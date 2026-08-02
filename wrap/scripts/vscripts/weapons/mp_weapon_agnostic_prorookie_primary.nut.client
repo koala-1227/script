@@ -1,0 +1,1093 @@
+global function MpWeaponProrookiePrimary_Init
+
+global function OnWeaponActivate_weapon_agnostic_prorookie_primary
+global function OnWeaponDeactivate_weapon_agnostic_prorookie_primary
+
+
+
+
+
+global function AgnosticProrookie_GetAllEquippedAddOns
+
+
+global function OnClientAnimEvent_weapon_agnostic_prorookie_primary
+
+
+
+global function AgnosticProrookie_OnCommsMenuStateChanged
+global function AgnosticProrookie_TryCreateCommsMenuNestedRui
+global function AgnosticProrookie_CheckCanPlayActivationEmoteWithWeaponAddOn
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const bool DEBUG_AGNOSTIC_PROROOKIE = false
+
+const int AGNOSTIC_PROROOKIE_WEAPON_GUID = 1490387936
+const int AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_GUID = 2029372234
+const int AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_GUID = 969639563
+const int AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_GUID = 730046840
+
+const string ANNOUNCEMENT_STRING_NOT_READY = "#AGNOSTIC_PROROOKIE_NOT_READY"
+const string ANNOUNCEMENT_STRING_CANNOT_BE_USED_IS_INSIDE = "#AGNOSTIC_PROROOKIE_CANNOT_BE_USED_IS_INSIDE"
+
+const float SCEPTER_PASSIVE_CHARGE_DURATION = 3.0 * 60.0
+const float DELAY_FULLY_CHARGE_STATE_RESET_DURATION = 2.8
+
+const asset COMMS_MENU_NESTED_RUI = $"ui/comms_menu_icon_default.rpak"
+const asset COMMS_MENU_CANNOT_USE_ICON = $"rui/menu/buttons/character_emotes/shared/emote_cancel_icon"
+
+
+
+
+
+
+const array<asset> AGNOSTIC_PROROOKIE_FX_ASSETS_REFERENCES = [
+	$"P_scepter_chrg_none",
+	$"P_scepter_chrg_low",
+	$"P_scepter_chrg_half",
+	$"P_scepter_chrg_full",
+	$"P_scepter_chrg_none_handle",
+	$"P_scepter_chrg_low_handle",
+	$"P_scepter_chrg_half_handle",
+	$"P_scepter_chrg_handle",
+	$"P_scepter_idle_Up_R",
+	$"P_scepter_idle_Up_L",
+	$"P_scepter_idle_Low_R",
+	$"P_scepter_idle_Low_L",
+	$"P_scepter_idle_3p",
+	$"P_scepter_chrg_handle_lobby",
+	$"P_scepter_chrg_lobby_full",
+	$"P_scepter_chrg_handle_3p",
+	$"P_scepter_chrg_3p_full",
+
+
+	$"P_scepter_blk_chrg_none",
+	$"P_scepter_blk_chrg_low",
+	$"P_scepter_blk_chrg_half",
+	$"P_scepter_blk_chrg_full",
+	$"P_scepter_blk_chrg_none_handle",
+	$"P_scepter_blk_chrg_low_handle",
+	$"P_scepter_blk_chrg_half_handle",
+	$"P_scepter_blk_chrg_handle",
+	$"P_scepter_blk_idle_Up_R",
+	$"P_scepter_blk_idle_Up_L",
+	$"P_scepter_blk_idle_Low_R",
+	$"P_scepter_blk_idle_Low_L",
+	$"P_scepter_blk_idle_3p"
+	$"P_scepter_blk_chrg_handle_lobby",
+	$"P_scepter_blk_chrg_lobby_full",
+	$"P_scepter_blk_chrg_handle_3p",
+	$"P_scepter_blk_chrg_3p_full",
+
+
+	$"P_scepter_pnk_chrg_none",
+	$"P_scepter_pnk_chrg_low",
+	$"P_scepter_pnk_chrg_half",
+	$"P_scepter_pnk_chrg_full",
+	$"P_scepter_pnk_chrg_none_handle",
+	$"P_scepter_pnk_chrg_low_handle",
+	$"P_scepter_pnk_chrg_half_handle",
+	$"P_scepter_pnk_chrg_handle",
+	$"P_scepter_pnk_idle_Up_R",
+	$"P_scepter_pnk_idle_Up_L",
+	$"P_scepter_pnk_idle_Low_R",
+	$"P_scepter_pnk_idle_Low_L",
+	$"P_scepter_pnk_idle_3p"
+	$"P_scepter_pnk_chrg_handle_lobby",
+	$"P_scepter_pnk_chrg_lobby_full",
+	$"P_scepter_pnk_chrg_handle_3p",
+	$"P_scepter_pnk_chrg_3p_full",
+
+
+	$"P_scepter_grn_chrg_none",
+	$"P_scepter_grn_chrg_low",
+	$"P_scepter_grn_chrg_half",
+	$"P_scepter_grn_chrg_full",
+	$"P_scepter_grn_chrg_none_handle",
+	$"P_scepter_grn_chrg_low_handle",
+	$"P_scepter_grn_chrg_half_handle",
+	$"P_scepter_grn_chrg_handle",
+	$"P_scepter_grn_idle_Up_R",
+	$"P_scepter_grn_idle_Up_L",
+	$"P_scepter_grn_idle_Low_R",
+	$"P_scepter_grn_idle_Low_L",
+	$"P_scepter_grn_idle_3p",
+	$"P_scepter_grn_chrg_handle_lobby",
+	$"P_scepter_grn_chrg_lobby_full",
+	$"P_scepter_grn_chrg_handle_3p",
+	$"P_scepter_grn_chrg_3p_full",	
+]
+
+const string AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_UP_R_1P = "idle_up_r_1p"
+const string AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_UP_L_1P = "idle_up_l_1p"
+const string AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_LOW_R_1P = "idle_low_r_1p"
+const string AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_LOW_L_1P = "idle_low_l_1p"
+const string AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_3P = "idle_3p"
+
+const string AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_NONE = "core_charge_none"
+const string AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_LOW = "core_charge_low"
+const string AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_HALF = "core_charge_half"
+const string AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_FULL = "core_charge_full"
+
+const string AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_NONE = "handle_charge_none"
+const string AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_LOW = "handle_charge_low"
+const string AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_HALF = "handle_charge_half"
+const string AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_FULL = "handle_charge_full"
+
+const string AGNOSTIC_PROROOKIE_CHARGE_SOUND_1P_FULL = "Scepter_Fireworks_FullCharge_Indicator_1p"
+
+const string AGNOSTIC_PROROOKIE_LAUNCH_SOUND_1P = "Scepter_Fireworks_Launch_1p"
+const string AGNOSTIC_PROROOKIE_LAUNCH_SOUND_3P = "Scepter_Fireworks_Launch_3p"
+const string AGNOSTIC_PROROOKIE_EXPLOSION_SOUND_3P = "Scepter_Fireworks_Explosion_3p"
+const string AGNOSTIC_PROROOKIE_TRAIL_SOUND_3P = "Scepter_Fireworks_Projectile_3p"
+
+const string AGNOSTIC_PROROOKIE_CORE_FX_ATTACHMENT_NAME = "FX_Core"
+const string AGNOSTIC_PROROOKIE_HANDLE_BASE_FX_ATTACHMENT_NAME = "FX_handle_end"
+const string AGNOSTIC_PROROOKIE_HANDLE_END_FX_ATTACHMENT_NAME = "FX_handle_end"
+const string AGNOSTIC_PROROOKIE_MUZZLE_FLASH_FX_ATTACHMENT_NAME = "FX_CORE"
+
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_ICON_NOT_READY = $"rui/menu/buttons/character_emotes/shared/emote_scepter_color_red_01"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_ICON_READY = $"rui/menu/buttons/character_emotes/shared/emote_scepter_color_red_02"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_FIREWORKS_FX = $"P_scepter_firework_apex_main"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_TRAIL_FX = $"P_scepter_firework_apex_trail"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_MUZZLE_FLASH_FX = $"P_scepter_muzzleflash_red"
+
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_ICON_NOT_READY = $"rui/menu/buttons/character_emotes/shared/emote_scepter_color_blue_01"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_ICON_READY = $"rui/menu/buttons/character_emotes/shared/emote_scepter_color_blue_02"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_FIREWORKS_FX = $"P_scepter_firework_taunt_main"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_TRAIL_FX = $"P_scepter_firework_taunt_trail"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_MUZZLE_FLASH_FX = $"P_scepter_muzzleflash"
+
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_ICON_NOT_READY = $"rui/menu/buttons/character_emotes/shared/emote_scepter_color_green_01"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_ICON_READY = $"rui/menu/buttons/character_emotes/shared/emote_scepter_color_green_02"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_FIREWORKS_FX = $"P_scepter_firework_nessie_main"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_TRAIL_FX = $"P_scepter_firework_nessie_trail"
+const asset AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_MUZZLE_FLASH_FX = $"P_scepter_muzzleflash_green"
+
+global const string AGNOSTIC_PROROOKIE_MP_WEAPON_NAME = "mp_weapon_agnostic_prorookie_primary"
+global const string AGNOSTIC_PROROOKIE_USAGE_PROMPT = "#AGNOSTIC_PROROOKIE_USAGE_PROMPT"
+
+
+const string AGNOSTIC_PROROOKIE_COMMS_MENU_CLOSED_SIGNAL_NAME = "agnostic_prorookie_comms_menu_closed"
+
+
+const string AGNOSTIC_PROROOKIE_ACTIVATED_SIGNAL_NAME = "agnostic_prorookie_activated"
+const string AGNOSTIC_PROROOKIE_DEACTIVATED_SIGNAL_NAME = "agnostic_prorookie_deactivated"
+const string AGNOSTIC_PROROOKIE_KILL_FX_SIGNAL_NAME = "agnostic_prorookie_kill_fx"
+
+const string AGNOSTIC_PROROOKIE_PLAY_FX_ANIM_EVENT_NAME = "agnostic_prorookie_play_fx"
+
+enum eChargeState
+{
+	none,
+	low,
+	half,
+	full
+}
+
+enum eUseState
+{
+	not_ready,
+	ready_can_be_used,
+	ready_cannot_be_used
+}
+
+enum eCannotBeUsedReason
+{
+	is_inside
+}
+
+
+struct CommsMenuIcons
+{
+	asset notReady
+	asset ready
+}
+
+
+
+struct CommsMenuItem
+{
+	var rui
+	ItemFlavor& meleeAddOn
+}
+
+
+struct FxNames
+{
+	asset fireworksFx
+	asset trailFx
+	asset muzzleFlashFx
+}
+
+struct
+{
+	array< int > allAddOnGUIDs
+	table< int, FxNames > addOnGuidToFxNamesMap
+
+
+	array< CommsMenuItem > commsMenuItemList
+	table< int, CommsMenuIcons > addOnGuidToCommsMenuIconsMap
+
+
+
+
+
+
+
+
+
+
+
+} file
+
+
+void function RegisterAddOnData( int guid, asset notReadyIcon, asset readyIcon, asset fireworksFx, asset trailFx, asset muzzleFlashFx )
+{
+	file.allAddOnGUIDs.append( guid )
+
+
+	CommsMenuIcons icons
+	icons.notReady = notReadyIcon
+	icons.ready = readyIcon
+	file.addOnGuidToCommsMenuIconsMap[guid] <- icons
+
+
+	FxNames fxNames
+	fxNames.fireworksFx = fireworksFx
+	fxNames.trailFx = trailFx
+	fxNames.muzzleFlashFx = muzzleFlashFx
+	file.addOnGuidToFxNamesMap[guid] <- fxNames
+
+	PrecacheParticleSystem( fireworksFx )
+	PrecacheParticleSystem( trailFx )
+	PrecacheParticleSystem( muzzleFlashFx )
+}
+
+
+
+asset function GetCommsMenuIcon( ItemFlavor addOn, int useState )
+{
+	int addOnGuid = ItemFlavor_GetGUID( addOn )
+	Assert( addOnGuid in file.addOnGuidToCommsMenuIconsMap, format( "addOn not found in addOnGuidToCommsMenuIconsMap : %d", addOnGuid ) )
+	CommsMenuIcons icons = file.addOnGuidToCommsMenuIconsMap[addOnGuid]
+	switch ( useState )
+	{
+		case eUseState.not_ready:
+			return icons.notReady
+		case eUseState.ready_can_be_used:
+		case eUseState.ready_cannot_be_used:
+			return icons.ready
+		default:
+			Assert( false )
+	}
+	unreachable
+}
+
+
+void function MpWeaponProrookiePrimary_Init()
+{
+
+		
+		AddCallback_OnItemFlavorRegistered( eItemType.melee_skin, void function( ItemFlavor skin ) {
+			ItemFlavor weapon = ItemFlavor_GetParentFlavorOFType( skin, eItemType.melee_weapon )
+			if ( ItemFlavor_GetGUID( weapon ) == AGNOSTIC_PROROOKIE_WEAPON_GUID )
+			{
+				PrecacheAllParticleSystemsOfMeleeSkinVfxAliases( skin )
+			}
+		} )
+
+
+
+		RegisterAddOnData(
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_GUID,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_ICON_NOT_READY,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_ICON_READY,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_FIREWORKS_FX,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_TRAIL_FX,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_MUZZLE_FLASH_FX )
+
+		RegisterAddOnData(
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_GUID,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_ICON_NOT_READY,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_ICON_READY,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_FIREWORKS_FX,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_TRAIL_FX,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_MUZZLE_FLASH_FX )
+
+		RegisterAddOnData(
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_GUID,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_ICON_NOT_READY,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_ICON_READY,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_FIREWORKS_FX,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_TRAIL_FX,
+			AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_MUZZLE_FLASH_FX
+		)
+
+
+
+		AddCallback_OnCommsMenuStateChanged( AgnosticProrookie_OnCommsMenuStateChanged )
+
+		Melee_AddCallback_CheckCanPlayActivationEmoteWithWeaponAddOn( AGNOSTIC_PROROOKIE_WEAPON_GUID, AgnosticProrookie_CheckCanPlayActivationEmoteWithWeaponAddOn )
+
+		RegisterSignal( AGNOSTIC_PROROOKIE_COMMS_MENU_CLOSED_SIGNAL_NAME )
+
+
+
+
+
+
+
+
+
+
+	RegisterSignal( AGNOSTIC_PROROOKIE_ACTIVATED_SIGNAL_NAME )
+	RegisterSignal( AGNOSTIC_PROROOKIE_DEACTIVATED_SIGNAL_NAME )
+	RegisterSignal( AGNOSTIC_PROROOKIE_KILL_FX_SIGNAL_NAME )
+
+	Remote_RegisterServerFunction( "ClientToServer_AgnosticProrookie_PlayFx", "typed_entity", "weaponx", "int", INT_MIN, INT_MAX, "vector", -MAX_WORLD_COORD, MAX_WORLD_COORD, 32 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function StartChargeEffectIfNeeded( entity weapon, asset effectName, string attachmentName )
+{
+	if ( effectName != "" )
+	{
+		weapon.PlayWeaponEffect( effectName, $"", attachmentName, true )
+	}
+}
+
+
+
+void function StopChargeEffectIfNeeded( entity weapon, asset effectName )
+{
+	if ( effectName != "" )
+	{
+		weapon.StopWeaponEffect( effectName, $"" )
+	}
+}
+
+
+
+void function StartChargeSoundIfNeeded( entity weapon, string soundName1P )
+{
+	if ( soundName1P != "" )
+	{
+		if ( weapon.GetWeaponOwner() == GetLocalViewPlayer() )
+		{
+			EmitSoundOnEntity( weapon, soundName1P )
+		}
+	}
+}
+
+
+
+void function StopChargeSoundIfNeeded( entity weapon, string soundName1P )
+{
+	if ( soundName1P != "" )
+	{
+		if ( weapon.GetWeaponOwner() == GetLocalViewPlayer() )
+		{
+			StopSoundOnEntity( weapon, soundName1P )
+		}
+	}
+}
+
+
+
+int function ResolveChargeState( entity weapon, int lastChargeState, float fullyChargedTime )
+{
+	if ( !IsValid( weapon ) )
+	{
+		Warning( "%s : %s is not valid", FUNC_NAME(), string( weapon ) )
+		return eChargeState.none
+	}
+
+	float chargePercentage = weapon.GetScriptFloat0()
+
+	if ( chargePercentage < 0.1 )
+	{
+		
+		
+		if ( lastChargeState == eChargeState.full )
+		{
+			if ( Time() - fullyChargedTime < DELAY_FULLY_CHARGE_STATE_RESET_DURATION )
+			{
+				return eChargeState.full
+			}
+		}
+
+		return eChargeState.none
+	}
+
+	if ( chargePercentage < 0.5 )
+		return eChargeState.low
+
+	if ( chargePercentage < 1.0 )
+		return eChargeState.half
+
+	return eChargeState.full
+}
+
+
+
+float function ResolveBladesOpenPercentage( float chargePercentage, float fullyChargedStartTime )
+{
+	const float OPEN_DURATION = 2.0
+	const float CLOSE_DURATION = 0.4
+
+	float timeElapsedSinceFullyCharged = max( 0.0, Time() - fullyChargedStartTime )
+	float t = 0.0
+	float beginV = 0.0
+	float endV = 1.0
+	if ( chargePercentage < 1.0 )
+	{
+		t = min( 1.0, timeElapsedSinceFullyCharged / CLOSE_DURATION )
+		beginV = 1.0
+		endV = 0.0
+	}
+	else
+	{
+		t = min( 1.0, timeElapsedSinceFullyCharged / OPEN_DURATION )
+	}
+
+	return ( beginV + ( ( endV - beginV ) * t ) ) 
+}
+
+
+
+void function SyncClientWeaponToChargeState_Thread( entity weapon )
+{
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( AGNOSTIC_PROROOKIE_KILL_FX_SIGNAL_NAME  )
+
+	int currentChargeState = -1
+	PassByReferenceAsset currentCoreFxName
+	PassByReferenceAsset currentHandleFxName
+	PassByReferenceString currentChargeSoundName
+
+	OnThreadEnd( function() : ( weapon, currentCoreFxName, currentHandleFxName, currentChargeSoundName ) {
+		StopChargeEffectIfNeeded( weapon, currentCoreFxName.value )
+		StopChargeEffectIfNeeded( weapon, currentHandleFxName.value )
+		StopChargeSoundIfNeeded( weapon, currentChargeSoundName.value )
+	} )
+
+	float mostRecentFullyChargedTime = 0.0
+	while ( true )
+	{
+		float chargePercentage = weapon.GetScriptFloat0()
+		if ( chargePercentage >= 1.0 )
+		{
+			mostRecentFullyChargedTime = Time()
+		}
+
+		
+		weapon.SetScriptPoseParam0( chargePercentage )
+
+		
+		float fullyChargedStartTime = weapon.GetScriptTime1()
+		float bladesOpenPercentage = ResolveBladesOpenPercentage( chargePercentage, fullyChargedStartTime )
+		weapon.SetScriptPoseParam1( bladesOpenPercentage )
+
+		int newChargeState = ResolveChargeState( weapon, currentChargeState, mostRecentFullyChargedTime )
+		if ( currentChargeState != newChargeState )
+		{
+#if DEBUG_AGNOSTIC_PROROOKIE
+			printf( "Charge state for %s has changed : %d -> %d", string( weapon ), currentChargeState, newChargeState )
+#endif
+
+			currentChargeState = newChargeState
+
+			StopChargeEffectIfNeeded( weapon, currentCoreFxName.value )
+			StopChargeEffectIfNeeded( weapon, currentHandleFxName.value )
+			StopChargeSoundIfNeeded( weapon, currentChargeSoundName.value )
+
+			switch ( newChargeState )
+			{
+				case eChargeState.none:
+					currentCoreFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_NONE )
+					currentHandleFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_NONE )
+					currentChargeSoundName.value = ""
+					break
+
+				case eChargeState.low:
+					currentCoreFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_LOW )
+					currentHandleFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_LOW )
+					currentChargeSoundName.value = ""
+					break
+
+				case eChargeState.half:
+					currentCoreFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_HALF )
+					currentHandleFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_HALF )
+					currentChargeSoundName.value = ""
+					break
+
+				case eChargeState.full:
+					currentCoreFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_CORE_CHARGE_FX_ALIAS_FULL )
+					currentHandleFxName.value = weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_HANDLE_CHARGE_FX_ALIAS_FULL )
+					currentChargeSoundName.value = AGNOSTIC_PROROOKIE_CHARGE_SOUND_1P_FULL
+					break
+
+				default:
+					Assert( false )
+					break
+			}
+
+			
+			
+			
+			
+			
+			
+			
+			int lastSoundState = weapon.GetScriptClientInt0()
+			if ( lastSoundState == newChargeState )
+			{
+				currentChargeSoundName.value = ""
+			}
+			else
+			{
+				weapon.SetScriptClientInt0( newChargeState )
+			}
+
+			StartChargeEffectIfNeeded( weapon, currentCoreFxName.value, AGNOSTIC_PROROOKIE_CORE_FX_ATTACHMENT_NAME )
+			StartChargeEffectIfNeeded( weapon, currentHandleFxName.value, AGNOSTIC_PROROOKIE_HANDLE_BASE_FX_ATTACHMENT_NAME )
+			StartChargeSoundIfNeeded( weapon, currentChargeSoundName.value )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+void function OnWeaponActivate_weapon_agnostic_prorookie_primary( entity weapon )
+{
+	
+	
+	weapon.Signal( AGNOSTIC_PROROOKIE_ACTIVATED_SIGNAL_NAME )
+
+
+
+
+
+
+
+
+
+
+
+
+
+	thread SyncClientWeaponToChargeState_Thread( weapon )
+
+
+	
+	
+	
+	if ( weapon.GetItemFlavorGUID() != 0 )
+	{
+		weapon.PlayWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_UP_R_1P ), $"", "FX_Blade_Up_R", true )
+		weapon.PlayWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_UP_L_1P ), $"", "FX_Blade_Up_L", true )
+		weapon.PlayWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_LOW_R_1P ), $"", "FX_core", true )
+		weapon.PlayWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_LOW_L_1P ), $"", "FX_handle_end", true )
+		weapon.PlayWeaponEffect( $"", weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_3P ), "FX_CORE", true )
+	}
+}
+
+void function OnWeaponDeactivate_weapon_agnostic_prorookie_primary( entity weapon )
+{
+	weapon.Signal( AGNOSTIC_PROROOKIE_DEACTIVATED_SIGNAL_NAME )
+
+	
+	if ( IsValid( weapon ) )
+		thread WaitAndNotifyDeactivatedRecentlyThread( weapon )
+}
+
+void function WaitAndNotifyDeactivatedRecentlyThread( entity weapon )
+{
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( AGNOSTIC_PROROOKIE_ACTIVATED_SIGNAL_NAME  )
+	weapon.EndSignal( AGNOSTIC_PROROOKIE_DEACTIVATED_SIGNAL_NAME  )
+
+	OnThreadEnd(
+		function() : ( weapon )
+		{
+			if ( IsValid( weapon ) )
+			{
+				weapon.Signal( AGNOSTIC_PROROOKIE_KILL_FX_SIGNAL_NAME )
+
+				weapon.StopWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_UP_R_1P ), $"" )
+				weapon.StopWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_UP_L_1P ), $"" )
+				weapon.StopWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_LOW_R_1P ), $"" )
+				weapon.StopWeaponEffect( weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_LOW_L_1P ), $"" )
+				weapon.StopWeaponEffect( $"", weapon.VfxGetRealFromAlias( AGNOSTIC_PROROOKIE_IDLE_FX_ALIAS_3P ) )
+			}
+		}
+	)
+
+	wait 2.0
+}
+
+
+void function OnClientAnimEvent_weapon_agnostic_prorookie_primary( entity weapon, string eventName )
+{
+	if ( eventName == AGNOSTIC_PROROOKIE_PLAY_FX_ANIM_EVENT_NAME )
+	{
+		
+		int addOnGUIDIndex = weapon.GetScriptInt0()
+		if ( addOnGUIDIndex < 0 || addOnGUIDIndex >= file.allAddOnGUIDs.len() )
+		{
+			Warning( "%s triggered when weapon has invalid cached addOnGUIDIndex. weapon=%s , GUIDIndex=%d", FUNC_NAME(), string( weapon ), addOnGUIDIndex )
+			return
+		}
+
+		int addOnGUID = file.allAddOnGUIDs[addOnGUIDIndex]
+		Assert( addOnGUID in file.addOnGuidToFxNamesMap, format( "addOnGUID '%d' not found in addOnGuidToFxNamesMap", addOnGUID ) )
+		FxNames fxNames = file.addOnGuidToFxNamesMap[addOnGUID]
+
+		weapon.PlayWeaponEffect( fxNames.muzzleFlashFx, $"", AGNOSTIC_PROROOKIE_MUZZLE_FLASH_FX_ATTACHMENT_NAME )
+
+		int muzzleFlashAttachmentId = weapon.LookupAttachment( AGNOSTIC_PROROOKIE_MUZZLE_FLASH_FX_ATTACHMENT_NAME )
+		vector muzzleFlashOrigin = weapon.GetAttachmentOrigin( muzzleFlashAttachmentId )
+
+		Remote_ServerCallFunction( "ClientToServer_AgnosticProrookie_PlayFx", weapon, addOnGUIDIndex, muzzleFlashOrigin )
+	}
+}
+
+
+bool function IsPlayerInside( entity player )
+{
+	
+	TraceResults results = TraceLine( player.GetOrigin(), player.GetOrigin() + <0, 0, 1800>, [ player ], TRACE_MASK_PLAYERSOLID_BRUSHONLY , TRACE_COLLISION_GROUP_BLOCK_WEAPONS_AND_PHYSICS )
+	return results.fraction < 1.0
+}
+
+struct ResolveUseStateResult
+{
+	int useState
+	int cannotBeUsedReason
+	float chargePercentage
+	entity weapon
+}
+
+ResolveUseStateResult function ResolveUseState( entity player )
+{
+	ResolveUseStateResult result
+	result.useState = eUseState.not_ready
+	result.chargePercentage = 0.0
+
+	if ( !IsValid( player ) )
+	{
+		return result
+	}
+
+	result.weapon = player.GetActiveWeapon( 0 )
+	if ( !IsValid( result.weapon ) )
+	{
+		return result
+	}
+
+	result.chargePercentage = result.weapon.GetScriptFloat0()
+	if ( result.chargePercentage < 1.0 )
+	{
+		result.useState = eUseState.not_ready
+		return result
+	}
+
+	if ( IsPlayerInside( player ) )
+	{
+		result.useState = eUseState.ready_cannot_be_used
+		result.cannotBeUsedReason = eCannotBeUsedReason.is_inside
+		return result
+	}
+
+	result.useState = eUseState.ready_can_be_used
+	return result
+}
+
+
+void function UpdateCommsMenuItem_Thread( CommsMenuItem item )
+{
+	EndSignal( item, AGNOSTIC_PROROOKIE_COMMS_MENU_CLOSED_SIGNAL_NAME )
+
+	while ( RuiIsAlive( item.rui ) )
+	{
+		ResolveUseStateResult resolveResult = ResolveUseState( GetLocalViewPlayer() )
+
+		RuiSetImage( item.rui, "icon", GetCommsMenuIcon( item.meleeAddOn, resolveResult.useState ) )
+		RuiSetString( item.rui, "bottomText", format( "%.0f %%", resolveResult.chargePercentage * 100.0 ) )
+
+		if ( resolveResult.useState == eUseState.ready_cannot_be_used )
+		{
+			RuiSetFloat( item.rui, "iconAlpha", 0.0 )
+			RuiSetFloat( item.rui, "overlayAlpha", 1.0 )
+			RuiSetImage( item.rui, "overlayIcon", COMMS_MENU_CANNOT_USE_ICON )
+		}
+		else
+		{
+			RuiSetFloat( item.rui, "iconAlpha", 1.0 )
+			RuiSetFloat( item.rui, "overlayAlpha", 0.0 )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function AgnosticProrookie_OnCommsMenuStateChanged( bool menuOpened )
+{
+	if ( !menuOpened )
+	{
+		foreach ( commsMenuItem in file.commsMenuItemList )
+		{
+			Signal( commsMenuItem, AGNOSTIC_PROROOKIE_COMMS_MENU_CLOSED_SIGNAL_NAME )
+		}
+		file.commsMenuItemList.clear()
+	}
+}
+
+
+
+var function AgnosticProrookie_TryCreateCommsMenuNestedRui( var baseRui, string argName, ItemFlavor data )
+{
+	var nestedRui = null
+
+	if ( ItemFlavor_GetType( data ) == eItemType.melee_addon )
+	{
+		nestedRui = RuiCreateNested( baseRui, argName, COMMS_MENU_NESTED_RUI )
+
+		CommsMenuItem item
+		item.rui = nestedRui
+		item.meleeAddOn = data
+		thread UpdateCommsMenuItem_Thread( item )
+		file.commsMenuItemList.append( item )
+	}
+
+	return nestedRui
+}
+
+
+
+bool function AgnosticProrookie_CheckCanPlayActivationEmoteWithWeaponAddOn( ItemFlavor meleeAddOn )
+{
+	Assert( ItemFlavor_GetType( meleeAddOn ) == eItemType.melee_addon )
+
+	entity player = GetLocalViewPlayer()
+	ResolveUseStateResult resolveResult = ResolveUseState( player )
+	if ( resolveResult.useState == eUseState.not_ready )
+	{
+		AnnouncementMessageRight( player, Localize( ANNOUNCEMENT_STRING_NOT_READY, format( "%d", int( resolveResult.chargePercentage * 100.0 ) ) ) )
+		return false
+	}
+
+	if ( resolveResult.useState == eUseState.ready_cannot_be_used )
+	{
+		switch ( resolveResult.cannotBeUsedReason )
+		{
+			case eCannotBeUsedReason.is_inside:
+				AnnouncementMessageRight( player, ANNOUNCEMENT_STRING_CANNOT_BE_USED_IS_INSIDE )
+				return false
+			default:
+				Assert( false )
+		}
+	}
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array< ItemFlavor > function AgnosticProrookie_GetAllEquippedAddOns( EHI playerEHI, ItemFlavor meleeWeapon )
+{
+	array< ItemFlavor > allEquippedAddOns
+
+	if ( IsEverythingUnlocked() )
+	{
+		allEquippedAddOns.append( GetItemFlavorByGUID( AGNOSTIC_PROROOKIE_WEAPON_ADDON_1_GUID ) )
+		allEquippedAddOns.append( GetItemFlavorByGUID( AGNOSTIC_PROROOKIE_WEAPON_ADDON_2_GUID ) )
+		allEquippedAddOns.append( GetItemFlavorByGUID( AGNOSTIC_PROROOKIE_WEAPON_ADDON_3_GUID ) )
+	}
+	else
+	{
+		allEquippedAddOns = Loadout_GetEquippedMeleeAddOnsForWeapon( playerEHI, meleeWeapon )
+	}
+
+	return allEquippedAddOns
+} 

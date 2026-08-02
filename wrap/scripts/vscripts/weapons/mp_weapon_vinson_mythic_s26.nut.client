@@ -1,0 +1,2000 @@
+
+global function VinsonMythicS26_Init
+global function GetPlaylistVar_VinsonMythicS26_Enabled
+
+
+global function VinsonMythicS26_GetWeaponSkinFromRef
+
+global function VinsonMythicS26_OnWeaponActivate
+global function VinsonMythicS26_OnProjectileCollision
+global function VinsonMythicS26_OnWeaponFirePost
+global function VinsonMythicS26_OnWeaponReload
+global function VinsonMythicS26_OnWeaponDeactivate
+global function VinsonMythicS26_OnSelectFirePressed_ToggleMod
+
+global function VinsonMythicS26_BulletBuff_Reset
+
+
+
+
+
+
+
+
+
+
+
+
+global function VinsonMythicS26_FireRing_ExplodeVFX_Cockpit
+global function VinsonMythicS26_Bomb_Timer
+global function VinsonMythicS26_IsPlayerBombed
+global function VinsonMythicS26_UpdateBombUIState_Thread
+global function VinsonMythicS26_EventMythicWeapon02_Helper
+
+
+
+
+
+
+
+
+
+
+
+global const string REF_MYTHIC_FLATLINE_WEAPON = "mp_weapon_vinson_mythicset"
+
+
+const asset SKIN_MYTHIC_WEAPON = $"settings/itemflav/weapon_skin/flatline/mythic_v24_rivnature_level02.rpak"
+const string NAME_MYTHIC_WEAPON = "mythic_v24_rivnature_level02"
+
+const string MOD_VINSON_ALTFIRE = "altfire"
+const string MOD_BULLET_EXPLOSIVE_ROUND = "explosive_round"
+const string MOD_BULLET_EXPLOSIVE_ROUND_ALT = "altfire_explosive_round"
+const string SFX_BULLET_EXPLOSIVE_PROJECTILE = "weapon_vinson_mythic_explosiveround_Trail_LP_3p"
+
+const string IMPACT_FX_BULLET_EXPLODE = "flatline_unH_exp"
+const int COUNT_RING_BULLETS_FIRED_MIN = 0
+const int COUNT_RING_BULLETS_FIRED_MAX = 29
+
+const asset VFX_RING_FIRE_EXPLODE_COCKPIT = $"P_gmat_exp_FP_shockwave"
+const asset VFX_RING_FIRE_EXPLODE_1P = $"P_flatline_unH_reload_exp_FP"
+const asset VFX_RING_FIRE_EXPLODE_3P = $"P_flatline_unH_reload_exp"
+const string SFX_RING_FIRE_EXPLODE_1P = "weapon_flatline_mythic_firering_activate_1p"
+const string SFX_RING_FIRE_EXPLODE_3P = "weapon_flatline_mythic_firering_activate_3p"
+const string SFX_RING_FIRE_BURN_1P = "flesh_thermiteburn_3p_vs_1p"
+
+const string SIGNAL_BOMB_DEFUSE = "MythicS26_Bomb_Defuse"
+const string SFX_BOMB_COUNTDOWN_1P = "weapon_vinson_mythic_grenade_warningbeep_1p"
+const string SFX_BOMB_COUNTDOWN_3P = "weapon_vinson_mythic_grenade_warningbeep_3p"
+const string SFX_BOMB_COUNTDOWN_3P_ENEMY = "weapon_vinson_mythic_grenade_warningbeep_3p_Enemy"
+const string SFX_BOMB_NEAR_END_1P = "weapon_vinson_mythic_grenade_warningbeep_nearend_1p"
+const string SFX_BOMB_NEAR_END_3P = "weapon_vinson_mythic_grenade_warningbeep_nearend_3p"
+const string SFX_BOMB_DEFUSING_1P = "weapon_vinson_mythic_grenade_deactivate_1p"
+const string SFX_BOMB_DEFUSING_3P = "weapon_vinson_mythic_grenade_deactivate_3p"
+const string SFX_BOMB_EXPLODE_1P = "explo_bomb_on_knock_impact_1p"
+const asset VFX_BOMB_PLANTED = $"P_flatline_unH_timer_slow"
+const asset VFX_BOMB_PLANTED_NEAR_END = $"P_flatline_unH_timer_fast"
+const string IMPACT_FX_BOMB_EXPLODE = "flatline_unH_exp_bomb"
+const float RADIUS_BOMB_THREAT_OFFSET = 50.0
+const vector POS_BOMB_THREAT_OFFSET = <0, 0, 30>
+const vector POS_BOMB_EXPLODE_OFFSET = <0, 0, 30>
+const float TIME_BOMB_WAIT_TO_START = 0.75
+const float TIME_BOMB_SOUND_NEAR_END = 7.0
+const float SIZE_BOMB_COUNTDOWN_TIMER = 95.0
+const vector POS_BOMB_COUNTDOWN_3P_OFFSET = <0, 0, 55>
+const float DIST_BOMB_COUNTDOWN_1P_OFFSET = 30.0
+
+
+const int EVO_ACTION_MIN_ENEMY_TARGETS = 2
+
+
+const table< string, string > MYTHIC_MOD_TO_WEAPON_REF = {
+	[WEAPON_LOCKEDSET_MOD_MYTHIC_S26] = REF_MYTHIC_FLATLINE_WEAPON
+}
+
+
+struct {
+	bool removeOnDeath = true
+	bool oncePerShieldBreak = false
+	bool oncePerKnock = false
+
+	bool bulletEnabled = true
+	
+	int bulletDamageMax = 10
+	float bulletRadiusMin = 1.0 
+	float bulletRadiusMax = 2.75 
+	float bulletFragForce = 10.0
+	bool bulletGivesBomb = true
+	bool bulletDebugHUD = false
+
+	bool ringEnabled = false
+	float ringRadiusMin = 2.0 
+	float ringRadiusMax = 10.0 
+	float ringExplodeTime = 0.7
+	int ringExplodeDamageMax = 25
+	bool ringExplodeGivesBomb = false
+
+	int ringBurnDamage = 25
+	float ringBurnTime = 3.0
+	float ringBurnTickRate = 0.8
+	float ringBurnStackDebounce = 1.0
+	int ringBurnStacksMax = 1
+	bool ringBurnGivesBomb = false
+
+	bool bombEnabled = true
+	int bombDamageMax = 100
+	bool bombHurtsEveryone = false
+	float bombExplodeTime = 12.0
+	float bombRadiusMin = 3.0 
+	float bombRadiusMax = 6.0 
+	float bombFragForce = 500.0
+	bool bombDefusedOnThirst = true
+	bool bombWaitForRevive = true
+	bool bombGivesBomb = false
+} tunings
+
+
+struct {
+
+		table< entity, int > playerToRingChargeCount
+
+
+
+
+
+
+
+
+
+
+
+		table< entity, entity > bombToTarget
+		table< entity, float > bombActualEndTimes
+
+} file
+
+
+bool function GetPlaylistVar_VinsonMythicS26_Enabled()
+{
+	return GetCurrentPlaylistVarBool( "mythic_s26_enabled", false )
+}
+
+void function VinsonMythicS26_Init()
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+	{
+		SURVIVAL_Loot_AddDisabledRef( REF_MYTHIC_FLATLINE_WEAPON )
+		return
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+		RegisterConCommandTriggeredCallback( "+scriptCommand3", VinsonMythicS26_OnSelectFirePressed )
+
+
+
+		PrecacheParticleSystem( VFX_RING_FIRE_EXPLODE_COCKPIT )
+		PrecacheParticleSystem( VFX_RING_FIRE_EXPLODE_1P )
+		PrecacheParticleSystem( VFX_RING_FIRE_EXPLODE_3P )
+		PrecacheParticleSystem( VFX_BOMB_PLANTED )
+		PrecacheParticleSystem( VFX_BOMB_PLANTED_NEAR_END )
+		PrecacheImpactEffectTable( IMPACT_FX_BULLET_EXPLODE )
+		PrecacheImpactEffectTable( IMPACT_FX_BOMB_EXPLODE )
+
+		Remote_RegisterServerFunction( "VinsonMythicS26_OnSelectFirePressed_ToggleMod", "typed_entity", "prop_script" )
+
+		Remote_RegisterClientFunction( "VinsonMythicS26_BulletBuff_Reset", "entity" )
+		Remote_RegisterClientFunction( "VinsonMythicS26_FireRing_ExplodeVFX_Cockpit" )
+		Remote_RegisterClientFunction( "VinsonMythicS26_Bomb_Timer", "entity" )
+
+		VinsonMythicS26_InitTunings()
+
+}
+
+
+void function VinsonMythicS26_InitTunings()
+{
+	tunings.removeOnDeath =      	GetCurrentPlaylistVarBool( "mythic_s26_remove_on_death", tunings.removeOnDeath )
+	tunings.oncePerShieldBreak = 	GetCurrentPlaylistVarBool( "mythic_s26_buff_once_per_shield_break", tunings.oncePerShieldBreak )
+	tunings.oncePerKnock =       	GetCurrentPlaylistVarBool( "mythic_s26_buff_once_per_knock", tunings.oncePerKnock )
+
+	tunings.bulletEnabled =			GetCurrentPlaylistVarBool(  "mythic_s26_buff_bullet_enabled", tunings.bulletEnabled )
+	tunings.bulletDamageMax =		GetCurrentPlaylistVarInt(   "mythic_s26_buff_bullet_damage_max", tunings.bulletDamageMax )
+	tunings.bulletRadiusMin =		GetCurrentPlaylistVarFloat( "mythic_s26_buff_bullet_radius_min", tunings.bulletRadiusMin ) * METERS_TO_INCHES
+	tunings.bulletRadiusMax =		GetCurrentPlaylistVarFloat( "mythic_s26_buff_bullet_radius_max", tunings.bulletRadiusMax ) * METERS_TO_INCHES
+	tunings.bulletFragForce =		GetCurrentPlaylistVarFloat( "mythic_s26_buff_bullet_frag_force", tunings.bulletFragForce )
+	tunings.bulletGivesBomb =		GetCurrentPlaylistVarBool(  "mythic_s26_buff_bullet_gives_bomb", tunings.bulletGivesBomb )
+	tunings.bulletDebugHUD =		GetCurrentPlaylistVarBool(  "mythic_s26_buff_bullet_debug_hud", tunings.bulletDebugHUD )
+
+	tunings.ringEnabled =			GetCurrentPlaylistVarBool(  "mythic_s26_buff_ring_enabled", tunings.ringEnabled )
+	tunings.ringRadiusMin =			GetCurrentPlaylistVarFloat( "mythic_s26_buff_ring_radius_min", tunings.ringRadiusMin ) * METERS_TO_INCHES
+	tunings.ringRadiusMax =			GetCurrentPlaylistVarFloat( "mythic_s26_buff_ring_radius_max", tunings.ringRadiusMax ) * METERS_TO_INCHES
+	tunings.ringExplodeTime =		GetCurrentPlaylistVarFloat( "mythic_s26_buff_ring_explode_time", tunings.ringExplodeTime )
+	tunings.ringExplodeDamageMax =	GetCurrentPlaylistVarInt(   "mythic_s26_buff_ring_explode_damage_max", tunings.ringExplodeDamageMax )
+	tunings.ringExplodeGivesBomb =	GetCurrentPlaylistVarBool(  "mythic_s26_buff_ring_explode_gives_bomb", tunings.ringExplodeGivesBomb )
+
+	tunings.ringBurnDamage =		GetCurrentPlaylistVarInt(   "mythic_s26_buff_ring_burn_damage", tunings.ringBurnDamage )
+	tunings.ringBurnTime =			GetCurrentPlaylistVarFloat( "mythic_s26_buff_ring_burn_time", tunings.ringBurnTime )
+	tunings.ringBurnTickRate =		GetCurrentPlaylistVarFloat( "mythic_s26_buff_ring_burn_tick_rate", tunings.ringBurnTickRate )
+	tunings.ringBurnStackDebounce =	GetCurrentPlaylistVarFloat( "mythic_s26_buff_ring_burn_stack_debounce", tunings.ringBurnStackDebounce )
+	tunings.ringBurnStacksMax =		GetCurrentPlaylistVarInt(   "mythic_s26_buff_ring_burn_stacks_max", tunings.ringBurnStacksMax )
+	tunings.ringBurnGivesBomb =		GetCurrentPlaylistVarBool(  "mythic_s26_buff_ring_burn_gives_bomb", tunings.ringBurnGivesBomb )
+
+	tunings.bombEnabled =			GetCurrentPlaylistVarBool(  "mythic_s26_buff_bomb_enabled", tunings.bombEnabled )
+	tunings.bombDamageMax =			GetCurrentPlaylistVarInt(   "mythic_s26_buff_bomb_damage_max", tunings.bombDamageMax )
+	tunings.bombHurtsEveryone =		GetCurrentPlaylistVarBool(  "mythic_s26_buff_bomb_hurts_everyone", tunings.bombHurtsEveryone )
+	tunings.bombExplodeTime =		GetCurrentPlaylistVarFloat( "mythic_s26_buff_bomb_explode_time", tunings.bombExplodeTime )
+	tunings.bombRadiusMin =			GetCurrentPlaylistVarFloat( "mythic_s26_buff_bomb_radius_min", tunings.bombRadiusMin ) * METERS_TO_INCHES
+	tunings.bombRadiusMax =			GetCurrentPlaylistVarFloat( "mythic_s26_buff_bomb_radius_max", tunings.bombRadiusMax ) * METERS_TO_INCHES
+	tunings.bombFragForce =			GetCurrentPlaylistVarFloat( "mythic_s26_buff_bomb_frag_force", tunings.bombFragForce )
+	tunings.bombDefusedOnThirst =	GetCurrentPlaylistVarBool(  "mythic_s26_buff_bomb_defused_on_thirst", tunings.bombDefusedOnThirst )
+	tunings.bombWaitForRevive =		GetCurrentPlaylistVarBool(  "mythic_s26_buff_bomb_wait_for_revive", tunings.bombWaitForRevive )
+	tunings.bombGivesBomb =			GetCurrentPlaylistVarBool(  "mythic_s26_buff_bomb_gives_bomb", tunings.bombGivesBomb )
+
+
+		ScoreEvent_SetMessagingDelay( GetScoreEvent( "Evo_Mythic_Weapon_S26_01" ), UNHINGED_EVO_SCORE_MESSAGING_DELAY )
+
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CallbackHandling___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function VinsonMythicS26_OnWeaponActivate( entity weapon )
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+		return
+
+	string weaponRef = VinsonMythicS26_GetNameFromWeapon( weapon )
+	if ( weaponRef == "" )
+		return
+
+	switch ( weaponRef )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+			VinsonMythicS26_BulletBuff_Init( weapon )
+
+
+
+			break
+
+		default:
+			break
+	}
+}
+
+
+
+void function VinsonMythicS26_OnWeaponFire( entity weapon )
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+		return
+
+	string weaponRef = VinsonMythicS26_GetNameFromWeapon( weapon )
+	if ( weaponRef == "" )
+		return
+
+	switch ( weaponRef )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+			break
+
+		default:
+			break
+	}
+}
+
+
+
+void function VinsonMythicS26_OnProjectileCollision( entity projectile, vector pos )
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+		return
+
+	entity weapon = projectile.GetWeaponSource()
+	string weaponRef = VinsonMythicS26_GetNameFromWeapon( weapon )
+	if ( weaponRef == "" )
+		return
+
+	switch ( weaponRef )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+
+
+
+			break
+
+		default:
+			break
+	}
+}
+
+
+
+void function VinsonMythicS26_OnWeaponFirePost( entity weapon )
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+		return
+
+	string weaponRef = VinsonMythicS26_GetNameFromWeapon( weapon )
+	if ( weaponRef == "" )
+		return
+
+	switch ( weaponRef )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+			thread VinsonMythicS26_BulletBuff_UpdateHopup( weapon )
+
+
+
+			break
+
+		default:
+			break
+	}
+}
+
+
+
+void function VinsonMythicS26_OnWeaponReload( entity weapon )
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+		return
+
+	string weaponRef = VinsonMythicS26_GetNameFromWeapon( weapon )
+	if ( weaponRef == "" )
+		return
+
+	switch ( weaponRef )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+
+
+
+			break
+
+		default:
+			break
+	}
+}
+
+
+
+void function VinsonMythicS26_OnWeaponDeactivate( entity weapon )
+{
+	if ( !GetPlaylistVar_VinsonMythicS26_Enabled() )
+		return
+
+	string weaponRef = VinsonMythicS26_GetNameFromWeapon( weapon )
+	if ( weaponRef == "" )
+		return
+
+	switch ( weaponRef )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+
+
+
+			break
+
+		default:
+			break
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function VinsonMythicS26_OnSelectFirePressed( entity player )
+{
+	if ( !IsValid( player ) || player != GetLocalViewPlayer() || player.IsPhaseShifted() )
+		return
+
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( activeWeapon ) )
+		return
+
+	if ( !DoesModExist( activeWeapon, MOD_BULLET_EXPLOSIVE_ROUND_ALT ) )
+		return
+
+	
+	thread VinsonMythicS26_OnSelectFirePressed_ToggleMod( player, activeWeapon )
+}
+
+
+
+void function VinsonMythicS26_OnSelectFirePressed_ToggleMod( entity player, entity weapon )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+
+	
+
+	WaitFrame()
+
+	if ( !IsValid( player ) || !IsValid( weapon ) )
+		return
+
+	
+	if ( weapon.GetHeatValue() >= 1.0 )
+	{
+		VinsonMythicS26_BulletBuff_SetHopup( weapon, true )
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________WeaponUtilities___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function VinsonMythicS26_GetNameFromWeapon( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return ""
+
+	foreach ( mod, weaponRef in MYTHIC_MOD_TO_WEAPON_REF )
+	{
+		if ( weapon.HasMod( mod ) )
+		{
+			return weaponRef
+		}
+	}
+
+	return ""
+}
+
+
+
+asset function VinsonMythicS26_GetWeaponSkinFromRef( string ref )
+{
+	switch ( ref )
+	{
+		case REF_MYTHIC_FLATLINE_WEAPON:
+			return SKIN_MYTHIC_WEAPON
+
+		default:
+			return $""
+	}
+
+	unreachable
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ExplosiveBullet___________________________(){}
+#endif
+
+
+void function VinsonMythicS26_BulletBuff_Init( entity weapon )
+{
+	if ( !tunings.bulletEnabled )
+		return
+
+	if ( !IsValid( weapon ) )
+		return
+
+	VinsonMythicS26_BulletBuff_Reset( weapon )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function VinsonMythicS26_BulletBuff_TryToggleHopup( entity weapon )
+{
+	if ( !IsValid( weapon ) || weapon.IsProjectile() )
+		return
+
+	bool hasMod = VinsonMythicS26_BulletBuff_HasExplosiveMod( weapon )
+	VinsonMythicS26_BulletBuff_SetHopup( weapon, !hasMod )
+}
+
+
+
+void function VinsonMythicS26_BulletBuff_SetHopup( entity weapon, bool enable )
+{
+	if ( !IsValid( weapon ) || weapon.IsProjectile() )
+		return
+
+		if ( !( InPrediction() && IsFirstTimePredicted() ) )
+			return
+
+
+	if ( enable )
+	{
+		weapon.AddMod( MOD_BULLET_EXPLOSIVE_ROUND )
+	}
+	else
+	{
+		weapon.RemoveMod( MOD_BULLET_EXPLOSIVE_ROUND )
+	}
+}
+
+
+
+bool function VinsonMythicS26_BulletBuff_HasExplosiveMod( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	bool isProjectile = weapon.IsProjectile()
+	bool hasMod
+	if ( isProjectile )
+	{
+		hasMod = weapon.HasWeaponMod( MOD_BULLET_EXPLOSIVE_ROUND )
+	}
+	else
+	{
+		hasMod = weapon.HasMod( MOD_BULLET_EXPLOSIVE_ROUND )
+	}
+
+	return hasMod
+}
+
+
+
+void function VinsonMythicS26_BulletBuff_UpdateHopup( entity weapon )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+
+	
+	WaitFrame()
+
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( VinsonMythicS26_BulletBuff_HasExplosiveMod( weapon ) )
+	{
+		VinsonMythicS26_BulletBuff_Reset( weapon )
+	}
+	else if ( weapon.GetHeatValue() >= 1.0 )
+	{
+		VinsonMythicS26_BulletBuff_SetHopup( weapon, true )
+	}
+}
+
+
+
+void function VinsonMythicS26_BulletBuff_Reset( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+	if ( !tunings.bulletEnabled )
+		return
+
+	if ( !( InPrediction() && IsFirstTimePredicted() ) )
+		return
+
+
+	weapon.SetHeatValue( 0 )
+	weapon.TryUpdatingFullyHeated()
+	VinsonMythicS26_BulletBuff_SetHopup( weapon, false )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________RingOfFire___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function VinsonMythicS26_FireRing_ExplodeVFX_Cockpit()
+{
+	entity player = GetLocalViewPlayer()
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	int fxID   = GetParticleSystemIndex( VFX_RING_FIRE_EXPLODE_COCKPIT )
+	int handle = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( handle, true )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________BombOnKnock___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function VinsonMythicS26_Bomb_Timer( entity bomb )
+{
+	if ( !IsValid( bomb ) )
+		return
+
+	thread VinsonMythicS26_Bomb_Timer_Thread( bomb )
+}
+
+
+
+void function VinsonMythicS26_Bomb_Timer_Thread( entity bomb )
+{
+	if ( !IsValid( bomb ) )
+		return
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) || !IsLocalClientPlayer( player ) )
+		return
+
+	var topo = CreateRUITopology_Worldspace( ZERO_VECTOR, ZERO_VECTOR, SIZE_BOMB_COUNTDOWN_TIMER, SIZE_BOMB_COUNTDOWN_TIMER )
+	var ruiWorld = RuiCreate( $"ui/arsenal_item_respawn_timer.rpak", topo, RUI_DRAW_WORLD, 0 )
+
+	float endTime = Time() + tunings.bombExplodeTime
+	RuiSetFloat( ruiWorld, "respawnDuration", tunings.bombExplodeTime )
+	RuiSetGameTime( ruiWorld, "endTime", endTime )
+
+	file.bombActualEndTimes[bomb] <- endTime
+
+	entity victim = bomb.GetParent()
+	bool isOnMe = ( victim == player )
+
+	var ruiHUD = null
+	if ( isOnMe )
+	{
+		ruiHUD = CreateCockpitPostFXRui( $"ui/bleedout_bomb_timer.rpak" )
+		RuiSetGameTime( ruiHUD, "endTime", endTime )
+		RuiSetFloat( ruiHUD, "bombDuration", tunings.bombExplodeTime )
+	}
+
+	if ( IsValid( victim ) )
+	{
+		file.bombToTarget[bomb] <- victim
+	}
+
+	thread VinsonMythicS26_UpdateUnitFrameBombUI( victim, true, endTime )
+
+	bomb.EndSignal( "OnDestroy" )
+	player.EndSignal( "OnDeath" )
+
+	OnThreadEnd(
+		function() : ( topo, ruiWorld, ruiHUD, victim, bomb )
+		{
+			RuiDestroyIfAlive( ruiWorld )
+			if ( ruiHUD != null )
+			{
+				RuiDestroyIfAlive( ruiHUD )
+			}
+			RuiTopology_Destroy( topo )
+
+			VinsonMythicS26_UpdateUnitFrameBombUI( victim, false )
+
+			if ( IsValid( bomb ) && ( bomb in file.bombToTarget ) )
+			{
+				delete file.bombToTarget[bomb]
+			}
+
+			if ( bomb in file.bombActualEndTimes )
+			{
+				delete file.bombActualEndTimes[bomb]
+			}
+		}
+	)
+
+	while ( Time() < endTime )
+	{
+		if ( ruiHUD != null && RuiIsAlive( ruiHUD ) )
+		{
+			if ( isOnMe && (player.ContextAction_IsBeingRevived() || player.ContextAction_IsReviving()) )
+			{
+				RuiSetBool( ruiHUD, "isBeingRevived", true )
+			}
+		}
+		WaitFrame()
+	}
+
+	Wait( tunings.bombExplodeTime )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function VinsonMythicS26_IsPlayerBombed( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	array< entity > targets = file.bombToTarget.clonevalues()
+	foreach ( target in targets )
+	{
+		if ( target == player )
+			return true
+	}
+
+	return false
+}
+
+void function VinsonMythicS26_UpdateUnitFrameBombUI( entity victim, bool show, float endTime = 0.0 )
+{
+	table<entity, UnitFrameDef> teamFrames = GetTeamUnitFrames()
+	foreach ( UnitFrameDef frame in teamFrames )
+	{
+		entity owner = UnitFrame_GetOwnerByIndex( frame.index )
+		if ( owner == victim && IsValid( frame.rui ) )
+		{
+			RuiSetBool( frame.rui, "showBombUI", show )
+			if ( show )
+			{
+				RuiSetGameTime( frame.rui, "bombEndTime", endTime )
+				RuiSetFloat( frame.rui, "bombDuration", tunings.bombExplodeTime )
+				thread VinsonMythicS26_UpdateUnitFrameBombUI_UpdateState_Thread( victim, frame.rui )
+			}
+		}
+	}
+}
+
+void function VinsonMythicS26_UpdateUnitFrameBombUI_UpdateState_Thread( entity victim, var rui )
+{
+	AssertIsNewThread()
+	victim.EndSignal( "OnDeath" )
+
+	float timeout = Time() + tunings.bombExplodeTime
+
+	OnThreadEnd(
+		function() : ( rui )
+		{
+			if ( rui != null && RuiIsAlive( rui ) )
+			{
+				RuiSetBool( rui, "isBeingRevived", false )
+			}
+		}
+	)
+
+	while ( Time() < timeout && rui != null && RuiIsAlive( rui ) )
+	{
+		bool isBeingRevived = false
+		if ( IsValidPlayer( victim ) && Bleedout_IsBleedingOut( victim ) )
+		{
+			entity reviver = Bleedout_GetRevivingPlayer( victim )
+			isBeingRevived = IsValid( reviver )
+		}
+
+		if ( !VinsonMythicS26_IsPlayerBombed( victim ) && !isBeingRevived )
+			return
+
+		RuiSetBool( rui, "isBeingRevived", isBeingRevived )
+
+		WaitFrame()
+	}
+}
+
+void function VinsonMythicS26_UpdateBombUIState_Thread( entity player, var rui )
+{
+	AssertIsNewThread()
+	player.EndSignal( "OnDeath" )
+
+	float timeout = Time() + tunings.bombExplodeTime
+	bool bombTimerInitialized = false
+
+	OnThreadEnd(
+		function() : ( rui )
+		{
+			if ( rui != null && RuiIsAlive( rui ) )
+			{
+				RuiSetBool( rui, "isBeingRevived", false )
+			}
+		}
+	)
+
+	while ( Time() < timeout )
+	{
+		if ( rui == null || !RuiIsAlive( rui ) )
+			return
+
+		bool isBeingRevived = false
+		if ( IsValidPlayer( player ) && Bleedout_IsBleedingOut( player ) )
+		{
+			entity reviver = Bleedout_GetRevivingPlayer( player )
+			isBeingRevived = IsValid( reviver )
+		}
+
+		if ( VinsonMythicS26_IsPlayerBombed( player ) || isBeingRevived )
+		{
+			if ( !bombTimerInitialized && VinsonMythicS26_IsPlayerBombed( player ) )
+			{
+				entity playerBomb = null
+				foreach( bomb, target in file.bombToTarget )
+				{
+					if( target == player )
+					{
+						playerBomb = bomb
+						break
+					}
+				}
+
+				float bombEndTime
+				if( IsValid( playerBomb ) && playerBomb in file.bombActualEndTimes )
+				{
+					bombEndTime = file.bombActualEndTimes[playerBomb]
+				}
+				else
+				{
+					bombEndTime = Time() + tunings.bombExplodeTime
+				}
+
+				RuiSetBool( rui, "showBombUI", true )
+				RuiSetGameTime( rui, "bombEndTime", bombEndTime )
+				RuiSetFloat( rui, "bombDuration", tunings.bombExplodeTime )
+				bombTimerInitialized = true
+
+				timeout = bombEndTime
+			}
+
+			RuiSetBool( rui, "isBeingRevived", isBeingRevived )
+		}
+		else
+		{
+			RuiSetBool( rui, "showBombUI", false )
+			RuiSetBool( rui, "isBeingRevived", false )
+			bombTimerInitialized = false
+		}
+
+		WaitFrame()
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________EVO_Action_Score_Messaging___________________________(){}
+#endif
+
+
+string function VinsonMythicS26_EventMythicWeapon02_Helper( int scoreEventID, EvoXPEvent evoXpEvent, entity associatedEntity, int overrideXP, string eventText )
+{
+	entity player = GetLocalClientPlayer()
+
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventID )
+
+	if ( overrideXP > 0 )
+	{
+		string imageStr = evoXpEvent.baseIsTeamXP ? RUI_SQUAD_TRIOS_ICON : RUI_SQUAD_SOLOS_ICON
+
+		if ( EvoXp_IsProgressionLocked_ForPlayer( GetLocalViewPlayer() ) )
+		{
+			eventText += "`0 " + "#SCORE_EVENT_PROGRESSION_LOCKED" + " " + imageStr
+		}
+		else
+		{
+			eventText += "`0 + " + overrideXP + " " + RUI_EVO_ICON  + " " + imageStr
+		}
+	}
+
+	eventText += "\n ( "
+	array<entity> bombDetonateTargets = GetPlayerArrayEx( TEAM_ANY, player.GetTeam(), associatedEntity.GetOrigin(), tunings.bombRadiusMax )
+	bool shouldAddComma = false
+	for ( int i=0; i < bombDetonateTargets.len(); i++ )
+	{
+		bool isBombOwner = ( bombDetonateTargets[i] == associatedEntity )
+
+		if ( shouldAddComma )
+		{
+			eventText += ", "
+		}
+		else
+		{
+			shouldAddComma = true
+		}
+
+		if ( isBombOwner || !IsAlive( bombDetonateTargets[i] ) )
+		{
+			eventText += "%$rui/hud/gamestate/player_kills_icon% `1"
+		}
+
+		eventText += GetDisplayablePlayerNameFromEHI( ToEHI( bombDetonateTargets[i] ) ) + "`0"
+	}
+
+	eventText += " ) "
+
+	return eventText
+}
+
+
+
+ 

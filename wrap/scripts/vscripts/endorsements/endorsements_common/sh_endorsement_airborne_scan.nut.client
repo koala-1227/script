@@ -1,0 +1,503 @@
+
+
+
+
+global function Endorsement_AirborneScan_Init
+
+global function ServerToClient_Endorsement_AirborneScan_Start
+global function ServerToClient_Endorsement_AirborneScan_End
+
+
+
+const string ENDORSEMENT_AIRBORNESCAN_SIGNAL = "endorsement_airborne_scan_stop"
+const string ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL = "endorsement_airborne_scan_reveal"
+const string ENDORSEMENT_AIRBORNESCAN_START_TRACKING_SIGNAL = "endorsement_airborne_scan_start_tracking"
+
+struct
+{
+	float scanRate = 0.1
+	float hudHighlightRange = 210 * METERS_TO_INCHES
+	float hudHighlightRangeSqr 
+	float minHeightToScan = 150
+} tuning
+
+struct
+{
+
+		int                     scanTrackersActive
+		array<entity>			scanEnemiesTracked
+		table<entity, int>		scanEnemiesTrackedCount
+
+} file
+
+void function Endorsement_AirborneScan_Init()
+{
+	RegisterTuningStruct( "tuning", "endorsement_airborne_scan_" )
+	tuning.hudHighlightRangeSqr = pow( tuning.hudHighlightRange, 2 )
+
+	RegisterSignal( ENDORSEMENT_AIRBORNESCAN_SIGNAL )
+	RegisterSignal( ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+	RegisterSignal( ENDORSEMENT_AIRBORNESCAN_START_TRACKING_SIGNAL )
+
+	Remote_RegisterClientFunction( "ServerToClient_Endorsement_AirborneScan_Start" )
+	Remote_RegisterClientFunction( "ServerToClient_Endorsement_AirborneScan_End" )
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_Endorsement_AirborneScan_Start()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+	{
+		return
+	}
+
+	thread Endorsement_AirborneScan_StartTracking( player )
+}
+
+
+
+void function ServerToClient_Endorsement_AirborneScan_End()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+	{
+		return
+	}
+
+	player.Signal( ENDORSEMENT_AIRBORNESCAN_START_TRACKING_SIGNAL )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Endorsement_AirborneScan_StartTracking( entity player )
+{
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( ENDORSEMENT_AIRBORNESCAN_START_TRACKING_SIGNAL )
+
+	file.scanTrackersActive++
+	if ( file.scanTrackersActive == 1 )
+	{
+		thread Endorsement_AirborneScan_FlightReveal_Thread()
+	}
+
+	array<entity> targetsShown = []
+
+	OnThreadEnd(
+		function() : ( player, targetsShown )
+		{
+			file.scanTrackersActive--
+			if ( file.scanTrackersActive == 0 )
+			{
+				Signal( clGlobal.levelEnt, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+			}
+
+			foreach ( enemy in targetsShown )
+			{
+				Endorsement_AirborneScan_StopFlightReveal( enemy )
+			}
+		}
+	)
+
+	var rui
+	
+	
+
+	float valkPasRevealDistanceSqr = tuning.hudHighlightRangeSqr
+
+	while ( IsValid( player ) )
+	{
+		int playerTeam				= player.GetTeam()
+		array<entity> enemyPlayers 	= GetPlayerArrayOfEnemies( playerTeam )
+		array<entity> decoyArray 	= GetPlayerDecoyArray()
+		decoyArray.extend( GetEntArrayByScriptName( MIRAGE_DECOY_DROP_SCRIPTNAME ) )
+
+		if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+		{
+			array<entity> dummies = GetEntArrayByScriptName( FIRING_RANGE_DUMMIE_SCRIPT_NAME )
+			dummies.extend( GetEntArrayByScriptName( FIRING_RANGE_COMBAT_DUMMIE_SCRIPT_NAME ) )
+
+			enemyPlayers.extend( dummies )
+		}
+
+		foreach ( decoy in decoyArray )
+		{
+			if ( !IsValid(decoy) )
+				continue
+
+			int decoyTeam = decoy.GetTeam()
+			if ( decoyTeam != playerTeam )
+			{
+				enemyPlayers.append( decoy )
+			}
+		}
+
+		foreach ( enemy in enemyPlayers )
+		{
+			bool dropThisEnemy
+			bool isDropDecoy
+			string scriptName
+
+			if ( IsValid( enemy ) )
+			{
+				scriptName = enemy.GetScriptName()
+				isDropDecoy = ( scriptName == MIRAGE_DECOY_DROP_SCRIPTNAME )
+			}
+
+			if ( IsAlive( enemy ) || isDropDecoy )
+			{
+				dropThisEnemy = false
+
+				if ( DistanceSqr( player.GetOrigin(), enemy.GetOrigin() ) < valkPasRevealDistanceSqr )
+				{
+					vector enemyTracePos = enemy.GetOrigin()
+					if ( !isDropDecoy )
+					{
+						enemyTracePos = enemy.EyePosition()
+					}
+
+					TraceResults trace = TraceLine( player.EyePosition(), enemyTracePos, [ player ], TRACE_MASK_VISIBLE, TRACE_COLLISION_GROUP_NONE )
+
+					if ( trace.fraction == 1.0 && Endorsement_AirborneScan_ThreatVisionShouldRevealEnemy( enemy ) )
+					{
+						if ( !(targetsShown.contains( enemy ) ) )
+						{
+							Endorsement_AirborneScan_StartFlightReveal( enemy )
+							targetsShown.append( enemy )
+						}
+					}
+					else
+					{
+						
+						dropThisEnemy = true
+					}
+				}
+				else
+				{
+					
+					dropThisEnemy = true
+				}
+			}
+			else
+			{
+				
+				dropThisEnemy = true
+			}
+
+			if ( dropThisEnemy )
+			{
+				if ( targetsShown.contains( enemy ) )
+				{
+					targetsShown.removebyvalue( enemy )
+					Endorsement_AirborneScan_StopFlightReveal( enemy )
+				}
+			}
+
+			WaitFrame()
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function Endorsement_AirborneScan_StartFlightReveal( entity enemy )
+{
+	array<entity> trackedEnemies = file.scanEnemiesTracked
+
+	if ( ! (enemy in file.scanEnemiesTrackedCount) )
+	{
+		file.scanEnemiesTrackedCount[ enemy ] <- 0
+	}
+
+	file.scanEnemiesTrackedCount[ enemy ] += 1
+
+	if ( file.scanEnemiesTrackedCount[ enemy ] == 1 )
+		file.scanEnemiesTracked.append( enemy )
+}
+
+
+
+void function Endorsement_AirborneScan_StopFlightReveal( entity enemy )
+{
+	file.scanEnemiesTrackedCount[ enemy ] -= 1
+
+	if ( file.scanEnemiesTrackedCount[ enemy ] == 0 )
+	{
+		file.scanEnemiesTracked.fastremovebyvalue( enemy )
+	}
+}
+
+
+
+void function Endorsement_AirborneScan_FlightReveal_Thread()
+{
+	entity player = GetLocalViewPlayer()
+	Signal( clGlobal.levelEnt, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+	EndSignal( clGlobal.levelEnt, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+	EndSignal( player, "OnDestroy" )
+	EndSignal( player, "OnDeath" )
+
+	array<entity> activeEnts
+
+	while ( true )
+	{
+		bool notifiedUsedEndorsement = false
+
+		foreach ( ent in file.scanEnemiesTracked )
+		{
+			if ( !activeEnts.contains( ent ) )
+			{
+				activeEnts.append( ent )
+				thread _FlightReveal_Thread( ent )
+				if ( !notifiedUsedEndorsement )
+				{
+					
+					notifiedUsedEndorsement = true
+					Endorsements_DisplayEndorsemenUsedPopupByPassiveID( player, ePassives.PAS_ENDORSEMENT_AIRBORNE_SCAN, eEndorsementConveyanceFlags.UNIT_FRAME | eEndorsementConveyanceFlags.UNIT_FRAME_TEAM )
+				}
+			}
+		}
+
+		foreach ( ent in clone activeEnts )
+		{
+			if ( !file.scanEnemiesTracked.contains( ent ) )
+			{
+				Signal( ent, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+				activeEnts.fastremovebyvalue( ent )
+			}
+		}
+
+		wait 0.5
+	}
+}
+
+
+
+
+void function _FlightReveal_Thread( entity victim )
+{
+	if ( !IsValid( victim ) )
+		return
+
+	Signal( victim, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+
+	EndSignal( clGlobal.levelEnt, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+	entity player = GetLocalViewPlayer()
+	EndSignal( player, "OnDestroy" )
+	EndSignal( victim, ENDORSEMENT_AIRBORNESCAN_REVEAL_SIGNAL )
+	EndSignal( victim, "OnDestroy" )
+	var rui = RuiCreate( $"ui/endorsement_airborne_scan.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, 0 )
+	InitHUDRui( rui )
+
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), "Valk_Ultimate_AcquireTarget_1P" )
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "pinToEdge", true )
+	RuiSetBool( rui, "showClampArrow", true )
+	RuiSetString( rui, "hint", "" )
+
+	int attachment = victim.LookupAttachment( "CHESTFOCUS" )
+	RuiTrackFloat3( rui, "pos", victim, RUI_TRACK_POINT_FOLLOW, attachment )
+	bool isChampion   = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) && victim.IsNPC() ? false : GradeFlagsHas( victim, eTargetGrade.CHAMPION )
+	bool isKillLeader = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) && victim.IsNPC() ? false : GradeFlagsHas( victim, eTargetGrade.CHAMP_KILLLEADER )
+	RuiSetBool( rui, "isChampion", isChampion )
+	RuiSetBool( rui, "isKillLeader", isKillLeader )
+
+
+		if ( GameMode_IsActive( eGameModes.CONTROL ) )
+		{
+			bool isEXPLeader = GradeFlagsHas( victim, eTargetGrade.EXP_LEADER )
+			RuiSetBool( rui, "isEXPLeader", isEXPLeader )
+		}
+
+
+
+	var fRui = FullMap_AddEnemyLocation( victim )
+	var mRui = Minimap_AddEnemyToMinimap( victim )
+
+	OnThreadEnd (
+		function() : ( victim, rui, fRui, mRui )
+		{
+			RuiDestroy( rui )
+			Fullmap_RemoveRui( fRui )
+			RuiDestroy( fRui )
+			Minimap_CommonCleanup( mRui )
+		}
+	)
+
+		while( true )
+		{
+			bool scanBlocked = FerroWall_BlockScan( player.EyePosition(), victim.GetWorldSpaceCenter() )
+			RuiSetBool( rui, "isVisible", !scanBlocked )
+			WaitFrame()
+		}
+
+
+
+}
+
+
+
+
+bool function Endorsement_AirborneScan_ThreatVisionShouldRevealEnemy( entity enemy )
+{
+	if ( !enemy.IsPlayer() && !enemy.IsPlayerDecoy() )
+	{
+		string scriptName = enemy.GetScriptName()
+		if ( scriptName == MIRAGE_DECOY_DROP_SCRIPTNAME )
+			return true
+		else if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) && ( scriptName == FIRING_RANGE_DUMMIE_SCRIPT_NAME || scriptName == FIRING_RANGE_COMBAT_DUMMIE_SCRIPT_NAME ) )
+			return true
+		else
+			return false
+	}
+
+	if ( !enemy.IsPlayerDecoy() )
+	{
+		if ( BleedoutState_GetPlayerBleedoutState( enemy ) != BS_NOT_BLEEDING_OUT )
+			return false
+	}
+
+
+
+
+
+
+	return true
+}
+ 

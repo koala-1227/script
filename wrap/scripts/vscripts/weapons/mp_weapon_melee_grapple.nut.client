@@ -1,0 +1,835 @@
+
+
+
+global function Melee_Grapple_Init
+
+global function OnWeaponActivate_melee_grapple
+global function MeleeGrapple_TryMeleeGrapple
+global function OnWeaponPrimaryAttack_melee_grapple
+global function OnWeaponAttemptOffhandSwitch_melee_grapple
+global function OnWeaponReadyToFire_melee_grapple
+global function MeleeGrapple_OnMeleeGrappleActivate
+global function MeleeGrapple_OnMeleeGrappleAttach
+global function MeleeGrapple_OnMeleeGrappleDetach
+global function MeleeGrapple_MeleeGrappleDetachFromNPC
+
+
+
+
+
+
+
+
+
+
+global const string MELEE_GRAPPLE_WEAPON_NAME = "mp_weapon_melee_grapple"
+
+const int GRAPPLEFLAG_CHARGED	= (1<<0)
+
+const string MELEE_GRAPPLE_CHANGED_TARGET_SIGNAL = "melee_grapple_changed_targets"
+const string MELEE_GRAPPLE_STOP_TRACKING_SIGNAL = "melee_grapple_stop_tracking"
+
+const string MELEE_GRAPPLE_DISTANCE_VAR = "grapple_maxLength"
+const int MELEE_GRAPPLE_TRACKING_ACTIVE_DISTANCE = 30
+const float MELEE_GRAPPLE_TRACKING_ANGLE = DOT_5DEGREE
+
+const asset MELEE_GRAPPLE_FRIENDLY_CUSTOM_MATERIAL_ASSET = $"cable/wildcard_cable_glow"
+const string MELEE_GRAPPLE_FRIENDLY_CUSTOM_MATERIAL_NAME = "cable/wildcard_cable_glow"
+const asset MELEE_GRAPPLE_ENEMY_CUSTOM_MATERIAL_ASSET = $"cable/wildcard_cable_glow_nme"
+const string MELEE_GRAPPLE_ENEMY_CUSTOM_MATERIAL_NAME = "cable/wildcard_cable_glow_nme"
+
+const string MELEE_GRAPPLE_SOUND_MOD = "melee_grapple_sound"
+
+struct
+{
+	int grappleExplodeImpactTable
+	array<void functionref( entity player, entity hitent, vector hitpos, vector hitNormal )> onGrappledCallbacks
+	array<void functionref( entity player )> onGrappleDetachCallbacks
+
+	int grappleDrainBaseCost = 100
+	float grappleDrainMinDist = 300
+	float grappleDrainMaxDist = 4500
+	float grappleDrainMaxDist_Zscalar = 0.0
+
+
+	entity targetEntity = null
+	bool fadeOutRui = false
+
+} file
+
+void function Melee_Grapple_Init()
+{
+	file.grappleExplodeImpactTable = PrecacheImpactEffectTable( "exp_rocket_archer" )
+
+	RegisterSignal( "Grapple_OnTouchGround" )
+	RegisterSignal( "Grapple_CooldownQueue" )
+	RegisterSignal( MELEE_GRAPPLE_CHANGED_TARGET_SIGNAL )
+	RegisterSignal( MELEE_GRAPPLE_STOP_TRACKING_SIGNAL )
+
+	PrecacheMaterial( MELEE_GRAPPLE_FRIENDLY_CUSTOM_MATERIAL_ASSET )
+	PrecacheMaterial( MELEE_GRAPPLE_ENEMY_CUSTOM_MATERIAL_ASSET )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		AddCallback_OnPassiveChanged( ePassives.PAS_ENDORSEMENT_PHASE_PULL, MeleeGrapple_OnPassiveChanged )
+
+
+
+		AddCreateCallback( PLAYER_WAYPOINT_CLASSNAME, OnWaypointCreated )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnWaypointCreated( entity wp )
+{
+	int wpType = wp.GetWaypointType()
+	if ( wpType == eWaypoint.ORBITAL_SUPPORT_TRACKER )
+	{
+		thread MeleeGrapple_OrbitalSupportIntegration_Thread( wp )
+	}
+}
+
+
+
+void function MeleeGrapple_OrbitalSupportIntegration_Thread( entity wp )
+{
+	entity owner  = wp.GetOwner()
+	entity target = wp.GetParent()
+
+	if ( GetLocalViewPlayer() == owner )
+	{
+		wp.EndSignal( "OnDeath" )
+		wp.EndSignal( "OnDestroy" )
+
+		OnThreadEnd(
+			function() : ( )
+			{
+				file.fadeOutRui = false
+			}
+		)
+
+		while( true )
+		{
+			bool hasHits= int( wp.GetWaypointFloat( 0 ) ) > 0
+			file.fadeOutRui = hasHits
+
+			WaitFrame()
+		}
+	}
+}
+
+
+
+void function MeleeGrapple_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( !IsValid( player ) )
+		return
+
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+
+	if( nowHas )
+	{
+		if ( player.IsClassModAvailableForPlayerSetting( MELEE_GRAPPLE_SOUND_MOD ) && !HasPlayerSettingMod( player, MELEE_GRAPPLE_SOUND_MOD ) )
+		{
+			GivePlayerSettingsMods( player, [MELEE_GRAPPLE_SOUND_MOD] )
+		}
+
+		thread MeleeGrapple_DetectTarget_Thread( player )
+
+
+
+
+
+	}
+	else
+	{
+		if ( player.IsClassModAvailableForPlayerSetting( MELEE_GRAPPLE_SOUND_MOD ) && HasPlayerSettingMod( player, MELEE_GRAPPLE_SOUND_MOD ) )
+		{
+			TakePlayerSettingsMods( player, [MELEE_GRAPPLE_SOUND_MOD] )
+		}
+
+		player.Signal( MELEE_GRAPPLE_STOP_TRACKING_SIGNAL )
+
+
+
+
+
+	}
+}
+
+
+bool function MeleeGrapple_TryMeleeGrapple( entity player, entity weapon )
+{
+    if ( weapon.GetWeaponClassName() != MELEE_GRAPPLE_WEAPON_NAME )
+        return false
+
+    MeleeGrapple_PerformMeleeGrapple( player, weapon )
+
+    return true
+}
+
+void function MeleeGrapple_PerformMeleeGrapple( entity player, entity weapon )
+{
+    if ( weapon.GetWeaponPrimaryClipCount() < weapon.GetAmmoPerShot() )
+        return
+
+    OnWeaponPrimaryAttack_melee_grapple( weapon, player )
+}
+
+void function OnWeaponActivate_melee_grapple( entity weapon )
+{
+	entity weaponOwner = weapon.GetWeaponOwner()
+	int pmLevel = -1
+	if ( (pmLevel >= 2) && IsValid( weaponOwner ) )
+		weapon.SetScriptTime0( Time() )
+	else
+		weapon.SetScriptTime0( 0.0 )
+
+	
+	{
+		int oldFlags = weapon.GetScriptFlags0()
+		weapon.SetScriptFlags0( oldFlags & ~GRAPPLEFLAG_CHARGED )
+	}
+}
+
+int function OnWeaponPrimaryAttack_melee_grapple( entity weapon, entity player )
+{
+	entity owner = weapon.GetWeaponOwner()
+
+	if ( owner.IsPlayer() )
+	{
+
+
+
+
+
+		int pmLevel = -1
+		float scriptTime = weapon.GetScriptTime0()
+		if ( (pmLevel >= 2) && (scriptTime != 0.0) )
+		{
+			float chargeMaxTime = weapon.GetWeaponSettingFloat( eWeaponVar.custom_float_0 )
+			float chargeTime = (Time() - scriptTime)
+			if ( chargeTime >= chargeMaxTime )
+			{
+				int oldFlags = weapon.GetScriptFlags0()
+				weapon.SetScriptFlags0( oldFlags | GRAPPLEFLAG_CHARGED )
+			}
+		}
+	}
+
+	
+
+	vector traceStart = player.EyePosition()
+	vector traceDir = AnglesToForward( player.EyeAngles() )
+	vector traceVec = ( traceDir * 10 )
+	vector traceEnd = traceStart + traceVec
+
+	vector grappleDirection = traceDir 
+	entity grappleAutoAimTarget = null
+	if ( owner.IsPlayer() )
+	{
+		if ( !owner.IsGrappleActive() )
+		{
+			entity autoAimTarget = GrappleAutoAim_FindTarget( owner )
+			if ( autoAimTarget )
+			{
+				if ( autoAimTarget != owner && autoAimTarget.GetTeam() != owner.GetTeam() )
+				{
+					vector ownerToTarget = autoAimTarget.GetWorldSpaceCenter() - traceStart 
+					grappleDirection = Normalize( ownerToTarget )
+					grappleAutoAimTarget = autoAimTarget
+				}
+			}
+		}
+	}
+
+	owner.Grapple( grappleDirection )
+
+	if ( owner.IsPlayer() && owner.IsGrappleActive() && grappleAutoAimTarget )
+	{
+		owner.SetGrappleAutoAimTarget( grappleAutoAimTarget )
+	}
+
+	return PLAYER_MELEE_STATE_NONE
+}
+
+bool function OnWeaponAttemptOffhandSwitch_melee_grapple( entity weapon )
+{
+	return true 
+
+    entity ownerPlayer = weapon.GetWeaponOwner()
+	bool allowSwitch = (ownerPlayer.GetSuitGrapplePower() >= 100.0)
+
+	if ( !allowSwitch )
+	{
+		Assert( ownerPlayer == weapon.GetWeaponOwner() )
+		ownerPlayer.Grapple( <0,0,1> )
+	}
+
+	return allowSwitch
+}
+
+void function OnWeaponReadyToFire_melee_grapple( entity weapon )
+{
+	
+	
+	
+}
+
+void function DoGrappleImpactExplosion( entity player, entity grappleWeapon, entity hitent, vector hitpos, vector hitNormal )
+{
+
+	if ( !grappleWeapon.ShouldPredictProjectiles() )
+		return
+
+
+	vector origin = hitpos + hitNormal * 16.0
+	int damageType = (DF_RAGDOLL | DF_EXPLOSION | DF_ELECTRICAL)
+	WeaponFireGrenadeParams fireGrenadeParams
+	fireGrenadeParams.pos = origin
+	fireGrenadeParams.vel = hitNormal
+	fireGrenadeParams.angVel = <0,0,0>
+	fireGrenadeParams.fuseTime = 0.01
+	fireGrenadeParams.scriptTouchDamageType = damageType
+	fireGrenadeParams.scriptExplosionDamageType = damageType
+	fireGrenadeParams.clientPredicted = true
+	fireGrenadeParams.lagCompensated = true
+	fireGrenadeParams.useScriptOnDamage = true
+	entity nade = grappleWeapon.FireWeaponGrenade( fireGrenadeParams )
+	if ( !IsValid( nade ) || nade == null )
+		return
+
+	nade.SetImpactEffectTable( file.grappleExplodeImpactTable )
+	nade.GrenadeExplode( hitNormal )
+}
+
+void function MeleeGrapple_OnMeleeGrappleActivate( entity player )
+{
+}
+
+void function MeleeGrapple_OnMeleeGrappleAttach( entity player, entity hitent, vector hitpos, vector hitNormal )
+{
+	bool missedEnemy = false
+	if ( IsValid( hitent ) && !( hitent.IsPlayer() || hitent.IsNPC() ) )
+	{
+		player.GrappleDetach()
+		missedEnemy = true
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	{
+		if ( !IsValid( player ) )
+			return
+
+		entity grappleWeapon = player.GetOffhandWeapon( eOffhandInv.MELEE )
+		if ( !IsValid( grappleWeapon ) )
+			return
+		if ( !grappleWeapon.GetWeaponSettingBool( eWeaponVar.grapple_weapon ) )
+			return
+
+		if ( grappleWeapon.GetWeaponSettingBool( eWeaponVar.grapple_scaled_ammo_drain ) )
+		{
+			thread GrappleDecreaseAmmo( player, grappleWeapon, missedEnemy )
+		}
+		else
+		{
+			int minAmmo = missedEnemy ? GetWeaponInfoFileKeyField_GlobalInt( MELEE_GRAPPLE_WEAPON_NAME, "ammo_on_missed_enemy") : 0
+			int newAmmo = maxint( minAmmo, grappleWeapon.GetWeaponPrimaryClipCount() - grappleWeapon.GetWeaponSettingInt( eWeaponVar.ammo_min_to_fire ) )
+			grappleWeapon.SetWeaponPrimaryClipCount( newAmmo )
+
+
+
+
+		}
+
+		int flags = grappleWeapon.GetScriptFlags0()
+		if ( !IsBitFlagSet( flags, GRAPPLEFLAG_CHARGED ) )
+			return
+
+		int expDamage = grappleWeapon.GetWeaponSettingInt( eWeaponVar.explosion_damage )
+		if ( expDamage <= 0 )
+			return
+
+		DoGrappleImpactExplosion( player, grappleWeapon, hitent, hitpos, hitNormal )
+	}
+}
+
+struct GrappleDistanceInfo
+{
+	vector startPos
+	vector lastPos
+	float  distanceTraveled
+	float  distanceTraveled_z
+}
+
+void function GrappleDecreaseAmmo( entity player, entity grappleWeapon, bool missedEnemy )
+{
+
+		if ( !InPrediction() )
+			return
+
+
+	player.EndSignal( "OnDeath" )
+	grappleWeapon.EndSignal( "OnDestroy" )
+
+	GrappleDistanceInfo info
+
+	info.startPos = player.GetOrigin()
+	info.lastPos = info.startPos
+	info.distanceTraveled = 0.0
+	info.distanceTraveled_z = 0.0
+
+	float startTime = Time()
+
+	int minAmmoToFire = grappleWeapon.GetWeaponSettingInt( eWeaponVar.ammo_min_to_fire )
+	int startAmmo = grappleWeapon.GetWeaponPrimaryClipCount()
+	int maxStockpile = grappleWeapon.GetWeaponSettingInt( eWeaponVar.ammo_stockpile_max )
+	grappleWeapon.SetWeaponPrimaryClipCount( 0 )
+
+	grappleWeapon.AddMod( "grapple_regen_stop" )
+	grappleWeapon.RegenerateAmmoReset()
+
+	OnThreadEnd(
+		function() : ( player, info, startAmmo, minAmmoToFire, grappleWeapon, missedEnemy )
+		{
+			if ( IsValid( player ) )
+			{
+				if ( IsValid( grappleWeapon ) )
+				{
+
+						if ( grappleWeapon.GetWeaponOwner() != player || !IsLocalViewPlayer( player ) )
+							return
+
+
+					info.distanceTraveled += Distance2D( info.lastPos, player.GetOrigin() )
+					info.distanceTraveled_z = max( info.distanceTraveled_z, fabs( player.GetOrigin().z - info.startPos.z ) )
+
+					float distanceTraveled = max( info.distanceTraveled, (info.distanceTraveled_z * file.grappleDrainMaxDist_Zscalar) )
+
+					ReduceAmmoBasedOnDistance( grappleWeapon, distanceTraveled, startAmmo, minAmmoToFire, missedEnemy )
+				}
+			}
+		}
+	)
+
+	player.EndSignal( "JumpPad_GiveDoubleJump" )
+
+	bool playerWasOnZipline = player.IsZiplining()
+	while ( player.IsGrappleActive() || Length( player.GetVelocity() ) > 500.0 )
+	{
+		if ( player.IsZiplining() && !playerWasOnZipline )
+			break
+
+		if ( !player.IsZiplining() )
+			playerWasOnZipline =  false
+
+		if ((Time() - startTime) > 5)
+			break
+
+		info.distanceTraveled += Distance2D( info.lastPos, player.GetOrigin() )
+		info.distanceTraveled_z = max( info.distanceTraveled_z, fabs( player.GetOrigin().z - info.startPos.z ) )
+
+		info.lastPos = player.GetOrigin()
+
+		
+		wait 0.1
+	}
+}
+
+void function ReduceAmmoBasedOnDistance( entity grappleWeapon, float distanceTraveled, int startAmmo, int ammoPerShot, bool missedEnemy )
+{
+
+		if ( !InPrediction() )
+			return
+
+
+	if ( !IsValid( grappleWeapon.GetWeaponOwner() ) )
+		return
+
+	
+	
+
+	float XYScalar = GraphCapped( distanceTraveled, file.grappleDrainMinDist, file.grappleDrainMaxDist, 0, 1.0 )
+	
+
+	
+	
+
+	int amountToReduce = int( GraphCapped( XYScalar, 0, 1.0, 0, ammoPerShot ) ) 
+	amountToReduce += file.grappleDrainBaseCost
+
+	int minAmmo = missedEnemy ? GetWeaponInfoFileKeyField_GlobalInt( MELEE_GRAPPLE_WEAPON_NAME, "ammo_on_missed_enemy") : 0
+	int newAmmo = minint( ammoPerShot, maxint( minAmmo, startAmmo - amountToReduce ) )
+
+	
+	
+	
+
+	grappleWeapon.SetWeaponPrimaryClipCount( newAmmo )
+
+	if ( grappleWeapon.HasMod( "grapple_regen_stop" ) )
+		grappleWeapon.RemoveMod( "grapple_regen_stop" )
+
+	grappleWeapon.RegenerateAmmoReset()
+}
+
+
+
+
+
+
+
+
+void function MeleeGrapple_OnMeleeGrappleDetach( entity player )
+{
+
+
+
+}
+
+bool function MeleeGrapple_MeleeGrappleDetachFromNPC( entity player, entity npc )
+{
+	if( IsValid( player ) && IsValid( npc ) )
+	{
+		if( npc.GetAIClassName() == "prowler" && Length( player.GetVelocity() ) > 400 )
+		{
+			return true
+		}
+	}
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________LOS_TARGETS__________________________(){}
+#endif
+
+
+void function MeleeGrapple_DetectTarget_Thread( entity player )
+{
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( MELEE_GRAPPLE_STOP_TRACKING_SIGNAL )
+
+	OnThreadEnd(
+		function() : ()
+		{
+			file.targetEntity = null
+		}
+	)
+
+	while( IsValid( player ) )
+	{
+		
+		entity target = GrappleAutoAim_FindTarget( player )
+		if ( target != file.targetEntity )
+		{
+			file.targetEntity = target
+			MeleeGrapple_Start_Tracking_Rui(player, file.targetEntity)
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function MeleeGrapple_Start_Tracking_Rui( entity player, entity target )
+{
+	if ( !IsValid( player ) )
+		return
+
+	player.Signal( MELEE_GRAPPLE_CHANGED_TARGET_SIGNAL )
+	thread MeleeGrapple_Tracking_Rui_Thread( player, target )
+}
+
+
+
+void function MeleeGrapple_Tracking_Rui_Thread(  entity player, entity target )
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( player ) || !IsValid( target ) )
+		return
+
+	if ( GetGameState() >= eGameState.Resolution )
+		return
+
+	EndSignal( target, "OnDestroy", "OnDeath" )
+	EndSignal( target, "OnModelChanged" )
+	EndSignal( player, MELEE_GRAPPLE_CHANGED_TARGET_SIGNAL )
+	EndSignal( player, MELEE_GRAPPLE_STOP_TRACKING_SIGNAL )
+	EndSignal( player, "OnDestroy" )
+
+	var rui = RuiCreate( $"ui/endorsement_phase_pull_target.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, RuiCalculateDistanceSortKey( player.EyePosition(), target.GetOrigin() ) )
+	InitHUDRui( rui )
+
+	RuiSetBool( rui, "isVisible", false )
+
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	target.DoModelChangeScriptCallback( true )
+
+	OnThreadEnd(
+		function() : ( rui, target, player)
+		{
+			RuiDestroyIfAlive( rui )
+
+			if ( IsValid( target ) && target.IsPlayer() )
+			{
+				target.DoModelChangeScriptCallback( false )
+				target.SetTargetInfoStatusIcon( $"" )
+			}
+		}
+	)
+
+	while ( IsValid( player ) )
+	{
+		
+		bool isValidTarget = IsValid( target )
+
+
+			if ( !Endorsement_PhasePull_CheckCanUse( player ) )
+			{
+				RuiSetBool( rui, "isVisible", false )
+				WaitFrame()
+				continue
+			}
+
+
+		if ( isValidTarget && target.GetTeam() != player.GetTeam() )
+		{
+			vector pos = target.GetWorldSpaceCenter()
+			pos += <0, 0, 15>
+
+			RuiSetFloat3( rui, "pos", pos )
+			RuiSetBool( rui, "isVisible", true )
+
+			RuiSetBool( rui, "enemyObstructing", CheckIfEnemyIsObstructing( player, target ) )
+		}
+		else
+		{
+			RuiSetBool( rui, "isVisible", false )
+		}
+
+		RuiSetBoolIfExists( rui, "fadeOut", file.fadeOutRui )
+
+		entity grappleWeapon = player.GetOffhandWeapon( eOffhandInv.MELEE )
+		if ( IsValid( grappleWeapon ) && grappleWeapon.GetWeaponSettingBool( eWeaponVar.grapple_weapon ) )
+		{			
+			bool isGrappling = player.IsGrappleAttached()
+			RuiSetBool( rui, "isGrappling", isGrappling )
+
+			bool isOnCooldown = grappleWeapon.GetWeaponPrimaryClipCount() < grappleWeapon.GetWeaponSettingInt( eWeaponVar.ammo_min_to_fire )
+			RuiSetBool( rui, "isOnCooldown", isOnCooldown && !isGrappling ) 
+		}
+
+		WaitFrame()
+	}
+}
+
+ 

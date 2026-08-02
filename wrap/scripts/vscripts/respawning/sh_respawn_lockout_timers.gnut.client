@@ -1,0 +1,1335 @@
+
+
+
+global function LockoutTimeSynced_PLV_Enabled
+global function Freespawns_PLV_LockoutTime_Progress_PastDisable
+
+
+
+global function LockoutTimers_Init
+
+global function AddCallback_OnGiveAggroReward
+global function RemoveCallback_OnGiveAggroReward
+
+
+global function LockoutTime_GetBaseLockoutDurationForCurrentRound
+global function LockoutTime_GetPersonalLockoutStartTime
+global function LockoutTime_GetPersonalLockoutEndTime
+global function LockoutTime_GetBaseDurationAdjustments
+
+global function AggroRewards_GetRewardByType
+global function LockoutTime_ServerToClient_OnAggroRewardReceived	
+
+#if DEV
+global function DEV_Freespawns_SetBaseLockoutTimeForRound
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const string LOCKOUT_TIMES_DEFAULTS 		= "10 20 30 40 50 60"
+const string LOCKOUT_DEATHADDS_DEFAULTS 	= "05 10 15 15 15 15"
+
+
+const string LOCKOUT_TUNINGS_INTRO_ACTIVE 	= "Freespawns_Lockout_IntroTuning_Active"
+const string LOCKOUT_TUNINGS_HYPER_ACTIVE 	= "Freespawns_Lockout_HyperTuning_Active"
+
+global const string NETVAR_PERSONAL_LOCKOUT_BASE_TIME_ADJUSTMENTS	= "Freespawn_PersonalBaseLockoutTimeAdjustments"
+global const string NETVAR_PERSONAL_LOCKOUT_START_TIME 				= "Freespawn_PersonalLockoutStartTime"
+global const string NETVAR_PERSONAL_LOCKOUT_END_TIME 				= "Freespawn_PersonalLockoutEndTime"
+
+
+
+
+
+
+
+const string RESPAWN_COUNTDOWN_THREAD_START = "Freespawn_RespawnCountdownThread_Start"
+
+
+const float LOCKOUTTIME_MAX = 255.0
+const float MAX_LOCKOUT_GAMETIME = 9999.0
+
+
+const float LOCKOUT_COUNTDOWN_DURATION = 5.0
+
+
+enum eDeathModulationType 
+{
+	PENALTY_DEATH,
+	PENALTY_BLEEDOUT,
+	PENALTY_SUICIDE,
+	PENALTY_EXECUTED,
+	REWARD_DOWN,
+	REWARD_KILL,
+	REWARD_EXECUTION,
+	COUNT_
+}
+
+
+
+
+
+
+
+
+
+
+struct
+{
+	bool devPrintsOn = false
+
+
+
+
+
+
+
+
+
+
+		array< float > lockoutTimeMinimumsByRound_Explicit
+		array< float > lockoutTimeDeathPenaltiesByRound_Explicit
+		array< void functionref( entity actionPlayer, int aggroType, int count ) > onGiveAggroReward_Callbacks 
+
+} file
+
+
+
+
+#if DEV
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEV_HELPERS___________________________(){}
+#endif
+
+
+void function DEV_Freespawns_SetBaseLockoutTimeForRound( int round = 0, float duration = 90 )
+{
+	file.lockoutTimeMinimumsByRound_Explicit[ round ] = duration
+}
+
+void function DevOut( string printMe, bool forcePrint = false )
+{
+	if( forcePrint || file.devPrintsOn )
+	{
+		printt( "** FREERESPAWNS LOCKOUT TIMER ** " + printMe )
+	}
+}
+
+#endif
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PLAYLIST_VARS___________________________(){}
+#endif
+
+
+string function Lockout_PLV_LockoutTimeMinimums_ByRound()
+{
+	return GetCurrentPlaylistVarString( "freespawns_lockouttimes_byround", LOCKOUT_TIMES_DEFAULTS ) 
+}
+
+bool function LockoutTimeSynced_PLV_Enabled()
+{
+	
+	return GetCurrentPlaylistVarBool( "freespawns_lockouttime_synced_enabled", true ) 
+}
+
+float function LockoutTimeSynced_PLV_AllyDeathPenalty()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_lockouttime_synced_allydeathpenalty", 0.0 ) 
+}
+
+
+
+bool function Lockout_PLV_IntroTunings_Enabled()
+{
+	
+	return GetCurrentPlaylistVarBool( "freespawns_lockout_introtunings_enabled", true )
+}
+
+int function Lockout_PLV_IntroTunings_Round()
+{
+	
+	return GetCurrentPlaylistVarInt( "freespawns_lockout_introtunings_round", 1 )
+}
+
+float function Lockout_PLV_IntroTunings_LockoutTime()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_lockout_introtunings_lockouttime", 5.0 )
+}
+
+float function Lockout_PLV_IntroTunings_DeathAdd()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_lockout_introtunings_deathadd", 5.0 )
+}
+
+bool function Lockout_PLV_HyperTunings_Enabled()
+{
+	
+	return GetCurrentPlaylistVarBool( "freespawns_lockout_hypertunings_enabled", false )
+}
+
+int function Lockout_PLV_HyperTunings_StartAt_EndofRound()
+{
+	
+	return GetCurrentPlaylistVarInt( "freespawns_lockout_hypertunings_startat_endofround", 4 )
+}
+
+float function Lockout_PLV_HyperTunings_LockoutTime()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_lockout_hypertunings_lockouttime", 60.0 )
+}
+
+float function Lockout_PLV_HyperTunings_DeathAdd()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_lockout_hypertunings_deathadd", 30.0 )
+}
+
+float function Lockout_PLV_HyperTunings_AggroRewardMod()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_lockout_hypertunings_aggrorewardmod", 2.0 )
+}
+
+
+
+bool function LockoutDeathAdds_PLV_Enabled()
+{
+	
+	return GetCurrentPlaylistVarBool( "freespawns_lockoutdeathadds_enabled", true ) 
+}
+
+float function DeathAddMod_PLV_Penalty_Death()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_penalty_death", 1.0 )
+}
+
+float function DeathAddMod_PLV_Penalty_Bleedout()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_penalty_bleedout", 1.0 )
+}
+
+float function DeathAddMod_PLV_Penalty_Executed()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_penalty_executed", 1.5 )
+}
+
+float function DeathAddMod_PLV_Penalty_Suicide()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_penalty_suicide", 2.0 )
+}
+
+float function DeathAddMod_PLV_Reward_Down()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_reward_down", -0.5 )
+}
+
+float function DeathAddMod_PLV_Reward_Kill()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_reward_kill", -0.5 )
+}
+
+float function DeathAddMod_PLV_Reward_Execution()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathaddmod_reward_finish", -1.0 )
+}
+
+string function Lockout_PLV_DeathAdds_ByRound()
+{
+	return GetCurrentPlaylistVarString( "freespawns_lockoutdeathadds_byround", LOCKOUT_DEATHADDS_DEFAULTS )
+}
+
+bool function Freespawns_PLV_LockoutTime_Progress_PastDisable()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_lockouttime_progress_pastdisable", true ) 
+}
+
+
+
+bool function AggroRewards_PLV_Enabled()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_aggrorewards_enabled", true ) 
+}
+
+bool function AggroRewards_PLV_CanGive_Evo()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_aggrorewards_CanGive_evo", true )
+}
+
+bool function AggroRewards_PLV_CanGive_DownedEnemy()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_aggrorewards_CanGive_downedenemy", false ) 
+}
+
+bool function AggroRewards_PLV_CanGive_KilledEnemy()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_aggrorewards_CanGive_killedenemy", false ) 
+}
+
+bool function AggroRewards_PLV_CanGive_ExecutedEnemy()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_aggrorewards_CanGive_executedenemy", false ) 
+}
+
+bool function AggroRewards_PLV_CanGive_Penalty_AllyDeath()
+{
+	return GetCurrentPlaylistVarBool( "freespawns_aggrorewards_CanGive_penalty_allydeath", false ) 
+}
+
+float function AggroRewards_PLV_EvoToSeconds()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_aggrorewards_evo_to_seconds", -0.05  )
+}
+
+float function AggroRewards_PLV_DownedEnemy()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_aggrorewards_downedenemy", -5.0  ) 
+}
+
+float function AggroRewards_PLV_KilledEnemy()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_aggrorewards_killedenemy", -10  ) 
+}
+
+float function AggroRewards_PLV_ExecutedEnemy()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_aggrorewards_executedenemy", -15  ) 
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________TUNINGS___________________________(){}
+#endif
+
+
+bool function Lockout_IntroTunings_ActiveCheck()
+{
+	if( !Lockout_PLV_IntroTunings_Enabled() )
+		return false
+
+	bool result = GetGlobalNetBool( LOCKOUT_TUNINGS_INTRO_ACTIVE )
+
+#if DEV
+		printt( FUNC_NAME() + "(): " + LOCKOUT_TUNINGS_INTRO_ACTIVE + " == " + result )
+#endif
+
+	return result
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Lockout_HyperTunings_ActiveCheck()
+{
+	if( !Lockout_PLV_HyperTunings_Enabled() )
+		return false
+
+	bool result = GetGlobalNetBool( LOCKOUT_TUNINGS_HYPER_ACTIVE )
+
+#if DEV
+		printt( FUNC_NAME() + "(): Freespawns_Lockout_HyperTuning_Active == " + result )
+#endif
+
+	return result
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________INITIALIZATION___________________________(){}
+#endif
+
+
+void function LockoutTimers_Init()
+{
+	RegisterNetworking()
+	RegisterSignals()
+	RegisterCallbacks()
+
+	LockoutTime_Minimums_Init()
+	LockoutTime_DeathPenalties_Explicit_Init()
+
+		KnockedRespawnStatusWidget_Init()
+		RespawnTimeReductionWidget_Init()
+
+
+
+
+
+}
+
+void function RegisterNetworking()
+{
+	RegisterNetworkedVariable( LOCKOUT_TUNINGS_INTRO_ACTIVE, SNDC_GLOBAL, SNVT_BOOL  )
+	RegisterNetworkedVariable( LOCKOUT_TUNINGS_HYPER_ACTIVE, SNDC_GLOBAL, SNVT_BOOL  )
+
+	RegisterNetworkedVariable( NETVAR_PERSONAL_LOCKOUT_BASE_TIME_ADJUSTMENTS, SNDC_PLAYER_EXCLUSIVE, SNVT_TIME, 0.0 )
+	RegisterNetworkedVariable( NETVAR_PERSONAL_LOCKOUT_START_TIME, SNDC_PLAYER_GLOBAL, SNVT_TIME, 0.0 )
+	RegisterNetworkedVariable( NETVAR_PERSONAL_LOCKOUT_END_TIME, SNDC_PLAYER_GLOBAL, SNVT_TIME, 0.0 )
+
+	Remote_RegisterClientFunction( string( LockoutTime_ServerToClient_OnAggroRewardReceived ), "entity", 		"int", 0, eFreespawns_AggroType.COUNT_, "int", 0, 100000 )
+}
+
+void function RegisterSignals()
+{
+
+
+
+
+
+		RegisterSignal( RESPAWN_COUNTDOWN_THREAD_START )
+
+}
+
+void function RegisterCallbacks()
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		RegisterNetVarTimeChangeCallback( NETVAR_PERSONAL_LOCKOUT_END_TIME, LockoutTime_OnPersonalLockoutEndTimeChanged )
+
+}
+
+void function LockoutTime_Minimums_Init()
+{
+	string lockoutTimes_String = Lockout_PLV_LockoutTimeMinimums_ByRound()
+	array< string > lockoutTimes_StrArray = GetTrimmedSplitString( lockoutTimes_String, " " )
+	foreach( string ltStr in lockoutTimes_StrArray )
+	{
+		file.lockoutTimeMinimumsByRound_Explicit.append( float( ltStr ) )
+	}
+}
+
+void function LockoutTime_DeathPenalties_Explicit_Init()
+{
+	string lockout_DeathAdds_String = Lockout_PLV_DeathAdds_ByRound()
+	array< string > lockout_DeathAdds_StrArray = GetTrimmedSplitString( lockout_DeathAdds_String, " " )
+	foreach( string ltStr in lockout_DeathAdds_StrArray )
+	{
+		file.lockoutTimeDeathPenaltiesByRound_Explicit.append( float( ltStr ) )
+	}
+}
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________NETVAR_HELPERS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function LockoutTime_GetPersonalLockoutStartTime( entity player )
+{
+	return player.GetPlayerNetTime( NETVAR_PERSONAL_LOCKOUT_START_TIME )
+}
+
+float function LockoutTime_GetPersonalLockoutEndTime( entity player )
+{
+	return player.GetPlayerNetTime( NETVAR_PERSONAL_LOCKOUT_END_TIME )
+}
+
+
+float function LockoutTime_GetBaseLockoutDurationForCurrentRound( bool roundClosed = false )
+{
+	int round = SURVIVAL_GetCurrentDeathFieldStage()
+#if DEV
+		printt( FUNC_NAME() + "(): roundClosed == " + roundClosed )
+		printt( FUNC_NAME() + "(): Round Number ( Before Adjustment ) == " + round )
+#endif
+
+	round = maxint( 0, round )
+	round = roundClosed ? round + 1 : round
+
+	float lockoutTime
+
+	if( Lockout_IntroTunings_ActiveCheck() )
+	{
+		lockoutTime = Lockout_PLV_IntroTunings_LockoutTime()
+	}
+	else if( Lockout_HyperTunings_ActiveCheck() )
+	{
+		lockoutTime = Lockout_PLV_HyperTunings_LockoutTime()
+	}
+	else
+	{
+		lockoutTime = LockoutTime_GetMinimumBaseLockoutForRound_Explicit( round )
+	}
+
+#if DEV
+		printt( FUNC_NAME() + "(): Lockout Time for Stage " + round + " ==  " + lockoutTime )
+#endif
+
+	return lockoutTime
+}
+
+float function LockoutTime_GetMinimumBaseLockoutForRound_Explicit( int roundParm )
+{
+	
+	int lockOutTimes_Len = file.lockoutTimeMinimumsByRound_Explicit.len()
+
+	int round = roundParm < 0 ? 0 : roundParm
+	round = minint( round, lockOutTimes_Len - 1 )
+	float lockoutTime =  file.lockoutTimeMinimumsByRound_Explicit[ round ]
+#if DEV
+		printt( FUNC_NAME() + "(): Round == " + round )
+		printt( FUNC_NAME() + "(): Lockout Time == " + lockoutTime )
+#endif
+
+	return lockoutTime
+}
+
+float function LockoutTime_GetDeathPenaltyForRound( bool roundClosed = false )
+{
+	int round = SURVIVAL_GetCurrentDeathFieldStage()
+
+	round = maxint( 0, round )
+	round = roundClosed ? round + 1 : round
+
+	float lockoutDeathPenalty
+
+	if( Lockout_IntroTunings_ActiveCheck() )
+	{
+		lockoutDeathPenalty = Lockout_PLV_IntroTunings_DeathAdd()
+	}
+	else if( Lockout_HyperTunings_ActiveCheck() )
+	{
+		lockoutDeathPenalty = Lockout_PLV_HyperTunings_DeathAdd()
+	}
+	else
+	{
+		lockoutDeathPenalty = LockoutTime_GetDeathPenaltyForRound_Explicit( round )
+	}
+
+#if DEV
+		printt( FUNC_NAME() + "(): Lockout Death Penalty for Round " + round + " ==  " + lockoutDeathPenalty )
+#endif
+
+	return lockoutDeathPenalty
+}
+
+float function LockoutTime_GetDeathPenaltyForRound_Explicit( int roundParm )
+{
+	
+	int lockoutDeathAdds_Len = file.lockoutTimeDeathPenaltiesByRound_Explicit.len()
+
+	int round = maxint( 0, roundParm )
+	round = minint( round, lockoutDeathAdds_Len - 1 )
+	float lockoutDeathPenalty =  file.lockoutTimeDeathPenaltiesByRound_Explicit[ round ]
+#if DEV
+		printt( FUNC_NAME() + "(): Round == " + round )
+		printt( FUNC_NAME() + "(): Death Penalty for Round == " + lockoutDeathPenalty )
+#endif
+
+	return lockoutDeathPenalty
+}
+
+float function LockoutTime_GetBaseDurationAdjustments( entity player )
+{
+	return player.GetPlayerNetTime( NETVAR_PERSONAL_LOCKOUT_BASE_TIME_ADJUSTMENTS )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function AddCallback_OnGiveAggroReward( void functionref( entity actionPlayer, int aggroType, int count ) callback )
+{
+	Assert( !file.onGiveAggroReward_Callbacks.contains( callback ), "Already added " + string( callback ) + " with AddCallback_OnGiveAggroReward" )
+	file.onGiveAggroReward_Callbacks.append( callback )
+}
+
+void function RemoveCallback_OnGiveAggroReward( void functionref( entity actionPlayer, int aggroType, int count ) callback )
+{
+	int index = file.onGiveAggroReward_Callbacks.find( callback )
+
+	Assert( index != -1, "Requested RemoveCallback_OnGiveAggroReward " + string( callback ) + " to be removed not found! " )
+	file.onGiveAggroReward_Callbacks.fastremove( index )
+}
+
+
+
+
+void function LockoutTime_OnPersonalLockoutEndTimeChanged( entity player, float newEndTime )
+{
+	if ( newEndTime < 0 )
+		return
+
+	printt( FUNC_NAME() + "(): " + player + " endTime: " + newEndTime )
+
+	DeathScreen_UpdateRespawnTime()
+	thread LockoutTime_OnPersonalLockoutEndTimeChanged_Thread( player )
+}
+
+void function LockoutTime_OnPersonalLockoutEndTimeChanged_Thread( entity player )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+
+	if ( !IsValid( player ) )
+		return
+
+	if ( !IsLocalClientPlayer( player ) )
+		return
+
+	player.Signal( RESPAWN_COUNTDOWN_THREAD_START )
+	player.EndSignal( RESPAWN_COUNTDOWN_THREAD_START, "OnDestroy" )
+	EndSignal( clGlobal.levelEnt, "OnDestroy", "LocalClientPlayerRespawned"  )
+
+	player.EndSignal( "freespawns_gameover" )
+
+	while ( IsValidPlayer( player ) )
+	{
+		
+		float timeRemainingUntilRespawn = LockoutTime_GetPersonalLockoutEndTime( player ) - Time()
+		bool shouldCountdownSfxBeActive = timeRemainingUntilRespawn <= LOCKOUT_COUNTDOWN_DURATION
+
+		if ( shouldCountdownSfxBeActive )
+		{
+			
+			
+			EmitSoundOnEntity( player, "Survival_Freespawn_TokenCountdown_1P"  )
+			wait 1.0
+		}
+		else if ( timeRemainingUntilRespawn > 0.0 )
+		{
+			
+			WaitFrame()
+		}
+		else
+		{
+			
+			EmitSoundOnEntity( player, "Survival_Freespawn_TokenUse_1P" )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________AGGRO_REWARDS___________________________(){}
+#endif
+
+
+bool function AggroRewards_AreEnabled()
+{
+	bool freespawnsEnabled = true 
+
+		freespawnsEnabled = FreeRespawns_Feature_IsInEffect()
+
+
+	bool aggroRewardsEnabled = AggroRewards_PLV_Enabled()
+	return freespawnsEnabled && aggroRewardsEnabled
+}
+
+float function AggroRewards_GetRewardByType( int aggroRewardType )
+{
+	if ( !AggroRewards_AreEnabled() )
+		return 0
+
+	float result
+	switch( aggroRewardType )
+	{
+		case eFreespawns_AggroType.DOWNED_ENEMY:
+			result = AggroRewards_PLV_DownedEnemy()
+			break
+		case eFreespawns_AggroType.KILLED_ENEMY:
+			result = AggroRewards_PLV_KilledEnemy()
+			break
+		case eFreespawns_AggroType.EXECUTED_ENEMY:
+			result = AggroRewards_PLV_ExecutedEnemy()
+			break
+		case eFreespawns_AggroType.PENALTY_ALLYDEATH:
+			result = LockoutTimeSynced_PLV_AllyDeathPenalty()
+			break
+		case eFreespawns_AggroType.EVO:
+			result = AggroRewards_PLV_EvoToSeconds()
+			break
+		default:
+			result = 0
+			break
+	}
+
+	if ( Lockout_HyperTunings_ActiveCheck() )
+	{
+		float rewardMod = Lockout_PLV_HyperTunings_AggroRewardMod()
+		result = result * rewardMod
+	}
+
+	return result
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function LockoutTime_ServerToClient_OnAggroRewardReceived( entity actionPlayer, int aggroType, int count )
+{
+
+#if DEV
+			printt( FUNC_NAME() + "(): actionPlayer 	== " + actionPlayer )
+			printt( FUNC_NAME() + "(): GetLocalViewPlayer()	 == " + GetLocalViewPlayer() )
+			printt( FUNC_NAME() + "(): GetLocalClientPlayer()== " + GetLocalClientPlayer() )
+			printt( FUNC_NAME() + "(): aggroType 	== " + aggroType )
+#endif
+
+		foreach ( func in file.onGiveAggroReward_Callbacks )
+		{
+			func( actionPlayer, aggroType, count )
+		}
+
+
+
+}
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEATH_TIME_MODULATIONS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ANALYTICS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           

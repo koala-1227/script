@@ -1,0 +1,1098 @@
+global function MpAbilityValkJets_Init
+
+global function OnWeaponActivate_ability_valk_jets
+global function OnWeaponDeactivate_ability_valk_jets
+global function OnWeaponChargeBegin_ability_valk_jets
+global function OnWeaponChargeEnd_ability_valk_jets
+global function OnWeaponPrimaryAttack_ability_valk_jets
+global function OnWeaponAttemptOffhandSwitch_ability_valk_jets
+
+global function CodeCallback_OnPlayerJetpackStop
+global function CodeCallback_OnPlayerJetpackStart
+
+
+
+
+
+
+
+global function Valk_EnableHudColorCorrection
+global function Valk_DisableHudColorCorrection
+global function Valk_CreateJetPackRui
+global function Valk_GetJetPackRui
+global function Valk_DestroyJetPackRui
+
+
+
+const asset SKYWARD_JUMPJETS_FRIENDLY = $"P_valk_jet_fly_ON"
+const asset SKYWARD_JUMPJETS_ENEMY = $"P_valk_jet_fly_ON"
+const asset VALK_AMB_EXHAUST_FP = $"P_valk_spear_thruster_idle"
+const asset VALK_AMB_EXHAUST_3P = $"P_valk_spear_thruster_idle_3P"
+
+
+global const string VALK_JETPACK_WEAPON_NAME = "mp_ability_valk_jets"
+
+
+const string JETPACK_OFF_SIGNAL = "JetpackOff"
+
+const string VALK_TEAMMATE_START_TRACKING_SIGNAL = "ValkTeammateStartTracking"
+const string VALK_FLIGHT_REVEAL_SIGNAL = "ValkFlightReveal"
+
+
+
+
+
+
+
+const string VALK_TRACKING_ACTIVE_NETVAR = "valkTrackingActive"
+
+
+global const string VALK_UPGRADE_PAS_AIR_CONTROL = "valk_jetpack_manuverability"
+global const string VALK_UPGRADE_PAS_EFFICIENCY = "valk_jetpack_increased_efficiency"
+global const string VALK_SKYDIVE_IMPROVEMENTS = "valk_skydive_improvements"
+global const string VALK_JETPACK_COOLDOWN_ON_GROUND = "valk_jetpack_cooldown_on_ground"
+
+enum eJetpackCooldownMode
+{
+	ALWAYS,
+	WAIT_FOR_FIRST_GROUND_TOUCH,
+	ONLY_WHEN_GROUNDED
+}
+
+struct
+{
+	float jetpackReactivationDelay = 0.25
+	bool valkJetsPredictFix = true
+
+
+		float ultHudHighlightRange = 210 * METERS_TO_INCHES
+		float ultHudHighlightRangeSqr
+		float ultHudHighlightRangeUpgrade = 250 * METERS_TO_INCHES
+		float ultHudHighlightRangeUpgradeSqr
+
+
+
+
+
+
+
+
+} tuning
+
+struct
+{
+
+		int  colorCorrection
+		bool colorCorrectionActive
+
+		int						valkTrackersActive
+		array<entity>			valkEnemiesTracked
+		table<entity, int>		valkEnemiesTrackedCount
+
+		var jetPackRui
+
+
+	table<entity, float>                  valkToJumpHeldStartTime
+	table<entity, array<entity> >         valkToJumpJetFXs
+
+
+
+
+
+
+
+
+} file
+
+
+void function MpAbilityValkJets_Init()
+{
+	SetupTuning()
+
+	PrecacheWeapon( VALK_JETPACK_WEAPON_NAME )
+
+	PrecacheParticleSystem( VALK_AMB_EXHAUST_FP )
+	PrecacheParticleSystem( VALK_AMB_EXHAUST_3P )
+
+	RegisterSignal( JETPACK_OFF_SIGNAL )
+
+	RegisterSignal( VALK_FLIGHT_REVEAL_SIGNAL )
+	RegisterSignal( VALK_TEAMMATE_START_TRACKING_SIGNAL )
+
+
+
+
+
+
+	RegisterNetworkedVariable( VALK_TRACKING_ACTIVE_NETVAR, SNDC_PLAYER_GLOBAL, SNVT_BOOL, false )
+
+
+
+
+
+
+		RegisterNetVarBoolChangeCallback( VALK_TRACKING_ACTIVE_NETVAR, OnValkTrackingChanged )
+		AddCallback_CreatePlayerPassiveRui( Valk_CreateJetPackRui )
+		AddCallback_DestroyPlayerPassiveRui( Valk_DestroyJetPackRui )
+		file.colorCorrection = ColorCorrection_Register( "materials/correction/launch_hud.raw_hdr" )
+
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_VALK, OnPassiveChanged )
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_BOOSTED_JETPACK, BoostedJets_OnPassiveChanged )
+	AddCallback_OnPassiveChanged( ePassives.PAS_EXTRA_JETPACK_FUEL, JetpackFuel_OnPassiveChanged )
+
+
+
+
+
+
+
+
+
+
+}
+
+void function SetupTuning()
+{
+	RegisterTuningStruct( "tuning", "valk_" )
+
+		tuning.ultHudHighlightRangeSqr = pow( tuning.ultHudHighlightRange, 2 )
+		tuning.ultHudHighlightRangeUpgradeSqr = pow( tuning.ultHudHighlightRangeUpgrade, 2 )
+
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________JetpackRui___________________________(){}
+#endif
+
+void function Valk_CreateJetPackRui( entity player )
+{
+	if ( PlayerHasPassive( player, ePassives.PAS_VALK ) )
+	{
+		if ( file.jetPackRui != null )
+			return
+
+		file.jetPackRui = CreateCockpitRui( $"ui/valk_jets_meter.rpak" )
+
+		RuiTrackFloat( file.jetPackRui, "chargeFrac", player, RUI_TRACK_GLIDE_METER_FRACTION )
+		RuiTrackBool( file.jetPackRui, "glideCanRecharge", player, RUI_TRACK_GLIDE_METER_RECHARGE_ALLOWED )
+		RuiTrackFloat( file.jetPackRui, "bleedoutEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "bleedoutEndTime" ) )
+		RuiTrackFloat( file.jetPackRui, "reviveEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "reviveEndTime" ) )
+		RuiSetFloat( file.jetPackRui, "glideRechargeDelay", player.GetPlayerSettingFloat( "glideRechargeDelay" ) )
+	}
+}
+
+
+
+var function Valk_GetJetPackRui()
+{
+	return file.jetPackRui
+}
+
+
+
+void function Valk_DestroyJetPackRui( entity player )
+{
+	if( !PlayerHasPassive( player, ePassives.PAS_VALK ) )
+	{
+		if ( file.jetPackRui != null )
+		{
+			RuiDestroyIfAlive( file.jetPackRui )
+			file.jetPackRui = null
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SkydiveTracking___________________________(){}
+#endif
+
+void function ValkTeammateStartTracking( entity valk )
+{
+	valk.EndSignal( "OnDeath" )
+	valk.EndSignal( "OnDestroy" )
+	valk.EndSignal( VALK_TEAMMATE_START_TRACKING_SIGNAL )
+
+	file.valkTrackersActive++
+	if ( file.valkTrackersActive == 1 )
+	{
+		thread Thread_ValkFlightReveal()
+	}
+
+	array<entity> targetsShown = []
+
+	OnThreadEnd(
+		function() : ( valk, targetsShown )
+		{
+			file.valkTrackersActive--
+			if ( file.valkTrackersActive == 0 )
+			{
+				Signal( clGlobal.levelEnt, VALK_FLIGHT_REVEAL_SIGNAL )
+			}
+
+			foreach ( enemy in targetsShown )
+			{
+				StopValkFlightRevealForTeam( enemy )
+			}
+		}
+	)
+
+	float valkPasRevealDistanceSqr = tuning.ultHudHighlightRangeSqr
+	if( PlayerHasPassive( valk, ePassives.PAS_ULT_UPGRADE_THREE ) ) 
+	{
+		valkPasRevealDistanceSqr = tuning.ultHudHighlightRangeUpgradeSqr
+	}
+
+	while ( true )
+	{
+		int valkTeam				= valk.GetTeam()
+		array<entity> enemyPlayers 	= GetPlayerArrayOfEnemies( valkTeam )
+		array<entity> decoyArray 	= GetPlayerDecoyArray()
+		decoyArray.extend( GetEntArrayByScriptName( MIRAGE_DECOY_DROP_SCRIPTNAME ) )
+
+		if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+		{
+			array<entity> dummies = GetEntArrayByScriptName( FIRING_RANGE_DUMMIE_SCRIPT_NAME )
+			dummies.extend( GetEntArrayByScriptName( FIRING_RANGE_COMBAT_DUMMIE_SCRIPT_NAME ) )
+
+			enemyPlayers.extend( dummies )
+		}
+
+		foreach ( decoy in decoyArray )
+		{
+			if( !IsValid(decoy) )
+				continue
+
+			int decoyTeam = decoy.GetTeam()
+			if( decoyTeam != valkTeam )
+				enemyPlayers.append( decoy )
+		}
+
+		foreach ( enemy in enemyPlayers )
+		{
+			bool dropThisEnemy
+			bool isDropDecoy
+			string scriptName
+
+			if( IsValid( enemy ) )
+			{
+				scriptName = enemy.GetScriptName()
+				isDropDecoy = ( scriptName == MIRAGE_DECOY_DROP_SCRIPTNAME )
+			}
+
+			if ( IsAlive( enemy ) || isDropDecoy )
+			{
+				dropThisEnemy = false
+
+				if ( DistanceSqr( valk.GetOrigin(), enemy.GetOrigin() ) < valkPasRevealDistanceSqr )
+				{
+					vector enemyTracePos = enemy.GetOrigin()
+					if( !isDropDecoy )
+						enemyTracePos = enemy.EyePosition()
+
+					TraceResults trace = TraceLine( valk.EyePosition(), enemyTracePos, [ valk ], TRACE_MASK_VISIBLE, TRACE_COLLISION_GROUP_NONE )
+
+					if ( PlayerHasPassive( valk, ePassives.PAS_ULT_UPGRADE_THREE ) || trace.fraction == 1.0 && ValkThreatVisionShouldRevealEnemy( enemy ) )
+					{
+						if ( !(targetsShown.contains( enemy )) )
+						{
+							StartValkFlightRevealForTeam( enemy )
+							targetsShown.append( enemy )
+						}
+					}
+					else
+					{
+						
+						dropThisEnemy = true
+					}
+				}
+				else
+				{
+					
+					dropThisEnemy = true
+				}
+			}
+			else
+			{
+				
+				dropThisEnemy = true
+			}
+
+			if ( dropThisEnemy )
+			{
+				if ( targetsShown.contains( enemy ) )
+				{
+					targetsShown.removebyvalue( enemy )
+					StopValkFlightRevealForTeam( enemy )
+				}
+			}
+
+			WaitFrame()
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function StartValkFlightRevealForTeam( entity enemy )
+{
+	if ( ! (enemy in file.valkEnemiesTrackedCount) )
+	{
+		file.valkEnemiesTrackedCount[ enemy ] <- 0
+	}
+
+	file.valkEnemiesTrackedCount[ enemy ] += 1
+
+	if ( file.valkEnemiesTrackedCount[ enemy ] == 1 )
+		file.valkEnemiesTracked.append( enemy )
+}
+
+void function StopValkFlightRevealForTeam( entity enemy )
+{
+	file.valkEnemiesTrackedCount[ enemy ] -= 1
+
+	if ( file.valkEnemiesTrackedCount[ enemy ] == 0 )
+	{
+		file.valkEnemiesTracked.fastremovebyvalue( enemy )
+	}
+}
+
+
+
+void function Thread_ValkFlightReveal()
+{
+	entity player = GetLocalViewPlayer()
+	Signal( clGlobal.levelEnt, VALK_FLIGHT_REVEAL_SIGNAL )
+	EndSignal( clGlobal.levelEnt, VALK_FLIGHT_REVEAL_SIGNAL )
+	EndSignal( player, "OnDestroy" )
+	EndSignal( player, "OnDeath" )
+
+	array<entity> activeEnts
+
+	while ( true )
+	{
+		foreach ( ent in file.valkEnemiesTracked )
+		{
+			if ( !activeEnts.contains( ent ) )
+			{
+				activeEnts.append( ent )
+				thread _ValkFlightReveal( ent )
+			}
+		}
+
+		foreach ( ent in clone activeEnts )
+		{
+			if ( !file.valkEnemiesTracked.contains( ent ) )
+			{
+				Signal( ent, VALK_FLIGHT_REVEAL_SIGNAL )
+				activeEnts.fastremovebyvalue( ent )
+			}
+		}
+
+		wait 0.5
+	}
+}
+
+
+
+void function _ValkFlightReveal( entity victim )
+{
+	if ( !IsValid( victim ) )
+		return
+
+	Signal( victim, VALK_FLIGHT_REVEAL_SIGNAL )
+
+	EndSignal( clGlobal.levelEnt, VALK_FLIGHT_REVEAL_SIGNAL )
+	entity player = GetLocalViewPlayer()
+	EndSignal( player, "OnDestroy" )
+	EndSignal( victim, VALK_FLIGHT_REVEAL_SIGNAL )
+	EndSignal( victim, "OnDestroy" )
+	var rui = RuiCreate( $"ui/recon_overview_scan_target.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, 0 )
+	InitHUDRui( rui )
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), "Valk_Ultimate_AcquireTarget_1P" )
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "pinToEdge", true )
+	RuiSetBool( rui, "showClampArrow", true )
+	RuiSetString( rui, "hint", "" )
+
+	int attachment = victim.LookupAttachment( "CHESTFOCUS" )
+	RuiTrackFloat3( rui, "pos", victim, RUI_TRACK_POINT_FOLLOW, attachment )
+	bool isChampion   = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) && victim.IsNPC() ? false : GradeFlagsHas( victim, eTargetGrade.CHAMPION )
+	bool isKillLeader = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) && victim.IsNPC() ? false : GradeFlagsHas( victim, eTargetGrade.CHAMP_KILLLEADER )
+	RuiSetBool( rui, "isChampion", isChampion )
+	RuiSetBool( rui, "isKillLeader", isKillLeader )
+
+
+		if ( GameMode_IsActive( eGameModes.CONTROL ) )
+		{
+			bool isEXPLeader = GradeFlagsHas( victim, eTargetGrade.EXP_LEADER )
+			RuiSetBool( rui, "isEXPLeader", isEXPLeader )
+		}
+
+
+
+	var fRui = FullMap_AddEnemyLocation( victim )
+	var mRui = Minimap_AddEnemyToMinimap( victim )
+
+	OnThreadEnd (
+		function() : ( victim, rui, fRui, mRui )
+		{
+			RuiDestroy( rui )
+			Fullmap_RemoveRui( fRui )
+			RuiDestroy( fRui )
+			Minimap_CommonCleanup( mRui )
+		}
+	)
+
+		while( true )
+		{
+			bool scanBlocked = FerroWall_BlockScan( player.EyePosition(), victim.GetWorldSpaceCenter() )
+			RuiSetBool( rui, "isVisible", !scanBlocked )
+			WaitFrame()
+		}
+
+
+
+}
+
+
+
+void function OnValkTrackingChanged( entity player, bool new )
+{
+	if ( !IsValid( GetLocalViewPlayer() ) )
+		return
+
+	if ( player.GetTeam() != GetLocalViewPlayer().GetTeam() )
+	{
+		
+		if ( !AllianceProximity_ShouldTryToTransmitPingOrIconToAlliance( false ) || !IsValid( player ) || !IsFriendlyTeam( player.GetTeam(), GetLocalViewPlayer().GetTeam() ) || !IsPositionWithinRadius( AllianceProximity_GetMaxDistForProximity(), GetLocalViewPlayer().GetOrigin(), player.GetOrigin() ) )
+			return
+	}
+
+	if ( new )
+	{
+		thread ValkTeammateStartTracking( player )
+	}
+	else
+	{
+		player.Signal( VALK_TEAMMATE_START_TRACKING_SIGNAL )
+	}
+}
+
+
+
+void function Valk_EnableHudColorCorrection()
+{
+	Assert ( IsNewThread(), "Must be started as a new thread" )
+	
+	if ( !file.colorCorrectionActive )
+	{
+		ColorCorrection_SetExclusive( file.colorCorrection, true )
+		file.colorCorrectionActive = true
+		for ( float intensity = 0.0; intensity <= 1.0; intensity += 0.05 )
+		{
+			ColorCorrection_SetWeight( file.colorCorrection, intensity )
+			Wait( 0.05 )
+		}
+	}
+}
+
+
+
+void function Valk_DisableHudColorCorrection()
+{
+	Assert ( IsNewThread(), "Must be started as a new thread" )
+	
+	if ( file.colorCorrectionActive )
+	{
+		file.colorCorrectionActive = false
+		for ( float intensity = 1.0; intensity >= 0.0; intensity -= 0.05 )
+		{
+			ColorCorrection_SetWeight( file.colorCorrection, intensity )
+			Wait( 0.05 )
+		}
+		ColorCorrection_SetExclusive( file.colorCorrection, false )
+	}
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ThreatVision___________________________(){}
+#endif
+
+bool function ValkThreatVisionShouldRevealEnemy( entity enemy )
+{
+	if ( !enemy.IsPlayer() && !enemy.IsPlayerDecoy() )
+	{
+		string scriptName = enemy.GetScriptName()
+		if( scriptName == MIRAGE_DECOY_DROP_SCRIPTNAME )
+			return true
+		else if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) && ( scriptName == FIRING_RANGE_DUMMIE_SCRIPT_NAME || scriptName == FIRING_RANGE_COMBAT_DUMMIE_SCRIPT_NAME ) )
+			return true
+		else
+			return false
+	}
+
+	if( !enemy.IsPlayerDecoy() )
+	{
+		if ( BleedoutState_GetPlayerBleedoutState( enemy ) != BS_NOT_BLEEDING_OUT )
+			return false
+	}
+
+
+
+
+
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CodeCallbacksCallbacks___________________________(){}
+#endif
+bool function OnWeaponAttemptOffhandSwitch_ability_valk_jets( entity weapon )
+{
+	entity weaponOwner = weapon.GetWeaponOwner()
+	if ( PlayerHasPassive( weaponOwner, ePassives.PAS_ENDORSEMENT_ASH_DASH ) && weaponOwner.GetDodgePower()	== 100 )
+	{
+		return false
+	}
+
+	entity lastWpn = weaponOwner.GetLatestPrimaryWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( lastWpn ) )
+		return false
+
+	entity tacWeapon = weaponOwner.GetOffhandWeapon( eOffhandInv.TACTICAL )
+	if ( IsValid( tacWeapon ) )
+	{
+		if ( tacWeapon.IsBurstFireInProgress() )
+			return false
+	}
+
+	if ( weaponOwner.GetPlayerNetBool( "isHealing" ) )
+		return false
+
+	float now = Time()
+	if ( now < weaponOwner.p.lastTimeDeactivatedJetpack + tuning.jetpackReactivationDelay )
+		return false
+
+	int result = weaponOwner.CanUseJetpack( weaponOwner.GetVelocity() )
+
+		if ( result == JETPACK_ENGAGE_FAILED_OUT_OF_FUEL )
+		{
+			EmitSoundOnEntity( weaponOwner, "Valk_Hover_Start_Fail_1P" )
+		}
+
+
+	if ( result == JETPACK_ENGAGE_SUCCEED )
+		TryHideHolsteredSpear( weaponOwner )
+
+	return result == JETPACK_ENGAGE_SUCCEED
+}
+
+var function OnWeaponPrimaryAttack_ability_valk_jets( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	return 0
+}
+
+void function OnWeaponActivate_ability_valk_jets( entity weapon )
+{
+	if ( !tuning.valkJetsPredictFix )
+	{
+		TurnOnJets( weapon )
+	}
+}
+
+bool function OnWeaponChargeBegin_ability_valk_jets( entity weapon )
+{
+	if ( tuning.valkJetsPredictFix )
+	{
+		TurnOnJets( weapon )
+	}
+
+	return true
+}
+
+void function TurnOnJets( entity weapon )
+{
+	entity owner = weapon.GetWeaponOwner()
+
+	owner.SetActivateJetpack( true )
+	owner.Signal("JumpPadStart") 
+
+
+		if ( GetLocalViewPlayer() != owner )
+			return
+
+		ClientScreenShake( 5, 12, 0.3, <0, 0, 1> )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	if ( weapon.HasMod( "heirloom" ) )
+	{
+		weapon.PlayWeaponEffect( VALK_AMB_EXHAUST_FP, VALK_AMB_EXHAUST_3P, "fx_l_thruster_top" , true )
+		weapon.PlayWeaponEffect( VALK_AMB_EXHAUST_FP, VALK_AMB_EXHAUST_3P, "fx_l_thruster_bot" , true )
+		weapon.PlayWeaponEffect( VALK_AMB_EXHAUST_FP, VALK_AMB_EXHAUST_3P, "fx_r_thruster_top" , true )
+		weapon.PlayWeaponEffect( VALK_AMB_EXHAUST_FP, VALK_AMB_EXHAUST_3P, "fx_r_thruster_bot" , true )
+	}
+}
+
+void function CodeCallback_OnPlayerJetpackStop( entity player )
+{
+	player.SetActivateJetpack( false )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+void function CodeCallback_OnPlayerJetpackStart( entity player )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function OnWeaponDeactivate_ability_valk_jets( entity weapon )
+{
+	if ( !tuning.valkJetsPredictFix )
+	{
+		TurnOffJets( weapon )
+	}
+}
+
+void function OnWeaponChargeEnd_ability_valk_jets( entity weapon )
+{
+	if ( tuning.valkJetsPredictFix )
+	{
+		TurnOffJets( weapon )
+	}
+}
+
+void function TurnOffJets( entity weapon )
+{
+	entity valk = weapon.GetWeaponOwner()
+	if ( !IsValid( valk ) )
+		return
+
+	valk.Signal( JETPACK_OFF_SIGNAL )
+	valk.SetActivateJetpack( false )
+	valk.p.lastTimeDeactivatedJetpack = Time()
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PassiveChangedCallbacks___________________________(){}
+#endif
+void function OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( didHave )
+	{
+
+
+
+
+
+
+
+
+
+
+
+	}
+	if ( nowHas )
+	{
+
+			if ( player == GetLocalClientPlayer() )
+				UpdateAbilityToggleOrHoldBasedOnInput()
+
+
+
+
+
+
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function BoostedJets_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function JetpackFuel_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+
+		if ( player == GetLocalViewPlayer() )
+		{
+			if ( nowHas )
+				RuiSetFloat( Valk_GetJetPackRui(), "glideRechargeDelay", player.GetPlayerSettingFloat( "glideRechargeDelay" ) )
+
+			if ( didHave )
+			{
+				if ( Valk_GetJetPackRui() != null )
+					RuiSetFloat( Valk_GetJetPackRui(), "glideRechargeDelay", player.GetPlayerSettingFloat( "glideRechargeDelay" ) )
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

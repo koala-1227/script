@@ -1,0 +1,489 @@
+global function ClPip_LevelInit
+global function BeginMovingPIP
+global function CaptureMovingPIPtoStillPIP
+global function AllocateStillPIPSlot
+global function ReleasePIPSlot
+global function PIPSlotState_GetSlotID
+
+
+
+global function ClientCodeCallback_MonitorSnapshotDone
+global function ClientCodeCallback_GladiatorCardCached
+global function ClientCodeCallback_GladiatorCardCacheLoaded
+
+global function ClPip_GetMaxConcurrentCaptures
+global function ClPip_SetMaxConcurrentCaptures
+
+
+Assert( PIP_MONITOR_START_INDEX == 0 )
+Assert( PIP_NUM_MONITORS == 3 )
+Assert( PIP_SNAPSHOT_START_INDEX == 0 )
+Assert( PIP_NUM_SNAPSHOTS == 10 )
+Assert( PIP_INVALID == -1 )
+
+const int PIP_NUM_TOTAL = PIP_NUM_SNAPSHOTS
+
+enum ePIPSlotStatus
+{
+	AVAILABLE,
+	MOVING,
+	STILL,
+}
+
+global struct PIPSlotState
+{
+	int  slotIndex = -1
+	bool isUsableForMoving
+
+	int                 status = ePIPSlotStatus.AVAILABLE
+	PIPSlotState ornull associatedProcessingSlotStateOrNull = null 
+	
+
+	entity camera 
+	bool   hasColorCorrectionAssigned = false
+}
+
+struct CapturedStillPIPInfo
+{
+	string 	name
+	string 	characterRef
+	int		handle
+}
+
+struct
+{
+	
+	array<PIPSlotState> slotStateList
+
+	int                capturesInProgress = 0
+	int                maxConcurrentCaptures = 1
+	array<PIPSlotState> captureQueue
+	array<CapturedStillPIPInfo> capturedStillPIPs
+
+	int freeTotalSlotCount = 0
+	int freeMovingSlotCount = 0
+
+	table signalDummy
+} file
+
+
+
+
+
+int function ClPip_GetMaxConcurrentCaptures()
+{
+	return file.maxConcurrentCaptures
+}
+
+void function ClPip_SetMaxConcurrentCaptures(int newValue = 1)
+{
+	int actualNewValue = maxint(1, newValue)
+	actualNewValue  = minint(PIP_NUM_MONITORS, actualNewValue )
+
+	if (newValue != actualNewValue )
+	{
+		printf("ClPip_SetMaxConcurrentCaptures was called with %d, but value was clamped to %d", newValue, actualNewValue)
+	}
+
+	file.maxConcurrentCaptures = actualNewValue
+}
+
+void function ClPip_LevelInit()
+{
+	RegisterSignal( "PIPSnapshotCaptured" )
+	RegisterSignal( "YouMayProceedWithPIPSnapshot" )
+	RegisterSignal( "CancelPIPSnapshot" )
+	RegisterSignal( "PIPSlotAvailable" )
+	RegisterSignal( "GladiatorCardCached" )
+	RegisterSignal( "GladiatorCardCacheLoaded" )
+
+	file.slotStateList.resize( PIP_NUM_TOTAL )
+	foreach( int slotIndex, PIPSlotState slotState in file.slotStateList )
+	{
+		slotState.slotIndex = slotIndex
+		slotState.isUsableForMoving = (slotIndex >= PIP_MONITOR_START_INDEX && slotIndex < PIP_MONITOR_START_INDEX + PIP_NUM_MONITORS)
+
+		file.freeTotalSlotCount++
+		if ( slotState.isUsableForMoving )
+			file.freeMovingSlotCount++
+	}
+}
+
+void function WaitForFreePIP( bool mustBeMoving )
+{
+	while ( mustBeMoving ? (file.freeMovingSlotCount == 0) : (file.freeTotalSlotCount == 0) )
+		WaitSignal( file.signalDummy, "PIPSlotAvailable" )
+
+	return
+}
+
+PIPSlotState ornull function BeginMovingPIP( entity camera, bool allowWaitForFreeSlot, int colorCorrectionLayer = -1 )
+{
+	PIPSlotState ornull slotState = AllocateMovingPIPSlot( allowWaitForFreeSlot )
+	if ( slotState == null )
+		return null
+
+	expect PIPSlotState ( slotState )
+	Assert( slotState.status == ePIPSlotStatus.MOVING )
+	slotState.camera = camera
+	camera.SetMonitorId( slotState.slotIndex )
+	camera.SetActive( true )
+	if ( colorCorrectionLayer != -1 )
+	{
+		slotState.hasColorCorrectionAssigned = true
+		ColorCorrection_AssignMonitor( slotState.slotIndex, colorCorrectionLayer )
+	}
+
+	return slotState
+}
+
+PIPSlotState ornull function AllocateMovingPIPSlot( bool allowWaitForFreeSlot )
+{
+	if ( allowWaitForFreeSlot )
+		WaitForFreePIP( true )
+
+	for ( int slotIndex = PIP_MONITOR_START_INDEX; slotIndex < PIP_MONITOR_START_INDEX + PIP_NUM_MONITORS; slotIndex++ )
+	{
+		PIPSlotState slotState = file.slotStateList[slotIndex]
+		if ( slotState.status != ePIPSlotStatus.AVAILABLE )
+			continue
+
+		slotState.status = ePIPSlotStatus.MOVING
+		file.freeTotalSlotCount--
+		file.freeMovingSlotCount--
+		return slotState
+	}
+	return null
+}
+
+PIPSlotState ornull function AllocateStillPIPSlot( bool allowWaitForFreeSlot )
+{
+	if ( allowWaitForFreeSlot )
+		WaitForFreePIP( false )
+
+	for ( int slotsTriedCount = 0; slotsTriedCount < PIP_NUM_TOTAL; slotsTriedCount++ )
+	{
+		
+		int slotIndex = (PIP_MONITOR_START_INDEX + PIP_NUM_MONITORS + slotsTriedCount) % PIP_NUM_TOTAL
+		PIPSlotState slotState = file.slotStateList[slotIndex]
+		if ( slotState.status != ePIPSlotStatus.AVAILABLE )
+			continue
+
+		slotState.status = ePIPSlotStatus.STILL
+		file.freeTotalSlotCount--
+		if ( slotState.isUsableForMoving )
+			file.freeMovingSlotCount--
+		return slotState
+	}
+	return null
+}
+
+void function CaptureMovingPIPtoStillPIP( PIPSlotState movingSlotState, PIPSlotState stillSlotState )
+{
+	Assert( movingSlotState.slotIndex != -1 ) 
+	Assert( movingSlotState.isUsableForMoving ) 
+	Assert( movingSlotState.status == ePIPSlotStatus.MOVING ) 
+	Assert( movingSlotState.associatedProcessingSlotStateOrNull == null ) 
+
+	Assert( stillSlotState.slotIndex != -1 ) 
+	Assert( stillSlotState.status == ePIPSlotStatus.STILL ) 
+	Assert( stillSlotState.associatedProcessingSlotStateOrNull == null ) 
+
+	
+	bool shouldWaitOneFrame = false
+	if ( file.capturesInProgress >= file.maxConcurrentCaptures )
+	{
+		file.captureQueue.append( movingSlotState )
+
+		OnThreadEnd( void function() : ( movingSlotState ) {
+			file.captureQueue.removebyvalue( movingSlotState )
+		} )
+
+		WaitSignal( movingSlotState, "YouMayProceedWithPIPSnapshot" )
+		Assert(file.captureQueue[0] == movingSlotState)
+		file.captureQueue.remove( 0 )
+
+		shouldWaitOneFrame = true 
+	}
+
+	Assert( file.capturesInProgress < file.maxConcurrentCaptures )
+	++file.capturesInProgress
+
+	OnThreadEnd( void function() : ( movingSlotState ) {
+		Assert( file.capturesInProgress > 0 )
+		--file.capturesInProgress
+		if ( movingSlotState.associatedProcessingSlotStateOrNull != null )
+		{
+			if ( IsValid( movingSlotState.camera ) )
+				movingSlotState.camera.DequeueMonitorSnapshot()
+
+			PIPSlotState stillSlotState = expect PIPSlotState( movingSlotState.associatedProcessingSlotStateOrNull )
+
+			stillSlotState.associatedProcessingSlotStateOrNull = null
+			movingSlotState.associatedProcessingSlotStateOrNull = null
+		}
+
+		if ( file.captureQueue.len() > 0 && file.capturesInProgress < file.maxConcurrentCaptures )
+			Signal( file.captureQueue[0], "YouMayProceedWithPIPSnapshot" )
+	} )
+
+	EndSignal( movingSlotState, "CancelPIPSnapshot" )
+
+	if ( shouldWaitOneFrame )
+		WaitFrame()
+
+	
+	
+	stillSlotState.associatedProcessingSlotStateOrNull = movingSlotState
+	movingSlotState.associatedProcessingSlotStateOrNull = stillSlotState
+
+
+	
+	movingSlotState.camera.QueueMonitorSnapshot( stillSlotState.slotIndex )
+	WaitSignal( stillSlotState, "PIPSnapshotCaptured" )
+	
+
+
+	Assert( stillSlotState.status == ePIPSlotStatus.STILL ) 
+	Assert( movingSlotState.status == ePIPSlotStatus.MOVING ) 
+	Assert( stillSlotState.associatedProcessingSlotStateOrNull == movingSlotState ) 
+	Assert( movingSlotState.associatedProcessingSlotStateOrNull == stillSlotState ) 
+
+	stillSlotState.associatedProcessingSlotStateOrNull = null
+	movingSlotState.associatedProcessingSlotStateOrNull = null
+}
+
+
+void function ClientCodeCallback_MonitorSnapshotDone( int stillSlotIndex )
+{
+	PIPSlotState stillSlotState = file.slotStateList[stillSlotIndex]
+	
+	
+	
+
+	Signal( stillSlotState, "PIPSnapshotCaptured" )
+	
+}
+
+void function ClientCodeCallback_GladiatorCardCached( int stillSlotIndex )
+{
+	PIPSlotState stillSlotState = file.slotStateList[stillSlotIndex]
+	Signal( stillSlotState, "GladiatorCardCached" )
+}
+
+void function ClientCodeCallback_GladiatorCardCacheLoaded( int stillSlotIndex )
+{
+	PIPSlotState stillSlotState = file.slotStateList[stillSlotIndex]
+	Signal( stillSlotState, "GladiatorCardCacheLoaded" )
+}
+
+void function ReleasePIPSlot( PIPSlotState slotState )
+{
+	Assert( slotState.slotIndex != -1 ) 
+	Assert( slotState.status != ePIPSlotStatus.AVAILABLE, "Attempted to end PIP on slot that was not in use." )
+
+	if ( slotState.status == ePIPSlotStatus.MOVING )
+	{
+		if ( !IsValid( slotState.camera ) )
+			Warning( "Camera for PIP slot " + slotState.slotIndex + " was deleted before PIP slot was released." )
+
+		if ( slotState.associatedProcessingSlotStateOrNull != null )
+		{
+			Signal( slotState, "CancelPIPSnapshot" )
+		}
+
+		if ( IsValid( slotState.camera ) )
+		{
+			slotState.camera.SetMonitorId( PIP_INVALID )
+			slotState.camera.SetActive( false )
+		}
+		slotState.camera = null
+
+		if ( slotState.hasColorCorrectionAssigned )
+		{
+			slotState.hasColorCorrectionAssigned = false
+			ColorCorrection_UnassignMonitor( slotState.slotIndex )
+		}
+	}
+	else if ( slotState.status == ePIPSlotStatus.STILL )
+	{
+		Assert( slotState.associatedProcessingSlotStateOrNull == null ) 
+	}
+
+	slotState.status = ePIPSlotStatus.AVAILABLE
+	file.freeTotalSlotCount++
+	if ( slotState.isUsableForMoving )
+	{
+		file.freeMovingSlotCount++
+	}
+
+	Signal( file.signalDummy, "PIPSlotAvailable" )
+}
+
+
+int function PIPSlotState_GetSlotID( PIPSlotState slotState )
+{
+	Assert( slotState.slotIndex != -1 ) 
+	Assert( slotState.status != ePIPSlotStatus.AVAILABLE, "Attempted to get PIP slot ID for display when it was not in use." )
+	return slotState.slotIndex
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

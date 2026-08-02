@@ -1,0 +1,814 @@
+
+global function WPObjective_Init
+global function WPObjective_Register
+
+global function WPObjective_IsEntityMarked
+global function WPObjective_IsPingTypeRegistered
+global function WPObjective_IsWaypointRegistered
+
+global function WPObjective_GetCommsAction
+global function WPObjective_GetHandleEnt
+global function WPObjective_GetPingType
+
+
+
+
+
+
+
+
+
+
+global function WPObjective_UpdateHighlightedIcon
+global function WPObjective_Pinged
+
+
+const string CLASS_HANDLE_TYPE = "prop_script"
+
+
+const string SIG_WPOBJECTIVE_PING = "WPObjectivePing"
+const string SIG_WPOBJECTIVE_PING_DESTROYED = "WPObjectivePingDestroyed"
+
+
+
+global struct WPObjective_Settings
+{
+	string scriptName = ""
+
+	int enumWaypoint
+	int enumPingType
+	int enumCommsAction
+	int enumMinimapObject_prop_script
+
+	asset iconInWorld
+	asset iconMap
+	asset iconMapSmall = $""
+	float iconScale = 1.0
+
+	string pingText = ""
+
+	float worldIconPingDistance = 1500.0
+	float worldIconMinAlphaDistance = 1500.0
+	float worldIconMaxAlphaDistance = 2000.0
+	float worldIconCloseUpFadeMinAlphaDistance = 200.0
+	float worldIconCloseUpFadeMaxAlphaDistance = 300.0
+}
+
+
+
+global struct WPObjective_SpawnSettings
+{
+	string scriptName
+	vector origin
+
+	entity parentEnt = null
+	bool trackParentPos = false
+	string extraText = ""
+}
+
+
+
+
+struct WPObjective_Config
+{
+	string scriptName
+
+	int enumWaypoint
+	int enumPingType
+	int enumCommsAction
+	int enumMinimapObject_prop_script
+
+	asset iconMapSmall = $""
+
+	WorldspaceIconData& iconInWorld
+}
+
+
+
+struct WPObjective_Instance
+{
+	WorldspaceIconData& iconInWorld
+
+	bool isPinged
+	bool isWorldspaceVisible
+}
+
+
+struct
+{
+
+		table< string, WPObjective_Config > handleScriptNameToConfig
+		array< string > handleScriptNames
+		table< entity, EHI > handleToParentEntEHI
+
+
+
+		table< entity, WPObjective_Instance > handleToWorldspaceInstance
+		EHI highlightedPingEntEHI
+
+
+
+
+
+
+
+
+} file
+
+
+
+void function WPObjective_Init()
+{
+	if ( !WPObjective_IsEnabled() )
+		return
+
+
+	AddCreateCallback( CLASS_HANDLE_TYPE, WPObjective_OnPropSpawn )
+	AddDestroyCallback( CLASS_HANDLE_TYPE, WPObjective_OnPropDestroy )
+
+	RegisterSignal( SIG_WPOBJECTIVE_PING )
+	RegisterSignal( SIG_WPOBJECTIVE_PING_DESTROYED )
+
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Interface___________________________(){}
+#endif
+
+
+void function WPObjective_Register( WPObjective_Settings settings )
+{
+	Assert( settings.scriptName != "", "You must set a unique script name when registering a WPObjective!" )
+	Assert( !file.handleScriptNames.contains( settings.scriptName ), "Tried to register WPObjective of type " + settings.scriptName + " but this type was already registered!" )
+
+	WPObjective_Register_Internal( settings )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Utilities___________________________(){}
+#endif
+
+
+bool function WPObjective_IsHandleEnt( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return false
+
+	string scriptName = ent.GetScriptName()
+	if ( !file.handleScriptNames.contains( scriptName ) )
+		return false
+
+	return true
+}
+
+
+
+bool function WPObjective_IsEntityMarked( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return false
+
+	foreach ( parentEntEHI in file.handleToParentEntEHI )
+	{
+		if ( ToEHI( ent ) == parentEntEHI )
+			return true
+	}
+
+	return false
+}
+
+
+
+bool function WPObjective_IsPingTypeRegistered( int enumPingType )
+{
+	foreach ( config in file.handleScriptNameToConfig )
+	{
+		if ( enumPingType == config.enumPingType )
+			return true
+	}
+
+	return false
+}
+
+
+
+bool function WPObjective_IsWaypointRegistered( int enumWaypoint )
+{
+	foreach ( config in file.handleScriptNameToConfig )
+	{
+		if ( enumWaypoint == config.enumWaypoint )
+			return true
+	}
+
+	return false
+}
+
+
+
+int function WPObjective_GetCommsAction( int enumPingType )
+{
+	if ( !WPObjective_IsPingTypeRegistered( enumPingType ) )
+		return eCommsAction._count
+
+	foreach ( config in file.handleScriptNameToConfig )
+	{
+		if ( enumPingType == config.enumPingType )
+			return config.enumCommsAction
+	}
+
+	return eCommsAction._count
+}
+
+
+
+entity function WPObjective_GetHandleEnt( entity ent )
+{
+	if ( !WPObjective_IsEntityMarked( ent ) )
+		return null
+
+	foreach ( entity currentHandle, EHI parentEntEHI in file.handleToParentEntEHI )
+	{
+		if ( ToEHI( ent ) == parentEntEHI )
+		{
+			return currentHandle
+		}
+	}
+
+	return null
+}
+
+
+
+int function WPObjective_GetPingType( entity ent )
+{
+	entity handle = WPObjective_GetHandleEnt( ent )
+	if ( !IsValid( handle ) )
+		return ePingType._count
+
+	string scriptName = handle.GetScriptName()
+	if ( !file.handleScriptNames.contains( scriptName ) )
+		return ePingType._count
+
+	if( !( scriptName in file.handleScriptNameToConfig ) )
+		return ePingType._count
+
+	return file.handleScriptNameToConfig[scriptName].enumPingType
+}
+
+
+
+array < entity > function WPObjective_GetObjectiveWaypointsInPingRange()
+{
+	entity player = GetLocalClientPlayer()
+	vector playerEyePos = player.EyePosition()
+
+	array < entity > waypoints
+	foreach ( entity currentHandle, EHI parentEntEHI in file.handleToParentEntEHI )
+	{
+		if ( !IsValid( currentHandle ) )
+			continue
+
+		string scriptName = currentHandle.GetScriptName()
+		if ( !file.handleScriptNames.contains( scriptName ) )
+			continue
+
+		if( !( scriptName in file.handleScriptNameToConfig ) )
+			continue
+
+		float pingDistance = file.handleScriptNameToConfig[scriptName].iconInWorld.pingDistance
+		float pingDistanceSqr = pingDistance * pingDistance
+
+		if ( DistanceSqr( playerEyePos, currentHandle.GetOrigin() ) < pingDistanceSqr )
+		{
+			waypoints.append( currentHandle )
+		}
+	}
+
+	return waypoints
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Internal___________________________(){}
+#endif
+
+
+void function WPObjective_Register_Internal( WPObjective_Settings settings )
+{
+	WPObjective_Config config
+	config.scriptName = settings.scriptName
+
+
+	config.iconInWorld = WPObjective_WorldIcon_Register( settings )
+
+	WPObjective_Minimap_Register( settings )
+
+
+	
+	{
+		config.enumWaypoint = settings.enumWaypoint
+		config.enumPingType = settings.enumPingType
+		config.enumCommsAction = settings.enumCommsAction
+		config.enumMinimapObject_prop_script = settings.enumMinimapObject_prop_script
+
+		config.iconInWorld.imageAsset = settings.iconMap
+		config.iconMapSmall = settings.iconMapSmall
+
+		config.iconInWorld.descriptiveText = settings.pingText
+	}
+
+	file.handleScriptNameToConfig[ settings.scriptName ] <- config
+	file.handleScriptNames.append( settings.scriptName )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function WPObjective_OnPropSpawn( entity handle )
+{
+	if( !WPObjective_IsHandleEnt( handle ) )
+		return
+
+	thread WPObjective_Spawn_Client( handle )
+}
+
+
+
+void function WPObjective_Spawn_Client( entity handle )
+{
+	string scriptName = handle.GetScriptName()
+	if ( !( scriptName in file.handleScriptNameToConfig ) )
+		return
+
+	if ( handle.GetOwner() != null )
+	{
+		file.handleToParentEntEHI[handle] <- ToEHI( handle.GetOwner() )
+	}
+
+	WPObjective_Instance instance
+	instance.iconInWorld = WPObjective_WorldIcon_Create( scriptName, handle )
+	instance.isPinged = false
+	instance.isWorldspaceVisible = true
+
+	file.handleToWorldspaceInstance[handle] <- instance
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function WPObjective_OnPropDestroy( entity handle )
+{
+	bool shouldDestroy = false
+	foreach ( entity currentHandle, EHI parentEntEHI in file.handleToParentEntEHI )
+	{
+		if ( handle == currentHandle )
+		{
+			shouldDestroy = true
+			break
+		}
+	}
+
+	if ( !shouldDestroy )
+		return
+
+	thread WPObjective_Destroy_Client( handle )
+}
+
+
+
+void function WPObjective_Destroy_Client( entity handle )
+{
+	WPObjective_WorldIcon_Destroy( handle )
+
+	delete file.handleToWorldspaceInstance[handle]
+	delete file.handleToParentEntEHI[handle]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________1_Waypoint___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________2_WorldIcon___________________________(){}
+#endif
+
+
+WorldspaceIconData function WPObjective_WorldIcon_Register( WPObjective_Settings settings )
+{
+	WorldspaceIconData iconSettings
+
+	iconSettings.imageAsset = settings.iconMap
+	iconSettings.pingType = settings.enumPingType
+	iconSettings.pingDistance = settings.worldIconPingDistance
+	iconSettings.minAlphaDistance = settings.worldIconMinAlphaDistance
+	iconSettings.maxAlphaDistance = settings.worldIconMaxAlphaDistance
+	iconSettings.closeUpFadeMinAlphaDistance = settings.worldIconCloseUpFadeMinAlphaDistance
+	iconSettings.closeUpFadeMaxAlphaDistance = settings.worldIconCloseUpFadeMaxAlphaDistance
+	iconSettings.mapPingFilterFunction = WPObjective_IsPingableOnMap
+
+	return iconSettings
+}
+
+
+
+WorldspaceIconData function WPObjective_WorldIcon_Create( string scriptName, entity wp )
+{
+	WorldspaceIconData instanceSettings
+
+	if ( !( scriptName in file.handleScriptNameToConfig ) )
+		return instanceSettings
+
+	WorldspaceIconData settings = file.handleScriptNameToConfig[scriptName].iconInWorld
+	instanceSettings.imageAsset = settings.imageAsset
+	instanceSettings.pingType = settings.pingType
+	instanceSettings.pingDistance = settings.pingDistance
+	instanceSettings.minAlphaDistance = settings.minAlphaDistance
+	instanceSettings.maxAlphaDistance = settings.maxAlphaDistance
+	instanceSettings.closeUpFadeMinAlphaDistance = settings.closeUpFadeMinAlphaDistance
+	instanceSettings.closeUpFadeMaxAlphaDistance = settings.closeUpFadeMaxAlphaDistance
+	instanceSettings.descriptiveText = settings.descriptiveText
+
+	instanceSettings.ent = wp
+	instanceSettings.upOffset = 0.0
+
+	SetupWorldspaceIcon( instanceSettings )
+	thread WPObjective_ListenForPing( instanceSettings )
+
+	return instanceSettings
+}
+
+
+
+void function WPObjective_WorldIcon_Destroy( entity handle )
+{
+	if ( IsValid( handle ) )
+	{
+		handle.Signal( "HideWorldSpaceIconMinimapVisibility" )
+	}
+}
+
+
+
+bool function WPObjective_IsPingableOnMap( WorldspaceIconData data, vector worldPos, float worldRange )
+{
+	array< WPObjective_Instance > worldspaceInstances = file.handleToWorldspaceInstance.clonevalues()
+	bool found = false
+	foreach ( instance in worldspaceInstances )
+	{
+		if ( instance.iconInWorld == data )
+		{
+			found = true
+			break
+		}
+	}
+	if ( !found )
+		return false
+
+	if ( data.hidden || !data.isInteractable )
+		return false
+
+	return true
+}
+
+
+
+bool function WPObjective_UpdateHighlightedIcon()
+{
+	if( Perks_GetPerkPingInfo().ent != null || DeathBoxInsight_GetCurrentPingInfo().loot != null )
+		return false
+
+	entity player = GetLocalClientPlayer()
+	vector playerEyePos = player.EyePosition()
+	vector viewVector = player.GetViewVector()
+	array< entity > WPObjectives = WPObjective_GetObjectiveWaypointsInPingRange()
+	float minDot = deg_cos( PERK_HIGHLIGHT_DEGREES )
+	float bestDot = 0
+
+	entity bestEnt = null
+	foreach( entity objectiveEnt in WPObjectives )
+	{
+		if( !( file.handleToWorldspaceInstance[objectiveEnt].isWorldspaceVisible ) )
+			continue
+
+		vector iconPos
+		iconPos = objectiveEnt.GetOrigin()
+		vector eyeToIcon = iconPos - playerEyePos
+		vector eyeToIconNormalized = Normalize( eyeToIcon )
+		float dot = DotProduct( eyeToIconNormalized, viewVector )
+		if( dot < minDot || dot < bestDot )
+			continue
+
+		bestDot = dot
+		bestEnt = objectiveEnt
+	}
+
+	WPObjective_SetHighlightedIcon( bestEnt )
+	return bestEnt != null
+}
+
+
+
+void function WPObjective_SetHighlightedIcon( entity handle )
+{
+	if( file.highlightedPingEntEHI == ToEHI( handle ) )
+		return
+
+	entity oldHandle = FromEHI( file.highlightedPingEntEHI )
+	if( IsValid( oldHandle ) && IsValid( file.handleToWorldspaceInstance[oldHandle] ) )
+	{
+		RuiSetBoolIfExists( file.handleToWorldspaceInstance[oldHandle].iconInWorld.rui, "isHighlighted", false )
+	}
+
+	file.highlightedPingEntEHI = ToEHI( handle )
+
+	if( IsValid( handle ) && IsValid( file.handleToWorldspaceInstance[handle] ) )
+	{
+		RuiSetBoolIfExists( file.handleToWorldspaceInstance[handle].iconInWorld.rui, "isHighlighted", true )
+	}
+}
+
+
+
+void function WPObjective_ListenForPing( WorldspaceIconData instanceSettings )
+{
+	entity handle = instanceSettings.ent
+	var rui = instanceSettings.rui
+
+	handle.EndSignal( "OnDestroy", "OnDeath" )
+
+	OnThreadEnd( function() : ( instanceSettings ) {
+		var rui = instanceSettings.rui
+		RuiDestroyIfAlive( rui )
+
+		entity handle = instanceSettings.ent
+		if ( IsValid( handle ) && IsValid( file.handleToWorldspaceInstance[handle] ) )
+		{
+			file.handleToWorldspaceInstance[handle].isPinged = false
+			file.handleToWorldspaceInstance[handle].isWorldspaceVisible = false
+		}
+	} )
+
+	
+	WaitFrame()
+
+	while( true )
+	{
+		if( !file.handleToWorldspaceInstance[handle].isPinged )
+		{
+			handle.WaitSignal( SIG_WPOBJECTIVE_PING )
+		}
+
+		file.handleToWorldspaceInstance[handle].isPinged = true
+		file.handleToWorldspaceInstance[handle].isWorldspaceVisible = false
+		if ( IsValid( rui ) )
+		{
+			RuiSetBoolIfExists( rui, "isVisible", false )
+		}
+
+		handle.WaitSignal( SIG_WPOBJECTIVE_PING_DESTROYED )
+
+		file.handleToWorldspaceInstance[handle].isPinged = false
+		if ( IsValid( rui ) )
+		{
+			file.handleToWorldspaceInstance[handle].isWorldspaceVisible = true
+			RuiSetBoolIfExists( rui, "isVisible", true )
+		}
+	}
+}
+
+
+
+void function WPObjective_Pinged( entity handle, entity wp )
+{
+	handle.Signal( SIG_WPOBJECTIVE_PING )
+
+	wp.WaitSignal( "OnDestroy" )
+
+	if ( IsValid( handle ) )
+	{
+		handle.Signal( SIG_WPOBJECTIVE_PING_DESTROYED )
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________3_MinimapIcon___________________________(){}
+#endif
+
+
+void function WPObjective_Minimap_Register( WPObjective_Settings settings )
+{
+	RegisterMinimapPackage( "prop_script", settings.enumMinimapObject_prop_script,
+		MINIMAP_OBJECT_PROXIMITY_RUI, WPObjective_MinimapPackage,
+		FULLMAP_OBJECT_PROXIMITY_RUI, WPObjective_FullmapPackage )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function WPObjective_MinimapPackage( entity ent, var rui )
+{
+	thread WPObjective_WaitAndSetMapData_Thread( rui, ent, true )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________4_FullmapIcon___________________________(){}
+#endif
+
+
+void function WPObjective_FullmapPackage( entity ent, var rui )
+{
+	thread WPObjective_WaitAndSetMapData_Thread( rui, ent, false )
+}
+
+
+
+void function WPObjective_WaitAndSetMapData_Thread( var rui, entity minimapEnt, bool isMinimap )
+{
+	entity handle
+
+	while( true )
+	{
+		WaitFrame()
+
+		if ( !RuiIsAlive( rui ) )
+			return
+
+		handle = minimapEnt.GetOwner()
+		string scriptName = handle.GetScriptName()
+		if ( !file.handleScriptNames.contains( scriptName ) )
+			continue
+
+		break
+	}
+
+	if ( !RuiIsAlive( rui ) )
+		return
+
+	if ( !IsValid( handle ) )
+		return
+
+	string scriptName = handle.GetScriptName()
+	if ( !file.handleScriptNames.contains( scriptName ) )
+		return
+
+	WPObjective_Config config = file.handleScriptNameToConfig[scriptName]
+
+	RuiSetImage( rui, "defaultIcon", config.iconInWorld.imageAsset )
+	RuiSetImage( rui, "clampedDefaultIcon", config.iconInWorld.imageAsset )
+	RuiSetBool( rui, "useTeamColor", false )
+
+	if ( IsValid( config.iconMapSmall ) )
+	{
+		RuiSetImage( rui, "smallIcon", config.iconMapSmall )
+		RuiSetBool( rui, "hasSmallIcon", config.iconMapSmall != $"" )
+	}
+	else
+	{
+		RuiSetBool( rui, "hasSmallIcon", false )
+	}
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PlaylistVariables___________________________(){}
+#endif
+
+bool function WPObjective_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "wpobjective_enabled", true )
+} 

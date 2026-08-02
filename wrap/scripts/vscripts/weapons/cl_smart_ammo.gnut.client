@@ -1,0 +1,1819 @@
+untyped
+
+global function SmartAmmoClient_Init
+
+global function SmartAmmo_LockedOntoWarningHUD_Update
+
+global function SmartAmmo_SetStatusWarning
+global function SmartAmmo_ClearStatusWarning
+
+global function SmartAmmo_SetVerticalOffset
+
+global function GetLockon_Hud
+global function IsLockonHudVisible
+global function HowLongHasCurrentLockonHudBeenVisible
+global function HowLongHasLockonHudBeenVisible
+
+#if DEV
+global function DEV_ForceShowScanRuiIndex
+global function DEV_CycleThroughScanRuiStyles
+global function DEV_StopScanRuiCycle
+#endif
+
+
+global function ServerCallback_ShowUltTimeIncreasedHint
+
+
+const SMART_AMMO_VICTIM_LOCKED_SOUND = "Titan_Cockpit_TitanLocking_Warning"  
+
+
+const float ADDITIONAL_TIME_DELAY = 2.0
+
+
+global enum eScanRuiType
+{
+	NONE = -1,
+	SCAN_WARNING,
+
+
+
+
+
+
+
+
+
+	SHADOW_FORM,
+
+		ZIPLINE_SHIELD,
+
+
+
+	_LOCKON_SECTION_START,
+
+	SONAR_DETECTED,
+	CRYPTO_SCAN,
+
+		SURVEY_BEACON_SCAN,
+
+	LOCKON_MIRAGE_DETECTED,
+
+	_LOCKON_SECTION_END,
+
+
+
+		SURVEY_BEACON_ENEMIES_SCAN,
+
+
+
+
+	VOID_NEXUS,
+	STUCK_EMP,
+
+		STUCK_ARROW,
+
+
+
+	
+	_LEGEND_SECTION_START,
+
+	CAMERA,
+	MAPHACK,
+	SONAR,
+
+		MORTAR_RING,
+
+
+		ARCO_ULT_SCAN,
+
+
+
+
+	STUCK_SONAR,
+	SEER_DETECTED,
+	SPAWN_KILLING,
+	DAMAGE_MULTIPLIER,
+	MIRAGE_DETECTED,
+
+		FREESPAWN_VICTIM_TEAMMATE,
+
+	BLOODHOUND,
+
+
+		SONAR_PULSE,
+
+
+	_LEGEND_SECTION_END,
+
+
+
+
+
+	SONAR_BLOCKED,
+	PLACING_PHASE_TUNNEL,
+	TETHERED,
+
+
+	_DEVICE_SECTION_START,
+
+	DEVICE_DETECTED_0,
+	DEVICE_DETECTED_1,
+	DEVICE_DETECTED_10_OR_LESS,
+	DEVICE_DETECTED_10_PLUS
+
+	_DEVICE_SECTION_END,
+
+
+	HUNT_MODE,
+
+
+
+
+
+
+
+	DEVICE_BLOCKED,
+
+
+
+
+
+
+
+
+
+	REVEALED_BY_ASH,
+	REVEALING_ENEMIES,
+
+
+
+
+
+
+	TARGETED_BY_BALLISTIC,
+	AUTOLOADER_BUFF,
+	VOID_BREACHER,
+	WRAITH_IN_PHASE_DOME,
+	RAMPART_AMPED_SPEED,
+
+
+
+
+		SONAR_DART,
+		ON_HIT_LIST,
+
+
+
+
+
+		OVERDRIVE_ULT_TRACKING,
+
+	POWER_SWORD_BUFF,
+	POWER_SWORD_DEBUFF,
+
+
+
+
+
+		MRB_CARRIER,
+
+
+
+
+
+
+
+
+
+	_ENDORSEMENT_SECTION_START,
+
+	ENDORSEMENT_GENERIC,
+	ENDORSEMENT_SPEED_SCAN,
+
+	ENDORSEMENT_ORBITAL_SUPPORT,
+
+
+
+
+
+
+	_ENDORSEMENT_SECTION_END,
+
+
+	CLOCKUP_DISRUPTING_HACK_BREACHED,
+
+	_COUNT
+}
+
+
+global struct ScanRuiTypeCooldown
+{
+	float minVisibleTime = 0.5
+	float cooldownLength = 60.0
+
+	float visibleStartTime = -1
+	float cooldownStartTime = -1
+}
+
+
+
+
+
+
+const table<string, float> SmartAmmo_DetectorStartFracOverrides = {
+	
+	
+	
+	[ "mp_weapon_rocket_launcher" ] = 0.0,
+	[ "mp_titanweapon_shoulder_rockets" ] = 0.8,
+	[ "mp_titanweapon_homing_rockets" ] = 0.8,
+}
+
+struct
+{
+	bool initialized = false
+
+	entity        lockonHudForceWeapon
+	array<entity> lockingMissiles
+
+	var lockon_hud
+	var lockon_hud_bottom_nested
+	bool isLockonHudVisible = false
+	float lockonHudVisibleStartTime = -1
+	float currentLockonHudVisibleStartTime = -1
+	int currentScanRuiType = eScanRuiType.NONE
+	int verticalOffset
+
+	table<int, ScanRuiTypeCooldown> scanRuiCooldownInfo
+
+#if DEV
+	int forceShowScanRuiIndex = -1
+#endif
+
+	string statusWarning = ""
+} file
+
+void function SmartAmmoClient_Init()
+{
+	RegisterSignal( "SmartAmmoStatusWarning" )
+
+#if DEV
+		RegisterSignal( "StopScanRuiCycle" )
+#endif
+
+	AddCallback_OnClientScriptInit( SmartAmmoClient_AddClient )
+	AddCallback_KillReplayStarted( ClearLockonHudForceWeapon )
+	SmartAmmo_SetupInitialScanRuiCooldowns()
+}
+
+void function SmartAmmo_SetupInitialScanRuiCooldowns()
+{
+	ScanRuiTypeCooldown speedScanCooldown = {
+		minVisibleTime = 0.5,
+		cooldownLength = 30.0,
+		visibleStartTime = -1
+		cooldownStartTime = -1
+	}
+	file.scanRuiCooldownInfo[eScanRuiType.ENDORSEMENT_SPEED_SCAN] <- speedScanCooldown
+
+
+
+}
+
+void function SmartAmmo_AddScanRuiCooldown( int scanRuiType, float minVisibleTime, float cooldownLength )
+{
+	Assert( IsValidEnumValue( "eScanRuiType", scanRuiType ), format( "Unable to find a matching eScanRuiType for type %s", scanRuiType ) )
+
+	ScanRuiTypeCooldown scanCooldown
+	scanCooldown.minVisibleTime = minVisibleTime
+	scanCooldown.cooldownLength = cooldownLength
+	scanCooldown.visibleStartTime = -1
+	scanCooldown.cooldownStartTime = -1
+
+	file.scanRuiCooldownInfo[scanRuiType] <- scanCooldown
+}
+
+bool function SmartAmmo_IsScanRuiTypeOnCooldown( int scanRuiType )
+{
+	Assert( IsValidEnumValue( "eScanRuiType", scanRuiType ), format( "Unable to find a matching eScanRuiType for type %s", scanRuiType ) )
+
+	
+	if ( !( scanRuiType in file.scanRuiCooldownInfo ) )
+		return false
+
+	ScanRuiTypeCooldown cooldownInfo = file.scanRuiCooldownInfo[scanRuiType]
+
+	
+	if ( cooldownInfo.cooldownStartTime < 0 )
+		return false
+
+	float timeSinceCooldownBegan = ClientTime() - cooldownInfo.cooldownStartTime
+	return timeSinceCooldownBegan < cooldownInfo.cooldownLength
+}
+
+bool function SmartAmmo_HasScanRuiBeenVisibleLongEnoughToEnterCooldown( int scanRuiType )
+{
+	Assert( IsValidEnumValue( "eScanRuiType", scanRuiType ), format( "Unable to find a matching eScanRuiType for type %s", scanRuiType ) )
+
+	
+	if ( !( scanRuiType in file.scanRuiCooldownInfo ) )
+		return false
+
+	ScanRuiTypeCooldown cooldownInfo = file.scanRuiCooldownInfo[scanRuiType]
+	float timeSinceVisibleStart = ClientTime() - cooldownInfo.visibleStartTime
+	return timeSinceVisibleStart >= cooldownInfo.minVisibleTime
+}
+
+void function SmartAmmo_SetScanRuiVisibleStartTime( int scanRuiType, float time )
+{
+	Assert( IsValidEnumValue( "eScanRuiType", scanRuiType ), format( "Unable to find a matching eScanRuiType for type %s", scanRuiType ) )
+
+	if ( !( scanRuiType in file.scanRuiCooldownInfo ) )
+		return
+
+	ScanRuiTypeCooldown cooldownInfo = file.scanRuiCooldownInfo[scanRuiType]
+	cooldownInfo.visibleStartTime = time
+}
+
+void function SmartAmmo_StartScanRuiCooldown( int scanRuiType, float startTime )
+{
+	Assert( IsValidEnumValue( "eScanRuiType", scanRuiType ), format( "Unable to find a matching eScanRuiType for type %s", scanRuiType ) )
+
+	if ( !( scanRuiType in file.scanRuiCooldownInfo ) )
+		return
+
+	ScanRuiTypeCooldown cooldownInfo = file.scanRuiCooldownInfo[scanRuiType]
+	cooldownInfo.cooldownStartTime = startTime
+}
+
+
+void function SmartAmmoClient_AddClient( entity player )
+{
+	var rui = CreateCockpitPostFXRui( $"ui/lockon_hud.rpak", FULLMAP_Z_BASE )
+	file.lockon_hud = rui
+}
+
+var function GetLockon_Hud()
+{
+	return file.lockon_hud
+}
+
+bool function IsLockonHudVisible()
+{
+	return file.isLockonHudVisible
+}
+
+float function HowLongHasCurrentLockonHudBeenVisible()
+{
+	if ( file.currentLockonHudVisibleStartTime < 0 )
+		return -1
+
+	return ClientTime() - file.currentLockonHudVisibleStartTime
+}
+
+float function HowLongHasLockonHudBeenVisible()
+{
+	if ( file.lockonHudVisibleStartTime < 0 )
+		return -1
+
+	return ClientTime() - file.lockonHudVisibleStartTime
+}
+
+
+void function SmartAmmo_SetStatusWarning( string warningText, float duration = 0.0 )
+{
+	file.statusWarning = warningText
+
+	if ( duration != 0.0 )
+		thread SmartAmmo_ClearStatusWarning( duration )
+}
+
+
+void function SmartAmmo_ClearStatusWarning( float duration = 0.0 )
+{
+	if ( duration > 0.0 )
+	{
+		Assert( IsNewThread() )
+
+		Signal( GetLocalClientPlayer(), "SmartAmmoStatusWarning" )
+		EndSignal( GetLocalClientPlayer(), "SmartAmmoStatusWarning" )
+
+		wait duration
+	}
+
+	file.statusWarning = ""
+}
+
+void function SmartAmmo_SetVerticalOffset( int offset )
+{
+	file.verticalOffset = offset
+}
+
+#if DEV
+void function DEV_ForceShowScanRuiIndex( int index )
+{
+	file.forceShowScanRuiIndex = index
+}
+
+void function DEV_CycleThroughScanRuiStyles( float timePerStyle, bool looping = false )
+{
+	Signal( clGlobal.signalDummy, "StopScanRuiCycle" )
+
+	if ( !IsRegisteredButtonPressedCallback( KEY_ESCAPE, DEV_StopScanRuiCycle ) )
+	{
+		RegisterButtonPressedCallback( KEY_ESCAPE, DEV_StopScanRuiCycle )
+	}
+
+	thread function() : ( timePerStyle, looping )
+	{
+		EndSignal( clGlobal.signalDummy, "StopScanRuiCycle" )
+
+		int currentIndex = 0
+
+		OnThreadEnd( void function()
+		{
+			DEV_ForceShowScanRuiIndex( eScanRuiType.NONE )
+		} )
+
+		while ( currentIndex <= eScanRuiType._COUNT )
+		{
+			bool isCurrentIndexASectionMarker = false
+			local scanRuiTypeStr = GetEnumString( "eScanRuiType", currentIndex )
+			if ( scanRuiTypeStr.len() > 0 )
+			{
+				isCurrentIndexASectionMarker = scanRuiTypeStr.slice( 0, 1 ) == "_"
+			}
+
+			if ( !isCurrentIndexASectionMarker )
+			{
+				DebugDrawScreenTextForTime( 0.43, 0.13, format( "Cycling Scan RUIs. Current type: %s (%s/%s)\nPress ESC to cancel", scanRuiTypeStr, string( currentIndex + 1 ), string( eScanRuiType._COUNT ) ), <255, 255, 255>, timePerStyle )
+
+				DEV_ForceShowScanRuiIndex( currentIndex )
+				wait timePerStyle
+			}
+
+			if ( currentIndex + 1 > eScanRuiType._COUNT && looping )
+			{
+				currentIndex = 0
+			}
+			else
+			{
+				currentIndex++
+			}
+		}
+	}()
+}
+
+void function DEV_StopScanRuiCycle( var button = null )
+{
+	Signal( clGlobal.signalDummy, "StopScanRuiCycle" )
+
+	if ( IsRegisteredButtonPressedCallback( KEY_ESCAPE, DEV_StopScanRuiCycle ) )
+	{
+		DeregisterButtonPressedCallback( KEY_ESCAPE, DEV_StopScanRuiCycle )
+	}
+}
+#endif
+
+bool function ShouldForceShowScanRui( int index )
+{
+#if DEV
+		return index == file.forceShowScanRuiIndex
+#else
+		return false
+#endif
+}
+
+bool function IsForceShowIndexInRange( int minExclusive, int maxExclusive )
+{
+#if DEV
+		return file.forceShowScanRuiIndex > minExclusive && file.forceShowScanRuiIndex < maxExclusive
+#else
+		return false
+#endif
+}
+
+
+void function SmartAmmo_LockedOntoWarningHUD_Update()
+{
+	RuiSetInt( file.lockon_hud, "verticalOffset", file.verticalOffset )
+	int AnnouncementActivePositionZone = Announcement_GetActivePositionZone()
+	bool isAnnouncementActiveInSpace = CenterAnnouncements_IsActivelyDisplaying() || ( AnnouncementActivePositionZone != ANNOUNCEMENT_POSITION_ZONE_CENTER && AnnouncementActivePositionZone != ANNOUNCEMENT_POSITION_ZONE_NONE )
+	RuiSetBool( file.lockon_hud, "isAnnouncementActiveInSpace", isAnnouncementActiveInSpace )
+
+	entity player = GetLocalViewPlayer()
+
+	int scanRuiForThisFrame = eScanRuiType.NONE
+
+	float previousLockedFraction = 0.0
+	float lockedFraction         = 0.0
+	array<entity> highestFractionSources
+#if SMART_AMMO
+		previousLockedFraction = player.SmartAmmo_GetPreviousHighestLockOnMeFraction()
+		lockedFraction = player.SmartAmmo_GetHighestLockOnMeFraction()
+		highestFractionSources = player.SmartAmmo_GetHighestLocksOnMeEntities()
+#endif
+
+	array<entity> lockingWeapons
+	array<entity> lockingEnemies
+	foreach ( weapon in highestFractionSources )
+	{
+		if ( IsValid( weapon ) )
+		{
+			entity weaponOwner = weapon.GetWeaponOwner()
+			if ( IsValid( weaponOwner )
+			&& GetWeaponDamageNear( weapon, player ) > 0 )
+			{
+				lockingWeapons.append( weapon )
+				lockingEnemies.append( weaponOwner )
+			}
+		}
+	}
+
+	entity activeLockingWeapon
+	entity highestLockSource
+
+	entity foundMissile = null
+	foreach ( missile in file.lockingMissiles )
+	{
+		if ( IsValid( missile ) )
+		{
+			foundMissile = missile
+			break
+		}
+	}
+
+	ArrayRemoveInvalid( file.lockingMissiles )
+	bool hasBottomUiHandle = false
+
+	if ( foundMissile != null && IsValid( file.lockonHudForceWeapon ) )
+	{
+		activeLockingWeapon = file.lockonHudForceWeapon
+		highestLockSource = foundMissile 
+		lockingEnemies.append( highestLockSource )
+		lockedFraction = 1.0
+	}
+	else if ( lockingWeapons.len() > 0 )
+	{
+		activeLockingWeapon = lockingWeapons[0]
+		highestLockSource = activeLockingWeapon.GetWeaponOwner()
+	}
+	else
+	{
+		bool isFreespawnsTeammateDeathScan = false
+
+		
+		string lockMessage = ""
+
+		asset characterIcon = $""
+		float characterIconScale = 1.0
+		vector characterIconOffset = <0, 7, 0>
+		vector iconColor = <1, 1, 1>
+		asset iconBackgroundImage = $"rui/hud/ultimate_icons/ultimate_frame_mask"
+		asset iconBorderImage = $"rui/hud/ultimate_icons/ultimate_frame_inner"
+		asset iconBorderDetailsImage = $"rui/hud/ultimate_icons/ultimate_frame_corners"
+
+		vector borderColor = <1, 1, 1>
+		float borderTopDetailsAlpha = 1.0
+		asset borderSideRightTexture = $"rui/hud/lockon_indicator/border_right_side_texture"
+		vector borderSideRightTextureSize = GetImageSize( borderSideRightTexture )
+		vector borderSideRightTextureOffset = <0, 0, 0>
+		vector borderTextureColor = COLOR_WHITE / 255.0
+
+		bool northLock = false
+		bool southLock = false
+		bool westLock = false
+		bool eastLock = false
+		float lockEndTime = RUI_BADGAMETIME
+
+		bool showAdditionalInfo = false
+		asset additionalInfo1Icon = $""
+		vector additionalInfo1IconColor = COLOR_WHITE / 255.0
+		asset additionalInfo2Icon = $""
+		vector additionalInfo2IconColor = COLOR_WHITE / 255.0
+
+		bool showProgress = false
+
+
+		if ( file.statusWarning != "" || ShouldForceShowScanRui( eScanRuiType.SCAN_WARNING ) )
+		{
+			lockMessage = file.statusWarning
+			scanRuiForThisFrame = eScanRuiType.SCAN_WARNING
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.shadow_form ) || ShouldForceShowScanRui( eScanRuiType.SHADOW_FORM ) )
+		{
+			lockMessage = "#SHADOW_FORM_HEADER"
+			lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.shadow_form )
+			borderColor = < 1.0, 0.0, 0.0 >
+			iconColor = borderColor
+
+			showAdditionalInfo = player.GetPlayerNetFloat( SHADOW_FORM_REGEN_NETVAR ) > 0
+			additionalInfo1Icon = $"rui/hud/character_abilities/rampart_shield_hit_indicator_full"
+			additionalInfo1IconColor = < 1.0, 0.0, 0.0 >
+
+			additionalInfo2Icon = $"rui/hud/player_info/shield_regening_icon"
+			additionalInfo2IconColor = SrgbToLinear( GetKeyColor( COLORID_HUD_HEAL_COLOR ) / 255.0 )
+
+			if( file.lockon_hud_bottom_nested == null )
+			{
+				file.lockon_hud_bottom_nested = RuiCreateNested( file.lockon_hud, "bottomUiHandle", $"ui/shadow_form_time_bar.rpak" )
+				RuiTrackFloat( file.lockon_hud_bottom_nested, "mitigatedDamageRemaining", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( SHADOW_FORM_HEALTH_NETVAR ) )
+				RuiTrackFloat( file.lockon_hud_bottom_nested, "rechargeAmount", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( SHADOW_FORM_REGEN_NETVAR ) )
+			}
+
+			hasBottomUiHandle = true
+			MpAbilityShadowForm_PopulateRui( player, file.lockon_hud_bottom_nested )
+
+			scanRuiForThisFrame = eScanRuiType.SHADOW_FORM
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.physical_overshield ) || ShouldForceShowScanRui( eScanRuiType.ZIPLINE_SHIELD ) )
+		{
+			lockMessage = "#UPGRADE_PATHFINDER_ZIPLINE_SHIELD"
+			borderColor = < 1.0, 0.0, 0.0 >
+			iconColor = borderColor
+
+			additionalInfo1Icon = $"rui/hud/character_abilities/rampart_shield_hit_indicator_full"
+			additionalInfo1IconColor = < 1.0, 0.0, 0.0 >
+
+			if( file.lockon_hud_bottom_nested == null )
+				file.lockon_hud_bottom_nested = RuiCreateNested( file.lockon_hud, "bottomUiHandle", $"ui/shadow_form_time_bar.rpak" )
+
+			hasBottomUiHandle = true
+			PhysicalOvershield_PopulateRui( player, file.lockon_hud_bottom_nested, file.lockon_hud )
+
+			scanRuiForThisFrame = eScanRuiType.ZIPLINE_SHIELD
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.lockon_detected ) || IsForceShowIndexInRange( eScanRuiType._LOCKON_SECTION_START, eScanRuiType._LOCKON_SECTION_END ) )
+		{
+			
+			if ( StatusEffect_HasSeverity( player, eStatusEffect.sonar_detected ) || ShouldForceShowScanRui( eScanRuiType.SONAR_DETECTED ) )
+			{
+				lockMessage = "#LOCKON_WARNING"
+				scanRuiForThisFrame = eScanRuiType.SONAR_DETECTED
+			}
+			
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.crypto_tt_scanned_visual ) || ShouldForceShowScanRui( eScanRuiType.CRYPTO_SCAN ) )
+			{
+				lockMessage = "#HUD_SPOTTED_CRYPTO_TT"
+				borderColor = < 0.21, 0.79, 0.34> 
+				iconColor = borderColor
+				scanRuiForThisFrame = eScanRuiType.CRYPTO_SCAN
+			}
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.perk_survey_beacon_scanned_visual ) || ShouldForceShowScanRui( eScanRuiType.SURVEY_BEACON_SCAN ) )
+			{
+				lockMessage = "#SURVEY_ENEMY_SCANNED_HINT"
+				borderColor = < 0.58, 0.34, 0.71> 
+				iconColor = borderColor
+				PerkSettingsInfo info = Perks_GetSettingsInfoForPerk( ePerkIndex.BEACON_ENEMY_SCAN )
+				AddPlayerHint( .1, .1, info.icon, "#SURVEY_ENEMY_VIEW_MAP_HINT" )
+				scanRuiForThisFrame = eScanRuiType.SURVEY_BEACON_SCAN
+			}
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.mirage_detected ) || ShouldForceShowScanRui( eScanRuiType.LOCKON_MIRAGE_DETECTED ) )
+			{
+				lockMessage = "#BAMBOOZLED_WARNING"
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_mirage"
+				borderColor = <1, .98, .447> 
+				iconColor = borderColor
+				characterIconScale = 0.8
+				scanRuiForThisFrame = eScanRuiType.LOCKON_MIRAGE_DETECTED
+			}
+		}
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.perk_survey_beacon_enemies_scanned_visual ) || ShouldForceShowScanRui( eScanRuiType.SURVEY_BEACON_ENEMIES_SCAN ) )
+		{
+
+			if( Perk_ScoutExpert_FastBeaconScan_Enabled() )
+			{
+				array<entity> scannedEnemies = BeaconScanEnemy_GetScannedEnemies()
+				lockMessage = Localize( "#SURVEY_ENEMY_ALLY_SCANNED_WITH_COUNT_HINT", scannedEnemies.len() )
+			}
+			else
+
+			{
+				lockMessage = "#SURVEY_ENEMY_ALLY_SCANNED_HINT"
+			}
+
+			borderColor = < 0.58, 0.34, 0.71> 
+			iconColor = borderColor
+			PerkSettingsInfo info = Perks_GetSettingsInfoForPerk( ePerkIndex.BEACON_ENEMY_SCAN )
+			AddPlayerHint( .1, .1, info.icon, "#SURVEY_ENEMY_ALLY_VIEW_MAP_HINT"  )
+
+			scanRuiForThisFrame = eScanRuiType.SURVEY_BEACON_ENEMIES_SCAN
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( IsPlayersBeingWarnedAboutNexus( player ) || ShouldForceShowScanRui( eScanRuiType.VOID_NEXUS ) )
+		{
+			lockMessage = "#TRANSPORT_PORTAL_NEARBY_WARNING"
+			characterIcon = $"rui/hud/ultimate_icons/ultimate_alter"
+			borderColor = < .576, .439, .859 > 
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.VOID_NEXUS
+		}
+
+		else if ( ( StatusEffect_HasSeverity( player, eStatusEffect.stuck_by_emp_grenade ) && GetCurrentPlaylistVarBool( "should_display_emp_grenade_stuck_message", true ) ) || ShouldForceShowScanRui( eScanRuiType.STUCK_EMP ) )
+ 		{
+			lockMessage = "#WPN_ARC_STAR_STUCK"
+			characterIcon = $"rui/ordnance_icons/grenade_arc"
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.STUCK_EMP
+		}
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.stuck_by_frag_arrow ) || ShouldForceShowScanRui( eScanRuiType.STUCK_ARROW ) )
+ 		{
+			lockMessage = "#WPN_BOW_SPICEY_STUCK"
+			characterIcon =  $"rui/ordnance_icons/grenade_frag"
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.STUCK_ARROW
+		}
+
+
+
+		else if ( IsForceShowIndexInRange( eScanRuiType._ENDORSEMENT_SECTION_START, eScanRuiType._ENDORSEMENT_SECTION_END )
+		|| StatusEffect_HasSeverity( player, eStatusEffect.endorsement_speed_scan ) && !SmartAmmo_IsScanRuiTypeOnCooldown( eScanRuiType.ENDORSEMENT_SPEED_SCAN )
+
+
+
+		)
+		{
+			borderColor = SrgbToLinear( UNHINGED_COLOR_UI )
+			iconColor = borderColor
+
+			if ( ( StatusEffect_HasSeverity( player, eStatusEffect.endorsement_speed_scan ) && !SmartAmmo_IsScanRuiTypeOnCooldown( eScanRuiType.ENDORSEMENT_SPEED_SCAN ) )
+					|| ShouldForceShowScanRui( eScanRuiType.ENDORSEMENT_SPEED_SCAN ) )
+			{
+				characterIcon = Endorsement_SpeedScan_GetIcon()
+				lockMessage = "#SONAR_WARNING"
+				characterIconScale = 0.8
+				scanRuiForThisFrame = eScanRuiType.ENDORSEMENT_SPEED_SCAN
+			}
+
+
+
+
+
+
+
+
+
+
+		}
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.clockup_disrupting_hack_impact ) || ShouldForceShowScanRui( eScanRuiType.CLOCKUP_DISRUPTING_HACK_BREACHED ) )
+		{
+		    lockMessage = "#CLOCKUP_DISRUPTING_HACK_DETECTED"
+		  	lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.clockup_disrupting_hack_impact )
+		    vector effectBorderColor = < 1.0, 0.0, 0.0 >
+		    borderColor = effectBorderColor
+		    iconColor = borderColor
+		    characterIconScale = 0.6
+		    characterIcon = $"rui/hud/endorsements/endorsement_clockup_blackwall_breach"
+
+		    scanRuiForThisFrame = eScanRuiType.CLOCKUP_DISRUPTING_HACK_BREACHED
+		}
+
+
+		else if ( IsForceShowIndexInRange( eScanRuiType._LEGEND_SECTION_START, eScanRuiType._LEGEND_SECTION_END )
+			|| ( (StatusEffect_HasSeverity( player, eStatusEffect.camera_detected )
+			|| StatusEffect_HasSeverity( player, eStatusEffect.maphack_detected )
+			|| StatusEffect_HasSeverity( player, eStatusEffect.sonar_detected )
+			|| StatusEffect_HasSeverity( player, eStatusEffect.area_sonar_scan )
+
+			|| StatusEffect_HasSeverity( player, eStatusEffect.mortar_ring_reveal )
+
+
+
+
+
+			|| StatusEffect_HasSeverity( player, eStatusEffect.arco_ult_scan )
+
+
+
+
+
+			|| StatusEffect_HasSeverity( player, eStatusEffect.sonar_pulse_embedded )
+
+			|| StatusEffect_HasSeverity( player, eStatusEffect.sonar_round_embedded ) )
+			
+			|| ( !GetSonicBlastDoesSonarScan() && StatusEffect_HasSeverity( player, eStatusEffect.seer_detected ) )
+
+
+
+
+			&& !player.IsCloaked( true ) ) )
+
+		{
+			borderColor = SrgbToLinear( <1, .36, .31> ) 
+			iconColor = borderColor
+
+			if ( StatusEffect_HasSeverity( player, eStatusEffect.spawnkilling_detected ) || ShouldForceShowScanRui( eScanRuiType.SPAWN_KILLING ) )
+			{
+				lockMessage = "#SPAWNKILLING_DETECTED"
+				scanRuiForThisFrame = eScanRuiType.SPAWN_KILLING
+			}
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.damage_received_multiplier ) || ShouldForceShowScanRui( eScanRuiType.DAMAGE_MULTIPLIER ) )
+			{
+				lockMessage = "#VULNERABLE_WARNING"
+				scanRuiForThisFrame = eScanRuiType.DAMAGE_MULTIPLIER
+			}
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.maphack_detected ) || ShouldForceShowScanRui( eScanRuiType.MAPHACK ) )
+			{
+				lockMessage = "#MAPHACK_WARNING"
+				scanRuiForThisFrame = eScanRuiType.MAPHACK
+			}
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.camera_detected ) || ShouldForceShowScanRui( eScanRuiType.CAMERA ) )
+			{
+				lockMessage = "#CAMERA_WARNING"
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_crypto"
+				borderColor = <.21, .79, .34>
+				iconColor = borderColor
+				characterIconScale = 0.6
+				scanRuiForThisFrame = eScanRuiType.CAMERA
+			}
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.arco_ult_scan ) || ShouldForceShowScanRui( eScanRuiType.ARCO_ULT_SCAN ) )
+			{
+				lockMessage = "#WPN_ULT_TRACKING_STATUS"
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_sparrow"
+				characterIconScale = 0.6
+				borderColor = <.85, .2, .18> 
+				iconColor = borderColor
+				scanRuiForThisFrame = eScanRuiType.ARCO_ULT_SCAN
+			}
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.mirage_detected ) || ShouldForceShowScanRui( eScanRuiType.MIRAGE_DETECTED ) )
+			{
+				lockMessage = "#BAMBOOZLED_WARNING"
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_mirage"
+				borderColor = <1, .98, .447> 
+				iconColor = borderColor
+				characterIconScale = 0.6
+				scanRuiForThisFrame = eScanRuiType.MIRAGE_DETECTED
+			}
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.seer_detected ) || ShouldForceShowScanRui( eScanRuiType.SEER_DETECTED ) )
+			{
+				lockMessage = "#SEER_DETECTED_WARNING"
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_seer"
+				characterIconScale = 0.6
+				vector color = GetKeyColor( COLORID_HUD_SEER_DEFAULT )
+				vector scaledColor = <color.x/255.0, color.y/255.0, color.z/255.0>
+				borderColor = scaledColor
+				iconColor = borderColor
+				scanRuiForThisFrame = eScanRuiType.SEER_DETECTED
+			}
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.sonar_round_embedded ) || ShouldForceShowScanRui( eScanRuiType.STUCK_SONAR ) )
+			{
+				lockMessage = "#VANTAGE_SNIPER_ULT_WARNING"
+				characterIcon = $"rui/hud/character_abilities/vantage_gun_mark"
+				characterIconScale = 0.6
+				scanRuiForThisFrame = eScanRuiType.STUCK_SONAR
+			}
+
+
+
+
+
+
+
+
+
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.mortar_ring_reveal ) || ShouldForceShowScanRui( eScanRuiType.MORTAR_RING ) )
+			{
+				lockMessage = "#FUSE_MORTAR_DETECTED_WARNING"
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_fuse"
+				characterIconScale = 0.6
+				scanRuiForThisFrame = eScanRuiType.MORTAR_RING
+			}
+
+
+
+
+
+
+
+
+
+
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.freespawn_victim_teammate ) || ShouldForceShowScanRui( eScanRuiType.FREESPAWN_VICTIM_TEAMMATE ) )
+			{
+				isFreespawnsTeammateDeathScan = true
+				scanRuiForThisFrame = eScanRuiType.FREESPAWN_VICTIM_TEAMMATE
+			}
+
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.sonar_pulse_embedded ) || ShouldForceShowScanRui( eScanRuiType.SONAR_PULSE ) )
+			{
+				lockMessage = "#SONAR_WARNING"
+				characterIcon = $"rui/hud/status_effects/pulse_blade_icon"
+				scanRuiForThisFrame = eScanRuiType.SONAR_PULSE
+				characterIconScale = 0.7
+			}
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.area_sonar_scan ) || ShouldForceShowScanRui( eScanRuiType.BLOODHOUND ) )
+			{
+				
+				characterIcon = $"rui/menu/buttons/battlepass/character_skin_bloodhound"
+				lockMessage = "#SONAR_WARNING"
+				characterIconScale = 0.8
+				scanRuiForThisFrame = eScanRuiType.BLOODHOUND
+			}
+		}
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.sonar_blocked ) || ShouldForceShowScanRui( eScanRuiType.SONAR_BLOCKED ) )
+		{
+			lockMessage = "#SONAR_WARNING_BLOCKED"
+			scanRuiForThisFrame = eScanRuiType.SONAR_BLOCKED
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.placing_phase_tunnel ) || ShouldForceShowScanRui( eScanRuiType.PLACING_PHASE_TUNNEL ) )
+		{
+			lockMessage = "#PHASE_TUNNEL_STATUS_DISTANCE"
+			lockEndTime = Time() + (100 * StatusEffect_GetSeverity( player, eStatusEffect.placing_phase_tunnel ))
+			borderColor = <1, 0.846873462, 0.0722718611>
+			iconColor = borderColor
+
+			scanRuiForThisFrame = eScanRuiType.PLACING_PHASE_TUNNEL
+		}
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.tethered ) || ShouldForceShowScanRui( eScanRuiType.TETHERED ) )
+		{
+			lockMessage = "#TETHER_WARNING"
+			scanRuiForThisFrame = eScanRuiType.TETHERED
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.device_detected ) || IsForceShowIndexInRange( eScanRuiType._DEVICE_SECTION_START, eScanRuiType._DEVICE_SECTION_END ) )
+		{
+			float detectWeight      = StatusEffect_GetSeverity( player, eStatusEffect.device_detected )
+			float deviceDetectCount = RoundToNearestInt( ((detectWeight) * 100) - 2 )
+
+			if ( deviceDetectCount == -1 )
+			{
+				return
+			}
+			else if ( deviceDetectCount == 0 || ShouldForceShowScanRui( eScanRuiType.DEVICE_DETECTED_0 ) )
+			{
+				lockMessage = "#DEVICE_DETECTED_WARNING_ZERO"
+				scanRuiForThisFrame = eScanRuiType.DEVICE_DETECTED_0
+			}
+			else if ( deviceDetectCount == 1 || ShouldForceShowScanRui( eScanRuiType.DEVICE_DETECTED_1 ) )
+			{
+				lockMessage = "#DEVICE_DETECTED_WARNING"
+				borderColor = <1, 0, 0>
+				iconColor = borderColor
+				scanRuiForThisFrame = eScanRuiType.DEVICE_DETECTED_1
+			}
+			else if ( deviceDetectCount <= 10 || ShouldForceShowScanRui( eScanRuiType.DEVICE_DETECTED_10_OR_LESS ) )
+			{
+				lockMessage = Localize( "#DEVICES_DETECTED_WARNING", deviceDetectCount )
+				borderColor = <1, 0, 0>
+				iconColor = borderColor
+				scanRuiForThisFrame = eScanRuiType.DEVICE_DETECTED_10_OR_LESS
+			}
+			else
+			{
+				lockMessage = "#DEVICES_DETECTED_WARNING_MANY"
+				borderColor = <1, 0, 0>
+				iconColor = borderColor
+				scanRuiForThisFrame = eScanRuiType.DEVICE_DETECTED_10_PLUS
+			}
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.hunt_mode ) || ShouldForceShowScanRui( eScanRuiType.HUNT_MODE ) )
+		{
+			
+			lockMessage = "#HUNT_MODE_STATUS"
+			lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.hunt_mode )
+
+			borderColor = <1, 0.846873462, 0.0722718611>
+			iconColor = borderColor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			scanRuiForThisFrame = eScanRuiType.HUNT_MODE
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.device_blocked ) || ShouldForceShowScanRui( eScanRuiType.DEVICE_BLOCKED ) )
+		{
+			float blockWeight        = StatusEffect_GetSeverity( player, eStatusEffect.device_blocked )
+			float deviceBlockedCount = RoundToNearestInt( ((blockWeight) * 100) - 1 )
+
+			
+			if ( deviceBlockedCount > 0 || ShouldForceShowScanRui( eScanRuiType.DEVICE_BLOCKED ) )
+			{
+				lockMessage = "#DEVICE_DETECTED_BLOCKED_WARNING"
+				scanRuiForThisFrame = eScanRuiType.DEVICE_BLOCKED
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.revealed_by_ash ) || ShouldForceShowScanRui( eScanRuiType.REVEALED_BY_ASH ) )
+		{
+			lockMessage = "#PAS_ASH_REVEALED"
+			characterIcon = $"rui/menu/buttons/battlepass/character_skin_ash"
+			borderColor = <1, 0, 0>
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.REVEALED_BY_ASH
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.revealing_enemies ) || ShouldForceShowScanRui( eScanRuiType.REVEALING_ENEMIES ) )
+		{
+			int playerCount = int( RoundToNearestInt ( ( StatusEffect_GetSeverity( player, eStatusEffect.revealing_enemies ) - 0.1 ) * 10.0 ) )
+			if ( playerCount > 1 )
+				lockMessage = Localize( "#PAS_ASH_REVEALING_ENEMIES_MULTIPLE", playerCount )
+			else if ( playerCount == 1 )
+				lockMessage = Localize( "#PAS_ASH_REVEALING_ENEMIES_SINGLE" )
+			else
+				lockMessage = Localize( "#PAS_ASH_REVEALING_ENEMIES_NONE" )
+
+			borderColor = <1, 0, 0>
+			iconColor = borderColor
+
+			scanRuiForThisFrame = eScanRuiType.REVEALING_ENEMIES
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( ( OrbitalSupport_EnemyHasTag() && IsOrbtialFiring() ) || ShouldForceShowScanRui( eScanRuiType.ENDORSEMENT_ORBITAL_SUPPORT ) )
+		{
+			lockMessage = "#ENDORSEMENT_ORBITAL_SUPPORT_LOCKON"
+
+			characterIcon = $"rui/hud/event_weapons/r99/weapon_missile_icon"
+
+			vector rampartColor = SrgbToLinear( ColorPalette_GetColorFromID( COLORID_AIRDROP_RAMPART_COLOR ) / 255.0 )
+			borderColor = rampartColor
+			iconColor = COLOR_WHITE / 255.0
+			borderTextureColor = rampartColor
+			characterIconScale = 0.65
+			characterIconOffset = <0, 0, 0>
+			borderTopDetailsAlpha =  0.0
+			borderSideRightTexture = $"rui/hud/splash/splash_rampart_paint"
+			borderSideRightTextureSize = GetImageSize( borderSideRightTexture )
+			borderSideRightTextureOffset = <0.03, 0.03, 0>
+			iconBackgroundImage = $"rui/hud/scan_rui_notification/scan_round_frame_mask"
+			iconBorderImage = $"rui/hud/scan_rui_notification/scan_round_frame_inner"
+			iconBorderDetailsImage = $"rui/hud/scan_rui_notification/scan_round_frame_corners"
+
+			scanRuiForThisFrame = eScanRuiType.ENDORSEMENT_ORBITAL_SUPPORT
+		}
+
+		else if ( IsPlayerBeingTargetedByBallistic( player ) || ShouldForceShowScanRui( eScanRuiType.TARGETED_BY_BALLISTIC ) )
+		{
+
+			if( IsPlayerBeingTargetedBySilenceBallistic( player ) )
+			{
+				lockMessage = "#SILENCE_TARGETING"
+			}
+			else
+
+			{
+				lockMessage = "#TURRET_TARGETING"
+			}
+
+			characterIcon = $"rui/hud/tactical_icons/tactical_ballistic"
+			borderColor = <1, 0, 0>
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.TARGETED_BY_BALLISTIC
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.void_breacher ) || ShouldForceShowScanRui( eScanRuiType.VOID_BREACHER ) )
+		{
+	    	lockMessage = "#VOID_BREACHER_ACTIVE"
+	    	lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.void_breacher )
+	    	borderColor = < .576, .439, .859 > 
+			iconColor = borderColor
+
+	    	scanRuiForThisFrame = eScanRuiType.VOID_BREACHER
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.rampart_amped_speed ) || ShouldForceShowScanRui( eScanRuiType.RAMPART_AMPED_SPEED ) )
+		{
+	    	lockMessage = "#AMPED_SPEED_ACTIVE"
+	    	lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.rampart_amped_speed )
+	    	borderColor = < .891, .498, .0196 >
+			iconColor = borderColor
+
+	    	scanRuiForThisFrame = eScanRuiType.RAMPART_AMPED_SPEED
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.hit_by_sonar_dart ) || ShouldForceShowScanRui( eScanRuiType.SONAR_DART ) )
+		{
+			lockMessage = "#TRACKING_INITIATED"
+			lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.hit_by_sonar_dart )
+			characterIcon = $"rui/hud/tactical_icons/tactical_sparrow"
+			vector trackingTacColor = SrgbToLinear( GetKeyColor( COLORID_DANGER_WARNING_ORANGE ) / 255.0 )
+			borderColor = trackingTacColor
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.SONAR_DART
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.on_hit_list ) || ShouldForceShowScanRui( eScanRuiType.ON_HIT_LIST ) )
+		{
+			lockMessage = "#WPN_TRACKING_STATUS"
+			characterIcon = $"rui/hud/tactical_icons/tactical_sparrow"
+			vector trackedTacColor = SrgbToLinear( GetKeyColor( COLORID_DANGER_WARNING_RED ) / 255.0 )
+			borderColor = trackedTacColor
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.ON_HIT_LIST
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.overdrive_ult_tracking ) || ShouldForceShowScanRui( eScanRuiType.OVERDRIVE_ULT_TRACKING ) )
+		{
+			lockMessage = "#ABL_ULT_FRAG_DRONE_TRACKING_WARNING"
+			characterIcon = $"rui/menu/buttons/battlepass/character_skin_overdrive"
+			borderColor = <1, 0, 0>
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.OVERDRIVE_ULT_TRACKING
+		}
+
+		else if ( DoesPlayerHaveAutoLoaderBuff( player ) || ShouldForceShowScanRui( eScanRuiType.AUTOLOADER_BUFF ) )
+		{
+			lockMessage = "#AUTO_LOADER_ACTIVE"
+			lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.has_auto_loader )
+			vector ballisticTacColor = GetKeyColor( COLORID_HUD_BALLISTIC_TAC_SEARCH ) / 255.0
+			borderColor = ballisticTacColor
+			iconColor = borderColor
+
+			scanRuiForThisFrame = eScanRuiType.AUTOLOADER_BUFF
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.power_sword_buff ) || ShouldForceShowScanRui( eScanRuiType.POWER_SWORD_BUFF ) )
+		{
+			lockMessage = "#WEAPON_POWER_SWORD_BUFF_TEXT"
+			lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.power_sword_buff )
+			characterIcon = $"rui/gamemodes/power_of_sword/power_sword_vertical_icon_s"
+			vector effectBorderColor = (TEAM_COLOR_FRIENDLY / 255.0)
+			borderColor = effectBorderColor
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.POWER_SWORD_BUFF
+		}
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.power_sword_debuff ) || ShouldForceShowScanRui( eScanRuiType.POWER_SWORD_DEBUFF ) )
+		{
+			lockMessage = "#WEAPON_POWER_SWORD_DEBUFF_TEXT"
+			lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.power_sword_debuff )
+			characterIcon = $"rui/gamemodes/power_of_sword/power_sword_vertical_icon_s"
+			vector effectBorderColor = (TEAM_COLOR_ENEMY / 255.0)
+			borderColor = effectBorderColor
+			iconColor = borderColor
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.POWER_SWORD_DEBUFF
+		}
+
+
+			else if ( StatusEffect_HasSeverity( player, eStatusEffect.clockup_disrupting_hack_phase ) )
+			{
+				lockMessage = "#CLOCKUP_DISRUPTING_HACK_PHASE_END_TIME"
+				lockEndTime = Time() + StatusEffect_GetTimeRemaining( player, eStatusEffect.clockup_disrupting_hack_phase )
+				vector effectBorderColor = < 1.0, 0.0, 0.0 >
+				borderColor = effectBorderColor
+				iconColor = borderColor
+				characterIcon = $"rui/hud/endorsements/endorsement_clockup_blackwall_breach"
+				characterIconScale = 0.6
+				scanRuiForThisFrame = eScanRuiType.CLOCKUP_DISRUPTING_HACK_BREACHED
+			}
+
+
+
+		else if ( StatusEffect_HasSeverity( player, eStatusEffect.mrb_carrier ) || ShouldForceShowScanRui( eScanRuiType.MRB_CARRIER ) )
+		{
+			lockMessage = "#CONTROL_MRB_HELD_WARNING"
+			characterIcon = CONTROL_MRB_INWORLD_ICON
+			characterIconScale = 0.6
+
+			scanRuiForThisFrame = eScanRuiType.MRB_CARRIER
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+		if ( file.forceShowScanRuiIndex > eScanRuiType.NONE && scanRuiForThisFrame == eScanRuiType.NONE )
+		{
+			local scanRuiTypeStr = GetEnumString( "eScanRuiType", file.forceShowScanRuiIndex )
+			if ( scanRuiTypeStr.len() > 0 )
+			{
+				bool isSectionMarker = scanRuiTypeStr.slice( 0, 1 ) == "_"
+				if ( !isSectionMarker )
+				{
+					DebugDrawScreenText( 0.45, 0.2, format( "Unable to display Scan RUI Type %s", scanRuiTypeStr ) )
+				}
+			}
+		}
+#endif
+
+		RuiSetString( file.lockon_hud, "lockMessage", lockMessage )
+
+		RuiSetImage( file.lockon_hud, "characterIcon", characterIcon )
+		RuiSetFloat( file.lockon_hud, "characterIconScale", characterIconScale )
+		RuiSetFloat2( file.lockon_hud, "characterIconOffset", characterIconOffset )
+		RuiSetColorAlpha( file.lockon_hud, "iconColor", iconColor, 1.0 )
+		RuiSetImage( file.lockon_hud, "iconBackgroundImage", iconBackgroundImage )
+		RuiSetImage( file.lockon_hud, "iconBorderImage", iconBorderImage )
+		RuiSetImage( file.lockon_hud, "iconBorderDetailsImage", iconBorderDetailsImage )
+
+		RuiSetFloat3( file.lockon_hud, "borderColor", borderColor )
+		RuiSetFloat( file.lockon_hud, "borderTopDetailsAlpha", borderTopDetailsAlpha )
+		RuiSetImage( file.lockon_hud, "borderSideRightTexture", borderSideRightTexture )
+		RuiSetFloat2( file.lockon_hud, "borderSideRightTextureSize", borderSideRightTextureSize )
+		RuiSetFloat2( file.lockon_hud, "borderSideRightTextureOffset", borderSideRightTextureOffset )
+		RuiSetColorAlpha( file.lockon_hud, "borderTextureColor", borderTextureColor, 1.0 )
+
+		RuiSetBool( file.lockon_hud, "northLock", northLock )
+		RuiSetBool( file.lockon_hud, "southLock", southLock )
+		RuiSetBool( file.lockon_hud, "westLock", westLock )
+		RuiSetBool( file.lockon_hud, "eastLock", eastLock )
+		RuiSetGameTime( file.lockon_hud, "lockEndTime", lockEndTime )
+
+		RuiSetBool( file.lockon_hud, "showAdditionalInfo", showAdditionalInfo )
+		RuiSetImage( file.lockon_hud, "additionalInfo1Icon", additionalInfo1Icon )
+		RuiSetFloat3( file.lockon_hud, "additionalInfo1IconColor", additionalInfo1IconColor )
+		RuiSetImage( file.lockon_hud, "additionalInfo2Icon", additionalInfo2Icon )
+		RuiSetFloat3( file.lockon_hud, "additionalInfo2IconColor", additionalInfo2IconColor )
+
+		RuiSetBool( file.lockon_hud, "showProgress", showProgress )
+
+		RuiSetBool( file.lockon_hud, "isVisible", scanRuiForThisFrame != eScanRuiType.NONE )
+
+		
+		if ( file.currentScanRuiType != scanRuiForThisFrame )
+		{
+			if ( scanRuiForThisFrame == eScanRuiType.NONE )
+			{
+				file.currentLockonHudVisibleStartTime = -1
+				file.lockonHudVisibleStartTime = -1
+
+				
+				if ( file.currentScanRuiType != eScanRuiType.NONE )
+				{
+					if ( SmartAmmo_HasScanRuiBeenVisibleLongEnoughToEnterCooldown( file.currentScanRuiType  ) )
+					{
+						SmartAmmo_StartScanRuiCooldown( file.currentScanRuiType, ClientTime() )
+					}
+				}
+			}
+			else
+			{
+				file.currentLockonHudVisibleStartTime = ClientTime()
+
+				
+				if ( file.currentScanRuiType == eScanRuiType.NONE )
+				{
+					file.lockonHudVisibleStartTime = ClientTime()
+				}
+
+				
+				if ( file.currentScanRuiType != eScanRuiType.NONE )
+				{
+					if ( SmartAmmo_HasScanRuiBeenVisibleLongEnoughToEnterCooldown( file.currentScanRuiType  ) )
+					{
+						SmartAmmo_StartScanRuiCooldown( file.currentScanRuiType, ClientTime() )
+					}
+				}
+
+				SmartAmmo_SetScanRuiVisibleStartTime( scanRuiForThisFrame, ClientTime() )
+			}
+		}
+
+		file.currentScanRuiType = scanRuiForThisFrame
+		file.isLockonHudVisible = scanRuiForThisFrame != eScanRuiType.NONE
+
+		ClearUplockOnBottomUiHandle( hasBottomUiHandle )
+		return
+	}
+
+	ClearUplockOnBottomUiHandle( hasBottomUiHandle ) 
+
+	
+
+	float reqFracForDetection = TARGET_SET_FRACTION
+	if ( lockedFraction > TARGET_SET_FRACTION && IsValid( highestLockSource ) )
+	{
+		float delay = SmartAmmo_GetWarningIndicatorDelay( activeLockingWeapon )
+		if ( delay > 0 )
+		{
+			reqFracForDetection = delay
+		}
+		else
+		{
+			string weaponclass = expect string( activeLockingWeapon.GetNetworkedClassName() )
+			if ( weaponclass in SmartAmmo_DetectorStartFracOverrides )
+			{
+				reqFracForDetection = SmartAmmo_DetectorStartFracOverrides[ weaponclass ]
+			}
+		}
+
+		Assert( activeLockingWeapon != null )
+	}
+
+	if ( lockedFraction == 1.0 && lockedFraction > reqFracForDetection )
+	{
+		ShowLockedOntoWarningHUD( player, lockingEnemies, activeLockingWeapon, true )
+
+		if ( previousLockedFraction < 1.0 )
+		{
+			if ( !("playingVictimLockedSound" in player.s) )
+			{
+				EmitSoundOnEntity( player, SMART_AMMO_VICTIM_LOCKED_SOUND )
+				player.s.playingVictimLockedSound <- true
+			}
+		}
+	}
+	else if ( lockedFraction > reqFracForDetection )
+	{
+		ShowLockedOntoWarningHUD( player, lockingEnemies, activeLockingWeapon, false )
+
+		if ( "playingVictimLockedSound" in player.s )
+		{
+			StopSoundOnEntity( player, SMART_AMMO_VICTIM_LOCKED_SOUND )
+			delete player.s.playingVictimLockedSound
+		}
+	}
+	else
+	{
+		if ( "playingVictimLockedSound" in player.s )
+		{
+			StopSoundOnEntity( player, SMART_AMMO_VICTIM_LOCKED_SOUND )
+			delete player.s.playingVictimLockedSound
+		}
+	}
+}
+
+void function ClearUplockOnBottomUiHandle( bool hasBottomUiHandle )
+{
+	if( !hasBottomUiHandle )
+	{
+		if( file.lockon_hud != null )
+			RuiDestroyNestedIfAlive( file.lockon_hud, "bottomUiHandle" )
+		file.lockon_hud_bottom_nested = null
+	}
+}
+
+void function ClearLockonHudForceWeapon()
+{
+	file.lockonHudForceWeapon = null
+	file.lockingMissiles = []
+}
+
+
+void function ShowLockedOntoWarningHUD( entity player, array<entity> lockingEnemies, entity activeLockingWeapon, bool isLocked )
+{
+	string displayStr
+	if ( isLocked )
+		displayStr = MakeLockedOnWarningDisplayString( lockingEnemies, activeLockingWeapon )
+	else
+		displayStr = MakeLockingOnWarningDisplayString( lockingEnemies, activeLockingWeapon )
+
+	table showArrows = GetActiveLockQuadrants( player, lockingEnemies )
+
+	RuiSetBool( file.lockon_hud, "isVisible", true )
+	RuiSetString( file.lockon_hud, "lockMessage", displayStr )
+
+	RuiSetBool( file.lockon_hud, "northLock", showArrows.forward )
+	RuiSetBool( file.lockon_hud, "southLock", showArrows.back )
+	RuiSetBool( file.lockon_hud, "westLock", showArrows.left )
+	RuiSetBool( file.lockon_hud, "eastLock", showArrows.right )
+}
+
+
+table function GetActiveLockQuadrants( entity player, array<entity> lockingEnemies )
+{
+	vector playerOrg = player.GetOrigin()
+	table arrows
+	arrows.forward    <- false
+	arrows.back    <- false
+	arrows.left    <- false
+	arrows.right    <- false
+
+	foreach ( enemy in lockingEnemies )
+	{
+		vector org = enemy.GetOrigin()
+
+		vector playerOrg2D = <playerOrg.x, playerOrg.y, 0>
+		vector lockOrg2D   = <org.x, org.y, 0>
+
+		vector forward   = player.GetViewVector()
+		vector forward2D = <forward.x, forward.y, 0>
+
+		vector right   = player.GetViewRight()
+		vector right2D = <right.x, right.y, 0>
+
+		vector orgDiff = Normalize( lockOrg2D - playerOrg2D )
+
+		float dotForward = DotProduct( forward2D, orgDiff )
+		float deg        = DotToAngle( dotForward )
+
+		float dotRight = DotProduct( right2D, orgDiff )
+
+		
+
+		
+		
+		
+
+		string dir
+		if ( dotForward >= 0 && dotRight >= 0 )            
+			dir = deg <= 45 ? "forward" : "right"
+		else if ( dotForward > 0 && dotRight < 0 )        
+			dir = deg <= 45 ? "forward" : "left"
+		else if ( dotForward <= 0 && dotRight >= 0 )    
+			dir = deg <= 135 ? "right" : "back"
+		else                                            
+			dir = deg <= 135 ? "left" : "back"
+
+		if ( !arrows[ dir ] )
+			arrows[ dir ] <- true
+	}
+
+	return arrows
+}
+
+
+string function MakeLockingOnWarningDisplayString( array<entity> lockingEnemies, entity activeLockingWeapon )
+{
+	if ( lockingEnemies.len() > 1 )
+	{
+		return "#HUD_ENEMY_MULTIPLE_LOCKING"
+	}
+	else
+	{
+		Assert( IsValid( activeLockingWeapon ) )
+		string activeLockingWeaponType = activeLockingWeapon.GetWeaponClass()
+		if ( activeLockingWeaponType == "human" )
+		{
+			if ( lockingEnemies[0].IsNPC() )
+				return "#HUD_ENEMY_LOCKING"
+			else
+				return "#HUD_ENEMY_PILOT_LOCKING"
+		}
+		else if ( activeLockingWeaponType == "titan" )
+			return "#HUD_ENEMY_TITAN_LOCKING"
+		else if ( activeLockingWeaponType == "drone" )
+			return "#HUD_ENEMY_DRONE_LOCKING"
+		else
+			Assert( false, " weaponClass field is neither human nor titan!" )
+	}
+
+	unreachable
+}
+
+
+string function MakeLockedOnWarningDisplayString( array<entity> lockingEnemies, entity activeLockingWeapon )
+{
+	if ( lockingEnemies.len() > 1 )
+	{
+		return "#HUD_ENEMY_MULTIPLE_LOCK"
+	}
+	else
+	{
+		Assert( IsValid( activeLockingWeapon ) )
+		string activeLockingWeaponType = activeLockingWeapon.GetWeaponClass()
+		if ( activeLockingWeaponType == "human" )
+		{
+			if ( lockingEnemies[0].IsNPC() )
+				return "#HUD_ENEMY_LOCK"
+			else
+				return "#HUD_ENEMY_PILOT_LOCK"
+		}
+		else if ( activeLockingWeaponType == "titan" )
+			return "#HUD_ENEMY_TITAN_LOCK"
+		else
+			Assert( false, " weaponClass field is neither human nor titan!" )
+	}
+
+	unreachable
+}
+
+void function ServerCallback_ShowUltTimeIncreasedHint( entity player, float additionalTime )
+{
+	if( !IsValid( player ) )
+		return
+
+	var rui = GetLockon_Hud()
+
+	thread ShowUltTimeIncreasedThread( rui, player, additionalTime )
+}
+
+void function ShowUltTimeIncreasedThread( var rui, entity player, float additionalTime )
+{
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( rui )
+		{
+			RuiSetBool( rui, "showAdditionalTime", false )
+		}
+	)
+
+	RuiSetBool( rui, "showAdditionalTime", true )
+	RuiSetFloat( rui, "additionalTimeValue", additionalTime )
+
+	wait ADDITIONAL_TIME_DELAY
+
+	return
+}
+       

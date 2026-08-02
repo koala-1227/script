@@ -1,0 +1,325 @@
+
+
+
+
+
+
+
+
+
+
+
+global function MatchModifiers_RegisterGroupData
+global function MatchModifiers_RegisterScheduleData
+
+global function MatchModifiers_IsValidGroup
+global function MatchModifiers_GetAllGroups
+global function MatchModifiers_IsValidSchedule
+global function MatchModifiers_GetSchedule
+global function MatchModifiers_GetAllModifiersInGroup
+
+global function MatchModifiers_CreateRemovalTableForRefs
+global function MatchModifiers_AddRefToRemovalTable
+
+
+
+
+
+#if DEV
+global function DEV_MatchModifiers_RegisterDefaultGroupData
+global function DEV_MatchModifiers_PrintAllGroups
+#endif
+
+
+const string PVAR_MATCH_MODIFIERS_GROUP_OVERRIDE = "match_modifiers_group_override_"
+const string PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE = "match_modifiers_schedule_override_"
+
+
+const float MATCH_MODIFIERS_REMOVE_WEIGHT = -99999.0
+
+const asset MATCH_MODIFIERS_LOOT_GROUP_DATATABLE_DEFAULT = $"datatable/match_modifiers/match_modifiers_groups_default.rpak"
+const asset MATCH_MODIFIERS_LOOT_SCHEDULE_DATATABLE_DEFAULT = $"datatable/match_modifiers/match_modifiers_schedule_default.rpak"
+
+struct MatchModifierGroup
+{
+	string ref
+
+	table<string, float> entries
+}
+
+global struct MatchModifierRound
+{
+	string groupRef
+	int roundStart
+	int selectionCount
+	bool uniqueFromGroup
+	bool uniqueFromGlobal
+	bool removeActive
+}
+
+global struct MatchModifierSchedule
+{
+	string ref = ""
+	table<string, MatchModifierRound> rounds
+	int maxModifiers = -1
+	int minModifiers = -1
+}
+
+struct
+{
+	table<string, MatchModifierGroup> modifierGroups
+	table<string, MatchModifierSchedule> modifierSchedules
+}file
+
+
+void function MatchModifiers_RegisterGroupData( asset dataTableAsset )
+{
+	if ( !MatchModifiers_Enabled() )
+		return
+
+	MatchModifiers_RegisterGroupData_Internal( dataTableAsset )
+}
+
+
+void function MatchModifiers_RegisterGroupData_Internal( asset dataTableAsset )
+{
+	var dataTable = GetDataTable( dataTableAsset )
+	int numRows   = GetDataTableRowCount( dataTable )
+
+	int featureFlagColumn = GetDataTableColumnByName( dataTable, "featureFlag" )
+
+	MatchModifierGroup currentGroup
+	table<string, float> groupRemap
+	for ( int i = 0; i < numRows; i++ )
+	{
+		string groupRef = GetDataTableString( dataTable, i, GetDataTableColumnByName( dataTable, "groupRef" ) )
+		if ( groupRef != "" )
+		{
+			foreach ( string entry, float dist in groupRemap )
+			{
+				if ( !(entry in currentGroup.entries) )
+				{
+					currentGroup.entries[entry] <- dist
+				}
+			}
+			groupRemap.clear()
+
+			MatchModifierGroup group
+			group.ref    = groupRef
+			currentGroup = group
+			file.modifierGroups[group.ref] <- group
+
+			
+			string playlistOverrides = GetCurrentPlaylistVarString( PVAR_MATCH_MODIFIERS_GROUP_OVERRIDE + group.ref, "" )
+
+			foreach ( string pair in GetTrimmedSplitLoweredString( playlistOverrides, " " ) )
+			{
+				array<string> splitPair = GetTrimmedSplitString( pair, ":" )
+				Assert( splitPair.len() == 2 )
+
+				string ref = splitPair[0]
+				float dist = float( splitPair[1] )
+
+				groupRemap[ref] <- dist
+				continue
+			}
+		}
+
+		string entryRef         = GetDataTableString( dataTable, i, GetDataTableColumnByName( dataTable, "entryRef" ) )
+		float entryDistribution = GetDataTableFloat( dataTable, i, GetDataTableColumnByName( dataTable, "entryDistribution" ) )
+
+		if ( entryRef != "" )
+		{
+			if ( entryRef in groupRemap )
+			{
+				entryDistribution = groupRemap[entryRef]
+			}
+			currentGroup.entries[entryRef] <- entryDistribution
+		}
+	}
+}
+
+void function MatchModifiers_RegisterScheduleData( asset dataTableAsset )
+{
+	if ( !MatchModifiers_Enabled() )
+		return
+
+	MatchModifiers_RegisterScheduleData_Internal( dataTableAsset )
+}
+
+
+void function MatchModifiers_RegisterScheduleData_Internal( asset dataTableAsset )
+{
+	var dataTable = GetDataTable( dataTableAsset )
+	int numRows   = GetDataTableRowCount( dataTable )
+	MatchModifierSchedule currentSchedule
+	int featureFlagColumn = GetDataTableColumnByName( dataTable, "featureFlag" )
+
+	for ( int i = 0; i < numRows; i++ )
+	{
+		string scheduleRef = GetDataTableString( dataTable, i, GetDataTableColumnByName( dataTable, "scheduleRef" ) )
+		if ( scheduleRef != "" )
+		{
+			
+			int maxModifiers = GetCurrentPlaylistVarInt( format( "%s%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, scheduleRef, "maxModifiers"), GetDataTableInt( dataTable, i, GetDataTableColumnByName( dataTable, "maxModifiers" ) ) )
+			int minModifiers = GetCurrentPlaylistVarInt( format( "%s%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, scheduleRef, "minModifiers"), GetDataTableInt( dataTable, i, GetDataTableColumnByName( dataTable, "minModifiers" ) ) )
+
+			currentSchedule = clone currentSchedule
+			currentSchedule.rounds = clone currentSchedule.rounds
+			currentSchedule.rounds.clear()
+			currentSchedule.ref = scheduleRef
+			currentSchedule.maxModifiers = maxModifiers
+			currentSchedule.minModifiers = minModifiers
+			file.modifierSchedules[scheduleRef] <- currentSchedule
+			continue
+		}
+
+		string groupRef = GetDataTableString( dataTable, i, GetDataTableColumnByName( dataTable, "groupRef" ) )
+		if ( groupRef != "" )
+		{
+			Assert( MatchModifiers_IsValidGroup( groupRef ), "Match Modifier group ref is invalid" )
+
+			
+			int roundStart = GetCurrentPlaylistVarInt( format( "%s%s_%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, currentSchedule.ref, groupRef, "roundStart"), GetDataTableInt( dataTable, i, GetDataTableColumnByName( dataTable, "roundStart" ) ) )
+			int selectionCount = GetCurrentPlaylistVarInt( format( "%s%s_%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, currentSchedule.ref, groupRef, "selectionCount"), GetDataTableInt( dataTable, i, GetDataTableColumnByName( dataTable, "selectionCount" ) ) )
+			bool uniqueFromGroup = GetCurrentPlaylistVarBool( format( "%s%s_%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, currentSchedule.ref, groupRef, "uniqueFromGroup"), GetDataTableBool( dataTable, i, GetDataTableColumnByName( dataTable, "uniqueFromGroup" ) ) )
+			bool uniqueFromGlobal = GetCurrentPlaylistVarBool( format( "%s%s_%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, currentSchedule.ref, groupRef, "uniqueFromGlobal"), GetDataTableBool( dataTable, i, GetDataTableColumnByName( dataTable, "uniqueFromGlobal" ) ) )
+			bool removeActive = GetCurrentPlaylistVarBool( format( "%s%s_%s_%s", PVAR_MATCH_MODIFIERS_SCHEDULE_OVERRIDE, currentSchedule.ref, groupRef, "removeActive"), GetDataTableBool( dataTable, i, GetDataTableColumnByName( dataTable, "removeActive" ) ) )
+
+			MatchModifierRound currentRound
+			currentRound.groupRef = groupRef
+			currentRound.roundStart = roundStart
+			currentRound.selectionCount = selectionCount
+			currentRound.uniqueFromGroup = uniqueFromGroup
+			currentRound.uniqueFromGlobal = uniqueFromGlobal
+			currentRound.removeActive = removeActive
+			file.modifierSchedules[currentSchedule.ref].rounds[groupRef] <- currentRound
+			continue
+		}
+	}
+}
+
+bool function MatchModifiers_IsValidGroup( string groupRef )
+{
+	return groupRef in file.modifierGroups
+}
+
+array<string> function MatchModifiers_GetAllGroups()
+{
+	return file.modifierGroups.clonekeys()
+}
+
+bool function MatchModifiers_IsValidSchedule( string scheduleRef )
+{
+	return scheduleRef in file.modifierSchedules
+}
+
+MatchModifierSchedule function MatchModifiers_GetSchedule( string scheduleRef )
+{
+	Assert( MatchModifiers_IsValidSchedule( scheduleRef ), "Match Modifiers schedule reference not found in table" )
+	return file.modifierSchedules[scheduleRef]
+}
+
+array<string> function MatchModifiers_GetAllModifiersInGroup( string groupRef )
+{
+	if ( !MatchModifiers_IsValidGroup( groupRef ) )
+		return []
+
+	return file.modifierGroups[groupRef].entries.clonekeys()
+}
+
+table<string, float> function MatchModifiers_CreateRemovalTableForRefs( array<string> refs )
+{
+	table<string, float> weightedTable
+	foreach ( string ref in refs )
+	{
+		weightedTable[ref] <- MATCH_MODIFIERS_REMOVE_WEIGHT
+	}
+	return weightedTable
+}
+
+void function MatchModifiers_AddRefToRemovalTable( string ref, table<string, float> removalTable )
+{
+	removalTable[ref] <- MATCH_MODIFIERS_REMOVE_WEIGHT
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+void function DEV_MatchModifiers_RegisterDefaultGroupData()
+{
+	file.modifierGroups.clear()
+	MatchModifiers_RegisterGroupData_Internal( MATCH_MODIFIERS_LOOT_GROUP_DATATABLE_DEFAULT )
+}
+
+void function DEV_MatchModifiers_PrintAllGroups()
+{
+	foreach ( MatchModifierGroup group in file.modifierGroups )
+	{
+		printt( "--- MODIFIER GROUP ---" )
+		printt( "REF: " + group.ref )
+		foreach ( string entry, float val in group.entries )
+		{
+			printt( entry + ": " + val )
+		}
+	}
+}
+#endif
+       

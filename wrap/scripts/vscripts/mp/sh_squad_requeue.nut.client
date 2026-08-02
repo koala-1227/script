@@ -1,0 +1,1338 @@
+global function Requeue_SquadOptInEnabled
+global function Requeue_IsPlayerAboveSoloRequiredTier
+
+
+global function Requeue_CanOptInSquad
+global function Requeue_AmIOptedInSquad
+global function Requeue_AmIOptedInParty
+global function Requeue_GetData
+global function Requeue_GetRemainingSeconds
+global function Requeue_IsSquadOptInTimeOut
+global function Requeue_ClearData
+global function Requeue_IsFullPartyConnected
+global function Requeue_SetSquadRequeueFinalized
+global function Requeue_GetSquadRequeueFinalized
+global function Requeue_GetUpcomingMapName
+global function Requeue_GetUpcomingMode
+global function Requeue_SetSinglePartySquadState
+global function Requeue_SetNoMorePlayersCanRequeueWithSquadState
+global function Requeue_IsAnyoneOptedInSquad
+global function Requeue_AllPlayersOptedIn
+global function Requeue_GetMatchmakingStatus
+global function Requeue_SetIsUnavailable
+global function Requeue_IsUnavailable
+
+
+
+
+
+
+
+
+
+
+
+global function ClSquadRequeue_RegisterNetworkFunctions
+global function SvSquadRequeue_RegisterNetworkFunctions
+global function Requeue_GetPlayerTeam
+global function Requeue_RankedPeriodWithinValidTime
+
+
+
+global function CL_Requeue_Init
+global function Requeue_LeavePartyAndStayInMatch
+global function Requeue_KickNotInMatchPlayers
+global function Requeue_AddFullPartyCheckCallback
+global function ServerCallback_RequeueOptIn
+global function ServerCallback_RequeuePlayerLeft
+global function ServerCallback_SquadRequeuePartyMerge
+global function ClRequeue_OptIn
+global function CL_Requeue_IsAnyPartyMemberAboveSoloRequiredTier
+
+
+
+
+
+
+
+
+
+global enum eRequeueOptInChoice
+{
+	NONE,
+	SQUAD,
+	PARTY,
+}
+
+struct RequeueOptInPlayerEntry
+{
+	EHI optInPlayer
+	EHI partyLeaderPlayer
+}
+
+const string SQUAD_REQUEUE_OPT_IN_TIME_LIMIT_CONVAR = "matchSquadRequeue_timeLimit"
+const string PARTY_CREATE_IMMEDIATELY_CONVAR = "party_createPartyImmediately"
+
+
+global struct RequeueData
+{
+	int optInChoice = eRequeueOptInChoice.NONE
+	float optInStartTime = -1.0
+	array<int> squadState
+}
+
+global enum eKickPartyMemberSource
+{
+	SQUAD_OPT_IN,
+	START_MATCHMAKE,
+}
+
+struct
+{
+
+		array<RequeueOptInPlayerEntry> squadOptIns
+		array<RequeueOptInPlayerEntry> partyOptIns
+		string optInLeaderUid
+		bool partyUpdateCallbackAdded
+		bool fullPartyCheckCallbackAdded
+		bool isLeavePartyThreadRunning
+
+
+
+
+
+
+	bool isSinglePartySquad
+	bool noMorePlayersCanRequeueWithSquad
+	bool squadRequeueFinalized
+	RequeueData data
+	bool isUnavailable
+} file
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClSquadRequeue_RegisterNetworkFunctions()
+{
+	Remote_RegisterClientFunction( "ServerCallback_RequeueOptIn", "entity", "entity", "int", 0, eRequeueOptInChoice.len(), "float", 0.0, FLT_MAX, 32 )
+	Remote_RegisterClientFunction( "ServerCallback_RequeuePlayerLeft", "int", 0, INT_MAX, "int", 0, eRequeueOptInChoice.len() )
+	Remote_RegisterClientFunction( "ServerCallback_SquadRequeuePartyMerge", "int", 0, INT_MAX, "bool", "bool" )
+}
+
+void function SvSquadRequeue_RegisterNetworkFunctions()
+{
+	Remote_RegisterServerFunction( "ClientCallback_RequeueOptIn", "typed_entity", "player", "int", 0, eRequeueOptInChoice.len() )
+	Remote_RegisterServerFunction( "ClientCallback_RequeueOptOut" )
+}
+
+array<entity> function Requeue_GetPlayerTeam( entity player, int overrideTeam = -1 )
+{
+	if ( AllianceProximity_IsUsingAlliances() )
+	{
+		EHI playerEHI = ToEHI( player )
+		int originalTeamID = overrideTeam < 0 && EHIHasValidScriptStruct( playerEHI ) ? AllianceProximity_GetOriginalPlayerTeam_FromPlayerEHI( playerEHI ) : overrideTeam
+		array<entity> output = []
+		array<entity> allPlayers = GetPlayerArray()
+		foreach( p in allPlayers )
+		{
+			EHI pEHI = ToEHI( p )
+			if ( EHIHasValidScriptStruct( pEHI ) && originalTeamID == AllianceProximity_GetOriginalPlayerTeam_FromPlayerEHI( pEHI ) )
+				output.append( p )
+		}
+		return output
+	}
+	else
+	{
+		int teamID = IsValid( player ) && overrideTeam < 0 ? player.GetTeam() : overrideTeam
+		return GetPlayerArrayOfTeam( teamID )
+	}
+	unreachable
+}
+
+bool function Requeue_RankedPeriodWithinValidTime()
+{
+	bool isRanked = GameModeVariant_IsActiveForPlaylist( GetCurrentPlaylistName(), eGameModeVariants.SURVIVAL_RANKED )
+	if ( isRanked )
+	{
+		int ornull seasonLockDate = Ranked_GetCurrentRankedPeriodLockTime()
+		if ( seasonLockDate != null )
+			return expect int( seasonLockDate ) > GetUnixTimestamp()
+	}
+	return true
+}
+
+
+bool function Requeue_SquadOptInEnabled()
+{
+	return GetConVarBool( "matchSquadRequeue_enabled" ) && GetCurrentPlaylistVarBool( "matchSquadRequeue_enabled", true )
+}
+
+RequeueOptInPlayerEntry function BuildSquadRequeueOptInPlayerEntry( entity player, entity leader )
+{
+	RequeueOptInPlayerEntry newPlayerEntry
+	newPlayerEntry.optInPlayer = ToEHI( player )
+	newPlayerEntry.partyLeaderPlayer = ToEHI( leader )
+	return newPlayerEntry
+}
+
+bool function Requeue_IsPlayerAboveSoloRequiredTier( entity player )
+{
+	int threshold = Ranked_GetSoloQueueRankScoreThreshold( GetCurrentPlaylistName() )
+	if ( threshold < 0 )
+		return false
+
+	Assert( !IsLobby(), "Can't use this for lobby because GetPlayerRankScore() doesn't work for client script in lobby." )
+
+	int rankScore
+
+
+
+
+
+
+		rankScore = GetPlayerRankScore( player )
+
+
+	return rankScore >= threshold
+}
+
+int function FindInRequeueOptInPlayerEntry( entity player, array<RequeueOptInPlayerEntry> entries, bool findLeader = false )
+{
+	return FindInRequeueOptInPlayerEntryEHI( ToEHI( player ), entries, findLeader )
+}
+
+int function FindInRequeueOptInPlayerEntryEHI( EHI playerEHI, array<RequeueOptInPlayerEntry> entries, bool findLeader = false )
+{
+	for ( int i = 0; i < entries.len(); i++ )
+	{
+		if ( !findLeader && playerEHI == entries[i].optInPlayer )
+			return i
+		else if ( findLeader && playerEHI == entries[i].partyLeaderPlayer )
+			return i
+	}
+	return -1
+}
+
+
+bool function Requeue_CanOptInSquad( bool checkLeader )
+{
+	if ( !Requeue_SquadOptInEnabled() || Requeue_IsSquadOptInTimeOut() )
+		return false
+
+	if ( Requeue_IsPlayerAboveSoloRequiredTier( GetLocalClientPlayer() ) )
+		return false
+
+	if ( checkLeader && ( !AmIPartyLeader() || !IsChatRuleSatisfied() ) )
+		return false
+
+	if ( file.isSinglePartySquad )
+		return false
+
+	if ( file.noMorePlayersCanRequeueWithSquad )
+		return false
+
+	return true
+}
+
+RequeueData function Requeue_GetData()
+{
+
+		if ( Requeue_GetPlayerTeam( GetLocalClientPlayer() ).len() != file.data.squadState.len() )
+			TransformUIFormat()
+
+
+
+
+
+	return file.data
+}
+
+int function Requeue_GetRemainingSeconds()
+{
+	if ( IsMyPartyMatchmaking() )
+		return 0
+
+	if ( Requeue_GetSquadRequeueFinalized() )
+		return 0
+
+	float optInStartTime = Requeue_GetData().optInStartTime
+	float timeLimit = GetConVarFloat( SQUAD_REQUEUE_OPT_IN_TIME_LIMIT_CONVAR )
+	if ( optInStartTime <= 0 )
+		return int( timeLimit )
+	return int( min( timeLimit, max( 0, timeLimit - ( ClientTime() - optInStartTime ) ) ) )
+}
+
+bool function Requeue_IsSquadOptInTimeOut()
+{
+	return Requeue_GetRemainingSeconds() <= 0
+}
+
+void function Requeue_ClearData()
+{
+	file.data.optInChoice = eRequeueOptInChoice.NONE
+	file.data.optInStartTime = -1.0
+	file.data.squadState.clear()
+}
+
+bool function Requeue_IsFullPartyConnected()
+{
+
+	int numPartyInSquad = 0
+	array<entity> squad = Requeue_GetPlayerTeam( GetLocalClientPlayer() )
+	foreach ( entity squadmate in squad )
+	{
+		if ( IsValid( squadmate ) && squadmate.IsConnectionActive() )
+		{
+			if ( IsInMyParty( squadmate.GetUserID() ) )
+				numPartyInSquad++
+		}
+	}
+	bool isFullPartyConnected = GetPartySize() == numPartyInSquad
+	RunUIScript( "Requeue_SetUIFullPartyStatus", isFullPartyConnected )
+	return isFullPartyConnected
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function Requeue_SetSquadRequeueFinalized( bool on )
+{
+	file.squadRequeueFinalized = on
+
+		RunUIScript( "Requeue_SetSquadRequeueFinalized", on )
+
+}
+
+void function Requeue_SetIsUnavailable( bool status )
+{
+	file.isUnavailable = status
+
+		RunUIScript( "Requeue_SetIsUnavailable", status )
+
+}
+
+bool function Requeue_IsUnavailable()
+{
+	return file.isUnavailable
+}
+
+bool function Requeue_GetSquadRequeueFinalized()
+{
+	return file.squadRequeueFinalized
+}
+
+string function Requeue_GetUpcomingMapName()
+{
+	string currentPlaylist = GetCurrentPlaylistForSchedule( GetCurrentPlaylistScheduleName() )
+	return Localize( GetPlaylistVarString( currentPlaylist, "map_name", "" ) )
+}
+
+string function Requeue_GetUpcomingMode()
+{
+
+		bool isRanked = GameModeVariant_IsActiveForPlaylist( GetCurrentPlaylistName(), eGameModeVariants.SURVIVAL_RANKED )
+		bool rankedEventFinished = isRanked && RankedEvent_IsLastMatchRankedEvent() && RankedEvent_GetRumbleRankedState() == eRankedRumbleState.FINISH
+		if ( rankedEventFinished )
+			return ""
+		if ( GetConVarBool( "cups_enabled" ) )
+		{
+			LastCupMatchPlayedData ornull cupsLastMatchData = Cups_GetLatestMatchSummaryData( GetLocalClientPlayer() )
+			if ( cupsLastMatchData != null )
+			{
+				expect LastCupMatchPlayedData( cupsLastMatchData )
+				CupBakeryAssetData ornull cupData = Cups_SafeGetCupBakeryAssetDataFromGUID( cupsLastMatchData.cupID )
+				if ( cupData != null )
+				{
+					expect CupBakeryAssetData( cupData )
+					string currentPlaylist = GetCurrentPlaylistForSchedule( GetCurrentPlaylistScheduleName() )
+					if ( Cups_IsCupGameMode( cupData, currentPlaylist ) )
+					{
+						string cupName = ""
+
+							if ( RankedEvent_IsCupRankedEvent( cupData ) )
+								cupName = "#RANKED_RUMBLE_SUBTITLE"
+							else
+
+								cupName = GameModeVariant_GetName( GameModeVariant_GetByDevName( cupData.gameMode ) )
+						return format( "%s %d/%d", Localize( cupName ), min( cupsLastMatchData.matchNum, cupData.topMatchesCount ), cupData.topMatchesCount )
+					}
+				}
+			}
+		}
+
+	string currentPlaylist = GetCurrentPlaylistForSchedule( GetCurrentPlaylistScheduleName() )
+	return Localize( GetPlaylistVarString( currentPlaylist, "title", "" ) )
+}
+
+void function Requeue_SetSinglePartySquadState( bool on )
+{
+	file.isSinglePartySquad = on
+
+		RunUIScript( "Requeue_SetSinglePartySquadState", on )
+
+}
+
+void function Requeue_SetNoMorePlayersCanRequeueWithSquadState( bool noMorePlayersCanRequeueWithSquad )
+{
+	file.noMorePlayersCanRequeueWithSquad = noMorePlayersCanRequeueWithSquad
+
+		RunUIScript( "Requeue_SetNoMorePlayersCanRequeueWithSquadState", noMorePlayersCanRequeueWithSquad )
+
+}
+
+bool function Requeue_IsAnyoneOptedInSquad()
+{
+	foreach ( state in file.data.squadState )
+	{
+		if ( state == eRequeueOptInChoice.SQUAD )
+			return true
+	}
+	return false
+}
+
+bool function Requeue_AmIOptedInSquad()
+{
+	return file.data.optInChoice == eRequeueOptInChoice.SQUAD
+}
+
+bool function Requeue_AmIOptedInParty()
+{
+	if ( !IsFullyConnected() || !Requeue_SquadOptInEnabled() )
+		return IsMyPartyMatchmaking()
+	return file.data.optInChoice == eRequeueOptInChoice.PARTY
+}
+
+bool function Requeue_AllPlayersOptedIn()
+{
+	foreach ( state in file.data.squadState )
+	{
+		if ( state == eRequeueOptInChoice.NONE )
+			return false
+	}
+	return true
+}
+
+string function Requeue_GetMatchmakingStatus()
+{
+
+		int numPartyInSquad = 0
+		foreach ( player in Requeue_GetPlayerTeam( GetLocalClientPlayer() ) )
+		{
+			if ( IsValid( player ) && IsInMyParty( player.GetUserID() ) )
+			{
+				numPartyInSquad++
+			}
+		}
+
+		bool isFullPartyConnected = GetPartySize() == numPartyInSquad
+
+
+
+
+	bool isPartyMatchmaking = IsMyPartyMatchmaking()
+	bool isPlaylistExpired = !Playlist_IsCurrentlyActive( GetMatchRequeuePlaylist() )
+	bool isRanked = GameModeVariant_IsActiveForPlaylist( GetCurrentPlaylistName(), eGameModeVariants.SURVIVAL_RANKED )
+	bool hasPartyRankTierDifferences = isRanked && !Ranked_PartyMeetsRankedDifferenceRequirements()
+
+		bool isRankedEventFinished = isRanked && RankedEvent_IsLastMatchRankedEvent() && RankedEvent_GetRumbleRankedState() == eRankedRumbleState.FINISH
+
+
+	string matchmakingStatus = Localize( GetMyMatchmakingStatus() )
+	if ( !isFullPartyConnected )
+		matchmakingStatus = Localize( "#REQUEUE_UNAVAILALE_PARTY_NOT_CONNECTED" )
+	else if ( isPlaylistExpired )
+		matchmakingStatus = Localize( "#REQUEUE_UNAVAILALE_PLAYLIST_EXPIRED" )
+	else if ( hasPartyRankTierDifferences )
+		matchmakingStatus = Localize( "#REQUEUE_UNAVAILALE_RANK_TIER_DIFFERENCES" )
+	else if ( !isPartyMatchmaking && Requeue_AmIOptedInSquad() )
+		matchmakingStatus = Localize( "#DIALOG_REQUEUED_WITH_SQUAD_WAITING" )
+
+	else if ( isRankedEventFinished )
+		matchmakingStatus = Localize( "#REQUEUE_UNAVAILALE_RANKED_EVENT_END" )
+
+
+	return matchmakingStatus
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CL_Requeue_Init()
+{
+	if ( IsLobby() )
+		return
+	file.squadOptIns = []
+	file.optInLeaderUid = ""
+	file.partyUpdateCallbackAdded = false
+	file.fullPartyCheckCallbackAdded = false
+	file.isUnavailable = false
+
+	Requeue_SetSquadRequeueFinalized( false )
+	Requeue_ClearData()
+
+	AddCallback_GameStateEnter( eGameState.Prematch, void function()
+	{
+		RunUIScript( "UI_Requeue_Init" )
+		UpdateSinglePartySquadState()
+	} )
+}
+
+void function UpdateSinglePartySquadState()
+{
+	if ( !Requeue_SquadOptInEnabled() )
+		return
+	Party party = GetParty()
+	array<string> partyIDs
+	foreach( PartyMember member in party.members )
+		partyIDs.append( member.uid )
+	array<entity> squad = Requeue_GetPlayerTeam( GetLocalClientPlayer() )
+
+	bool isSinglePartySquad = true
+	foreach( entity squadMember in squad )
+	{
+		if ( !partyIDs.contains( squadMember.GetUserID() ) )
+		{
+			isSinglePartySquad = false
+			break
+		}
+	}
+	Requeue_SetSinglePartySquadState( isSinglePartySquad )
+}
+
+void function TransformUIFormat()
+{
+	array<entity> localPlayerTeam = Requeue_GetPlayerTeam ( GetLocalClientPlayer() )
+	localPlayerTeam.sort( SortByTeamMemberIndex )
+
+	array<int> squadStates = []
+	for ( int i = 0; i < localPlayerTeam.len(); i++ )
+	{
+		int optInChoice = eRequeueOptInChoice.NONE
+		entity player = localPlayerTeam[i]
+		if ( IsValid( player ) && player.IsConnectionActive() )
+		{
+			if ( FindInRequeueOptInPlayerEntry( player, file.partyOptIns ) >= 0 )
+				optInChoice = eRequeueOptInChoice.PARTY
+			else if ( FindInRequeueOptInPlayerEntry( player, file.squadOptIns ) >= 0 )
+				optInChoice = eRequeueOptInChoice.SQUAD
+		}
+		squadStates.append( optInChoice )
+	}
+	file.data.squadState = squadStates
+	RunUIScript( "Requeue_SetUIData", file.data.optInChoice, file.data.squadState.len(), EncodeSquadState(), file.data.optInStartTime )
+
+	Requeue_UpdateRequeueWithSquadAvailability()
+}
+
+void function Requeue_UpdateRequeueWithSquadAvailability()
+{
+	
+	array<entity> squad = Requeue_GetPlayerTeam( GetLocalClientPlayer() )
+	bool allOtherTeamChosePartyRequeue = true
+
+	foreach ( index, player in squad )
+	{
+		if ( !IsValid( player ) || IsInMyParty( player.GetUserID() ) )
+			continue
+
+		
+		if ( Requeue_IsPlayerAboveSoloRequiredTier( player ) )
+			continue
+
+		if ( file.data.squadState[ index ] != eRequeueOptInChoice.PARTY )
+		{
+			allOtherTeamChosePartyRequeue = false
+			break
+		}
+	}
+	Requeue_SetNoMorePlayersCanRequeueWithSquadState( allOtherTeamChosePartyRequeue )
+}
+
+int function EncodeSquadState()
+{
+	int squadState = 0
+	int cnt = 0
+	for ( int i = 0; i < file.data.squadState.len(); i++ )
+	{
+		squadState = squadState | ( ( file.data.squadState[i] == eRequeueOptInChoice.SQUAD ? 1 : 0 ) << cnt )
+		cnt++
+		squadState = squadState | ( ( file.data.squadState[i] == eRequeueOptInChoice.PARTY ? 1 : 0 ) << cnt )
+		cnt++
+	}
+	return squadState
+}
+
+void function Requeue_AddFullPartyCheckCallback()
+{
+	if ( !Requeue_SquadOptInEnabled() || file.fullPartyCheckCallbackAdded )
+		return
+	AddCallback_OnPartyUpdated( OnPartyUpdated_FullPartyCheck )
+	file.fullPartyCheckCallbackAdded = true
+}
+
+void function Requeue_LeavePartyAndStayInMatch()
+{
+	Party_LeaveParty()
+	SetConVarBool( PARTY_CREATE_IMMEDIATELY_CONVAR, true )
+	if ( file.isSinglePartySquad && Requeue_GetPlayerTeam( GetLocalClientPlayer() ).len() > 1 )
+		Requeue_SetSinglePartySquadState( false )
+}
+
+entity ornull function ClGetLeaderIfPartyMembersInSquad( bool checkActiveSquadMembers = true )
+{
+	entity player = GetLocalClientPlayer()
+	table< string, bool > activeSquadMembers
+	Party party = GetParty()
+	entity leaderPlayer = null
+
+	array<entity> squad = Requeue_GetPlayerTeam( player )
+	foreach ( entity teammate in squad )
+	{
+		if ( IsValid( teammate ) && teammate.IsConnectionActive() )
+		{
+			string uid = teammate.GetUserID()
+			activeSquadMembers[uid] <- true
+			if ( uid == party.originatorUID )
+				leaderPlayer = teammate
+		}
+	}
+
+	if ( checkActiveSquadMembers )
+	{
+		foreach ( partyMember in party.members )
+		{
+			if ( !( partyMember.uid in activeSquadMembers ) )
+				return null
+		}
+	}
+
+	return leaderPlayer
+}
+
+void function OnPartyUpdated_AfterOptIn()
+{
+	if ( file.data.optInChoice == eRequeueOptInChoice.NONE )
+		return
+
+	entity player = GetLocalClientPlayer()
+	string uid = player.GetUserID()
+
+	if ( file.optInLeaderUid != uid )
+	{
+		
+		
+		Party party = GetParty()
+		if ( party.originatorUID != file.optInLeaderUid )
+		{
+			if ( party.originatorUID == uid || ClGetLeaderIfPartyMembersInSquad() == null )
+			{
+				if ( ( !Requeue_GetSquadRequeueFinalized() && Requeue_AmIOptedInSquad() ) || Requeue_AmIOptedInParty() )
+					Remote_ServerCallFunction( "ClientCallback_RequeueOptOut" )
+				return
+			}
+		}
+	}
+}
+
+
+void function OnPartyUpdated_FullPartyCheck()
+{
+	if ( Requeue_IsFullPartyConnected() )
+		return
+
+	if ( IsMyPartyMatchmaking() )
+		CancelMatchmaking()
+
+	if( AmIPartyLeader() )
+		Remote_ServerCallFunction( "ClientCallback_RequeueOptOut" )
+
+	Requeue_SetIsUnavailable( true )
+}
+
+void function ServerCallback_RequeuePlayerLeft( EHI optOutPlayerEHI, int optInChoice )
+{
+	EHI localPlayerEHI = ToEHI( GetLocalClientPlayer() )
+	bool isOutPlayerLocalPlayer = localPlayerEHI == optOutPlayerEHI
+
+	UpdateSinglePartySquadState()
+
+	if ( optInChoice == eRequeueOptInChoice.NONE )
+	{
+		TransformUIFormat()
+		return
+	}
+
+	array<RequeueOptInPlayerEntry> playerEntries = optInChoice == eRequeueOptInChoice.SQUAD ? file.squadOptIns : file.partyOptIns
+
+	int optOutPlayerIndex = FindInRequeueOptInPlayerEntryEHI( optOutPlayerEHI, playerEntries )
+	if ( optOutPlayerIndex < 0 )
+		return
+	int myIndex = FindInRequeueOptInPlayerEntryEHI( localPlayerEHI, playerEntries )
+
+	if ( optInChoice == Requeue_GetData().optInChoice )
+	{
+		bool decisionFinalized = false
+		if ( optInChoice == eRequeueOptInChoice.SQUAD )
+		{
+			decisionFinalized = Requeue_GetSquadRequeueFinalized() ||
+			ClientTime() - file.data.optInStartTime > GetConVarFloat( SQUAD_REQUEUE_OPT_IN_TIME_LIMIT_CONVAR ) || playerEntries.len() >= Requeue_GetPlayerTeam( GetLocalClientPlayer() ).len()
+		}
+		else if ( optInChoice == eRequeueOptInChoice.PARTY )
+		{
+			decisionFinalized = IsMyPartyMatchmaking() && myIndex >= 0 && playerEntries[optOutPlayerIndex].partyLeaderPlayer == playerEntries[myIndex].partyLeaderPlayer
+		}
+
+		if ( decisionFinalized )
+		{
+			Requeue_SetIsUnavailable( true )
+			if ( IsMyPartyMatchmaking() )
+				CancelMatchmaking()
+			Requeue_ClearData()
+			return
+		}
+	}
+	else if ( optInChoice == eRequeueOptInChoice.SQUAD && Requeue_GetSquadRequeueFinalized() )
+		return
+
+
+	bool amIPartyLeaderOfOutPlayer = playerEntries[optOutPlayerIndex].partyLeaderPlayer == localPlayerEHI
+	bool amIPartyLeader = AmIPartyLeader() || amIPartyLeaderOfOutPlayer
+
+	bool outPlayerWasMyPartyLeader = myIndex >= 0 && playerEntries[myIndex].partyLeaderPlayer == optOutPlayerEHI
+	bool isMyPartyLeaderLeft = !amIPartyLeader && ( ClGetLeaderIfPartyMembersInSquad( false ) == null || outPlayerWasMyPartyLeader )
+
+	if ( isOutPlayerLocalPlayer || isMyPartyLeaderLeft )
+	{
+		file.data.optInChoice = eRequeueOptInChoice.NONE
+		file.data.optInStartTime = -1.0
+		if ( file.partyUpdateCallbackAdded )
+		{
+			file.partyUpdateCallbackAdded = false
+			RemoveCallback_OnPartyUpdated( OnPartyUpdated_AfterOptIn )
+		}
+	}
+
+	playerEntries.remove( optOutPlayerIndex )
+	while( true )
+	{
+		int teammateIndex = FindInRequeueOptInPlayerEntryEHI( optOutPlayerEHI, playerEntries, true )
+		if ( teammateIndex < 0 )
+			break
+		playerEntries.remove( teammateIndex )
+	}
+	printt( "[requeue] ServerCallback_RequeuePlayerLeft:", optInChoice, playerEntries.len() )
+
+	if ( optInChoice == eRequeueOptInChoice.SQUAD && file.squadOptIns.len() == 0 && !Requeue_IsSquadOptInTimeOut() )
+		file.data.optInStartTime = -1.0
+
+	TransformUIFormat()
+}
+
+void function ServerCallback_RequeueOptIn( entity optInPlayer, entity partyLeader, int optInChoice, float optInStartTime )
+{
+	if ( !( IsValid( optInPlayer ) && optInPlayer.IsConnectionActive() && IsValid( partyLeader ) ) )
+		return
+	if ( FindInRequeueOptInPlayerEntry( optInPlayer, file.squadOptIns ) >= 0 )
+		return
+	if ( FindInRequeueOptInPlayerEntry( optInPlayer, file.partyOptIns ) >= 0 )
+		return
+
+	entity player = GetLocalClientPlayer()
+	if ( optInPlayer == player )
+	{
+		file.optInLeaderUid = partyLeader.GetUserID()
+		file.data.optInChoice = optInChoice
+		if ( !file.partyUpdateCallbackAdded )
+		{
+			file.partyUpdateCallbackAdded = true
+			AddCallback_OnPartyUpdated( OnPartyUpdated_AfterOptIn )
+		}
+	}
+	else
+	{
+		
+		entity ornull leaderPlayerOrNull = ClGetLeaderIfPartyMembersInSquad()
+		if ( leaderPlayerOrNull != null )
+		{
+			entity leaderPlayer = expect entity( leaderPlayerOrNull )
+			if ( leaderPlayer.GetUserID() == optInPlayer.GetUserID() )
+				ClRequeue_OptIn( optInChoice )
+		}
+	}
+	array<RequeueOptInPlayerEntry> playerEntries = optInChoice == eRequeueOptInChoice.SQUAD ? file.squadOptIns : file.partyOptIns
+
+	playerEntries.append( BuildSquadRequeueOptInPlayerEntry( optInPlayer, partyLeader ) )
+	playerEntries.sort( int function( RequeueOptInPlayerEntry a, RequeueOptInPlayerEntry b ) {
+		entity playerA = FromEHI(a.optInPlayer)
+		if ( !IsValid( playerA ) )
+			return 0
+		entity playerB = FromEHI(b.optInPlayer)
+		if ( !IsValid( playerB ) )
+			return 0
+		return SortByTeamMemberIndex( playerA, playerB )
+	} )
+
+	if ( optInChoice == eRequeueOptInChoice.SQUAD )
+		file.data.optInStartTime = optInStartTime
+	else if ( optInChoice == eRequeueOptInChoice.PARTY && partyLeader == GetLocalClientPlayer() )
+		RunUIScript( "StartMatchmakingFromMatch" )
+	
+	TransformUIFormat()
+}
+
+void function ServerCallback_SquadRequeuePartyMerge( EHI leaderPlayerEHI, bool success, bool isSingleParty )
+{
+	if ( success )
+	{
+		if ( leaderPlayerEHI == LocalClientEHI() )
+		{
+			printt( "[requeue] New party leader: ServerCallback_SquadRequeuePartyMerge success!", isSingleParty )
+
+			
+			
+			RunUIScript( "StartMatchmakingFromMatch" )
+		}
+		else
+		{
+			entity leaderPlayer = FromEHI( leaderPlayerEHI )
+			if ( IsValid( leaderPlayer ) && leaderPlayer.IsConnectionActive() )
+			{
+				printt( "[requeue] New party member: ServerCallback_SquadRequeuePartyMerge success!", isSingleParty )
+				
+			}
+			else
+			{
+				printt( "[requeue] ServerCallback_SquadRequeuePartyMerge. Fail: leader left the match", isSingleParty )
+				Requeue_SetIsUnavailable( true )
+			}
+		}
+	}
+	else
+	{
+		printt( "[requeue] ServerCallback_SquadRequeuePartyMerge, merge party failed." )
+		Requeue_SetIsUnavailable( true )
+	}
+
+	Requeue_SetSquadRequeueFinalized( true )
+	if ( file.partyUpdateCallbackAdded )
+	{
+		file.partyUpdateCallbackAdded = false
+		RemoveCallback_OnPartyUpdated( OnPartyUpdated_AfterOptIn )
+	}
+}
+
+bool function CL_Requeue_IsAnyPartyMemberAboveSoloRequiredTier()
+{
+	if ( !GetCurrentPlaylistVarBool( RANKED_REQUEUE_USE_POST_SCORING_RANK, true ) )
+		return false
+
+	if ( GetPartySize() <= 1 )
+		return false
+
+	if ( Ranked_GetSoloQueueRankScoreThreshold( GetCurrentPlaylistName() ) < 0 )
+		return false
+
+	array<entity> squad = Requeue_GetPlayerTeam( GetLocalClientPlayer() )
+	foreach ( player in squad )
+	{
+		if ( IsValid( player ) && IsInMyParty( player.GetUserID() ) && Requeue_IsPlayerAboveSoloRequiredTier( player ) )
+			return true
+	}
+	return false
+}
+
+
+bool function ClRequeue_OptIn( int optInChoice )
+{
+	if ( !Requeue_SquadOptInEnabled() || file.data.optInChoice == optInChoice || Requeue_IsUnavailable() || !Requeue_RankedPeriodWithinValidTime() )
+		return false
+
+	entity localPlayer = GetLocalClientPlayer()
+	if ( !IsMatchmakingFromMatchAllowed( localPlayer ) || IsMyPartyMatchmaking() )
+		return false
+
+	if ( optInChoice == eRequeueOptInChoice.SQUAD && !Requeue_CanOptInSquad( false ) )
+		return false
+
+	if ( optInChoice == eRequeueOptInChoice.PARTY && CL_Requeue_IsAnyPartyMemberAboveSoloRequiredTier() )
+		return false
+
+	if ( !Requeue_IsFullPartyConnected() )
+	{
+		printt( "ClRequeue_OptIn !Requeue_IsFullPartyConnected()" )
+		return false
+	}
+
+	entity ornull partyLeaderPlayerOrNull = ClGetLeaderIfPartyMembersInSquad()
+	if ( partyLeaderPlayerOrNull == null )
+		return false
+
+	entity partyLeaderPlayer = expect entity( partyLeaderPlayerOrNull )
+	if ( !IsValid( partyLeaderPlayer ) )
+		return false
+	printt( "[requeue] ClRequeue_OptIn:", partyLeaderPlayer.GetUserID() )
+
+	Remote_ServerCallFunction( "ClientCallback_RequeueOptIn", partyLeaderPlayer, optInChoice )
+	return true
+}
+
+void function Requeue_KickNotInMatchPlayers()
+{
+	array<string> playerUIDs
+	array<string> playerHardwares
+	entity localPlayer = GetLocalClientPlayer()
+	array<entity> playersOnTeam = Requeue_GetPlayerTeam( localPlayer )
+	array<PartyMember> members = GetParty().members
+	foreach ( PartyMember member in members )
+	{
+		if ( member.uid == localPlayer.GetUserID() )
+			continue
+		bool playerInMatch = false
+		foreach ( entity teammate in playersOnTeam )
+		{
+			if ( teammate.GetUserID() == member.uid )
+			{
+				playerInMatch = true
+				break
+			}
+		}
+		if ( !playerInMatch )
+		{
+			playerUIDs.append( member.uid )
+			playerHardwares.append( member.hardware )
+		}
+	}
+	if ( playerUIDs.len() > 0 )
+		Party_KickNotInMatchMembers( playerUIDs, playerHardwares )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

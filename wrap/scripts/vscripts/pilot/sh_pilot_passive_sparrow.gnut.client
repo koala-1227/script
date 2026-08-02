@@ -1,0 +1,716 @@
+global function ShPassiveSparrow_Init
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ShPassiveSparrow_GetDoubleJumpCooldownScalar
+
+
+global const string SPARROW_SUPPLIED_MOD_NAME = "sparrow_supplied"
+const asset SPARROW_SUPPLIED_HUD_ICON = $"rui/hud/character_abilities/sparrow_passive_weapon_hud_dongle"
+const asset SPARROW_SUPPLIED_PASSIVE_HUD_ICON = $"rui/hud/passive_icons/passive_sparrow_bocek"
+
+const JET_DRIVE_LAUNCH_FX = $"P_sprw_passive_jet_burst" 
+
+global const string HUNT_UPGRADE_BEST_TARGET_NETVAR = "hunt_upgrade_bestTarget"
+global const string HUNT_UPGRADE_CHARGE_END_NETVAR = "hunt_upgrade_chargeEndTime"
+const float HUNT_UPGRADE_ADRENALINE_EFFECT_DURATION = 2.0
+global const string SPARROW_DOUBLE_JUMP_ENABLE_MOD = "enable_sparrow_double_jump"
+const string SPARROW_WALL_LAUNCH_ENABLE_MOD = "enable_sparrow_wall_launch"
+
+const vector SPARROW_FRIENDLY_COLOR = < 48, 180, 255 >
+const vector SPARROW_ENEMY_COLOR = < 155, 0, 0 >
+
+struct
+{
+
+
+
+
+
+
+
+		var hitList
+		table<entity, float> buttonBuffer
+		var doubleJumpRui
+		var mantleLaunchRui
+		bool canWallLaunch = true
+
+} file
+
+struct {
+	float doubleJumpCooldownScaler = 1
+	bool wallLaunchPassiveEnabled = true
+	bool doubleJumpPassiveEnabled = true
+	float huntActivationAngle = DOT_45DEGREE
+	float huntActivationTime = .5
+	float huntActivationDistance = 40
+}tunings
+
+
+void function ShPassiveSparrow_Init()
+{
+	PrecacheParticleSystem( JET_DRIVE_LAUNCH_FX )
+	PrecacheWeapon( "mp_weapon_charge_gauntlet_alt_mode" )
+
+	RegisterNetworkedVariable( HUNT_UPGRADE_BEST_TARGET_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_ENTITY )
+	RegisterNetworkedVariable( HUNT_UPGRADE_CHARGE_END_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_TIME, -1 )
+
+
+
+
+
+
+
+
+
+
+
+		AddCallback_OnPassiveChanged( ePassives.PAS_SPARROW, PassiveSparrow_OnDoubleJumpPassiveChanged )
+		AddCallback_OnPassiveChanged( ePassives.PAS_WALL_LAUNCH, PassiveSparrow_OnWallLaunchPassiveChanged )
+		AddCallback_OnPlayerClimbHighJumped( PassiveSparrow_OnWallJump )
+
+
+	RegisterSignal( "SparrowPassiveEnd" )
+	RegisterSignal( "hunt_upgrade_adrenaline_stop_ability" )
+	RegisterSignal( "TargetingStop" )
+	RegisterSignal( "CleanUpDarts" )
+
+
+		RegisterNetVarEntityChangeCallback( HUNT_UPGRADE_BEST_TARGET_NETVAR, StartHuntRui )
+
+		AddModToTableOfPassiveWeaponBonuses( SPARROW_SUPPLIED_MOD_NAME, "#SPARROW_SUPPLIED", "#SPARROW_SUPPLIED_GUN", SPARROW_SUPPLIED_PASSIVE_HUD_ICON )
+		AddCallback_CreatePlayerPassiveRui( CreatePassiveRuis_Internal )
+		AddCallback_DestroyPlayerPassiveRui( DestroyPassiveRuis )
+
+		AddCallback_OnPassiveChanged( ePassives.PAS_ENDORSEMENT_ASH_DASH, PassiveSparrow_OnAshDashEndorsementPassiveChanged )
+
+
+	PassiveSparrow_GetTuningValues()
+}
+
+void function PassiveSparrow_GetTuningValues()
+{
+	tunings.doubleJumpCooldownScaler = GetCurrentPlaylistVarFloat( "double_jump_passive_cooldown_scaler", tunings.doubleJumpCooldownScaler )
+	tunings.wallLaunchPassiveEnabled = GetCurrentPlaylistVarBool( "sparrow_wall_launch_enabled", tunings.wallLaunchPassiveEnabled )
+	tunings.doubleJumpPassiveEnabled = GetCurrentPlaylistVarBool( "sparrow_double_jump_enabled", tunings.doubleJumpPassiveEnabled )
+	tunings.huntActivationAngle = GetCurrentPlaylistVarFloat( "sparrow_hunt_activation_angle", tunings.huntActivationAngle )
+	tunings.huntActivationTime = GetCurrentPlaylistVarFloat( "sparrow_hunt_activation_time", tunings.huntActivationTime )
+	tunings.huntActivationDistance = GetCurrentPlaylistVarFloat( "sparrow_hunt_activation_distance", tunings.huntActivationDistance )
+}
+
+bool function PassiveArtemis_UseCodeMantleBoost()
+{
+	return GetCurrentPlaylistVarBool( "code_mantle_boost_enabled", true )
+}
+
+
+void function PassiveSparrow_OnWallJump( entity player )
+{
+
+
+
+
+
+
+
+
+
+
+
+	file.canWallLaunch = false
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PassiveSparrow_OnDoubleJumpPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( nowHas )
+	{
+
+
+
+
+
+
+
+	}
+	else
+	{
+
+
+
+
+
+
+
+
+		player.Signal( "SparrowPassiveEnd" )
+	}
+}
+
+void function PassiveSparrow_OnWallLaunchPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( nowHas )
+	{
+
+
+
+	}
+	else
+	{
+
+
+
+		player.Signal( "SparrowPassiveEnd" )
+	}
+}
+
+float function ShPassiveSparrow_GetDoubleJumpCooldownScalar()
+{
+	return tunings.doubleJumpCooldownScaler
+}
+
+
+
+vector function Get2DWishDirFromInputAndView( entity player )
+{
+	vector viewForward = player.GetViewForward()
+	vector viewRight = player.GetViewRight()
+	
+	viewForward = Normalize( < viewForward.x, viewForward.y, 0 > )
+	viewRight =  Normalize( < viewRight.x, viewRight.y, 0 > )
+	vector wishDir = Normalize( player.GetInputAxisRight() * viewRight + player.GetInputAxisForward() * viewForward )
+	return wishDir
+}
+
+void function TrackMantleLaunchHintDisplay( entity player )
+{
+	if( GetLocalViewPlayer() != player )
+		return
+
+	player.EndSignal( "OnDeath", "OnDestroy", "SparrowPassiveEnd" )
+
+	while( true )
+	{
+		if ( !PlayerHasPassive( player, ePassives.PAS_WALL_LAUNCH ) )
+			return
+
+		bool canLaunch = false
+		if( player.IsWallRunning() && HasPlayerSettingMod( player, SPARROW_WALL_LAUNCH_ENABLE_MOD ) )
+		{
+			if( file.canWallLaunch )
+			{
+				vector wallDir = player.GetWallRunWallVector()
+				vector wishDir = Get2DWishDirFromInputAndView( player )
+				if( DotProduct( wallDir, wishDir ) < -DOT_60DEGREE )
+				{
+					RuiSetBool( file.mantleLaunchRui, "isWallHang", true )
+					CustomTutorialPopup ( "sparrow_passive_02" )
+				}
+			}
+		}
+		else if( player.IsOnGround() )
+		{
+			RuiSetBool( file.mantleLaunchRui, "isWallHang", false )
+			file.canWallLaunch = true
+		}
+		else
+			RuiSetBool( file.mantleLaunchRui, "isWallHang", false )
+
+		WaitFrame()
+	}
+}
+
+void function CreatePassiveRuis_Internal( entity player )
+{
+	if ( PlayerHasPassive( player, ePassives.PAS_SPARROW ) )
+	{
+		if ( file.doubleJumpRui == null )
+		{
+			file.doubleJumpRui = CreateCockpitRui( $"ui/ash_dash_meter.rpak", 32000 )
+
+			RuiTrackFloat( file.doubleJumpRui, "bleedoutEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "bleedoutEndTime" ) )
+			RuiTrackFloat( file.doubleJumpRui, "reviveEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "reviveEndTime" ) )
+			RuiSetInt( file.doubleJumpRui, "numDashSegments", 1 )
+			RuiSetFloat( file.doubleJumpRui, "barScaleFrac", 4 )
+		}
+
+		thread DisplayDoubleJumpCounter( player )
+	}
+
+	if ( PlayerHasPassive( player, ePassives.PAS_WALL_LAUNCH ) )
+	{
+		if ( file.mantleLaunchRui == null )
+		{
+			file.mantleLaunchRui = CreateCockpitRui( $"ui/mantle_launch.rpak", 32000 )
+		}
+
+		thread TrackMantleLaunchHintDisplay( player )
+	}
+}
+
+void function DestroyPassiveRuis( entity player )
+{
+	if ( !PlayerHasPassive( player, ePassives.PAS_SPARROW ) )
+	{
+		if ( file.doubleJumpRui != null )
+		{
+			RuiDestroyIfAlive( file.doubleJumpRui )
+			file.doubleJumpRui = null
+		}
+	}
+
+	if( !PlayerHasPassive( player, ePassives.PAS_WALL_LAUNCH ) )
+	{
+		if ( file.mantleLaunchRui != null )
+		{
+			RuiDestroyIfAlive( file.mantleLaunchRui )
+			file.mantleLaunchRui = null
+		}
+	}
+}
+
+void function PassiveSparrow_OnAshDashEndorsementPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( PlayerHasPassive( player, ePassives.PAS_SPARROW ) && file.doubleJumpRui != null && RuiIsAlive( file.doubleJumpRui ) )
+	{
+		RuiSetFloat( file.doubleJumpRui, "forceOffsetLeftRight", nowHas ? -0.7 : 0.0 )
+		RuiSetBool( file.doubleJumpRui, "hasAltCooldownSourceForShowHide", nowHas )
+	}
+}
+
+void function DisplayDoubleJumpCounter( entity player )
+{
+	player.EndSignal( "OnDeath", "OnDestroy" )
+
+	while( file.doubleJumpRui != null && RuiIsAlive( file.doubleJumpRui ) && IsValid( player ) )
+	{
+		float suitPower = player.GetSuitJumpPower()
+		float suitPowerFrac = suitPower / 100
+
+		
+		RuiSetFloat( file.doubleJumpRui, "altCooldownForShowHide", player.GetSuitPower() / 100.0 )
+		RuiSetFloat( file.doubleJumpRui, "dashFrac", suitPowerFrac )
+		WaitFrame()
+	}
+}
+
+void function StartHuntRui( entity player, entity target )
+{
+	player.Signal( "TargetingStop" )
+	thread HuntUpgradeRui_Thread( player, target )
+}
+
+void function HuntUpgradeRui_Thread(  entity player, entity target )
+{
+	if ( !IsValid( target ) )
+		return
+
+	if ( GetGameState() >= eGameState.Resolution )
+		return
+
+	EndSignal( target, "OnDestroy", "OnDeath" )
+	EndSignal( target, "OnModelChanged" )
+	EndSignal( player, "TargetingStop" )
+	EndSignal( player, "OnDestroy" )
+
+	var rui = RuiCreate( $"ui/in_world_targeted_speed_boost.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, RuiCalculateDistanceSortKey( player.EyePosition(), target.GetOrigin() ) )
+	InitHUDRui( rui )
+
+	RuiSetBool( rui, "isVisible", false )
+	RuiSetBool( rui, "isEnemyTarget", true )
+
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+
+	target.DoModelChangeScriptCallback( true )
+	OnThreadEnd(
+		function() : ( rui, target, player)
+		{
+			RuiDestroyIfAlive( rui )
+
+			if ( IsValid( target ) && target.IsPlayer() )
+			{
+				target.DoModelChangeScriptCallback( false )
+				target.SetTargetInfoStatusIcon( $"" )
+			}
+		}
+	)
+
+	while ( true )
+	{
+		
+		bool isValidTarget = IsValid(target)
+
+		if ( isValidTarget )
+		{
+			RuiSetFloat3( rui, "pos", target.GetWorldSpaceCenter() )
+			RuiSetBool( rui, "isVisible", true )
+
+			
+			RuiSetBool( rui, "showPassive", true )
+
+			float chargeEndTime = player.GetPlayerNetTime( HUNT_UPGRADE_CHARGE_END_NETVAR )
+			float chargeTimeRemaining = chargeEndTime != -1 ? max( chargeEndTime - Time(), 0.0 ) : tunings.huntActivationTime
+			RuiSetFloat( rui, "passiveFill", 1.0 - chargeTimeRemaining / tunings.huntActivationTime )
+			RuiSetBool( rui, "enemyObstructing", CheckIfEnemyIsObstructing(player, target) )
+		}
+		else
+			RuiSetBool( rui, "isVisible", false )
+
+		WaitFrame()
+	}
+}
+
+ 

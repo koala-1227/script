@@ -1,0 +1,322 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function HopupPopupQueue_Init
+global function HopupPopupQueue_ShowPopup
+global function HopupPopupQueue_SetSlingVerticalOffset
+global function HopupPopupQueue_SetSpectating
+global function HopupPopupQueue_SetShowChargeBar
+global function HopupPopupQueue_SetDormantHopupProgress
+global function HopupPopupQueue_SetDormantHopupNotif
+
+global enum eHopupPopupSlot
+{
+	HOPUP_PRIMARY, 
+	HOPUP_SECONDARY, 
+	PASSIVE,
+}
+
+global enum ePopupType
+{
+	HOPUP,
+	PASSIVE,
+}
+
+global const float HOPUP_POPUP_HOLD_TIME = 3.0
+global const float HOPUP_POPUP_OUTRO_TIME = 0.45
+const string HOPUP_POPUP_QUEUE_KEY = "hopup_popup"
+
+global struct PopupData
+{
+	
+	int popupType = ePopupType.HOPUP
+	int popupSlot = eHopupPopupSlot.HOPUP_PRIMARY
+	string slotKey = ""
+	float holdTime = HOPUP_POPUP_HOLD_TIME
+
+	
+	int hopupLootIdx = -1
+	int hopupTier = 0
+	asset hopupIcon = $""
+	string hopupName = ""
+	string hopupDesc = ""
+	bool hasBrand = false
+	bool hasBrandTierColor = false
+	asset brandTexture = $""
+	bool isEventWeapon = false
+	bool isLegendCollab = false
+
+	
+	int passiveTier = 0
+	int passiveAltTier = 0
+	asset passiveWeaponIcon = $""
+	string endorsementName = ""
+	asset endorsementIcon = $""
+	string passiveDesc = ""
+	asset passiveMagIcon = $""
+	asset passiveAmmoIcon = $""
+	bool displayMagDetails = false
+
+	
+	
+}
+
+struct HopupPopupPositionState
+{
+	bool isSlingVerticalOffset = false
+	bool isSpectating = false
+	bool showChargeBar = false
+	bool hasDormantHopupProgress = false
+	bool hasDormantHopupNotif = false
+}
+
+struct
+{
+	int queueId = -1
+	HopupPopupPositionState positionState
+	table<string, var> slotRuis  
+} file
+
+void function HopupPopupQueue_Init()
+{
+	file.queueId = HudNotificationQueue_CreateAndRegisterQueue( HOPUP_POPUP_QUEUE_KEY )
+
+	HudNotificationQueueConfiguration config = HudNotificationQueue_GetConfigure( file.queueId )
+	config.maxVisibleItems = 5
+	config.allowIndirectUpdates = true
+	config.allowDirectUpdates = true
+	config.allowDuplicates = false
+	config.itemUpdatesRefreshDuration = false
+	config.itemPositioningEnabled = false
+	HudNotificationQueue_Configure( file.queueId, config )
+
+	AddCallback_OnViewPlayerChanged( HopupPopupQueue_OnViewPlayerChanged )
+}
+
+void function HopupPopupQueue_ShowPopup( PopupData data )
+{
+	if ( file.queueId < 0 )
+		return
+
+	if ( !HopupPopupQueue_ValidatePopupData( data ) )
+		return
+
+	string slotKey = data.slotKey != "" ? data.slotKey : data.popupSlot.tostring()
+	string itemKey = "hopup_popup_" + slotKey
+
+	HudNotificationQueueItem item
+	item.key = itemKey
+	item.priority = eHudNotificationQueuePriority.MEDIUM
+	item.duration = data.holdTime
+	item.outroDuration = HOPUP_POPUP_OUTRO_TIME
+	item.ruiAsset = $"ui/hopup_popup.rpak"
+
+	item.ruiArgs = HopupPopupQueue_BuildRuiArgs( data )
+
+	item.onCreateVisualOverride = var function( HudNotificationQueueItem item ) : ( slotKey )
+	{
+		if ( slotKey in file.slotRuis && file.slotRuis[slotKey] != null )
+		{
+			RuiDestroyIfAlive( file.slotRuis[slotKey] )
+		}
+
+		var rui = CreatePermanentCockpitPostFXRui( item.ruiAsset )
+
+		file.slotRuis[slotKey] <- rui
+
+		HudNotificationQueue_SetRuiArgs( rui, item.ruiArgs )
+
+		RuiSetGameTime( rui, "startTime", Time() )
+
+		return rui
+	}
+
+	item.onUpdate = void function( bool isItemVisible, HudNotificationQueueItem item ) : ( slotKey )
+	{
+		if ( isItemVisible )
+		{
+			if ( slotKey in file.slotRuis && file.slotRuis[slotKey] != null )
+			{
+				RuiSetGameTime( file.slotRuis[slotKey], "startTime", Time() )
+			}
+
+			item.timeToStartOutro = Time() + item.duration
+		}
+	}
+
+	item.onDestroyVisualOverride = void function( HudNotificationQueueItem item ) : ( slotKey )
+	{
+
+		if ( slotKey in file.slotRuis && file.slotRuis[slotKey] != null )
+		{
+			RuiDestroyIfAlive( file.slotRuis[slotKey] )
+			delete file.slotRuis[slotKey]
+		}
+	}
+
+	HudNotificationQueue_QueueItem( file.queueId, item, ePersistenceContext.PLAYER )
+}
+
+bool function HopupPopupQueue_ValidatePopupData( PopupData data )
+{
+	switch ( data.popupType )
+	{
+		case ePopupType.HOPUP:
+			return data.hopupLootIdx > 0 || data.hopupName != ""
+
+		case ePopupType.PASSIVE:
+			return data.endorsementName != "" || data.passiveDesc != ""
+	}
+
+	return false
+}
+
+table<string, HudNotificationQueueRuiArg> function HopupPopupQueue_BuildRuiArgs( PopupData data )
+{
+	table<string, HudNotificationQueueRuiArg> ruiArgs
+
+	
+	ruiArgs["popupType"] <- HudNotificationQueue_CreateRuiArg( "popupType", data.popupType )
+	ruiArgs["popupSlot"] <- HudNotificationQueue_CreateRuiArg( "popupSlot", data.popupSlot )
+
+	
+	ruiArgs["isSlingVerticalOffset"] <- HudNotificationQueue_CreateRuiArg( "isSlingVerticalOffset", file.positionState.isSlingVerticalOffset )
+	ruiArgs["isSpectating"] <- HudNotificationQueue_CreateRuiArg( "isSpectating", file.positionState.isSpectating )
+	ruiArgs["showChargeBar"] <- HudNotificationQueue_CreateRuiArg( "showChargeBar", file.positionState.showChargeBar )
+	ruiArgs["hasDormantHopupProgress"] <- HudNotificationQueue_CreateRuiArg( "hasDormantHopupProgress", file.positionState.hasDormantHopupProgress )
+	ruiArgs["hasDormantHopupNotif"] <- HudNotificationQueue_CreateRuiArg( "hasDormantHopupNotif", file.positionState.hasDormantHopupNotif )
+
+	
+	switch ( data.popupType )
+	{
+		case ePopupType.HOPUP:
+			ruiArgs["hopupTier"] <- HudNotificationQueue_CreateRuiArg( "hopupTier", data.hopupTier )
+			ruiArgs["hopupIcon"] <- HudNotificationQueue_CreateRuiArg( "hopupIcon", data.hopupIcon, eRuiArgType.IMAGE )
+			ruiArgs["hopupName"] <- HudNotificationQueue_CreateRuiArg( "hopupName", data.hopupName )
+			ruiArgs["hopupDesc"] <- HudNotificationQueue_CreateRuiArg( "hopupDesc", data.hopupDesc )
+			ruiArgs["hasBrand"] <- HudNotificationQueue_CreateRuiArg( "hasBrand", data.hasBrand )
+			ruiArgs["hasBrandTierColor"] <- HudNotificationQueue_CreateRuiArg( "hasBrandTierColor", data.hasBrandTierColor )
+			ruiArgs["brandTexture"] <- HudNotificationQueue_CreateRuiArg( "brandTexture", data.brandTexture, eRuiArgType.IMAGE )
+			ruiArgs["isEventWeapon"] <- HudNotificationQueue_CreateRuiArg( "isEventWeapon", data.isEventWeapon )
+			ruiArgs["isLegendCollab"] <- HudNotificationQueue_CreateRuiArg( "isLegendCollab", data.isLegendCollab )
+			break
+
+		case ePopupType.PASSIVE:
+			ruiArgs["passiveTier"] <- HudNotificationQueue_CreateRuiArg( "passiveTier", data.passiveTier )
+			ruiArgs["passiveAltTier"] <- HudNotificationQueue_CreateRuiArg( "passiveAltTier", data.passiveAltTier )
+			ruiArgs["passiveWeaponIcon"] <- HudNotificationQueue_CreateRuiArg( "passiveWeaponIcon", data.passiveWeaponIcon, eRuiArgType.IMAGE )
+			ruiArgs["endorsementName"] <- HudNotificationQueue_CreateRuiArg( "endorsementName", data.endorsementName )
+			ruiArgs["endorsementIcon"] <- HudNotificationQueue_CreateRuiArg( "endorsementIcon", data.endorsementIcon, eRuiArgType.IMAGE )
+			ruiArgs["passiveDesc"] <- HudNotificationQueue_CreateRuiArg( "passiveDesc", data.passiveDesc )
+			ruiArgs["passiveMagIcon"] <- HudNotificationQueue_CreateRuiArg( "passiveMagIcon", data.passiveMagIcon, eRuiArgType.IMAGE )
+			ruiArgs["passiveAmmoIcon"] <- HudNotificationQueue_CreateRuiArg( "passiveAmmoIcon", data.passiveAmmoIcon, eRuiArgType.IMAGE )
+			ruiArgs["displayMagDetails"] <- HudNotificationQueue_CreateRuiArg( "displayMagDetails", data.displayMagDetails )
+			break
+	}
+
+	return ruiArgs
+}
+
+void function HopupPopupQueue_OnViewPlayerChanged( entity player )
+{
+	file.positionState.isSlingVerticalOffset = false
+	file.positionState.isSpectating = false
+	file.positionState.showChargeBar = false
+	file.positionState.hasDormantHopupProgress = false
+	file.positionState.hasDormantHopupNotif = false
+
+	if ( IsValid( player ) )
+	{
+		entity localPlayer = GetLocalClientPlayer()
+		if ( IsValid( localPlayer ) && localPlayer != player )
+		{
+			file.positionState.isSpectating = true
+		}
+	}
+
+	foreach ( string key, var rui in file.slotRuis )
+	{
+		if ( rui != null )
+			RuiDestroyIfAlive( rui )
+	}
+	file.slotRuis.clear()
+}
+
+void function HopupPopupQueue_SetSlingVerticalOffset( bool value )
+{
+	file.positionState.isSlingVerticalOffset = value
+}
+
+void function HopupPopupQueue_SetSpectating( bool value )
+{
+	file.positionState.isSpectating = value
+}
+
+void function HopupPopupQueue_SetShowChargeBar( bool value )
+{
+	file.positionState.showChargeBar = value
+}
+
+void function HopupPopupQueue_SetDormantHopupProgress( bool value )
+{
+	file.positionState.hasDormantHopupProgress = value
+}
+
+void function HopupPopupQueue_SetDormantHopupNotif( bool value )
+{
+	file.positionState.hasDormantHopupNotif = value
+} 

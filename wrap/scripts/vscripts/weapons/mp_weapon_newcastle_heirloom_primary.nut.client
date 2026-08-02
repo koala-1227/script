@@ -1,0 +1,526 @@
+global function MpWeaponNewcastleHeirloomPrimary_Init
+global function OnWeaponActivate_weapon_newcastle_heirloom_primary
+global function OnWeaponDeactivate_weapon_newcastle_heirloom_primary
+global function OnWeaponOwnerChanged_weapon_newcastle_heirloom_primary
+
+global function NewcastleHeirloom_ScriptAnimWindowStartCallback
+global function NewcastleHeirloom_ScriptAnimWindowStopCallback
+
+global function NewcastleHeirloom_HasBaseSkinEquipped
+global function NewcastleHeirloom_GetCurrentActiveSkinName
+
+
+global function NewcastleHeirloom_ActivationEmoteComplete
+
+
+
+
+
+
+
+global const int NEWCASTLE_SWORD_WEAPON_GUID = 879932097
+global const int NEWCASTLE_SWORD_RT01_SKIN_GUID = 938599645
+global const int NEWCASTLE_SWORD_RT02_SKIN_GUID = 1485350717
+global const int NEWCASTLE_SWORD_RT03_SKIN_GUID = 1917371551
+global const int NEWCASTLE_SWORD_DEFAULT_SKIN_GUID = 299455065
+
+const int NEWCASTLE_SWORD_DEFAULT_SKIN_INDEX = 1 
+
+global const string NEWCASTLE_SWORD_SKIN_NAME_BASE = "heirloom"
+global const string NEWCASTLE_SWORD_SKIN_NAME_RT01 = "heirloom_rt01"
+global const string NEWCASTLE_SWORD_SKIN_NAME_RT02 = "heirloom_rt02"
+global const string NEWCASTLE_SWORD_SKIN_NAME_RT03 = "heirloom_rt03"
+
+
+
+
+
+
+const asset SWORD_IDLE_FX_1P = $"P_sword_idle_1p_00"
+const asset SWORD_IDLE_FX_3P = $"P_sword_idle_3p_00"
+const asset SWORD_IDLE_FX_1P_RT_01 = $"P_sword_idle_1p_01"
+const asset SWORD_IDLE_FX_3P_RT_01 = $"P_sword_idle_3p_01"
+const asset SWORD_IDLE_FX_1P_RT_02 = $"P_sword_idle_1p_02"
+const asset SWORD_IDLE_FX_3P_RT_02 = $"P_sword_idle_3p_02"
+const asset SWORD_IDLE_FX_1P_RT_03 = $"P_sword_idle_1p_03"
+const asset SWORD_IDLE_FX_3P_RT_03 = $"P_sword_idle_3p_03"
+
+const asset SWORD_IDLE_JET_FX_1P = $"P_sword_jets_1P_00"
+const asset SWORD_IDLE_JET_FX_3P = $"P_sword_jets_3P_00"
+const asset SWORD_IDLE_JET_FX_1P_RT_01 = $"P_sword_jets_1P_01"
+const asset SWORD_IDLE_JET_FX_3P_RT_01 = $"P_sword_jets_3P_01"
+const asset SWORD_IDLE_JET_FX_1P_RT_02 = $"P_sword_jets_1P_02"
+const asset SWORD_IDLE_JET_FX_3P_RT_02 = $"P_sword_jets_3P_02"
+const asset SWORD_IDLE_JET_FX_1P_RT_03 = $"P_sword_jets_1P_03"
+const asset SWORD_IDLE_JET_FX_3P_RT_03 = $"P_sword_jets_3P_03"
+
+const asset SWORD_CORE_FX_00 = $"00_rift_cube_group"
+
+const asset SWORD_DEACTIVATED_COVER_FX = $"P_sword_deactivated_1p"
+
+
+const asset SWORD_ACTIVATE_FX_00 = $"P_sword_activate_generic"
+const asset SWORD_ACTIVATE_FX_01 = $"P_sword_activate_rt01"
+const asset SWORD_ACTIVATE_FX_02 = $"P_sword_activate_rt02"
+const asset SWORD_ACTIVATE_FX_03 = $"P_sword_activate_rt03"
+const asset SWORD_DEACTIVATE_FX_00 = $"P_sword_open_generic"
+const asset SWORD_DEACTIVATE_FX_01 = $"P_sword_open_rt01"
+const asset SWORD_DEACTIVATE_FX_02 = $"P_sword_open_rt02"
+const asset SWORD_DEACTIVATE_FX_03 = $"P_sword_open_rt03"
+const asset SWORD_INSPECT_GENERIC_FLICK_FX_00 = $"P_ego_sword_inspect_generic_flick_00"
+const asset SWORD_INSPECT_GENERIC_FLICK_FX_01 = $"P_ego_sword_inspect_generic_flick_01"
+const asset SWORD_INSPECT_GENERIC_FLICK_FX_02 = $"P_ego_sword_inspect_generic_flick_02"
+const asset SWORD_INSPECT_GENERIC_FLICK_FX_03 = $"P_ego_sword_inspect_generic_flick_03"
+const asset SWORD_JET_FLAREUP_FX_00 = $"P_ego_sword_1P_jet_flareup_00"
+const asset SWORD_JET_FLAREUP_FX_01 = $"P_ego_sword_1P_jet_flareup_01"
+const asset SWORD_JET_FLAREUP_FX_02 = $"P_ego_sword_1P_jet_flareup_02"
+const asset SWORD_JET_FLAREUP_FX_03 = $"P_ego_sword_1P_jet_flareup_03"
+const asset SWORD_ATTACK_GLOW_1P_FX_00 = $"P_ego_sword_attack_glow_1P_00"
+const asset SWORD_ATTACK_GLOW_1P_FX_01 = $"P_ego_sword_attack_glow_1P_01"
+const asset SWORD_ATTACK_GLOW_1P_FX_02 = $"P_ego_sword_attack_glow_1P_02"
+const asset SWORD_ATTACK_GLOW_1P_FX_03 = $"P_ego_sword_attack_glow_1P_03"
+const asset SWORD_JET_FLAREUP_DRAW_ROCKET_FX_00 = $"P_ego_sword_1P_jet_flareup_draw_rocket_00"
+const asset SWORD_JET_FLAREUP_DRAW_ROCKET_FX_01 = $"P_ego_sword_1P_jet_flareup_draw_rocket_01"
+const asset SWORD_JET_FLAREUP_DRAW_ROCKET_FX_02 = $"P_ego_sword_1P_jet_flareup_draw_rocket_02"
+const asset SWORD_JET_FLAREUP_DRAW_ROCKET_FX_03 = $"P_ego_sword_1P_jet_flareup_draw_rocket_03"
+
+const asset SWORD_IMPACT_FX = $"P_sword_impact_generic"
+
+global const string NEWCASTLE_SWORD_MP_WEAPON_NAME = "mp_weapon_newcastle_heirloom_primary"
+const string SWORD_CALLBACK_NAME = "Newcastle_Heirloom"
+const string SWORD_ACTIVATE_SIGNAL = "NewcastleHeirloomSwordActivate"
+const float SWORD_HOLSTER_TIME_SEC = 0.4
+
+const table<string, table< int, int > > HEIRLOOM_SKIN_REMAP =
+{
+	[NEWCASTLE_SWORD_SKIN_NAME_BASE] =
+	{
+		[eDamageSourceId.mp_weapon_newcastle_heirloom_primary] = eDamageSourceId.mp_weapon_newcastle_heirloom_primary,
+		[eDamageSourceId.melee_newcastle_heirloom] = eDamageSourceId.melee_newcastle_heirloom,
+	},
+	[NEWCASTLE_SWORD_SKIN_NAME_RT01] =
+	{
+		[eDamageSourceId.mp_weapon_newcastle_heirloom_primary] = eDamageSourceId.mp_weapon_newcastle_heirloom_rt01_primary,
+		[eDamageSourceId.melee_newcastle_heirloom] = eDamageSourceId.melee_newcastle_heirloom_rt01,
+	},
+	[NEWCASTLE_SWORD_SKIN_NAME_RT02] =
+	{
+		[eDamageSourceId.mp_weapon_newcastle_heirloom_primary] = eDamageSourceId.mp_weapon_newcastle_heirloom_rt02_primary,
+		[eDamageSourceId.melee_newcastle_heirloom] = eDamageSourceId.melee_newcastle_heirloom_rt02,
+	},
+	[NEWCASTLE_SWORD_SKIN_NAME_RT03] =
+	{
+		[eDamageSourceId.mp_weapon_newcastle_heirloom_primary] = eDamageSourceId.mp_weapon_newcastle_heirloom_rt03_primary,
+		[eDamageSourceId.melee_newcastle_heirloom] = eDamageSourceId.melee_newcastle_heirloom_rt03,
+	},
+}
+
+global enum eSwordActivationState
+{
+	NORMAL,
+	DEACTIVATED,
+}
+
+void function MpWeaponNewcastleHeirloomPrimary_Init()
+{
+	RegisterSignal( SWORD_ACTIVATE_SIGNAL )
+
+	PrecacheParticleSystem( SWORD_IDLE_FX_1P )
+	PrecacheParticleSystem( SWORD_IDLE_FX_1P )
+	PrecacheParticleSystem( SWORD_IDLE_FX_3P )
+	PrecacheParticleSystem( SWORD_IDLE_FX_1P_RT_01 )
+	PrecacheParticleSystem( SWORD_IDLE_FX_3P_RT_01 )
+	PrecacheParticleSystem( SWORD_IDLE_FX_1P_RT_02 )
+	PrecacheParticleSystem( SWORD_IDLE_FX_3P_RT_02 )
+	PrecacheParticleSystem( SWORD_IDLE_FX_1P_RT_03 )
+	PrecacheParticleSystem( SWORD_IDLE_FX_3P_RT_03 )
+
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_1P )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_3P )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_1P_RT_01 )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_3P_RT_01 )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_1P_RT_02 )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_3P_RT_02 )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_1P_RT_03 )
+	PrecacheParticleSystem( SWORD_IDLE_JET_FX_3P_RT_03 )
+
+	PrecacheParticleSystem( SWORD_CORE_FX_00 )
+	
+	PrecacheParticleSystem( SWORD_DEACTIVATED_COVER_FX )
+
+	
+	PrecacheParticleSystem( SWORD_ACTIVATE_FX_00 )
+	PrecacheParticleSystem( SWORD_ACTIVATE_FX_01 )
+	PrecacheParticleSystem( SWORD_ACTIVATE_FX_02 )
+	PrecacheParticleSystem( SWORD_ACTIVATE_FX_03 )
+	PrecacheParticleSystem( SWORD_DEACTIVATE_FX_00 )
+	PrecacheParticleSystem( SWORD_DEACTIVATE_FX_01 )
+	PrecacheParticleSystem( SWORD_DEACTIVATE_FX_02 )
+	PrecacheParticleSystem( SWORD_DEACTIVATE_FX_03 )
+	PrecacheParticleSystem( SWORD_INSPECT_GENERIC_FLICK_FX_00 )
+	PrecacheParticleSystem( SWORD_INSPECT_GENERIC_FLICK_FX_01 )
+	PrecacheParticleSystem( SWORD_INSPECT_GENERIC_FLICK_FX_02 )
+	PrecacheParticleSystem( SWORD_INSPECT_GENERIC_FLICK_FX_03 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_FX_00 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_FX_01 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_FX_02 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_FX_03 )
+
+	PrecacheParticleSystem(  SWORD_ATTACK_GLOW_1P_FX_00 )
+	PrecacheParticleSystem(  SWORD_ATTACK_GLOW_1P_FX_01 )
+	PrecacheParticleSystem(  SWORD_ATTACK_GLOW_1P_FX_02 )
+	PrecacheParticleSystem(  SWORD_ATTACK_GLOW_1P_FX_03 )
+
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_DRAW_ROCKET_FX_00 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_DRAW_ROCKET_FX_01 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_DRAW_ROCKET_FX_02 )
+	PrecacheParticleSystem( SWORD_JET_FLAREUP_DRAW_ROCKET_FX_03 )
+
+	PrecacheParticleSystem( SWORD_IMPACT_FX )
+
+	RegisterScriptAnimWindowCallbacks( SWORD_CALLBACK_NAME, NewcastleHeirloom_ScriptAnimWindowStartCallback, NewcastleHeirloom_ScriptAnimWindowStopCallback )
+
+
+
+
+
+
+
+
+
+		Melee_AddCallback_MeleeEmoteCompletedWithWeaponSkin( NEWCASTLE_SWORD_WEAPON_GUID, NewcastleHeirloom_ActivationEmoteComplete )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function NewcastleHeirloom_HasBaseSkinEquipped( entity weapon )
+{
+	return weapon.GetSkin() == NEWCASTLE_SWORD_DEFAULT_SKIN_INDEX
+}
+
+string function NewcastleHeirloom_GetCurrentActiveSkinName( entity weapon )
+{
+	return NewcastleHeirloom_HasBaseSkinEquipped( weapon ) ? NEWCASTLE_SWORD_SKIN_NAME_BASE : MeleeSkin_GetSkinNameFromPlayer( weapon.GetWeaponOwner() )
+}
+
+void function OnWeaponActivate_weapon_newcastle_heirloom_primary( entity weapon )
+{
+	weapon.Signal( SWORD_ACTIVATE_SIGNAL )
+
+		if ( IsSpectating() )
+		{
+			
+			
+			OnWeaponDeactivate_melee_newcastle_heirloom( weapon )
+			OnWeaponDeactivate_weapon_newcastle_heirloom_primary( weapon )
+		}
+
+	StartFXForSkin( weapon, NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+}
+
+void function OnWeaponDeactivate_weapon_newcastle_heirloom_primary( entity weapon )
+{
+	StopFXForSkin( weapon, NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+}
+
+void function OnWeaponOwnerChanged_weapon_newcastle_heirloom_primary( entity weapon, WeaponOwnerChangedParams changeParams )
+{
+	entity owner = changeParams.newOwner
+	if ( !IsValid( owner ) )
+		return
+
+	EHI ownerEHI = ToEHI( owner )
+	if ( !EHIHasValidScriptStruct( ownerEHI ) ) 
+	{
+		Warning( "%s : ownerEHI '%s' has no valid SS! OnWeaponOwnerChanged is being called before ShEHI_OnPlayerCreated?", FUNC_NAME(), string( ownerEHI ) )
+		return
+	}
+
+	AddCallback_ItemFlavorLoadoutSlotDidChange_SpecificPlayer( ownerEHI, Loadout_Character(), OnCharacterChanged, false )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function OnCharacterChanged( EHI playerEHI, ItemFlavor character )
+{
+	entity player = FromEHI( playerEHI )
+	if ( !IsValid( player ) )
+		return
+
+	entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_2 )
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != NEWCASTLE_SWORD_MP_WEAPON_NAME )
+		return
+
+	weapon.StopWeaponEffect( SWORD_IDLE_FX_1P, SWORD_IDLE_FX_3P )
+	weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P, SWORD_IDLE_JET_FX_3P )
+	weapon.StopWeaponEffect( SWORD_IDLE_FX_1P_RT_01, SWORD_IDLE_FX_3P_RT_01 )
+	weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_01, SWORD_IDLE_JET_FX_3P_RT_01 )
+	weapon.StopWeaponEffect( SWORD_IDLE_FX_1P_RT_02, SWORD_IDLE_FX_3P_RT_02 )
+	weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_02, SWORD_IDLE_JET_FX_3P_RT_02 )
+	weapon.StopWeaponEffect( SWORD_IDLE_FX_1P_RT_03, SWORD_IDLE_FX_3P_RT_03 )
+	weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_03, SWORD_IDLE_JET_FX_3P_RT_03 )
+
+	StartFXForSkin( weapon, MeleeSkin_GetSkinNameFromPlayer( player ) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function StartFXForSkin( entity weapon, string meleeSkinName )
+{
+	switch ( meleeSkinName )
+	{
+		case NEWCASTLE_SWORD_SKIN_NAME_BASE:
+			weapon.PlayWeaponEffect( SWORD_IDLE_FX_1P, SWORD_IDLE_FX_3P, "FX_CORE", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P, SWORD_IDLE_JET_FX_3P, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P, SWORD_IDLE_JET_FX_3P, "fx_nozzle_r", true )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT01:
+			weapon.PlayWeaponEffect( SWORD_IDLE_FX_1P_RT_01, SWORD_IDLE_FX_3P_RT_01, "FX_CORE", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_01, SWORD_IDLE_JET_FX_3P_RT_01, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_01, SWORD_IDLE_JET_FX_3P_RT_01, "fx_nozzle_r", true )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT02:
+			weapon.PlayWeaponEffect( SWORD_IDLE_FX_1P_RT_02, SWORD_IDLE_FX_3P_RT_02, "FX_CORE", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_02, SWORD_IDLE_JET_FX_3P_RT_02, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_02, SWORD_IDLE_JET_FX_3P_RT_02, "fx_nozzle_r", true )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT03:
+			weapon.PlayWeaponEffect( SWORD_IDLE_FX_1P_RT_03, SWORD_IDLE_FX_3P_RT_03, "FX_CORE", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_03, SWORD_IDLE_JET_FX_3P_RT_03, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_03, SWORD_IDLE_JET_FX_3P_RT_03, "fx_nozzle_r", true )
+			break
+	}
+}
+
+void function StopFXForSkin( entity weapon, string meleeSkinName )
+{
+	switch ( meleeSkinName )
+	{
+		case NEWCASTLE_SWORD_SKIN_NAME_BASE:
+			weapon.StopWeaponEffect( SWORD_IDLE_FX_1P, SWORD_IDLE_FX_3P )
+			weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P, SWORD_IDLE_JET_FX_3P )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT01:
+			weapon.StopWeaponEffect( SWORD_IDLE_FX_1P_RT_01, SWORD_IDLE_FX_3P_RT_01 )
+			weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_01, SWORD_IDLE_JET_FX_3P_RT_01 )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT02:
+			weapon.StopWeaponEffect( SWORD_IDLE_FX_1P_RT_02, SWORD_IDLE_FX_3P_RT_02 )
+			weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_02, SWORD_IDLE_JET_FX_3P_RT_02 )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT03:
+			weapon.StopWeaponEffect( SWORD_IDLE_FX_1P_RT_03, SWORD_IDLE_FX_3P_RT_03 )
+			weapon.StopWeaponEffect( SWORD_IDLE_JET_FX_1P_RT_03, SWORD_IDLE_JET_FX_3P_RT_03 )
+			break
+	}
+}
+
+void function NewcastleHeirloom_ScriptAnimWindowStartCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != NEWCASTLE_SWORD_MP_WEAPON_NAME )
+		return
+
+	if ( parameter == "Stop_FX" )
+	{
+		StopFXForSkin( weapon, NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+		
+		weapon.PlayWeaponEffect( SWORD_CORE_FX_00, SWORD_CORE_FX_00, "FX_CORE", true )
+		weapon.PlayWeaponEffect( SWORD_DEACTIVATED_COVER_FX, SWORD_DEACTIVATED_COVER_FX, "FX_CORE", true )
+	}
+	else if ( parameter == "Play_Idle_FX" ) 
+	{
+		StartFXForSkin( weapon, NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+		thread function() : ( weapon ) {
+			weapon.EndSignal( "OnDestroy" )
+			weapon.EndSignal( SWORD_ACTIVATE_SIGNAL )
+
+			entity owner = weapon.GetOwner()
+			owner.EndSignal( "OnDeath" )
+			owner.EndSignal( "OnDestroy" )
+
+			OnThreadEnd(
+				function() : ( weapon )
+				{
+					StopFXForSkin( weapon, NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+				}
+			)
+
+			wait SWORD_HOLSTER_TIME_SEC
+		}()
+	}
+}
+
+void function NewcastleHeirloom_ScriptAnimWindowStopCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != NEWCASTLE_SWORD_MP_WEAPON_NAME )
+		return
+
+	if ( parameter == "Stop_FX" )
+	{
+		StartFXForSkin( weapon, NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+		
+		weapon.StopWeaponEffect( SWORD_CORE_FX_00, SWORD_CORE_FX_00 )
+		weapon.StopWeaponEffect( SWORD_DEACTIVATED_COVER_FX, SWORD_DEACTIVATED_COVER_FX )
+	}
+	
+}
+
+string function NewcastleHeirloom_GetSkinNameFromWeapon( entity weapon )
+{
+	int skinIndex = weapon.GetSkin()
+	switch ( skinIndex )
+	{
+		case NEWCASTLE_SWORD_DEFAULT_SKIN_INDEX:
+			return NEWCASTLE_SWORD_SKIN_NAME_BASE
+
+		case NEWCASTLE_SWORD_DEFAULT_SKIN_INDEX + 1:
+			return NEWCASTLE_SWORD_SKIN_NAME_RT01
+
+		case NEWCASTLE_SWORD_DEFAULT_SKIN_INDEX + 2:
+			return NEWCASTLE_SWORD_SKIN_NAME_RT02
+
+		case NEWCASTLE_SWORD_DEFAULT_SKIN_INDEX + 3:
+			return NEWCASTLE_SWORD_SKIN_NAME_RT03
+
+		default:
+			Assert( false )
+	}
+
+	return ""
+}
+
+
+void function NewcastleHeirloom_ActivationEmoteComplete( entity weapon, ItemFlavor oldMeleeSkin )
+{
+	StopFXForSkin( weapon, MeleeSkin_GetSkinName( oldMeleeSkin ) )
+	StartFXForSkin( weapon, NewcastleHeirloom_GetSkinNameFromWeapon( weapon ) ) 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

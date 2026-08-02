@@ -1,0 +1,2634 @@
+global function MpWeaponPowerSword_Init
+
+global function PowerSword_WeaponRefIsPowerSword
+global function PowerSword_ShouldSpawnInDeathbox
+
+global function PowerSword_OnMeleeWeaponPrimaryAttack
+global function PowerSword_OnMeleeWeaponSecondaryAttack
+global function PowerSword_OnMeleeWeaponStandardFallbackAttack
+global function PowerSword_OnMeleeWeaponProjectileAttack
+global function PowerSword_OnStartZoomIn
+global function PowerSword_OnStartZoomOut
+global function PowerSword_OnWeaponRegenEnd
+global function PowerSword_OnProjectileCollision
+global function PowerSword_OnWeaponCustomActivityStart
+global function PowerSword_OnWeaponCustomActivityEnd
+global function PowerSword_OnWeaponActivate
+global function PowerSword_OnWeaponDeactivate
+global function PowerSword_OnWeaponOwnerChanged
+
+global function PowerSword_ScriptAnimWindowStartCallback
+global function PowerSword_ScriptAnimWindowStopCallback
+
+
+global function PowerSword_OnClientAnimEvent
+
+#if DEV
+global function DEV_PowerSword_SetMeleeHitSFXPlayChance
+global function DEV_PowerSword_SetMeleeHitSFXDebounceTime
+#endif
+
+
+
+
+global function PowerSword_DisplayHint
+global function ServerCallback_PowerSword_StopBlocking
+
+
+
+
+
+
+
+#if DEV
+global function DEV_SetYellowThreshold
+global function DEV_SetGreenThreshold
+#endif
+
+global const string WEAPON_POWER_SWORD_REF = "mp_weapon_power_sword"
+global const string POWER_SWORD_NET_INT_POWER_SWORD_STATE = "power_sword_state"
+global const string POWER_SWORD_NET_TIME_DEFLECT_FX_END = "power_sword_deflect_fx_end_time"
+
+global const float VISUAL_MARGIN = 0.02
+
+
+
+const string WEAPON_POWER_SWORD_CHARGING_MOD = "charging"
+const string WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD = "force_zoom_in"
+const string WEAPON_POWER_SWORD_FORCE_ZOOM_OUT_MOD = "force_zoom_out"
+const string WEAPON_POWER_SWORD_ULTIMATE_MOD = "ultimate"
+const string WEAPON_POWER_SWORD_HUD_HANDLE_NAME = "chargedHandle"
+const string WEAPON_POWER_SWORD_HUD_CHARGED_TEXT = "charged"
+const string WEAPON_POWER_SWORD_HUD_BLOCKING_TEXT = "blocking"
+const string WEAPON_POWER_SWORD_CHARGED_TEXT     = "#WEAPON_POWER_SWORD_CHARGED_TEXT"
+const string WEAPON_POWER_SWORD_TO_BLOCK_TEXT    = "#WEAPON_POWER_SWORD_TO_BLOCK_TEXT"
+const string WEAPON_POWER_SWORD_TO_SHOOT_TEXT    = "#WEAPON_POWER_SWORD_TO_SHOOT_TEXT"
+const string WEAPON_POWER_SWORD_NEED_CHARGE_TEXT = "#WEAPON_POWER_SWORD_NEED_CHARGE_TEXT"
+const string WEAPON_POWER_SWORD_TO_ULT           = "#WEAPON_POWER_SWORD_TO_ULT"
+const string WEAPON_POWER_SWORD_TO_CHARGE        = "#WEAPON_POWER_SWORD_TO_CHARGE"
+const string WEAPON_POWER_SWORD_TO_CANCEL        = "#WEAPON_POWER_SWORD_TO_CANCEL"
+
+
+const string PVAR_POWER_SWORD_SPAWN_IN_DEATHBOX = "power_sword_spawn_in_deathbox"
+const string PVAR_POWER_SWORD_IS_ENABLED = "power_sword_is_enabled"
+
+
+const string SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_START = "WeaponPowerSword_ActiveThread_Start"
+const string SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_STOP = "WeaponPowerSword_ActiveThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_DEACTIVATE = "WeaponPowerSword_Deactivate"
+const string SIG_WEAPON_POWER_SWORD_RUI_ACTIVATE = "WeaponPowerSword_RUI_Activate"
+const string SIG_WEAPON_POWER_SWORD_RUI_DEACTIVATE = "WeaponPowerSword_RUI_Deactivate"
+const string SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_START = "WeaponPowerSword_ChargingThread_Start"
+const string SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_STOP = "WeaponPowerSword_ChargingThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_START = "WeaponPowerSword_BlockingThread_Start"
+const string SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_STOP = "WeaponPowerSword_BlockingThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_START = "WeaponPowerSword_ReturnToZoomInThread_Start"
+const string SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_STOP = "WeaponPowerSword_ReturnToZoomInThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_START = "WeaponPowerSword_ReturnToZoomOutThread_Start"
+const string SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_STOP = "WeaponPowerSword_ReturnToZoomOutThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_REGEN_END = "WeaponPowerSword_Regen_End"
+const string SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_ON = "WeaponPowerSword_ToggleCharging_On"
+const string SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_OFF = "WeaponPowerSword_ToggleCharging_Off"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_CHANNEL = "WeaponPowerSword_UltimateChannel"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_END = "WeaponPowerSword_UltimateEnd"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_START = "WeaponPowerSword_UltimateThread_Start"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_STOP = "WeaponPowerSword_UltimateThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_WINDUP_START = "WeaponPowerSword_UltimateWindUp_Start"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_WINDUP_STOP = "WeaponPowerSword_UltimateWindUp_Stop"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_ABILITY_REGEN_START = "WeaponPowerSword_Ultimate_AbilityRegen_Start"
+const string SIG_WEAPON_POWER_SWORD_ULTIMATE_ABILITY_REGEN_STOP = "WeaponPowerSword_Ultimate_AbilityRegen_Stop"
+const string SIG_WEAPON_POWER_SWORD_BUFF_EFFECT_STOP = "WeaponPowerSword_Buff_Effect_Stop"
+const string SIG_WEAPON_POWER_SWORD_DEBUFF_EFFECT_STOP = "WeaponPowerSword_Debuff_Effect_Stop"
+const string SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_START = "WeaponPowerSword_BlockingFXThread_Start"
+const string SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_STOP = "WeaponPowerSword_BlockingFXThread_Stop"
+const string SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_START = "WeaponPowerSword_BlockDeflectFXThread_Start"
+const string SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_STOP = "WeaponPowerSword_BlockDeflectFXThread_Stop"
+
+
+const asset VFX_POWER_SWORD_CHARGING_1P = $"P_power_sword_charge_screen"
+const asset VFX_POWER_SWORD_CHARGING_3P = $"P_power_sword_charge_3P"
+const asset VFX_POWER_SWORD_TRAIL = $"P_power_sword_null"
+const asset VFX_POWER_SWORD_EYE_GLOW = $"P_power_sword_null"
+const asset VFX_POWER_SWORD_BODY = $"P_power_sword_null"
+const asset VFX_POWER_SWORD_ARM = $"P_power_sword_null"
+const asset VFX_POWER_SWORD_THRUSTERS = $"P_power_sword_thrusters"
+const asset VFX_POWER_SWORD_ATTACK_1P = $"P_power_sword_1P"
+const asset VFX_POWER_SWORD_ATTACK_3P = $"P_power_sword_3P"
+const asset VFX_POWER_SWORD_IDLE_1P = $"P_power_sword_1P"
+const asset VFX_POWER_SWORD_IDLE_3P = $"P_power_sword_3P"
+const asset VFX_POWER_SWORD_JET_1P = $"P_power_sword_1P_jet"
+const asset VFX_POWER_SWORD_JET_3P = $"P_power_sword_null"
+const asset VFX_POWER_SWORD_ULTIMATE_ZONE = $"P_power_sword_ult_activate_shockwave"
+const asset VFX_POWER_SWORD_ULTIMATE_READY_1P = $"P_power_sword_ult_ready_1P"
+const asset VFX_POWER_SWORD_ULTIMATE_READY_3P = $"P_power_sword_null"			
+const asset VFX_POWER_SWORD_ULTIMATE_CHANNEL_1P = $"P_power_sword_null"			
+const asset VFX_POWER_SWORD_ULTIMATE_CHANNEL_3P = $"P_power_sword_null"			
+const asset VFX_POWER_SWORD_ULTIMATE_ACTIVATE_1P = $"P_power_sword_null"		
+const asset VFX_POWER_SWORD_ULTIMATE_ACTIVATE_3P = $"P_power_sword_ult_activate_3P"
+const asset VFX_POWER_SWORD_DROP_SPARKS = $"P_power_sword_lightning"
+const asset VFX_POWER_SWORD_ULTIMATE_IMPACT_FRIENDLY = $"P_power_sword_buff_1P"
+const asset VFX_POWER_SWORD_ULTIMATE_IMPACT_ENEMY = $"P_power_sword_debuff_1P"
+const asset VFX_POWER_SWORD_BLOCK_IMPACT_1P = $"P_power_sword_block_1P_impact"
+const asset VFX_POWER_SWORD_BLOCK_IMPACT_3P = $"P_power_sword_block_3P_impact"
+const asset VFX_POWER_SWORD_BLOCK_ACTIVE_1P = $"P_power_sword_block_1P"
+const asset VFX_POWER_SWORD_BLOCK_ACTIVE_3P = $"P_power_sword_block_3P"
+const asset VFX_POWER_SWORD_BLOCK_DEFLECT_1P = $"P_power_sword_block_1P_deflect"
+const asset VFX_POWER_SWORD_BLOCK_DEFLECT_3P = $"P_power_sword_block_3P_deflect"
+const asset HUD_POWER_SWORD_RUI = $"ui/power_sword_v2.rpak"
+
+const string POWER_SWORD_VFX_CALLBACK_NAME = "Powersword_Callback"
+
+const float POWER_SWORD_DASH_NOT_READY_DEBOUNCE_TIME_SEC = 1
+
+
+const string SFX_POWER_SWORD_MELEE_HIT = "bc_hitLanded_powerSword"
+const string SFX_POWER_SWORD_LOOT_AIR_LOOP = "PowerSword_Drop_Air_Spin_LP_3p"
+const string SFX_POWER_SWORD_ULTIMATE_ACTIVATE_1P = "PowerSword_Ult_Activate_Blast_1p"
+const string SFX_POWER_SWORD_ULTIMATE_ACTIVATE_3P = "PowerSword_Ult_Activate_Blast_3p"
+const string SFX_POWER_SWORD_ULTIMATE_IMPACT_CASTER_1P = "PowerSword_Ult_Blast_PositiveDamage_1p_Caster"
+const string SFX_POWER_SWORD_ULTIMATE_IMPACT_FRIENDLY_1P = "PowerSword_Ult_Blast_PositiveDamage_1p_Friendly"
+const string SFX_POWER_SWORD_ULTIMATE_IMPACT_FRIENDLY_3P = "PowerSword_Ult_Blast_PositiveDamage_3p_Friendly"
+const string SFX_POWER_SWORD_ULTIMATE_IMPACT_ENEMY_1P = "PowerSword_Ult_Blast_NegativeDamage_1p_Enemy"
+const string SFX_POWER_SWORD_ULTIMATE_IMPACT_ENEMY_3P = "PowerSword_Ult_Blast_NegativeDamage_3p_Enemy"
+const string SFX_POWER_SWORD_PROJECTILE_LAUNCH_1P = "PowerSword_EnergyProjectile_Launch_1p"
+const string SFX_POWER_SWORD_PROJECTILE_LAUNCH_3P = "PowerSword_EnergyProjectile_Launch_3p"
+const string SFX_POWER_SWORD_CHARGING_3P = "PowerSword_Charge_Activate_Loop_3p"
+const string SFX_POWER_SWORD_BLOCK_IMPACT_1P = "PowerSword_Block_Bullet_Impacts_1p"
+const string SFX_POWER_SWORD_BLOCK_IMPACT_1P_VS_3P = "PowerSword_Block_Bullet_Impacts_1p_vs_3p"
+const string SFX_POWER_SWORD_BLOCK_IMPACT_3P = "PowerSword_Block_Bullet_Impacts_3p"
+const string SFX_POWER_SWORD_BLOCK_DEFLECT_1P = "PowerSword_Deflect_Projectile_Impacts_1p"
+const string SFX_POWER_SWORD_BLOCK_DEFLECT_3P = "PowerSword_Deflect_Projectile_Impacts_3p"
+const string SFX_POWER_SWORD_BLOCK_DEFLECT_1P_VS_3P = "PowerSword_Deflect_Projectile_Impacts_1p_vs_3p"
+const string SFX_POWER_SWORD_CHARGING_RISER_1P = "PowerSword_Charge_NearCompletion_1p"
+const string SFX_POWER_SWORD_BLOCK_ACTIVE_1P = "PowerSword_Shield_Activate_Sustain_1p"
+const string SFX_POWER_SWORD_BLOCK_ACTIVE_3P = "PowerSword_Shield_Activate_Sustain_3p"
+const string SFX_POWER_SWORD_BLOCK_BREAK_1P = "PowerSword_Shield_Breaks_1p"
+const string SFX_POWER_SWORD_BLOCK_BREAK_1P_VS_3P = "PowerSword_Shield_Breaks_1p_vs_3p"
+const string SFX_POWER_SWORD_BLOCK_BREAK_3P = "PowerSword_Shield_Breaks_3p"
+
+
+const string IMPACT_TABLE_POWER_SWORD_MELEE = "melee_powersword"
+const string IMPACT_TABLE_POWER_SWORD_SLAM = "melee_powersword_slam"
+const string IMPACT_TABLE_POWER_SWORD_PROJECTILE = "exp_powersword_projectile"
+
+
+const vector COLOR_POWER_SWORD_CHARGED_BAR = <102, 82, 0>
+const vector COLOR_POWER_SWORD_CHARGING_BAR_LEFT = <230, 184, 0>
+const vector COLOR_POWER_SWORD_CHARGING_BAR_RIGHT = <112, 103, 65>
+const vector COLOR_POWER_SWORD_GREY = <104, 104, 104>
+const vector COLOR_POWER_SWORD_LEFT_RED_BAR = <255, 0, 0>
+const vector COLOR_POWER_SWORD_RIGHT_RED_BAR = <255, 66, 0>
+const vector COLOR_POWER_SWORD_LEFT_YELLOW_BAR = <232, 148, 1>
+const vector COLOR_POWER_SWORD_RIGHT_YELLOW_BAR = <255, 240, 0>
+const vector COLOR_POWER_SWORD_LEFT_GREEN_BAR = <51, 156, 104>
+const vector COLOR_POWER_SWORD_RIGHT_GREEN_BAR = <0, 255, 90>
+const vector COLOR_POWER_SWORD_RED = <124, 2, 39>
+const vector COLOR_BORDER_POWER_SWORD_RED = <178, 1, 55>
+
+
+const float POWER_SWORD_MOVE_SLOW_SEVERITY = 0.4
+const float POWER_SWORD_DEBUFF_TIME = 8.0
+const float POWER_SWORD_DEBUFF_EASE_OUT_TIME = 4.0
+const float POWER_SWORD_DEBUFF_MOVE_SLOW_SEVERITY = 0.35
+const float POWER_SWORD_BUFF_TIME = 8.0
+const float POWER_SWORD_BUFF_EASE_OUT_TIME = 4.0
+const float POWER_SWORD_BUFF_SPEED_BOOST_SEVERITY = 0.3
+const float POWER_SWORD_BUFF_ABILITY_REGEN_RATE = 5
+const float POWER_SWORD_CLIP_COUNT_TO_SHIELD_HEALTH = 5.0
+const float POWER_SWORD_HINT_RECHARGE_FRACTION_TRIGGER = 0.1
+const float POWER_SWORD_ULTIMATE_READY_CHECK_TIME = 3.0
+const float POWER_SWORD_ULTIMATE_RADIUS_METERS_MAX = 18.0
+const float POWER_SWORD_ULTIMATE_WINDUP_TIME = 1.0
+const float POWER_SWORD_ULTIMATE_RADIUS_GROWTH_TIME = 0.1
+const float POWER_SWORD_ULTIMATE_HOLD_TIME = 0.0
+const float POWER_SWORD_ULTIMATE_ACTIVATE_TIME = 1.0
+const float BUBBLE_BUNKER_MODEL_RADIUS = 235.0
+const float POWER_SWORD_ULTIMATE_KNOCKBACK_FORCE_MIN = 200
+const float POWER_SWORD_ULTIMATE_KNOCKBACK_FORCE_MAX = 1000
+const float POWER_SWORD_ULTIMATE_KNOCKBACK_DAMAGE = 500
+const float POWER_SWORD_ULTIMATE_READY_AMMO_AMMOUNT = 85.0
+const float POWER_SWORD_PROJECTILE_AMMO_AMOUNT = 15.0
+const float POWER_SWORD_TOGGLE_CHARGING_DEBOUNCE_TIME = 0.1
+const float POWER_SWORD_SFX_MELEE_HIT_DEBOUNCE_TIME = 0.0
+const float POWER_SWORD_DROP_SEQUENCE_WAIT_TIME = 0.6
+const float POWER_SWORD_DROP_SEQUENCE_MIN_WAIT_BASED_ON_DISTANCE_TIME = 0.3
+const float POWER_SWORD_DROP_SEQUENCE_MAX_WAIT_BASED_ON_DISTANCE_TIME = 1.2
+const int POWER_SWORD_SFX_MELEE_HIT_PLAY_CHANCE = 0				
+const string POWER_SWORD_VFX_ATTACHMENT_POINT_FX_CORE = "FX_CORE"
+const float POWER_SWORD_CHARGING_RISER_START_PERCENT = 50.0
+const float POWER_SWORD_BLOCK_DEFLECT_WINDOW = 1.0
+const float POWER_SWORD_BLOCK_DEFLECT_FX_LIFETIME = 0.5
+const float POWER_SWORD_ULTIMATE_READY_VFX_PAUSE_TIME = 1.5
+
+const int POWER_SWORD_ULTIMATE_TRACEMASK = TRACE_MASK_BLOCKLOS | CONTENTS_WINDOW_NOCOLLIDE | CONTENTS_WINDOW
+
+const string ACTIVITY_POWER_SWORD_CHARGING = "ACT_VM_WEAPON_SPECIAL_ABILITY_ACTIVATION"
+const string ACTIVITY_POWER_SWORD_START_CHARGING = "ACT_VM_WEAPON_MOD_ADD"
+const string ACTIVITY_POWER_SWORD_STOP_CHARGING = "ACT_VM_WEAPON_MOD_REMOVE"
+const string ACTIVITY_POWER_SWORD_ABORT_CHARGING = "ACT_VM_COOLDOWN"
+const string ACTIVITY_POWER_SWORD_ULTIMATE_START = "ACT_VM_MELEE_SPECIAL_ALT_1_START"
+const string ACTIVITY_POWER_SWORD_ULTIMATE_CHANNEL = "ACT_VM_MELEE_SPECIAL_ALT_1_CHANNEL"
+const string ACTIVITY_POWER_SWORD_ULTIMATE_END = "ACT_VM_MELEE_SPECIAL_ALT_1_END"
+const string ACTIVITY_POWER_SWORD_CHARGING_GESTURE = "ACT_GESTURE_MELEE_CHARGING"
+const string ACTIVITY_POWER_SWORD_ULTIMATE_CHANNEL_GESTURE = "ACT_GESTURE_MELEE_SPECIAL_ALT_1_CHANNEL"
+
+
+enum ePowerSwordColorStatus
+{
+	INVALID = -1,
+	RED = 1,
+	YELLOW = 2,
+	GREEN = 3
+}
+
+enum ePowerSwordState
+{
+	INVALID = -1,
+	IDLE,
+	CHARGING_WIND_UP,
+	CHARGING,
+	CHARGING_WIND_DOWN,
+	CHARGED,
+	BLOCKING,
+	NEED_CHARGE,
+	EMPTY
+
+	_count,
+}
+
+struct PowerSwordUltimateData
+{
+	array< int >													statusEffectHandles							= []
+}
+
+struct PowerSwordUltimateAbilityRegenData
+{
+	float															endTime										= 0.0
+	float															overflowRegenTime							= 0.0
+}
+
+struct
+{
+	table< entity, bool > weaponShouldLaunchProjectile
+	float yellowThreshold
+	float greenThreshold
+
+	array< string > meleeModsToDisable
+
+
+		float nextAllowToggleChargingTime 																			= 0.0
+		float nextMeleeHitSFXPlayTime	  																			= 0.0
+		int	utimateReadyVFXHanle		  																			= -1
+		float ultimateReadyVFXValidTime																				= 0.0
+		float debounceMainMsg
+		float debounceInstructionMsg
+		float debounceDashMsg 																						= -1
+
+#if DEV
+			int devSFXMeleeHitPlayChance     																		= POWER_SWORD_SFX_MELEE_HIT_PLAY_CHANCE
+			float devSFXMeleeHitDebounceTime 																		= POWER_SWORD_SFX_MELEE_HIT_DEBOUNCE_TIME
+#endif
+
+
+
+
+
+
+
+} file
+
+void function MpWeaponPowerSword_Init()
+{
+	if ( !PowerSword_IsEnabled() )
+	{
+		SURVIVAL_Loot_AddDisabledRef( WEAPON_POWER_SWORD_REF )
+		return
+	}
+
+	WeaponBlockInterface weaponBlockInterface
+
+
+
+
+
+
+
+	weaponBlockInterface.callback_OnBlockStart = PowerSword_OnBlock_Start
+	weaponBlockInterface.callback_OnBlockEnd = PowerSword_OnBlock_End
+	weaponBlockInterface.GetDeflectTime = PowerSword_GetDeflectTime
+	WeaponUtilityBlock_RegisterBlockInterface( WEAPON_POWER_SWORD_REF, weaponBlockInterface )
+
+	MeleeWeaponInterface meleeWeaponInterface
+	meleeWeaponInterface.callback_OnMeleeHit = PowerSword_OnMeleeHit
+	Melee_RegisterMeleeWeaponInterface( WEAPON_POWER_SWORD_REF, meleeWeaponInterface )
+
+
+	
+	
+	
+	Melee_AddCallback_OnMeleeAttackAnimEvent( PowerSword_OnMeleeAttackAnimEvent )
+
+
+
+
+
+	
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_REGEN_END )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_ON )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_OFF )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_CHANNEL )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_END )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_WINDUP_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_WINDUP_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_ABILITY_REGEN_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_ULTIMATE_ABILITY_REGEN_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_STOP )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_START )
+	RegisterSignal( SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_STOP )
+
+	
+	PrecacheParticleSystem( VFX_POWER_SWORD_TRAIL )
+	PrecacheParticleSystem( VFX_POWER_SWORD_EYE_GLOW )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BODY )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ARM )
+	PrecacheParticleSystem( VFX_POWER_SWORD_THRUSTERS )
+	PrecacheParticleSystem( VFX_POWER_SWORD_CHARGING_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_CHARGING_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ATTACK_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ATTACK_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_IDLE_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_IDLE_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_JET_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_JET_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_ZONE )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_READY_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_READY_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_CHANNEL_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_CHANNEL_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_ACTIVATE_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_ACTIVATE_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_DROP_SPARKS )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_IMPACT_FRIENDLY )
+	PrecacheParticleSystem( VFX_POWER_SWORD_ULTIMATE_IMPACT_ENEMY )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BLOCK_IMPACT_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BLOCK_IMPACT_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BLOCK_ACTIVE_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BLOCK_ACTIVE_3P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BLOCK_DEFLECT_1P )
+	PrecacheParticleSystem( VFX_POWER_SWORD_BLOCK_DEFLECT_3P )
+
+	
+	RegisterScriptAnimWindowCallbacks( POWER_SWORD_VFX_CALLBACK_NAME, PowerSword_ScriptAnimWindowStartCallback, PowerSword_ScriptAnimWindowStopCallback )
+
+	
+	RegisterImpactTable( IMPACT_TABLE_POWER_SWORD_MELEE )
+	RegisterImpactTable( IMPACT_TABLE_POWER_SWORD_SLAM )
+	RegisterImpactTable( IMPACT_TABLE_POWER_SWORD_PROJECTILE )
+
+	
+	RegisterNetworkedVariable( POWER_SWORD_NET_INT_POWER_SWORD_STATE, SNDC_PLAYER_EXCLUSIVE, SNVT_INT, ePowerSwordState.INVALID )
+	RegisterNetworkedVariable( POWER_SWORD_NET_TIME_DEFLECT_FX_END, SNDC_PLAYER_EXCLUSIVE, SNVT_TIME, 0.0 )
+
+	Remote_RegisterServerFunction( "ClientCallback_PowerSword_OnToggleCharging", "bool" )
+	Remote_RegisterClientFunction( "ServerCallback_PowerSword_StopBlocking" )
+
+
+
+	{
+		
+		RegisterSignal( SIG_WEAPON_POWER_SWORD_RUI_ACTIVATE )
+		RegisterSignal( SIG_WEAPON_POWER_SWORD_RUI_DEACTIVATE )
+		RegisterSignal( SIG_WEAPON_POWER_SWORD_BUFF_EFFECT_STOP )
+		RegisterSignal( SIG_WEAPON_POWER_SWORD_DEBUFF_EFFECT_STOP )
+
+		
+		AddCallback_OnPlayerWeaponSwitched( PowerSword_OnPlayerWeaponSwitched )
+		RegisterConCommandTriggeredCallback( "+scriptCommand3", PowerSword_ToggleCharging )
+		RegisterConCommandTriggeredCallback( "+attack", PowerSword_CancelCharging )
+
+		
+		RegisterNetVarTimeChangeCallback( POWER_SWORD_NET_TIME_DEFLECT_FX_END, PowerSword_UpdateDeflectFxEndTime )
+
+		
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.power_sword_buff, PowerSword_BuffEffect_Start )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.power_sword_buff, PowerSword_BuffEffect_Stop )
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.power_sword_debuff, PowerSword_DebuffEffect_Start )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.power_sword_debuff, PowerSword_DebuffEffect_Stop )
+	}
+
+
+	file.meleeModsToDisable = [ HEARTBEAT_SENSOR_MELEE_MOD_NAME,
+								PASSIVE_RANGED_TRACKING_MELEE_MOD_NAME,
+
+								MOD_LOBA_ADS_MELEE,
+
+								]
+
+	file.yellowThreshold = POWER_SWORD_PROJECTILE_AMMO_AMOUNT / 100
+	file.greenThreshold  = POWER_SWORD_ULTIMATE_READY_AMMO_AMMOUNT / 100
+}
+
+bool function PowerSword_WeaponRefIsPowerSword( string ref )
+{
+	return ref == WEAPON_POWER_SWORD_REF
+}
+
+bool function PowerSword_WeaponIsPowerSword( entity weapon )
+{
+	return IsValid( weapon) && PowerSword_WeaponRefIsPowerSword( weapon.GetWeaponClassName() )
+}
+
+bool function PowerSword_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_POWER_SWORD_IS_ENABLED, false )
+}
+
+bool function PowerSword_ShouldSpawnInDeathbox()
+{
+	return GetCurrentPlaylistVarBool( PVAR_POWER_SWORD_SPAWN_IN_DEATHBOX, false )
+}
+
+void function PowerSword_ScriptAnimWindowStartCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF )
+		return
+
+	if( parameter == "Stop_FX" )
+	{
+		weapon.StopWeaponEffect( VFX_POWER_SWORD_ATTACK_1P, VFX_POWER_SWORD_ATTACK_3P )
+		weapon.StopWeaponEffect( VFX_POWER_SWORD_IDLE_1P, VFX_POWER_SWORD_IDLE_3P )
+		weapon.StopWeaponEffect( VFX_POWER_SWORD_JET_1P, VFX_POWER_SWORD_JET_3P )
+
+
+			{
+				if ( weapon.GetWeaponOwner() == GetLocalViewPlayer() )
+				{
+					weapon.StopWeaponEffect( VFX_POWER_SWORD_ULTIMATE_READY_1P, VFX_POWER_SWORD_ULTIMATE_READY_3P )
+					file.ultimateReadyVFXValidTime = Time() + POWER_SWORD_ULTIMATE_READY_VFX_PAUSE_TIME
+					file.utimateReadyVFXHanle = -1
+				}
+			}
+
+	}
+}
+
+void function PowerSword_ScriptAnimWindowStopCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF )
+		return
+
+	if( parameter == "Stop_FX" )
+	{
+		weapon.PlayWeaponEffect( VFX_POWER_SWORD_IDLE_1P, VFX_POWER_SWORD_IDLE_3P, POWER_SWORD_VFX_ATTACHMENT_POINT_FX_CORE )
+		weapon.PlayWeaponEffect( VFX_POWER_SWORD_JET_1P, VFX_POWER_SWORD_JET_3P, "fx_nozzle_l" )
+		weapon.PlayWeaponEffect( VFX_POWER_SWORD_JET_1P, VFX_POWER_SWORD_JET_3P, "fx_nozzle_r" )
+	}
+}
+
+
+void function PowerSword_OnPlayerWeaponSwitched( entity player, entity newWeapon, entity oldWeapon )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( newWeapon != player.GetActiveWeapon( eActiveInventorySlot.mainHand ) )
+		return
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_RUI_DEACTIVATE )
+
+	if ( IsValid( newWeapon ) && (newWeapon.GetWeaponClassName() == WEAPON_POWER_SWORD_REF) )
+	{
+		if ( IsValid( oldWeapon ) )
+		{
+			Signal( player, WEAPON_CHARGED_RUI_ABORT_SIGNAL )
+		}
+
+		thread PowerSword_WeaponRUIThread( newWeapon )
+	}
+}
+
+
+void function PowerSword_OnMeleeHit( entity attacker, entity target, entity weapon )
+{
+
+		{
+			if ( GetLocalViewPlayer() == attacker )
+			{
+				float serverTimeNow = Time()
+				if ( file.nextMeleeHitSFXPlayTime <= serverTimeNow )
+				{
+					int chance = RandomInt( 100 )
+#if DEV
+						if ( chance < file.devSFXMeleeHitPlayChance )
+#else
+						if ( chance < POWER_SWORD_SFX_MELEE_HIT_PLAY_CHANCE )
+#endif
+					{
+						PlayBattleChatterToSelfOnClient( attacker, SFX_POWER_SWORD_MELEE_HIT )
+						file.nextMeleeHitSFXPlayTime = Time()
+#if DEV
+							file.nextMeleeHitSFXPlayTime += file.devSFXMeleeHitDebounceTime
+#else
+							file.nextMeleeHitSFXPlayTime += POWER_SWORD_SFX_MELEE_HIT_DEBOUNCE_TIME
+#endif
+					}
+				}
+			}
+		}
+
+}
+
+int function PowerSword_OnMeleeWeaponPrimaryAttack( entity weapon, entity player )
+{
+	if ( !IsValid( weapon ) || !IsValid( player ) )
+		return PLAYER_MELEE_STATE_NONE
+
+	if ( WeaponUtilityBlock_IsPlayerBlocking( player ) )
+	{
+		return PowerSword_OnMeleeWeaponProjectileAttack( weapon, player )
+	}
+
+	return PLAYER_MELEE_STATE_NONE
+}
+
+int function PowerSword_OnMeleeWeaponSecondaryAttack( entity weapon, entity player )
+{
+	if ( !IsValid( weapon ) || !IsValid( player ) )
+		return PLAYER_MELEE_STATE_NONE
+
+	PowerSword_StartUltimate( player, weapon )
+	return PLAYER_MELEE_STATE_NONE
+}
+
+int function PowerSword_OnMeleeWeaponStandardFallbackAttack( entity weapon, entity player )
+{
+	if ( !IsValid( weapon ) || !IsValid( player ) )
+		return PLAYER_MELEE_STATE_NONE
+
+	if ( WeaponUtilityBlock_IsPlayerBlocking( player ) && !player.IsInputCommandHeld( IN_ZOOM ) )
+	{
+		thread PowerSword_ReturnToZoomInThread( player, weapon )
+	}
+
+	if ( PowerSword_IsCharging( weapon ) )
+	{
+		return PLAYER_MELEE_STATE_NONE
+	}
+
+	file.weaponShouldLaunchProjectile[weapon] <- false
+	return PLAYER_MELEE_STATE_KICK_ATTACK
+}
+
+int function PowerSword_OnMeleeWeaponProjectileAttack( entity weapon, entity player )
+{
+	if ( !IsValid( weapon ) || !IsValid( player ) )
+		return PLAYER_MELEE_STATE_NONE
+
+	if ( WeaponUtilityBlock_IsPlayerBlocking( player ) && !player.IsInputCommandHeld( IN_ZOOM ) )
+	{
+		thread PowerSword_ReturnToZoomInThread( player, weapon )
+	}
+
+	file.weaponShouldLaunchProjectile[weapon] <- true
+
+
+		if ( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		weapon.EmitWeaponSound_1p3p( SFX_POWER_SWORD_PROJECTILE_LAUNCH_1P, SFX_POWER_SWORD_PROJECTILE_LAUNCH_3P )
+	}
+
+	return PLAYER_MELEE_STATE_KICK_ATTACK
+}
+
+void function PowerSword_OnStartZoomIn( entity weapon )
+{
+	if ( !IsValid( weapon ) || !IsValid( weapon.GetWeaponOwner() ) )
+		return
+
+	if ( weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD ) )
+		return
+
+	entity player = weapon.GetWeaponOwner()
+	Signal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_STOP )
+
+	PowerSword_StartBlocking( player, weapon )
+}
+
+void function PowerSword_OnStartZoomOut( entity weapon )
+{
+	if ( !IsValid( weapon ) || !IsValid( weapon.GetWeaponOwner() ) )
+		return
+
+	entity player = weapon.GetWeaponOwner()
+	Signal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_STOP )
+
+	PowerSword_StopBlocking( player, weapon )
+}
+
+void function PowerSword_OnWeaponRegenEnd( entity weapon )
+{
+	if ( !IsValid( weapon ) || !IsValid( weapon.GetWeaponOwner() ) )
+		return
+
+	entity player = weapon.GetWeaponOwner()
+
+	if ( WeaponUtilityBlock_IsPlayerBlocking( player ) )
+	{
+		thread PowerSword_ReturnToZoomOutThread( player, weapon )
+	}
+
+	Signal( weapon, SIG_WEAPON_POWER_SWORD_REGEN_END )
+}
+
+void function PowerSword_OnWeaponCustomActivityStart( entity weapon, int activity, int sequence )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	switch( activity )
+	{
+		case ACT_VM_MELEE_ATTACK2:
+		{
+			weapon.StopWeaponEffect( VFX_POWER_SWORD_IDLE_1P, VFX_POWER_SWORD_IDLE_3P )
+			weapon.PlayWeaponEffect( VFX_POWER_SWORD_ATTACK_1P, VFX_POWER_SWORD_ATTACK_3P, POWER_SWORD_VFX_ATTACHMENT_POINT_FX_CORE )
+			break
+		}
+
+		default:
+		{
+			break
+		}
+	}
+}
+
+void function PowerSword_OnWeaponCustomActivityEnd( entity weapon, int activity )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	switch ( activity )
+	{
+		case ACT_VM_MELEE_ATTACK2:
+		{
+			weapon.StopWeaponEffect( VFX_POWER_SWORD_ATTACK_1P, VFX_POWER_SWORD_ATTACK_3P )
+			weapon.PlayWeaponEffect( VFX_POWER_SWORD_IDLE_1P, VFX_POWER_SWORD_IDLE_3P, POWER_SWORD_VFX_ATTACHMENT_POINT_FX_CORE )
+			break
+		}
+
+		default:
+		{
+			break
+		}
+	}
+}
+
+void function PowerSword_OnWeaponOwnerChanged( entity weapon, WeaponOwnerChangedParams changeParams )
+{
+
+		{
+			if ( !InPrediction() || !IsFirstTimePredicted() )
+				return
+		}
+
+
+	foreach ( string meleeModName in file.meleeModsToDisable )
+	{
+		weapon.DisableMod( meleeModName )
+	}
+}
+
+void function PowerSword_OnWeaponActivate( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	thread PowerSword_WeaponActiveThread( weapon )
+}
+
+void function PowerSword_OnWeaponDeactivate( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_STOP )
+}
+
+#if DEV
+void function DEV_SetYellowThreshold( float value )
+{
+	file.yellowThreshold = value/100
+}
+#endif
+
+#if DEV
+void function DEV_SetGreenThreshold( float value )
+{
+	file.greenThreshold = value/100
+}
+#endif
+
+
+void function PowerSword_OnClientAnimEvent( entity weapon, string name )
+{
+	ClientCodeCallback_HandleClientAnimEvent( weapon, name )
+}
+
+
+void function PowerSword_StartCharging( entity player, entity weapon )
+{
+	int clipCount = weapon.GetWeaponPrimaryClipCount()
+	int clipCountMax = weapon.GetWeaponPrimaryClipCountMax()
+	if ( clipCount >= clipCountMax )
+		return
+
+	if ( player.IsZiplining() )
+		return
+
+	if ( player.Player_IsSkydiving() )
+		return
+
+	thread PowerSword_ChargingThread( player, weapon )
+}
+
+void function PowerSword_StopCharging( entity player, entity weapon )
+{
+	Signal( player, SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_STOP )
+}
+
+bool function PowerSword_IsCharging( entity weapon )
+{
+	int powerSwordState = ePowerSwordState.INVALID
+	entity player = weapon.GetWeaponOwner()
+	if ( IsValid( player ) )
+	{
+		powerSwordState = player.GetPlayerNetInt( POWER_SWORD_NET_INT_POWER_SWORD_STATE )
+	}
+
+	return weapon.HasMod( WEAPON_POWER_SWORD_CHARGING_MOD ) || (powerSwordState == ePowerSwordState.CHARGING_WIND_UP)
+}
+
+void function PowerSword_OnReloadPressed( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) || (weapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF) )
+		return
+
+	if ( weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD ) || WeaponUtilityBlock_IsPlayerBlocking( player ) || weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD ) )
+		return
+
+	if ( !PowerSword_IsCharging( weapon ) )
+	{
+		PowerSword_StartCharging( player, weapon )
+	}
+	else
+	{
+		PowerSword_StopCharging( player, weapon )
+	}
+}
+
+
+void function PowerSword_ToggleCharging( entity player )
+{
+	if ( file.nextAllowToggleChargingTime > Time() )
+		return
+
+	file.nextAllowToggleChargingTime = Time() + POWER_SWORD_TOGGLE_CHARGING_DEBOUNCE_TIME
+
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) || (weapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF) )
+		return
+
+	if ( weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD ) || WeaponUtilityBlock_IsPlayerBlocking( player ) || weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD ) )
+		return
+
+	if ( !PowerSword_IsCharging( weapon ) )
+	{
+		PowerSword_StartCharging( player, weapon )
+		Remote_ServerCallFunction( "ClientCallback_PowerSword_OnToggleCharging", true )
+	}
+	else
+	{
+		PowerSword_StopCharging( player, weapon )
+		Remote_ServerCallFunction( "ClientCallback_PowerSword_OnToggleCharging", false )
+	}
+}
+
+
+
+void function PowerSword_CancelCharging( entity player )
+{
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) || (weapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF) || !PowerSword_IsCharging( weapon ) )
+		return
+
+	PowerSword_StopCharging( player, weapon )
+	Remote_ServerCallFunction( "ClientCallback_PowerSword_OnToggleCharging", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PowerSword_ChargingThread( entity player, entity weapon )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_STOP )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+
+
+
+	EndSignal( weapon, SIG_WEAPON_POWER_SWORD_REGEN_END )
+
+	if ( weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD ) || WeaponUtilityBlock_IsPlayerBlocking( player ) || weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD ) )
+		return
+
+	array< int > statusEffectHandles = []
+	OnThreadEnd(
+		void function() : ( player, weapon, statusEffectHandles )
+		{
+
+				{
+					if ( !InPrediction() || !IsFirstTimePredicted() )
+						return
+				}
+
+
+			if ( IsValid( player ) )
+			{
+				foreach ( int statusEffectHandle in statusEffectHandles )
+				{
+					if ( IsValid( statusEffectHandle ) )
+					{
+						StatusEffect_Stop( player, statusEffectHandle )
+					}
+				}
+
+
+
+
+
+			}
+
+			if ( IsValid( weapon ) )
+			{
+				if ( weapon.HasMod( WEAPON_POWER_SWORD_CHARGING_MOD ) )
+				{
+					weapon.RemoveMod( WEAPON_POWER_SWORD_CHARGING_MOD )
+				}
+
+				if ( weapon.IsWeaponActivated() )
+				{
+					int ammoCurrent = weapon.GetWeaponPrimaryClipCount()
+					int ammoMax     = weapon.GetWeaponPrimaryClipCountMax()
+					if ( ammoCurrent == ammoMax )
+					{
+						weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_STOP_CHARGING, WCAF_NONE )
+					}
+					else
+					{
+						weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_ABORT_CHARGING, WCAF_NONE )
+					}
+				}
+			}
+		}
+	)
+
+
+		if ( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		statusEffectHandles.append( StatusEffect_AddEndless( player, eStatusEffect.move_slow, POWER_SWORD_MOVE_SLOW_SEVERITY ) )
+
+
+
+
+
+		weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_START_CHARGING, WCAF_NONE )
+
+
+
+
+
+
+
+
+
+	}
+
+	{
+		table result = WaitSignal( weapon, SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_ON, SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_OFF )
+
+		bool isCharging = (result.signal == SIG_WEAPON_POWER_SWORD_TOGGLE_CHARGING_ON)
+		if ( !IsValid( player ) || !IsValid( weapon ) || !isCharging )
+			return
+	}
+
+
+		if ( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_CHARGING, WCAF_NONE )
+
+		if ( !weapon.HasMod( WEAPON_POWER_SWORD_CHARGING_MOD ) )
+		{
+			weapon.AddMod( WEAPON_POWER_SWORD_CHARGING_MOD )
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	{
+		entity cockpit = player.GetCockpit()
+		if ( IsValid( cockpit ) )
+		{
+			int fxID     = GetParticleSystemIndex( VFX_POWER_SWORD_CHARGING_1P )
+			int fxHandle = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+			EffectSetIsWithCockpit( fxHandle, true )
+
+			OnThreadEnd(
+				void function() : ( fxHandle )
+				{
+					if ( !EffectDoesExist( fxHandle ) )
+						return
+
+					EffectStop( fxHandle, false, true )
+				}
+			)
+		}
+
+		while ( IsValid( weapon ) && IsValid( player ) )
+		{
+			if ( !weapon.HasMod( WEAPON_POWER_SWORD_CHARGING_MOD ) )
+			{
+				WaitFrame()
+				continue
+			}
+
+			float currentAmmoRegenRate = weapon.GetWeaponSettingFloat( eWeaponVar.regen_ammo_refill_rate )
+			if ( currentAmmoRegenRate < FLT_EPSILON )
+				break
+
+			OnThreadEnd(
+				void function() : ( player )
+				{
+					if ( !IsValid( player ) )
+						return
+
+					StopSoundOnEntity( player, SFX_POWER_SWORD_CHARGING_RISER_1P )
+				}
+			)
+
+			
+			float desiredRiserDuration = (100.0 - POWER_SWORD_CHARGING_RISER_START_PERCENT) / currentAmmoRegenRate
+			float chargingRiserDuration = min( desiredRiserDuration, GetSoundDuration( SFX_POWER_SWORD_CHARGING_RISER_1P ) )
+			float chargingRiserStartPercent = 100.0 - (chargingRiserDuration * currentAmmoRegenRate)
+
+			float chargeCurrent = float( weapon.GetWeaponPrimaryClipCount() )
+			float timeOffset = (chargeCurrent - chargingRiserStartPercent) / currentAmmoRegenRate
+			EmitSoundOnEntityWithTimeOffset( player, SFX_POWER_SWORD_CHARGING_RISER_1P, timeOffset )
+
+			break
+		}
+	}
+
+
+	WaitForever()
+}
+
+bool function PowerSword_OnMeleeAttackAnimEvent( entity attacker, entity meleeAttackWeapon, int impactTableOverride )
+{
+	if ( meleeAttackWeapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF )
+		return false
+
+	if ( !(meleeAttackWeapon in file.weaponShouldLaunchProjectile) || !file.weaponShouldLaunchProjectile[meleeAttackWeapon] )
+		return false
+
+	bool projectilePredicted      = PROJECTILE_PREDICTED
+	bool projectileLagCompensated = PROJECTILE_LAG_COMPENSATED
+	int projectileDamageFlags = DF_BULLET | DF_GIB | DF_EXPLOSION
+	entity projectile             = Grenade_Launch( meleeAttackWeapon, meleeAttackWeapon.GetAttackPosition(), meleeAttackWeapon.GetAttackDirection(), projectilePredicted, projectileLagCompensated, projectileDamageFlags, <0, 0, 0> )
+	if ( IsValid( projectile ) )
+	{
+		int impactTableIndex = GetImpactTableIndex( IMPACT_TABLE_POWER_SWORD_PROJECTILE )
+		Assert( impactTableIndex != -1, format( "%s - IMPACT TABLE[%s] is not registered", FUNC_NAME(), IMPACT_TABLE_POWER_SWORD_PROJECTILE ) )
+		projectile.SetImpactEffectTable( impactTableIndex )
+	}
+
+	return true
+}
+
+void function PowerSword_OnProjectileCollision( entity projectile, vector pos, vector normal, entity hitEnt, int hitbox, bool isCritical, bool isPassthrough )
+{
+	projectile.GrenadeExplode( normal )
+}
+
+
+void function PowerSword_WeaponRUIThread( entity weapon )
+{
+	AssertIsNewThread()
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_RUI_ACTIVATE )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_RUI_ACTIVATE )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_RUI_DEACTIVATE )
+	EndSignal( player, WEAPON_CHARGED_RUI_ABORT_SIGNAL )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+	EndSignal( weapon, "OnDestroy" )
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	
+	var weaponRui = ClWeaponStatus_GetWeaponHudRui( player )
+	if ( weaponRui == null )
+		return
+
+	RuiDestroyNestedIfAlive( weaponRui, WEAPON_POWER_SWORD_HUD_HANDLE_NAME )
+
+	var nestedRui = RuiCreateNested( weaponRui, WEAPON_POWER_SWORD_HUD_HANDLE_NAME, HUD_POWER_SWORD_RUI )
+	if ( nestedRui == null )
+		return
+
+	
+	var crosshairRui = CreateCockpitPostFXRui( $"ui/ammo_status_hint.rpak", HUD_Z_BASE )
+	RuiSetFloat( crosshairRui, "lowAmmoFrac", 1.0 )
+	RuiSetFloat( crosshairRui, "remainingAmmoFrac", 0.5 )
+	RuiSetFloat( crosshairRui, "maxClipAmmo", 100.0 )
+	RuiSetInt( crosshairRui, "lowHealthAmmoSetting", 2 )
+	RuiSetString( crosshairRui, "reloadOverrideText", Localize(WEAPON_POWER_SWORD_TO_CHARGE).toupper()  )
+
+	OnThreadEnd(
+		void function() : ( player, crosshairRui )
+		{
+			if ( crosshairRui )
+			{
+				RuiDestroyIfAlive( crosshairRui )
+			}
+
+			if ( !IsValid( player ) )
+				return
+
+			var weaponRui = ClWeaponStatus_GetWeaponHudRui( player )
+			if ( weaponRui == null )
+				return
+
+			RuiDestroyNestedIfAlive( weaponRui, WEAPON_POWER_SWORD_HUD_HANDLE_NAME )
+		}
+	)
+
+	
+	vector chargingBarLeftLinearColor = SrgbToLinear( COLOR_POWER_SWORD_CHARGING_BAR_RIGHT / 255.0 )
+	vector chargingBarRightLinearColor = SrgbToLinear( COLOR_POWER_SWORD_CHARGING_BAR_LEFT / 255.0 )
+	vector leftBoxLinearColor = SrgbToLinear( COLOR_POWER_SWORD_GREY / 255.0 )
+	vector chargedBarLinearColor = SrgbToLinear( COLOR_POWER_SWORD_CHARGED_BAR / 255.0 )
+
+	RuiSetBool( weaponRui, "showChargeBar", true )
+	RuiSetBool( nestedRui, "showChargeBar", true )
+
+	RuiSetBool( weaponRui, "showChargeBarBorderColor", true )
+	RuiSetBool( nestedRui, "showChargeBarBorderColor", true )
+
+	RuiSetFloat3( nestedRui, "chargeBarColorRight", chargingBarRightLinearColor )
+	RuiSetFloat3( nestedRui, "chargeBarColorLeft", chargingBarLeftLinearColor )
+
+	RuiSetFloat3( nestedRui, "leftBoxColor", chargingBarLeftLinearColor )
+
+	RuiSetBool( nestedRui, "showChargeProgressBar", true )
+
+	RuiSetBool( nestedRui, "showChargeBarBorder", true )
+	RuiSetFloat3( nestedRui, "chargeBGcolor", chargedBarLinearColor )
+	RuiSetFloat( nestedRui, "chargeBorderSaturation", 1.0 )
+
+	RuiSetString( nestedRui, "chargeBarTextLeftLong", "" )
+
+	RuiSetString( nestedRui, "leftBoxText", "" )
+
+	RuiSetFloat( nestedRui, "chargeIconSaturation", 1.0 )
+	RuiSetBool( nestedRui, "showChargeIcon", false )
+	RuiSetBool( nestedRui, "showChargeIconBG", false )
+	RuiSetFloat3( nestedRui, "iconBGColor", chargedBarLinearColor )
+
+	RuiSetBool( weaponRui, "showChargedAmmoIconOverride", false )
+	RuiSetBool( nestedRui, "showChargedAmmoIconOverride", false )
+	RuiSetBool( weaponRui, "showChargedAmmoOverride", false )
+	
+
+	
+	vector frameColorBase    = SrgbToLinear( GetAmmoColorByType( "supply_drop" ) ) 
+	vector frameColorCharged = SrgbToLinear( <247, 226, 70> / 255.0 )
+
+	RuiSetFloat3( nestedRui, "frameColor", frameColorBase )
+	RuiSetString( nestedRui, "chargeBarText", "" )
+	RuiSetBool( nestedRui, "showChargeBar", true )
+
+	vector ammoColor = SrgbToLinear( <0.5, 0.5, 0.5> )
+	string ammoTypeRef = AmmoType_GetRefFromIndex( weapon.GetWeaponAmmoPoolType() )
+	ammoColor = SrgbToLinear( GetAmmoColorByType( ammoTypeRef ) )
+	RuiSetFloat3( nestedRui, "ammoColor", ammoColor )
+	RuiSetFloat3( nestedRui, "ammoColor", ammoColor )
+
+	vector redColor       = SrgbToLinear( COLOR_POWER_SWORD_RED / 255.0 )
+	vector redBorderColor = SrgbToLinear( COLOR_BORDER_POWER_SWORD_RED / 255.0 )
+	RuiSetFloat3( nestedRui, "redColor", redColor )
+	RuiSetFloat3( nestedRui, "redBorderColor", redBorderColor )
+	RuiSetFloat3( nestedRui, "redColor", redColor )
+	RuiSetFloat3( nestedRui, "redBorderColor", redBorderColor )
+
+	int previousState = ePowerSwordState.INVALID
+	while ( IsValid( player ) && IsValid( weapon ) )
+	{
+		int ammoCurrent = weapon.GetWeaponPrimaryClipCount()
+		int ammoMax = weapon.GetWeaponPrimaryClipCountMax()
+		float chargeFraction = (ammoMax > 0) ? (ammoCurrent / float(ammoMax)) : 1.0
+
+		float superFrac       = chargeFraction
+		string chargeBarText  = ""
+		bool showChargedState = true
+
+		RuiSetString( nestedRui, "chargeBarText", chargeBarText )
+		RuiSetFloat( nestedRui, "chargeBarFrac", superFrac )
+		RuiSetFloat3( nestedRui, "frameColor", showChargedState ? frameColorCharged : frameColorBase )
+		RuiSetBool( nestedRui, "showChargeBarBorderColor", showChargedState )
+
+		float yellowValue = file.yellowThreshold <= 0.5 ? 0.94 : 0.98
+		float greenValue  = file.greenThreshold  <= 0.5 ? 0.94 : 0.98
+
+		RuiSetFloat( nestedRui, "yellowThreshold", file.yellowThreshold * yellowValue )
+		RuiSetFloat( nestedRui, "greenThreshold", file.greenThreshold * greenValue )
+
+		if ( chargeFraction < file.yellowThreshold )
+		{
+			chargingBarRightLinearColor = SrgbToLinear( COLOR_POWER_SWORD_RIGHT_RED_BAR / 255.0 )
+			chargingBarLeftLinearColor  = SrgbToLinear( COLOR_POWER_SWORD_LEFT_RED_BAR / 255.0 )
+			RuiSetFloat3( nestedRui, "chargeBarColorRight", chargingBarRightLinearColor )
+			RuiSetFloat3( nestedRui, "chargeBarColorLeft", chargingBarLeftLinearColor )
+			RuiSetInt( nestedRui, "colorStatus", ePowerSwordColorStatus.RED )
+		}
+		else if ( chargeFraction >= file.yellowThreshold && chargeFraction < file.greenThreshold )
+		{
+			chargingBarRightLinearColor = SrgbToLinear( COLOR_POWER_SWORD_RIGHT_YELLOW_BAR / 255.0 )
+			chargingBarLeftLinearColor  = SrgbToLinear( COLOR_POWER_SWORD_LEFT_YELLOW_BAR / 255.0 )
+			RuiSetFloat3( nestedRui, "chargeBarColorRight", chargingBarRightLinearColor )
+			RuiSetFloat3( nestedRui, "chargeBarColorLeft", chargingBarLeftLinearColor )
+			RuiSetInt( nestedRui, "colorStatus", ePowerSwordColorStatus.YELLOW )
+		}
+		else if ( chargeFraction >= file.greenThreshold && chargeFraction <= 1.0)
+		{
+			chargingBarRightLinearColor = SrgbToLinear( COLOR_POWER_SWORD_RIGHT_GREEN_BAR / 255.0 )
+			chargingBarLeftLinearColor  = SrgbToLinear( COLOR_POWER_SWORD_LEFT_GREEN_BAR / 255.0 )
+			RuiSetFloat3( nestedRui, "chargeBarColorRight", chargingBarRightLinearColor )
+			RuiSetFloat3( nestedRui, "chargeBarColorLeft", chargingBarLeftLinearColor )
+			RuiSetInt( nestedRui, "colorStatus", ePowerSwordColorStatus.GREEN )
+		}
+
+		
+
+		bool isFullyCharged = (ammoCurrent == ammoMax)
+
+		RuiSetFloat( nestedRui, "chargeBarTimeRemaining", float(ammoCurrent) )
+		RuiSetFloat( nestedRui, "chargeBarFrac", chargeFraction )
+
+		int currentState = isFullyCharged ? ePowerSwordState.CHARGED : ePowerSwordState.CHARGING
+		if ( WeaponUtilityBlock_IsPlayerBlocking( player ) )
+		{
+			currentState = ePowerSwordState.BLOCKING
+		}
+		if ( ammoCurrent == 0 )
+		{
+			currentState = ePowerSwordState.EMPTY
+		}
+		switch ( currentState )
+		{
+			case ePowerSwordState.CHARGING:
+			{
+				RuiSetString( nestedRui, "chargeBarTextLeft", Localize(WEAPON_POWER_SWORD_TO_BLOCK_TEXT).toupper() )
+				RuiSetBool( nestedRui, "leftBoxVisible", true )
+
+				if ( chargeFraction < file.yellowThreshold )
+				{
+					RuiSetString( nestedRui, "chargeBarTextLeft", Localize(WEAPON_POWER_SWORD_TO_BLOCK_TEXT).toupper() )
+					RuiSetString( nestedRui, "leftBoxText", Localize(WEAPON_POWER_SWORD_TO_CHARGE).toupper() )
+					PowerSword_DisplayHint( player, "#WEAPON_POWER_SWORD_NOT_ENOUGH_SHOOT", POWER_SWORD_DASH_NOT_READY_DEBOUNCE_TIME_SEC + 0.5 )
+				}
+				else if ( chargeFraction < file.greenThreshold )
+				{
+					RuiSetString( nestedRui, "leftBoxText", Localize(WEAPON_POWER_SWORD_TO_CHARGE).toupper() )
+				}
+				else if ( chargeFraction >= file.greenThreshold )
+				{
+					RuiSetString( nestedRui, "leftBoxText", Localize(WEAPON_POWER_SWORD_TO_ULT).toupper() )
+				}
+				break
+			}
+
+			case ePowerSwordState.CHARGED:
+			{
+				RuiSetString( nestedRui, "chargeBarTextLeft", Localize(WEAPON_POWER_SWORD_CHARGED_TEXT).toupper() )
+				RuiSetString( nestedRui, "leftBoxText", Localize(WEAPON_POWER_SWORD_TO_ULT).toupper() )
+				PowerSword_DisplayHint( player, "#WEAPON_POWER_SWORD_READY", POWER_SWORD_DASH_NOT_READY_DEBOUNCE_TIME_SEC + 0.5 )
+				RuiSetBool( nestedRui, "leftBoxVisible", true )
+				break
+			}
+
+			case ePowerSwordState.BLOCKING:
+			{
+				RuiSetString( nestedRui, "chargeBarTextLeft", Localize(WEAPON_POWER_SWORD_TO_SHOOT_TEXT).toupper() )
+				if ( chargeFraction < file.yellowThreshold )
+				{
+					RuiSetString( nestedRui, "chargeBarTextLeft", Localize(WEAPON_POWER_SWORD_NEED_CHARGE_TEXT).toupper() )
+					PowerSword_DisplayHint( player, "#WEAPON_POWER_SWORD_CANNOT_CHARGE", POWER_SWORD_DASH_NOT_READY_DEBOUNCE_TIME_SEC + 0.5 )
+					RuiSetString( nestedRui, "leftBoxText", "" )
+					RuiSetBool( nestedRui, "leftBoxVisible", false )
+				}
+				else if ( chargeFraction < file.greenThreshold )
+				{
+					RuiSetString( nestedRui, "leftBoxText", "" )
+					RuiSetBool( nestedRui, "leftBoxVisible", false )
+				}
+				else if ( chargeFraction >= file.greenThreshold )
+				{
+					RuiSetString( nestedRui, "leftBoxText", "" )
+					RuiSetBool( nestedRui, "leftBoxVisible", false )
+				}
+				break
+			}
+
+			case ePowerSwordState.EMPTY:
+			{
+				RuiSetString( nestedRui, "chargeBarTextLeft", "" )
+				if ( chargeFraction < file.yellowThreshold )
+				{
+					RuiSetString( nestedRui, "leftBoxText", Localize(WEAPON_POWER_SWORD_TO_CHARGE).toupper() )
+					RuiSetBool( nestedRui, "leftBoxVisible", true )
+					PowerSword_DisplayHint( player, "#WEAPON_POWER_SWORD_NOT_ENOUGH_BLOCK", POWER_SWORD_DASH_NOT_READY_DEBOUNCE_TIME_SEC + 0.5 )
+				}
+				break
+			}
+
+			default:
+				break
+		}
+
+		previousState = currentState
+
+		bool isBlocking = currentState == ePowerSwordState.BLOCKING
+
+		
+
+		bool currentIsChargingState = PowerSword_IsCharging( weapon )
+		if ( currentIsChargingState )
+		{
+			RuiSetString( crosshairRui, "reloadOverrideText", Localize(WEAPON_POWER_SWORD_TO_CANCEL).toupper() )
+			RuiSetString( nestedRui, "leftBoxText", Localize(WEAPON_POWER_SWORD_TO_CANCEL).toupper() )
+			RuiSetBool( nestedRui, "leftBoxVisible", true )
+			RuiSetBool( crosshairRui, "isVisible", true )
+		}
+		else
+		{
+			RuiSetString( crosshairRui, "reloadOverrideText", Localize(WEAPON_POWER_SWORD_TO_CHARGE).toupper() )
+		}
+
+		if ( !currentIsChargingState )
+		{
+			bool shouldDisplayHint = !weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD ) && !weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD ) && !WeaponUtilityBlock_IsPlayerBlocking( player )
+			RuiSetBool( crosshairRui, "isVisible", shouldDisplayHint && (chargeFraction <= POWER_SWORD_HINT_RECHARGE_FRACTION_TRIGGER) )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+void function PowerSword_WeaponActiveThread( entity weapon )
+{
+	AssertIsNewThread()
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_ACTIVE_THREAD_STOP )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+	EndSignal( weapon, "OnDestroy" )
+
+	weapon.PlayWeaponEffect( VFX_POWER_SWORD_IDLE_1P, VFX_POWER_SWORD_IDLE_3P, POWER_SWORD_VFX_ATTACHMENT_POINT_FX_CORE )
+	weapon.PlayWeaponEffect( VFX_POWER_SWORD_JET_1P, VFX_POWER_SWORD_JET_3P, "fx_nozzle_l" )
+	weapon.PlayWeaponEffect( VFX_POWER_SWORD_JET_1P, VFX_POWER_SWORD_JET_3P, "fx_nozzle_r" )
+	OnThreadEnd(
+		void function() : ( player, weapon )
+		{
+			if ( IsValid( player ) )
+			{
+				Signal( player, SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+
+
+
+
+
+
+			}
+
+			if ( IsValid( weapon ) )
+			{
+				weapon.StopWeaponEffect( VFX_POWER_SWORD_ATTACK_1P, VFX_POWER_SWORD_ATTACK_3P )
+				weapon.StopWeaponEffect( VFX_POWER_SWORD_IDLE_1P, VFX_POWER_SWORD_IDLE_3P )
+				weapon.StopWeaponEffect( VFX_POWER_SWORD_JET_1P, VFX_POWER_SWORD_JET_3P )
+
+
+					{
+						weapon.StopWeaponEffect( VFX_POWER_SWORD_ULTIMATE_READY_1P, VFX_POWER_SWORD_ULTIMATE_READY_3P )
+
+						if ( player == GetLocalViewPlayer() )
+						{
+							file.utimateReadyVFXHanle = -1
+						}
+					}
+
+			}
+		}
+	)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		{
+			while ( IsValid( player ) && IsValid( weapon ) )
+			{
+				if ( GetLocalViewPlayer() == player )
+				{
+					int ammoCurrent = weapon.GetWeaponPrimaryClipCount()
+					int ammoMax = weapon.GetWeaponPrimaryClipCountMax()
+
+					if ( !EffectDoesExist(file.utimateReadyVFXHanle) && (ammoCurrent >= POWER_SWORD_ULTIMATE_READY_AMMO_AMMOUNT) && (Time() > file.ultimateReadyVFXValidTime) )
+					{
+						file.utimateReadyVFXHanle = weapon.PlayWeaponEffectReturnViewEffectHandle( VFX_POWER_SWORD_ULTIMATE_READY_1P, VFX_POWER_SWORD_ULTIMATE_READY_3P, POWER_SWORD_VFX_ATTACHMENT_POINT_FX_CORE )
+					}
+					else if ( EffectDoesExist(file.utimateReadyVFXHanle) && (ammoCurrent < POWER_SWORD_ULTIMATE_READY_AMMO_AMMOUNT) )
+					{
+						weapon.StopWeaponEffect( VFX_POWER_SWORD_ULTIMATE_READY_1P, VFX_POWER_SWORD_ULTIMATE_READY_3P )
+						file.utimateReadyVFXHanle = -1
+					}
+				}
+
+				WaitFrame()
+			}
+		}
+
+}
+
+void function PowerSword_ReturnToZoomInThread( entity player, entity weapon )
+{
+	AssertIsNewThread()
+
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+	if ( weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD ) )
+		return
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_IN_THREAD_STOP )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_CHARGING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+
+
+
+
+	weapon.AddMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD )
+
+	OnThreadEnd( function () : ( weapon )
+		{
+
+				if ( !InPrediction() || !IsFirstTimePredicted() )
+					return
+
+
+			if ( !IsValid( weapon ) )
+				return
+
+			if ( weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD ) )
+			{
+				weapon.RemoveMod( WEAPON_POWER_SWORD_FORCE_ZOOM_IN_MOD )
+			}
+		}
+	)
+
+	WaitForever()
+}
+
+void function PowerSword_ReturnToZoomOutThread( entity player, entity weapon )
+{
+	AssertIsNewThread()
+
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+	if( weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_OUT_MOD ) )
+		return
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_RETURN_TO_ZOOM_OUT_THREAD_STOP )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+
+
+
+
+	weapon.AddMod( WEAPON_POWER_SWORD_FORCE_ZOOM_OUT_MOD )
+
+	OnThreadEnd(
+		function () : ( weapon )
+		{
+
+				if ( !InPrediction() || !IsFirstTimePredicted() )
+					return
+
+
+			if ( !IsValid( weapon ) )
+				return
+
+			if ( weapon.HasMod( WEAPON_POWER_SWORD_FORCE_ZOOM_OUT_MOD ) )
+			{
+				weapon.RemoveMod( WEAPON_POWER_SWORD_FORCE_ZOOM_OUT_MOD )
+			}
+		}
+	)
+
+	WaitForever()
+}
+
+void function PowerSword_StartBlocking( entity player, entity weapon )
+{
+	int clipCount = weapon.GetWeaponPrimaryClipCount()
+	if ( clipCount <= 0 )
+		return
+
+	thread PowerSword_BlockingThread( player, weapon )
+	WeaponUtilityBlock_StartBlocking( weapon )
+}
+
+void function PowerSword_StopBlocking( entity player, entity weapon )
+{
+	Signal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_STOP )
+}
+
+
+void function ServerCallback_PowerSword_StopBlocking()
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) || (weapon.GetWeaponClassName() != WEAPON_POWER_SWORD_REF) )
+		return
+
+	PowerSword_StopBlocking( player, weapon )
+}
+
+
+void function PowerSword_BlockingThread( entity player, entity weapon )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_THREAD_STOP )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+
+
+
+	EndSignal( weapon, SIG_WEAPON_POWER_SWORD_REGEN_END )
+
+	OnThreadEnd(
+		function () : ( weapon )
+		{
+			if ( !IsValid( weapon ) )
+				return
+
+			WeaponUtilityBlock_StopBlocking( weapon )
+		}
+	)
+
+	WaitForever()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PowerSword_UpdateDeflectFxEndTime( entity player, float updatedEndTime )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	thread function() : ( player, updatedEndTime )
+	{
+		Signal( player, SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_START )
+		EndSignal( player, SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_START )
+		EndSignal( player, SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_STOP )
+
+		entity cockpit = player.GetCockpit()
+		if ( !IsValid( cockpit ) )
+			return
+
+		int fxID = GetParticleSystemIndex( VFX_POWER_SWORD_BLOCK_DEFLECT_1P )
+		int deflectFx = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+		EffectSetIsWithCockpit( deflectFx, true )
+
+		OnThreadEnd(
+			function() : ( deflectFx )
+			{
+				if ( EffectDoesExist( deflectFx ) )
+				{
+					EffectStop( deflectFx, true, true )
+				}
+			}
+		)
+
+		float timeToWait = updatedEndTime > Time() ? (updatedEndTime - Time()) : 0.0
+		wait timeToWait
+	}()
+}
+
+
+float function PowerSword_GetDeflectTime()
+{
+	return GetCurrentPlaylistVarFloat( "power_sword_deflect_timing_window_override", POWER_SWORD_BLOCK_DEFLECT_WINDOW )
+}
+
+void function PowerSword_OnBlock_Start( entity player, entity weapon )
+{
+	thread PowerSword_BlockingFXThread( player, weapon )
+}
+
+void function PowerSword_OnBlock_End( entity player, entity weapon )
+{
+	Signal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_STOP )
+	Signal( player, SIG_WEAPON_POWER_SWORD_DEFLECT_FX_THREAD_STOP )
+
+
+
+
+
+
+}
+
+void function PowerSword_BlockingFXThread( entity player, entity weapon )
+{
+	Signal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_BLOCKING_FX_THREAD_STOP )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		{
+			entity cockpit = player.GetCockpit()
+			if ( !IsValid( cockpit ) )
+				return
+
+			int fxID = GetParticleSystemIndex( VFX_POWER_SWORD_BLOCK_ACTIVE_1P )
+			int shieldFx = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+			EffectSetIsWithCockpit( shieldFx, true )
+			EffectSetControlPointVector( shieldFx, 1, TEAM_COLOR_FRIENDLY )
+
+			OnThreadEnd(
+				function() : ( player, shieldFx )
+				{
+					if ( EffectDoesExist( shieldFx ) )
+					{
+						EffectStop( shieldFx, true, true )
+					}
+
+					if ( IsValid( player ) )
+					{
+						StopSoundOnEntity( player, SFX_POWER_SWORD_BLOCK_ACTIVE_1P )
+					}
+				}
+			)
+
+			EmitSoundOnEntity( player, SFX_POWER_SWORD_BLOCK_ACTIVE_1P )
+
+			while ( IsValid( weapon ) && IsValid( player ) )
+			{
+				int clipCount = weapon.GetWeaponPrimaryClipCount()
+				int clipCountMax = weapon.GetWeaponPrimaryClipCountMax()
+				float frac = float(clipCount) / float(clipCountMax)
+				vector colorVec = GetTriLerpColor( frac, COLOR_WHITE, LerpVector( TEAM_COLOR_FRIENDLY, <255, 255, 255>, 0.5 ), TEAM_COLOR_FRIENDLY, 0.6, 0.3 )
+
+				if ( EffectDoesExist( shieldFx ) )
+				{
+					EffectSetControlPointVector( shieldFx, 1, colorVec )
+				}
+
+				WaitFrame()
+			}
+		}
+
+}
+
+void function PowerSword_StartUltimate( entity player, entity weapon )
+{
+	if ( PowerSword_IsPlayingUltimate( weapon ) )
+		return
+
+	thread PowerSword_UltimateThread( player, weapon )
+}
+
+void function PowerSword_StopUltimate( entity player, entity weapon )
+{
+	Signal( player, SIG_WEAPON_POWER_SWORD_ULTIMATE_WINDUP_STOP )
+	Signal( player, SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_STOP )
+}
+
+bool function PowerSword_IsPlayingUltimate( entity weapon )
+{
+	return weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD )
+}
+
+void function PowerSword_UltimateThread( entity player, entity weapon )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_START )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_ULTIMATE_THREAD_STOP )
+	EndSignal( player, SIG_WEAPON_POWER_SWORD_DEACTIVATE )
+
+
+
+
+	if ( POWER_SWORD_ULTIMATE_RADIUS_GROWTH_TIME < FLT_EPSILON )
+		return
+
+	OnThreadEnd(
+		void function() : ( player, weapon )
+		{
+			if ( IsValid( weapon ) )
+			{
+
+
+
+
+
+
+
+
+
+
+
+
+
+			}
+
+			if ( IsValid( player ) )
+			{
+
+
+
+
+
+			}
+		}
+	)
+
+
+		if ( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		if ( !weapon.HasMod( WEAPON_POWER_SWORD_ULTIMATE_MOD ) )
+		{
+			weapon.AddMod( WEAPON_POWER_SWORD_ULTIMATE_MOD )
+		}
+
+		weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_ULTIMATE_START, WCAF_DISABLEWEAPON )
+		weapon.SetCanPlayIdleAnims( false )
+		weapon.SetCanPlaySprintAnims( false )
+
+
+
+
+
+
+
+
+
+
+		if ( weapon.IsInCustomActivity() )
+		{
+			WaitSignal( weapon, SIG_WEAPON_POWER_SWORD_ULTIMATE_CHANNEL )
+
+			if ( !IsValid( weapon ) || !IsValid( player ) )
+				return
+		}
+	}
+
+
+		if ( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_ULTIMATE_CHANNEL, WCAF_NONE )
+
+
+
+
+
+
+
+		if ( weapon.IsInCustomActivity() )
+		{
+			WaitSignal( weapon, SIG_WEAPON_POWER_SWORD_ULTIMATE_END )
+
+			if ( !IsValid( weapon ) || !IsValid( player ) )
+				return
+		}
+	}
+
+
+		if ( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		weapon.StartCustomActivity( ACTIVITY_POWER_SWORD_ULTIMATE_END, WCAF_NONE )
+
+
+
+
+
+
+
+
+
+
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+void function PowerSword_BuffEffect_Start( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || !actuallyChanged )
+		return
+
+	thread ( void function() : ( player, statusEffect )
+	{
+		EndSignal( player, "OnDeath" )
+		EndSignal( player, "OnDestroy" )
+		EndSignal( player, SIG_WEAPON_POWER_SWORD_BUFF_EFFECT_STOP )
+
+		int screenFxId = GetParticleSystemIndex( VFX_POWER_SWORD_ULTIMATE_IMPACT_FRIENDLY )
+		entity cockpit = player.GetCockpit()
+		if ( !IsValid( cockpit ) )
+			return
+
+		int effectHandle = StartParticleEffectOnEntity( cockpit, screenFxId, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+		EffectSetIsWithCockpit( effectHandle, true )
+		EffectSetControlPointVector( effectHandle, 1, TEAM_COLOR_FRIENDLY )
+
+		OnThreadEnd( function() : ( effectHandle )
+		{
+			if ( EffectDoesExist( effectHandle ) )
+			{
+				CleanupFXHandle( effectHandle, false, true )
+			}
+		} )
+
+		WaitForever()
+	} )()
+}
+
+
+
+void function PowerSword_BuffEffect_Stop( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || !actuallyChanged )
+		return
+
+	player.Signal( SIG_WEAPON_POWER_SWORD_BUFF_EFFECT_STOP )
+}
+
+
+
+void function PowerSword_DebuffEffect_Start( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || !actuallyChanged )
+		return
+
+	thread ( void function() : ( player, statusEffect )
+	{
+		EndSignal( player, "OnDeath" )
+		EndSignal( player, "OnDestroy" )
+		EndSignal( player, SIG_WEAPON_POWER_SWORD_DEBUFF_EFFECT_STOP )
+
+		int screenFxId = GetParticleSystemIndex( VFX_POWER_SWORD_ULTIMATE_IMPACT_ENEMY )
+		entity cockpit = player.GetCockpit()
+		if ( !IsValid( cockpit ) )
+			return
+
+		int effectHandle = StartParticleEffectOnEntity( cockpit, screenFxId, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+		EffectSetIsWithCockpit( effectHandle, true )
+		EffectSetControlPointVector( effectHandle, 1, TEAM_COLOR_ENEMY )
+
+		Minimap_SetJammed( player, statusEffect, false, true )
+
+		OnThreadEnd( function() : ( player, effectHandle )
+		{
+			if ( EffectDoesExist( effectHandle ) )
+			{
+				CleanupFXHandle( effectHandle, false, true )
+			}
+
+			Minimap_SetJammed( player, -1, false, false )
+		} )
+
+		WaitForever()
+	} )()
+}
+
+
+
+void function PowerSword_DebuffEffect_Stop( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || !actuallyChanged )
+		return
+
+	player.Signal( SIG_WEAPON_POWER_SWORD_DEBUFF_EFFECT_STOP )
+}
+
+
+
+void function PowerSword_ClearHints()
+{
+	
+	
+}
+
+void function PowerSword_DisplayHint( entity player, string message, float time = 6.0, float debounce = 0.0 )
+{
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	PowerSword_ClearHints()
+	AddPlayerHint( time, 0.5, $"", message )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+void function DEV_PowerSword_SetMeleeHitSFXPlayChance( int percentChance )
+{
+	file.devSFXMeleeHitPlayChance = ClampInt( percentChance, 0, 100 )
+}
+#endif
+
+#if DEV
+void function DEV_PowerSword_SetMeleeHitSFXDebounceTime( float debounceTime )
+{
+	file.devSFXMeleeHitDebounceTime = max( 0.0, debounceTime )
+}
+#endif
+ 

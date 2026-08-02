@@ -1,0 +1,187 @@
+global function MeleeNewcastleHeirloom_Init
+
+global function OnWeaponActivate_melee_newcastle_heirloom
+global function OnWeaponDeactivate_melee_newcastle_heirloom
+
+const asset SWORD_ATTACK_FX_1P = $"P_sword_attack_1p_00"
+const asset SWORD_ATTACK_FX_3P = $"P_sword_attack_3p_00"
+const asset SWORD_ATTACK_FX_1P_RT_01 = $"P_sword_attack_1p_01"
+const asset SWORD_ATTACK_FX_3P_RT_01 = $"P_sword_attack_3p_01"
+const asset SWORD_ATTACK_FX_1P_RT_02 = $"P_sword_attack_1p_02"
+const asset SWORD_ATTACK_FX_3P_RT_02 = $"P_sword_attack_3p_02"
+const asset SWORD_ATTACK_FX_1P_RT_03 = $"P_sword_attack_1p_03"
+const asset SWORD_ATTACK_FX_3P_RT_03 = $"P_sword_attack_3p_03"
+
+const asset SWORD_ATTACK_NO_TRAIL_FX_00 = $"P_sword_idle_1p_00"
+const asset SWORD_ATTACK_NO_TRAIL_FX_01 = $"P_sword_idle_1p_01"
+const asset SWORD_ATTACK_NO_TRAIL_FX_02 = $"P_sword_idle_1p_02"
+const asset SWORD_ATTACK_NO_TRAIL_FX_03 = $"P_sword_idle_1p_03"
+
+const asset SWORD_ATTACK_JET_FX_1P = $"P_sword_jets_1P_00"
+const asset SWORD_ATTACK_JET_FX_3P = $"P_sword_jets_3P_00"
+const asset SWORD_ATTACK_JET_FX_1P_RT_01 = $"P_sword_jets_1P_01"
+const asset SWORD_ATTACK_JET_FX_3P_RT_01 = $"P_sword_jets_3P_01"
+const asset SWORD_ATTACK_JET_FX_1P_RT_02 = $"P_sword_jets_1P_02"
+const asset SWORD_ATTACK_JET_FX_3P_RT_02 = $"P_sword_jets_3P_02"
+const asset SWORD_ATTACK_JET_FX_1P_RT_03 = $"P_sword_jets_1P_03"
+const asset SWORD_ATTACK_JET_FX_3P_RT_03 = $"P_sword_jets_3P_03"
+
+const string MELEE_WEAPON_NAME = "melee_newcastle_heirloom"
+const string MELEE_SWORD_CALLBACK_NAME = "Melee_Newcastle_Heirloom"
+
+void function MeleeNewcastleHeirloom_Init()
+{
+	
+	PrecacheParticleSystem( SWORD_ATTACK_FX_1P )
+	PrecacheParticleSystem( SWORD_ATTACK_FX_3P )
+	
+	PrecacheParticleSystem( SWORD_ATTACK_FX_1P_RT_01 )
+	PrecacheParticleSystem( SWORD_ATTACK_FX_3P_RT_01 )
+	PrecacheParticleSystem( SWORD_ATTACK_FX_1P_RT_02 )
+	PrecacheParticleSystem( SWORD_ATTACK_FX_3P_RT_02 )
+	PrecacheParticleSystem( SWORD_ATTACK_FX_1P_RT_03 )
+	PrecacheParticleSystem( SWORD_ATTACK_FX_3P_RT_03 )
+
+	PrecacheParticleSystem( SWORD_ATTACK_NO_TRAIL_FX_00 )
+	PrecacheParticleSystem( SWORD_ATTACK_NO_TRAIL_FX_01 )
+	PrecacheParticleSystem( SWORD_ATTACK_NO_TRAIL_FX_02 )
+	PrecacheParticleSystem( SWORD_ATTACK_NO_TRAIL_FX_03 )
+
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_1P )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_3P )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_1P_RT_01 )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_3P_RT_01 )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_1P_RT_02 )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_3P_RT_02 )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_1P_RT_03 )
+	PrecacheParticleSystem( SWORD_ATTACK_JET_FX_3P_RT_03 )
+
+	RegisterScriptAnimWindowCallbacks( MELEE_SWORD_CALLBACK_NAME, NewcastleHeirloomMelee_ScriptAnimWindowStartCallback, NewcastleHeirloomMelee_ScriptAnimWindowStopCallback )
+
+}
+
+void function OnWeaponActivate_melee_newcastle_heirloom( entity weapon )
+{
+	switch ( NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+	{
+		case NEWCASTLE_SWORD_SKIN_NAME_BASE:
+			weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P, SWORD_ATTACK_FX_3P, "FX_CORE" )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P, SWORD_ATTACK_JET_FX_3P, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P, SWORD_ATTACK_JET_FX_3P, "fx_nozzle_r", true )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT01:
+			weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P_RT_01, SWORD_ATTACK_FX_3P_RT_01, "FX_CORE" )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_01, SWORD_ATTACK_JET_FX_3P_RT_01, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_01, SWORD_ATTACK_JET_FX_3P_RT_01, "fx_nozzle_r", true )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT02:
+			weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P_RT_02, SWORD_ATTACK_FX_3P_RT_02, "FX_CORE" )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_02, SWORD_ATTACK_JET_FX_3P_RT_02, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_02, SWORD_ATTACK_JET_FX_3P_RT_02, "fx_nozzle_r", true )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT03:
+			weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P_RT_03, SWORD_ATTACK_FX_3P_RT_03, "FX_CORE" )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_03, SWORD_ATTACK_JET_FX_3P_RT_03, "fx_nozzle_l", true )
+			weapon.PlayWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_03, SWORD_ATTACK_JET_FX_3P_RT_03, "fx_nozzle_r", true )
+			break
+	}
+}
+
+void function OnWeaponDeactivate_melee_newcastle_heirloom( entity weapon )
+{
+	switch ( NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+	{
+		case NEWCASTLE_SWORD_SKIN_NAME_BASE:
+			weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P, SWORD_ATTACK_FX_3P )
+			weapon.StopWeaponEffect( SWORD_ATTACK_JET_FX_1P, SWORD_ATTACK_JET_FX_3P )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT01:
+			weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P_RT_01, SWORD_ATTACK_FX_3P_RT_01 )
+			weapon.StopWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_01, SWORD_ATTACK_JET_FX_3P_RT_01 )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT02:
+			weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P_RT_02, SWORD_ATTACK_FX_3P_RT_02 )
+			weapon.StopWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_02, SWORD_ATTACK_JET_FX_3P_RT_02 )
+			break
+
+		case NEWCASTLE_SWORD_SKIN_NAME_RT03:
+			weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P_RT_03, SWORD_ATTACK_FX_3P_RT_03 )
+			weapon.StopWeaponEffect( SWORD_ATTACK_JET_FX_1P_RT_03, SWORD_ATTACK_JET_FX_3P_RT_03 )
+			break
+	}
+}
+
+void function NewcastleHeirloomMelee_ScriptAnimWindowStartCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != MELEE_WEAPON_NAME )
+		return
+
+	if( parameter == "Stop_Trail_FX" )
+	{
+		switch ( NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+		{
+			case NEWCASTLE_SWORD_SKIN_NAME_BASE:
+				weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P, SWORD_ATTACK_FX_3P )
+				weapon.PlayWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_00, SWORD_ATTACK_NO_TRAIL_FX_00, "FX_CORE", true )
+				break
+
+			case NEWCASTLE_SWORD_SKIN_NAME_RT01:
+				weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P_RT_01, SWORD_ATTACK_FX_3P_RT_01 )
+				weapon.PlayWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_01, SWORD_ATTACK_NO_TRAIL_FX_01, "FX_CORE", true )
+				break
+
+			case NEWCASTLE_SWORD_SKIN_NAME_RT02:
+				weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P_RT_02, SWORD_ATTACK_FX_3P_RT_02 )
+				weapon.PlayWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_02, SWORD_ATTACK_NO_TRAIL_FX_02, "FX_CORE", true )
+				break
+
+			case NEWCASTLE_SWORD_SKIN_NAME_RT03:
+				weapon.StopWeaponEffect( SWORD_ATTACK_FX_1P_RT_03, SWORD_ATTACK_FX_3P_RT_03 )
+				weapon.PlayWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_03, SWORD_ATTACK_NO_TRAIL_FX_03, "FX_CORE", true )
+				break
+		}
+	}
+}
+
+void function NewcastleHeirloomMelee_ScriptAnimWindowStopCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != MELEE_WEAPON_NAME )
+		return
+
+	if( parameter == "Stop_Trail_FX" )
+	{
+		switch ( NewcastleHeirloom_GetCurrentActiveSkinName( weapon ) )
+		{
+			case NEWCASTLE_SWORD_SKIN_NAME_BASE:
+				weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P, SWORD_ATTACK_FX_3P, "FX_CORE", true )
+				weapon.StopWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_00, SWORD_ATTACK_NO_TRAIL_FX_00 )
+				break
+
+			case NEWCASTLE_SWORD_SKIN_NAME_RT01:
+				weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P_RT_01, SWORD_ATTACK_FX_3P_RT_01, "FX_CORE", true )
+				weapon.StopWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_01, SWORD_ATTACK_NO_TRAIL_FX_01 )
+				break
+
+			case NEWCASTLE_SWORD_SKIN_NAME_RT02:
+				weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P_RT_02, SWORD_ATTACK_FX_3P_RT_02, "FX_CORE", true )
+				weapon.StopWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_02, SWORD_ATTACK_NO_TRAIL_FX_02 )
+				break
+
+			case NEWCASTLE_SWORD_SKIN_NAME_RT03:
+				weapon.PlayWeaponEffect( SWORD_ATTACK_FX_1P_RT_03, SWORD_ATTACK_FX_3P_RT_03, "FX_CORE", true )
+				weapon.StopWeaponEffect( SWORD_ATTACK_NO_TRAIL_FX_03, SWORD_ATTACK_NO_TRAIL_FX_03 )
+				break
+		}
+	}
+} 

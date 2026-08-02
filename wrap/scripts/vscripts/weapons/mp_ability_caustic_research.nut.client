@@ -1,0 +1,682 @@
+global function MpAbilityCausticResearch_Init
+global function CausticResearch_IsEnabled
+global function CausticResearch_IsUpgradeSelectorActive
+global function CausticResearch_CanPlayerChooseUpgrade
+
+
+
+
+global function ServerToClient_CausticResearch_LevelUpAnnouncement
+global function ServerToClient_CausticResearch_LevelUpNotification
+
+
+
+
+
+
+const string RESEARCH_RUI_STOP					= "caustic_reseasrch_rui_stop"
+const string RESEARCH_UPGRADE_ANNOUNCEMENT_STOP	= "caustic_reseasrch_announcement_stop"
+const string RESEARCH_AMOUNT_NETVAR 			= "researchAmount"
+
+const int NUM_RESEARCH_POINTS 					= 2
+const int CAUSTIC_MAX_UPGRADES_NUMBER 			= 4
+const int ORANGE_COLOR_MAX_UPGRADES_LVL 		= 2
+const int TIME_TO_DISPLAY_NOTIFICATION  		= 5
+const int NO_VALID_UPGRADE						= -1
+
+global enum eCausticResearchUpgradeNotification
+{
+	THROUGH_EVO,
+	THROUGH_FIELD_RESEARCH,
+	UPGRADE_UNLOCKED,
+}
+
+struct
+{
+
+
+
+
+	var researchRui
+	var researchNotificationRui
+	bool hasSkydived = false
+	bool hasDisplayedNeededPoints = false
+	bool canShowUpgradeNotification = false
+	bool isAnimatingUpgradeNotification = false
+	bool isAnimatingUpgradeReadyNotification = false
+
+}file
+
+struct
+{
+	int researchPerLevel		= 100
+	int deathboxResearchAmount 	= 30
+	int consoleResesarchAmount 	= 40
+	float poisonResearchScalar 	= 0.5
+
+	
+	bool widgetShowsNextUpgrade = false
+}tuning
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________INITS___________________________(){}
+#endif
+
+void function MpAbilityCausticResearch_Init()
+{
+	if( !CausticResearch_IsEnabled() )
+		return
+
+	RegisterSignal( RESEARCH_RUI_STOP )
+	RegisterSignal( RESEARCH_UPGRADE_ANNOUNCEMENT_STOP )
+
+	RegisterNetworkedVariable( RESEARCH_AMOUNT_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_UNSIGNED_INT, 0.0 )
+
+
+
+
+
+
+
+
+
+		Remote_RegisterClientFunction( "ServerToClient_CausticResearch_LevelUpAnnouncement", "int", INT_MIN, INT_MAX )
+		Remote_RegisterClientFunction( "ServerToClient_CausticResearch_LevelUpNotification", "int", INT_MIN, INT_MAX, "int", INT_MIN, INT_MAX )
+		CausticResearch_SetupTuning()
+		UpgradeCore_AddCallback_OnHandleSelection( CausticResearch_OnHandleSelection )
+
+
+
+		AddCallback_CreatePlayerPassiveRui( CausticResearch_CreateRui )
+		AddCallback_DestroyPlayerPassiveRui( CausticResearch_DestroyRui )
+
+}
+
+void function CausticResearch_SetupTuning()
+{
+	tuning.researchPerLevel			= GetCurrentPlaylistVarInt( "caustic_research_per_level", tuning.researchPerLevel )
+	tuning.consoleResesarchAmount 	= GetCurrentPlaylistVarInt( "caustic_research_console_amount", tuning.consoleResesarchAmount )
+	tuning.deathboxResearchAmount 	= GetCurrentPlaylistVarInt( "caustic_research_deathbox_amount", tuning.deathboxResearchAmount )
+	tuning.poisonResearchScalar 	= GetCurrentPlaylistVarFloat( "caustic_research_poison_scalar", tuning.poisonResearchScalar )
+	tuning.widgetShowsNextUpgrade 	= GetCurrentPlaylistVarBool( "caustic_research_show_next_upgrade", tuning.widgetShowsNextUpgrade )
+}
+
+bool function CausticResearch_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "caustic_research_enabled", true )
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CALLBACKS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CausticResearch_OnHandleSelection( entity player, int upgradeIndex )
+{
+
+
+
+
+
+
+
+
+
+	file.canShowUpgradeNotification = true
+
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________GENERAL___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function CausticResearch_GetNextLevelCap( entity player )
+{
+	int currentResearch = player.GetPlayerNetInt( RESEARCH_AMOUNT_NETVAR )
+	int researchLevel = int( floor(  currentResearch /  tuning.researchPerLevel ) )
+	researchLevel = int( min( researchLevel + 1, NUM_RESEARCH_POINTS) )
+	return researchLevel * tuning.researchPerLevel
+}
+
+int function CausticResearch_GetResearchLevel( entity player )
+{
+	int currentResearch = player.GetPlayerNetInt( RESEARCH_AMOUNT_NETVAR )
+	if( currentResearch < 0.0 )
+		return 0
+
+	return int( floor(  currentResearch / tuning.researchPerLevel ) )
+}
+
+bool function CausticResearch_HaveSameUpgradesAsLevels( entity player )
+{
+	if( !IsValid( player ) )
+		return false
+
+	int researchLevel = CausticResearch_GetResearchLevel( player )
+	int totalLevels = EvoLevels_GetPlayerLevel( player ) + researchLevel
+
+	return totalLevels == UpgradeCore_GetSelectedUpgrades( player ).len()
+}
+
+bool function CausticResearch_HasntUpgradedThroughAnyMeans( int evoLevel, int researchLevel )
+{
+	return researchLevel + evoLevel == 0
+}
+
+bool function CausticResearch_IsUpgradeSelectorActive( entity player )
+{
+
+	if( !CausticResearch_IsEnabled() || IsLobby() )
+		return false
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_GAS_GEAR) )
+		return false
+
+	int researchLevel 	= CausticResearch_GetResearchLevel( player )
+	int evoLevel 		= EvoLevels_GetPlayerLevel( player )
+
+	if ( CausticResearch_HasntUpgradedThroughAnyMeans( evoLevel, researchLevel ) )
+		return false
+
+	int numSelectedUpgrades = UpgradeCore_GetSelectedUpgrades( player ).len()
+	if( numSelectedUpgrades == 0 )
+		return true
+
+	if( numSelectedUpgrades == CAUSTIC_MAX_UPGRADES_NUMBER )
+		return false
+
+	if( ( researchLevel == evoLevel ) && CausticResearch_HaveSameUpgradesAsLevels( player ) )
+		return false
+
+	int highestLevel = researchLevel >= evoLevel ? researchLevel : evoLevel
+	int upgradeLevel = int( floor( float( highestLevel / 2 ) ) )
+	array<int> upgrades = UpgradeCore_GetChoicesForLevel( player, upgradeLevel )
+	for( int i = 0; i < upgrades.len(); i++ )
+	{
+		if( UpgradeCore_IsUpgradeSelected( player, upgrades[ i ] ) )
+		{
+			return false
+		}
+	}
+
+	return true
+}
+
+int function CausticResearch_GetNextAutoUnlockUpgradeIndex( entity player )
+{
+	if( CausticResearch_IsUpgradeSelectorActive( player ) )
+		return NO_VALID_UPGRADE
+
+	int researchLevel 	= CausticResearch_GetResearchLevel( player )
+	int evoLevel 		= EvoLevels_GetPlayerLevel( player )
+	if( researchLevel == 0 || evoLevel == 0 )
+		return NO_VALID_UPGRADE
+
+	if ( CausticResearch_HasntUpgradedThroughAnyMeans( evoLevel, researchLevel ) )
+		return NO_VALID_UPGRADE
+
+	if( researchLevel == evoLevel && CausticResearch_HaveSameUpgradesAsLevels( player ) )
+		return NO_VALID_UPGRADE
+
+	array<UpgradeChoice> upgrades = UpgradeCore_GetUpgradesForPlayer( player )
+	for( int index = 0; index < upgrades.len(); index++ )
+	{
+		if ( !UpgradeCore_IsUpgradeSelected( player, index ) )
+		{
+			return index
+		}
+	}
+
+	return NO_VALID_UPGRADE
+}
+
+bool function CausticResearch_CanPlayerChooseUpgrade( entity player, int index )
+{
+	if( !IsValid( player ) )
+		return false
+
+	if( !CausticResearch_IsEnabled() || IsLobby() )
+		return false
+
+
+	if( !PlayerHasPassive( player, ePassives.PAS_GAS_GEAR ) )
+		return false
+
+
+	if( UpgradeCore_IsUpgradeSelected( player, index ) )
+		return false
+
+	bool isFiringRangeMode = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE )
+	bool isTraining = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_TRAINING )
+	if( !isFiringRangeMode && !isTraining && GetGameState() < eGameState.Playing )
+		return false
+
+	int upgradeLevel = UpgradeCore_GetLevelForUpgrade( index )
+	int numAvailPointsAtLevel = 0
+	int numRequiredPointsAtLevel = 1
+	int researchLevel = CausticResearch_GetResearchLevel( player )
+	int evoLevel = EvoLevels_GetPlayerLevel( player )
+
+	if( researchLevel >= upgradeLevel )
+	{
+		numAvailPointsAtLevel += 1
+	}
+
+	if( evoLevel >= upgradeLevel )
+	{
+		numAvailPointsAtLevel += 1
+	}
+
+	int partnerIndex = index
+	if ( IsEven( index ) )
+	{
+		partnerIndex += 1
+	}
+	else
+	{
+		partnerIndex -= 1
+	}
+	if( UpgradeCore_IsUpgradeSelected( player, partnerIndex ) )
+	{
+		numRequiredPointsAtLevel += 1
+	}
+	return numAvailPointsAtLevel >= numRequiredPointsAtLevel
+}
+
+
+void function CausticResearch_PlayUpgradeNotification( int upgradeIndex, int messageType )
+{
+	entity player = GetLocalViewPlayer()
+
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+	EndSignal( player, RESEARCH_UPGRADE_ANNOUNCEMENT_STOP )
+
+	if ( file.researchNotificationRui == null )
+		return
+
+	string descriptionText
+	switch ( messageType )
+	{
+		case eCausticResearchUpgradeNotification.THROUGH_FIELD_RESEARCH:
+			descriptionText = Localize("#LEGEND_UPGRADE_EXTRA_UPGRADE_FIELD_RESEARCH" )
+			break
+		case eCausticResearchUpgradeNotification.THROUGH_EVO:
+			descriptionText = Localize("#LEGEND_UPGRADE_EXTRA_UPGRADE_EVO" )
+			break
+		case eCausticResearchUpgradeNotification.UPGRADE_UNLOCKED:
+			descriptionText = Localize("#LEGEND_UPGRADE_EXTRA_UPGRADE_UNLOCKED" )
+			break
+	}
+	UpgradeChoice upgrade = UpgradeCore_GetUpgradeChoiceStructByIndex( player, upgradeIndex )
+	RuiSetImageIfExists( file.researchNotificationRui, "icon", upgrade.icon )
+	RuiSetStringIfExists( file.researchNotificationRui, "desc", descriptionText )
+	RuiSetStringIfExists( file.researchNotificationRui, "name", Localize( upgrade.title ) )
+	RuiSetGameTime( file.researchNotificationRui, "animationStartTime", Time() )
+	file.isAnimatingUpgradeNotification = true
+
+	
+	Wait( 3.7 )
+
+	OnThreadEnd(
+		function() : ( )
+		{
+			RuiSetGameTime( file.researchNotificationRui, "animationStartTime", RUI_BADGAMETIME )
+			file.isAnimatingUpgradeNotification = false
+			file.canShowUpgradeNotification = false
+		}
+	)
+}
+
+
+
+void function ServerToClient_CausticResearch_LevelUpNotification( int upgradeIndex, int messageType )
+{
+	file.canShowUpgradeNotification = true
+
+	if ( !file.isAnimatingUpgradeNotification )
+	{
+		thread CausticResearch_PlayUpgradeNotification( upgradeIndex, messageType )
+	}
+}
+
+
+
+bool function CausticResearch_LevelUpAnnouncement_onPreOutro( HudNotificationQueueItem queueItem )
+{
+	file.isAnimatingUpgradeReadyNotification = false
+
+	return true
+}
+
+
+
+void function ServerToClient_CausticResearch_LevelUpAnnouncement( int newLevel )
+{
+	if ( file.isAnimatingUpgradeReadyNotification )
+		return
+
+	file.isAnimatingUpgradeReadyNotification = true
+
+	vector tierColor = GetKeyColor( COLORID_HUD_LOOT_TIER0, newLevel + 1 ) * 1.4 
+
+	CenterAnnouncementItem banner = CenterAnnouncements_CreateNotchedStyle()
+	banner.mainText = Localize( "#LEGEND_UPGRADE_EXTRA_UPGRADE_TITLE" )
+	banner.frameColor = tierColor / 255.0
+	banner.textureColor = tierColor / 255.0
+	banner.onPreOutro = CausticResearch_LevelUpAnnouncement_onPreOutro
+
+	CenterAnnouncements_QueueItem( banner, ePersistenceContext.PLAYER )
+}
+
+
+
+bool function CausticResearch_CanPlayUpgradeNotification( )
+{
+	return file.canShowUpgradeNotification && !file.isAnimatingUpgradeNotification
+}
+
+
+
+void function CausticResearch_CreateRui( entity player )
+{
+	if( !IsValid( player ) )
+		return
+
+	if( player != GetLocalViewPlayer() )
+		return
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_GAS_GEAR ) )
+		return
+
+	if( file.researchRui != null )
+		return
+
+	file.researchRui = CreatePermanentCockpitPostFXRui( $"ui/caustic_research_counter.rpak", HUD_Z_BASE )
+	file.researchNotificationRui = CreatePermanentCockpitPostFXRui( $"ui/caustic_research_notification.rpak", HUD_Z_BASE )
+
+	if( !player.Player_IsSkydiving() )
+	{
+		RuiSetBool( file.researchRui, "weaponPickedUp", true )
+		RuiSetBool( file.researchRui, "weaponChangedFlag", true )
+		RuiSetBool( file.researchRui, "showProgressBar", true )
+		RuiSetInt(  file.researchRui, "tier", 0 )
+	}
+
+	RuiSetString( file.researchNotificationRui, "desc", Localize("#CAUSTIC_NOTIFICATION_TEXT") )
+	RuiSetString( file.researchNotificationRui, "name", Localize("#CAUSTIC_PAS_RESEARCH_LONG_NAME") )
+
+	RuiSetImage( file.researchRui, "upgradeIcon", $"rui/hud/passive_icons/passive_caustic" )
+	RuiSetInt( file.researchRui, "nextUpgrade", CausticResearch_GetNextLevelCap( player ) )
+	RuiTrackInt( file.researchRui, "currentResearch", player, RUI_TRACK_SCRIPT_NETWORK_VAR_INT, GetNetworkedVariableIndex( RESEARCH_AMOUNT_NETVAR ) )
+	RuiTrackInt( file.researchRui, "numPoints", player, RUI_TRACK_SCRIPT_NETWORK_VAR_INT, GetNetworkedVariableIndex( RESEARCH_AMOUNT_NETVAR ) )
+
+	thread CausticResearch_RuiThread( player )
+}
+
+
+
+void function CausticResearch_DestroyRui( entity player )
+{
+	if( !IsValid( player ) )
+		return
+
+	if( player != GetLocalViewPlayer() )
+		return
+
+	if ( PlayerHasPassive( player, ePassives.PAS_GAS_GEAR ) )
+		return
+
+	Signal( player, RESEARCH_UPGRADE_ANNOUNCEMENT_STOP )
+
+	if( file.researchRui != null )
+	{
+		RuiDestroyIfAlive( file.researchRui )
+		file.researchRui = null
+	}
+
+	if( file.researchNotificationRui != null )
+	{
+		RuiDestroyIfAlive( file.researchNotificationRui )
+		file.researchNotificationRui = null
+	}
+}
+
+
+
+void function CausticResearch_RuiThread( entity player )
+{
+	EndSignal( player, "OnDeath")
+	EndSignal( player, "OnDestroy")
+	EndSignal( player, RESEARCH_RUI_STOP )
+	EndSignal( player, RESEARCH_UPGRADE_ANNOUNCEMENT_STOP )
+
+	if( !IsValid( file.researchRui ) )
+		return
+
+	RuiSetInt( file.researchRui, "nextUpgrade", CausticResearch_GetNextLevelCap( player ) )
+	RuiSetIntIfExists( file.researchRui, "numPointsNeeded", CausticResearch_GetNextLevelCap( player ) )
+
+	OnThreadEnd(
+		function() : ( )
+		{
+			if( IsValid( file.researchRui ) )
+			{
+				RuiSetBool( file.researchRui, "isHidden", true )
+			}
+		}
+	)
+
+	while( IsValid( player ) && IsValid( file.researchRui ) )
+	{
+		int currentResearch = player.GetPlayerNetInt( RESEARCH_AMOUNT_NETVAR )
+		RuiSetInt( file.researchRui, "numPoints", currentResearch )
+
+		int numSelectedUpgrades = UpgradeCore_GetSelectedUpgrades( player ).len()
+		int researchLevel = CausticResearch_GetResearchLevel( player )
+		int evoLevel = EvoLevels_GetPlayerLevel( player )
+
+		if( numSelectedUpgrades == CAUSTIC_MAX_UPGRADES_NUMBER )
+		{
+			RuiSetBool( file.researchRui, "isMaxResearch", true )
+			RuiSetIntIfExists( file.researchRui, "tier", ORANGE_COLOR_MAX_UPGRADES_LVL )
+		}
+
+		
+		int nextUpgrade = CausticResearch_GetNextAutoUnlockUpgradeIndex( player )
+		if( nextUpgrade != NO_VALID_UPGRADE && CausticResearch_CanPlayUpgradeNotification() )
+		{
+			int unlockedThrough = researchLevel > evoLevel ? eCausticResearchUpgradeNotification.THROUGH_EVO : eCausticResearchUpgradeNotification.THROUGH_FIELD_RESEARCH
+			thread CausticResearch_PlayUpgradeNotification( nextUpgrade, unlockedThrough )
+		}
+
+		RuiSetInt( file.researchRui, "nextUpgrade", CausticResearch_GetNextLevelCap( player ) )
+		RuiSetInt( file.researchRui, "numPointsNeeded", CausticResearch_GetNextLevelCap( player ) )
+		RuiSetBool( file.researchRui, "weaponPickedUp", false )
+
+		if ( IsValid( file.researchNotificationRui ) && player.Player_IsSkydiving() && !file.hasSkydived )
+		{
+			file.hasSkydived = true
+			RuiSetBool( file.researchRui, "showProgressBar", false )
+			RuiSetGameTime( file.researchNotificationRui, "animationStartTime", Time() )
+		}
+		else if( !player.Player_IsSkydiving() && file.hasSkydived && !file.hasDisplayedNeededPoints )
+		{
+			file.hasDisplayedNeededPoints = true
+			RuiSetBool( file.researchRui, "showProgressBar", true )
+			RuiSetBool( file.researchRui, "weaponPickedUp", true )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+ 

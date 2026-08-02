@@ -1,0 +1,1218 @@
+
+
+
+
+
+
+
+global function MatchModifiers_View_Init
+
+
+
+
+
+
+global function MatchModifiers_View_OnModifierActivated
+global function MatchModifiers_View_OnModifierAnnouncementUpdate
+global function MatchModifiers_View_OnModifierUpdated
+global function MatchModifiers_View_OnModifierDeactivated
+global function MatchModifiers_View_SetPersistentHudVisualOverride
+global function MatchModifiers_View_RefreshPersistentHud
+global function MatchModifiers_View_UpdatePersistentHudPosition
+global function MatchModifiers_View_SetWeaponInspect
+global function MatchModifiers_View_SetAnnounceFilter
+
+
+
+
+const string MATCH_MODIFIER_ANNOUNCEMENT_KEY = "match_modifier_announcement"
+
+const string MATCH_MODIFIERS_BANNER_INCOMING_SFX             = "Wildcard_Juiced_UI_Banner_EffectIncoming_1p"
+const string MATCH_MODIFIERS_WIDGET_REROLL_SFX               = "Wildcard_Juiced_UI_Widget_EffectReroll_LP_1p"
+const string MATCH_MODIFIERS_BANNER_ACTIVATED_SFX            = "Wildcard_Juiced_UI_Banner_EffectActivated_1p"
+const string MATCH_MODIFIERS_WIDGET_ACTIVATED_SFX            = "Wildcard_Juiced_UI_Widget_EffectActivated_1p"
+const string MATCH_MODIFIERS_WIDGET_DEACTIVATE_WARNING_SFX   = "Wildcard_Juiced_UI_Widget_EffectDeactivateWarning_1p"
+const string MATCH_MODIFIERS_BANNER_FINAL_DEACTIVATED_SFX    = "Wildcard_Juiced_UI_Banner_FinalEffectDeactivated_1p"
+
+const int MAX_VISIBLE_MODIFIERS = 1 
+const asset MATCH_MODIFIERS_WIDGET_REROLL_VFX = $"P_unh_ss_reroll"
+const string SIG_MM_V_EFFECTS_END = "matchmodifier_view_effects_end"
+const string SIG_MM_PREDICTION_END = "matchmodifier_view_prediction_end"
+const string SIG_MM_V_REPOSITION_END = "matchmodifier_view_reposition_end"
+
+
+struct {
+
+		var rui
+		table<int,int> matchModifierToRemovalRoundMap
+		bool lastRoundWithModifiers
+		int activeTopLevelModifierIndex = -1
+		var persistentHudRui
+		int persistentHudModifierIndex = -1
+		int modifierSeenCount = 0
+		bool hasHydratedReplicatedState = false
+		bool functionref() viewAnnounceFilter = null
+
+} file
+
+
+const int MATCHMOD_VIEW_INVALID_ACTIVE_INDEX = -1
+
+
+
+const string MATCHMOD_NESTED_STATE_NETVAR_0 = "matchModNestedState0"
+const string MATCHMOD_NESTED_STATE_NETVAR_1 = "matchModNestedState1"
+
+
+
+const array ANNOUNCEMENT_VALID_GAME_STATES = [
+	eGameState.Playing,
+	eGameState.SuddenDeath
+]
+
+
+void function MatchModifiers_View_Init()
+{
+	if ( !MatchModifiers_Enabled() )
+		return
+
+
+		RegisterNetVarIntChangeCallback( MATCHMOD_ACTIVE_STATE_NETVAR, MatchModifiers_View_OnActiveStateChanged )
+		RegisterNetVarIntChangeCallback( MATCHMOD_NESTED_STATE_NETVAR_0, MatchModifiers_View_OnNestedStateChanged )
+		RegisterNetVarIntChangeCallback( MATCHMOD_NESTED_STATE_NETVAR_1, MatchModifiers_View_OnNestedStateChanged )
+		SURVIVAL_AddCallback_OnDeathFieldStartShrink( MatchModifiers_View_OnDeathFieldStartShrink )
+		AddCallback_OnViewPlayerChanged( MatchModifiers_View_OnViewPlayerChanged )
+		AddCallback_ClientOnPlayerConnectionStateChanged( MatchModifiers_View_OnPlayerConnectionStateChanged )
+		AddCallback_PlayerFreefallActiveChanged( MatchModifiers_View_PlayerFreefallActiveChanged )
+		Minimap_AddLayoutChangedCallback( MatchModifiers_View_OnMinimapLayoutChanged )
+		AddCinematicEventFlagChangedCallback( CE_FLAG_INTRO, CinematicEventFlagChanged )
+		RegisterSignal( SIG_MM_V_EFFECTS_END )
+		RegisterSignal( SIG_MM_V_REPOSITION_END )
+		RegisterSignal( SIG_MM_PREDICTION_END )
+		PrecacheParticleSystem( MATCH_MODIFIERS_WIDGET_REROLL_VFX )
+		AddCallback_MenuStateChanged( MatchModifiers_View_ActiveMenuChanged )
+		AddCallback_FakeMenuStateChanged( MatchModifiers_View_ActiveFakeMenuChanged )
+
+}
+
+
+void function MatchModifiers_View_SetAnnounceFilter( bool functionref() filter )
+{
+	file.viewAnnounceFilter = filter
+}
+
+
+
+bool function MatchModifiers_View_HasActiveTopLevelModifier()
+{
+	return MatchModifiers_IsValidIndex( file.activeTopLevelModifierIndex )
+}
+
+MatchModifierData function MatchModifiers_View_GetActiveTopLevelModifier()
+{
+	Assert( MatchModifiers_View_HasActiveTopLevelModifier(), "MatchModifiers_View_GetActiveTopLevelModifier called without an active top-level modifier" )
+	return MatchModifiers_GetDataFromIndex( file.activeTopLevelModifierIndex )
+}
+
+int function MatchModifiers_View_GetCurrentStage()
+{
+	return SURVIVAL_GetCurrentDeathFieldStage()
+}
+
+int function MatchModifiers_View_GetNextStage()
+{
+	return MatchModifiers_View_GetCurrentStage() + 1
+}
+
+int function MatchModifiers_View_GetActiveTopLevelModifierRemovalRound()
+{
+	if ( !MatchModifiers_View_HasActiveTopLevelModifier() )
+		return -1
+
+	MatchModifierData activeModifierData = MatchModifiers_View_GetActiveTopLevelModifier()
+	if ( !(activeModifierData.index in file.matchModifierToRemovalRoundMap) )
+		return -1
+
+	return file.matchModifierToRemovalRoundMap[ activeModifierData.index ]
+}
+
+int function MatchModifiers_View_GetNextStageScheduledModifierIndex()
+{
+	return MatchModifiers_GetModifierIndexForStage( MatchModifiers_View_GetNextStage() )
+}
+
+int function MatchModifiers_View_GetCurrentStageScheduledModifierIndex()
+{
+	return MatchModifiers_GetModifierIndexForStage( MatchModifiers_View_GetCurrentStage() )
+}
+
+bool function MatchModifiers_View_HasScheduledTopLevelModifierOnNextStage()
+{
+	return MatchModifiers_IsValidIndex( MatchModifiers_View_GetNextStageScheduledModifierIndex() )
+}
+
+MatchModifierData function MatchModifiers_View_GetGetActiveTopLevelModifierOrDummy()
+{
+	if ( MatchModifiers_View_HasActiveTopLevelModifier() )
+	{
+		return MatchModifiers_View_GetActiveTopLevelModifier()
+	}
+
+	return MatchModifiers_View_GetDummyModifier()
+}
+
+void function MatchModifiers_View_ApplyActiveStateFromNetvar( int packed, bool shouldAnnounce )
+{
+	int modifierIndex = MatchModifiers_GetActiveModifierIndexFromPackedState( packed )
+	int nextModifierRemovalRound = MatchModifiers_GetNextModifierRemovalRoundFromPackedState( packed )
+	bool lastRoundWithModifiers = MatchModifiers_GetLastRoundWithModifiersFromPackedState( packed )
+	int previousModifierIndex = file.activeTopLevelModifierIndex
+
+	file.lastRoundWithModifiers = lastRoundWithModifiers
+
+	if ( shouldAnnounce && ( ( GetGameState() != eGameState.Playing ) || ( SURVIVAL_GetCurrentDeathFieldStage() < 1 ) ) )
+	{
+		shouldAnnounce = false
+
+		if ( SURVIVAL_GetCurrentDeathFieldStage() == 0 && GetGameState() == eGameState.Playing )
+		{
+			thread MatchModifiers_View_Round0Announcement_Thread()
+		}
+	}
+
+	if ( previousModifierIndex != modifierIndex && MatchModifiers_IsValidIndex( previousModifierIndex ) )
+	{
+		if ( previousModifierIndex in file.matchModifierToRemovalRoundMap )
+		{
+			delete file.matchModifierToRemovalRoundMap[ previousModifierIndex ]
+		}
+
+		file.activeTopLevelModifierIndex = MATCHMOD_VIEW_INVALID_ACTIVE_INDEX
+		MatchModifiers_View_OnModifierDeactivated( MatchModifiers_GetDataFromIndex( previousModifierIndex ), false )
+	}
+
+	if ( modifierIndex == MATCHMOD_ACTIVE_STATE_NONE )
+	{
+		file.matchModifierToRemovalRoundMap.clear()
+		file.activeTopLevelModifierIndex = MATCHMOD_VIEW_INVALID_ACTIVE_INDEX
+		if ( shouldAnnounce && MatchModifiers_IsValidIndex( previousModifierIndex ) )
+		{
+			MatchModifiers_View_AnnounceAllDisabled( lastRoundWithModifiers )
+		}
+		MatchModifiers_View_RefreshPersistentHud()
+		return
+	}
+
+	Assert( MatchModifiers_IsValidIndex( modifierIndex ), format( "MatchModifiers_View_OnActiveStateChanged: Invalid modifier index %d", modifierIndex ) )
+
+	file.activeTopLevelModifierIndex = modifierIndex
+
+	MatchModifierData data = MatchModifiers_GetDataFromIndex( modifierIndex )
+	bool shouldShowForClient = ( file.viewAnnounceFilter == null || file.viewAnnounceFilter() )
+	if ( previousModifierIndex != modifierIndex )
+	{
+		if ( shouldShowForClient )
+		{
+			MatchModifiers_View_OnModifierActivated( data, false )
+
+			if ( shouldAnnounce )
+			{
+				MatchModifiers_View_AnnounceModifier( data )
+			}
+		}
+	}
+
+	MatchModifiers_View_OnModifierUpdated( data, nextModifierRemovalRound, lastRoundWithModifiers, GetGlobalNetTime( "nextCircleStartTime" ), shouldShowForClient )
+}
+
+void function MatchModifiers_View_RefreshActiveStateFromNetvar( bool shouldAnnounce = false )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	MatchModifiers_View_ApplyActiveStateFromNetvar( GetGlobalNonRewindNetInt( MATCHMOD_ACTIVE_STATE_NETVAR ), shouldAnnounce )
+}
+
+void function MatchModifiers_View_RefreshFromNetvars( bool predictExpiry = true, bool repositionHud = true )
+{
+	MatchModifiers_View_RefreshActiveStateFromNetvar( false )
+	MatchModifiers_RefreshClientNestedModifiersFromNetvars( false )
+	file.hasHydratedReplicatedState = true
+	MatchModifiers_View_RefreshPersistentHud()
+
+	if ( predictExpiry )
+	{
+		MatchModifiers_View_PredictModifierExpiry( false )
+	}
+
+	if ( repositionHud )
+	{
+		thread MatchModifiers_View_UpdatePersistentHudPosition_Thread()
+	}
+}
+
+void function MatchModifiers_View_OnNestedStateChanged( entity player, int newVal )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	MatchModifiers_RefreshClientNestedModifiersFromNetvars( file.hasHydratedReplicatedState )
+}
+
+
+
+void function MatchModifiers_View_AnnounceAllDisabled( bool lastRoundWithModifiers = false )
+{
+	if ( GetCurrentPlaylistVarBool( "ks_matchmodifiers_announcements", false ) )
+		return
+
+	if ( !ANNOUNCEMENT_VALID_GAME_STATES.contains( GetGameState() ) )
+		return
+
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	mainBanner.onUpdateOverride = MatchModifiers_View_OnModifierAnnouncementUpdate
+	mainBanner.allowIndirectUpdates = true
+	mainBanner.id = MATCH_MODIFIER_ANNOUNCEMENT_KEY
+	mainBanner.mainText = Localize( "#MATCHMOD_ALL_DISABLED" )
+	mainBanner.mainIcon1 = $"rui/events/unhinged/s29/icon_juiced_event_small"
+	mainBanner.imageContainerVerticalPadding = 8.0
+
+	const vector frameColor = < 0.53, 0.53, 0.53 >
+	mainBanner.imageContainerFrameColor = frameColor
+	mainBanner.frameColor = frameColor
+	mainBanner.imageContainerFrameColor = frameColor
+	mainBanner.leftIntensityTextureCount = 2
+	mainBanner.rightIntensityTextureCount = 2
+	mainBanner.backgroundColor = <0.0, 0.0, 0.0>
+	mainBanner.backgroundAlpha = 0.6
+	mainBanner.scalar = 1.0
+
+	CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+	if ( lastRoundWithModifiers )
+	{
+		subBanner.mainText = Localize( "#MATCHMOD_ALL_DISABLED_DESC" )
+	}
+	else
+	{
+		subBanner.mainText = Localize( "#MATCHMOD_ONE_DISABLED_DESC" )
+	}
+	subBanner.scalar = 0.5
+	subBanner.paddingTop = 8
+	subBanner.leftEndPadding = 100
+	subBanner.rightEndPadding = 100
+	subBanner.backgroundAlpha = 0.4
+	subBanner.mainTextIsUpper = false
+
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+	builder.onUpdateOverride = MatchModifiers_View_OnModifierAnnouncementUpdate
+	builder.allowIndirectUpdates = true
+	builder.id = MATCH_MODIFIER_ANNOUNCEMENT_KEY
+	builder.duration = 8
+	builder.soundAliases = [ MATCH_MODIFIERS_BANNER_FINAL_DEACTIVATED_SFX ]
+	builder.speakerDialogueLines.append( PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.MATCH_MODIFIERS_MODIFIER_DISABLED ) )
+	builder.priority = eHudNotificationQueuePriority.HIGH
+
+	CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+}
+
+void function MatchModifiers_View_AnnounceModifier( MatchModifierData data )
+{
+	if ( GetCurrentPlaylistVarBool( "ks_matchmodifiers_announcements", false ) )
+		return
+
+	if ( !ANNOUNCEMENT_VALID_GAME_STATES.contains( GetGameState() ) )
+		return
+
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	mainBanner.onUpdateOverride = MatchModifiers_View_OnModifierAnnouncementUpdate
+	mainBanner.allowIndirectUpdates = true
+	mainBanner.id = MATCH_MODIFIER_ANNOUNCEMENT_KEY
+	mainBanner.mainText = Localize( data.name )
+	mainBanner.mainIcon1 = data.image
+	mainBanner.imageContainerVerticalPadding = 8.0
+	mainBanner.mainTextMinWidth = 700
+
+	const vector frameColor = < 0.64, 0.98, 0.25 >
+	mainBanner.imageContainerFrameColor = frameColor
+	mainBanner.mainIcon1Color = frameColor
+	mainBanner.frameColor = frameColor
+	mainBanner.leftIntensityTextureCount = 2
+	mainBanner.rightIntensityTextureCount = 2
+	mainBanner.backgroundColor = <0.0, 0.0, 0.0>
+	mainBanner.backgroundAlpha = 0.6
+	mainBanner.scalar = 1.0
+
+	CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+	subBanner.mainText = Localize( data.description )
+	subBanner.scalar = 0.5
+	subBanner.paddingTop = 8
+	subBanner.leftEndPadding = 100
+	subBanner.rightEndPadding = 100
+	subBanner.backgroundAlpha = 0.4
+	subBanner.mainTextIsUpper = false
+
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+	builder.onUpdateOverride = MatchModifiers_View_OnModifierAnnouncementUpdate
+	builder.allowIndirectUpdates = true
+	builder.id = MATCH_MODIFIER_ANNOUNCEMENT_KEY
+	builder.duration = 8
+	builder.soundAliases = [ MATCH_MODIFIERS_BANNER_ACTIVATED_SFX, MATCH_MODIFIERS_WIDGET_ACTIVATED_SFX ]
+
+	if ( file.modifierSeenCount > 0 )
+	{
+		builder.speakerDialogueLines.append( PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.MATCH_MODIFIERS_MODIFIER_UPDATED ) )
+	}
+	else
+	{
+		builder.speakerDialogueLines.append( PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.MATCH_MODIFIERS_MODIFIER_ENABLED ) )
+	}
+	builder.priority = eHudNotificationQueuePriority.HIGH
+
+	CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+
+	file.modifierSeenCount++
+}
+
+
+
+
+void function MatchModifiers_View_OnModifierActivated( MatchModifierData data, bool isNested )
+{
+	MatchModifierSettings settings = MatchModifiers_GetModifierSettings( data.action.modifier )
+	if ( settings.viewOnActivated != null )
+	{
+		settings.viewOnActivated( data )
+	}
+
+	if ( isNested ) 
+	{
+		return
+	}
+
+	MatchModifiers_View_UpdatePersistentHud( data )
+
+	if ( data.activationSound != "" )
+	{
+		entity localViewPlayer = GetLocalViewPlayer()
+		if ( IsValid( localViewPlayer ) )
+		{
+			EmitSoundOnEntity( localViewPlayer, data.activationSound )
+		}
+	}
+}
+
+
+
+void function MatchModifiers_View_ImpendingModifierChange_Effects_Thread()
+{
+	AssertIsNewThread()
+	Signal( clGlobal.signalDummy, SIG_MM_V_EFFECTS_END )
+	EndSignal( clGlobal.signalDummy, SIG_MM_V_EFFECTS_END )
+
+	
+
+	if ( !IsFullyConnected() )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "ks_matchmodifiers_vfx", false ) )
+		return
+
+	entity localViewPlayer = GetLocalViewPlayer()
+	int vfxHandle = -1
+	if ( IsValid( localViewPlayer ) )
+	{
+		EmitSoundOnEntity( localViewPlayer, MATCH_MODIFIERS_WIDGET_REROLL_SFX )
+
+		vfxHandle = StartParticleEffectOnEntityWithPos( localViewPlayer, GetParticleSystemIndex( MATCH_MODIFIERS_WIDGET_REROLL_VFX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, localViewPlayer.EyePosition(), <0, 0, 0> )
+		EffectSetIsWithCockpit( vfxHandle, true )
+		EffectSetControlPointVector( vfxHandle, 5, UNHINGED_COLOR )
+	}
+
+	OnThreadEnd(
+		function() : ( vfxHandle, localViewPlayer )
+		{
+			if ( IsValid( localViewPlayer ) )
+			{
+				StopSoundOnEntity( localViewPlayer, MATCH_MODIFIERS_WIDGET_REROLL_SFX )
+			}
+
+			if ( vfxHandle >= 0 )
+			{
+				EffectStop( vfxHandle, true, false )
+			}
+		}
+	)
+
+	wait 6.0 
+}
+
+
+
+void function MatchModifiers_View_AnnounceImpendingModifierChange( bool disableVO = false, bool rerollToCurrentRound = false )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "ks_matchmodifiers_announce_impending", false ) )
+		return
+
+	if ( !GetCurrentPlaylistVarBool( "ks_matchmodifiers_announcements", false ) && ANNOUNCEMENT_VALID_GAME_STATES.contains( GetGameState() ) )
+	{
+		CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+		mainBanner.onUpdateOverride = MatchModifiers_View_OnModifierAnnouncementUpdate
+		mainBanner.allowIndirectUpdates = true
+		mainBanner.id = MATCH_MODIFIER_ANNOUNCEMENT_KEY
+
+		mainBanner.mainText = Localize( "#MATCHMOD_SELECTING_MODIFIER" )
+
+		
+		mainBanner.mainTextMinWidth = 700
+
+		const vector frameColor = < 0.64, 0.98, 0.25 >
+		mainBanner.imageContainerFrameColor = frameColor
+		mainBanner.frameColor = frameColor
+		mainBanner.imageContainerFrameColor = frameColor
+		mainBanner.leftIntensityTextureCount = 2
+		mainBanner.rightIntensityTextureCount = 2
+		mainBanner.backgroundColor = <0.0, 0.0, 0.0>
+		mainBanner.backgroundAlpha = 0.6
+		mainBanner.scalar = 1.0
+		mainBanner.mainIcon1 = $""
+
+		CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+		subBanner.mainText = ""
+		subBanner.subText = ""
+		subBanner.scalar = 0.0
+		subBanner.paddingTop = 0.0
+		subBanner.paddingBottom = 0.0
+		subBanner.backgroundAlpha = 0.0
+
+		AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+		builder.onUpdateOverride = MatchModifiers_View_OnModifierAnnouncementUpdate
+		builder.allowIndirectUpdates = true
+		builder.id = MATCH_MODIFIER_ANNOUNCEMENT_KEY
+		builder.duration = 11.0
+		builder.soundAliases = [ MATCH_MODIFIERS_BANNER_INCOMING_SFX ]
+		if ( !disableVO )
+		{
+			builder.speakerDialogueLines.append( PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.MATCH_MODIFIERS_MODIFIER_REROLL ) )
+		}
+		builder.priority = eHudNotificationQueuePriority.MEDIUM
+
+		CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+	}
+
+	if ( !rerollToCurrentRound )
+	{
+		MatchModifiers_View_StartPersistentHudReroll( rerollToCurrentRound )
+	}
+
+	thread MatchModifiers_View_ImpendingModifierChange_Effects_Thread()
+}
+
+
+
+void function MatchModifiers_View_OnModifierAnnouncementUpdate( bool isItemVisible, HudNotificationQueueItem oldItem, HudNotificationQueueItem ornull newItem )
+{
+	if ( newItem == null )
+		return
+
+	expect HudNotificationQueueItem( newItem )
+
+	oldItem.ruiArgs = newItem.ruiArgs
+	oldItem.nestedRuiArgs = newItem.nestedRuiArgs
+	oldItem.miscArgs = newItem.miscArgs
+	oldItem.duration = newItem.duration
+	oldItem.soundAliases = newItem.soundAliases
+	oldItem.speakerDialogueLines = newItem.speakerDialogueLines
+
+	if ( isItemVisible )
+	{
+		if ( oldItem.ruiInstance != null && RuiIsAlive( oldItem.ruiInstance ) )
+		{
+			HudNotificationQueue_SetRuiArgs( oldItem.ruiInstance, oldItem.ruiArgs )
+
+			RuiSetGameTimeIfExists( oldItem.ruiInstance, "startTimeReplay", ClientTime() ) 
+		}
+
+		if ( oldItem.nestedRuiInstances.len() > 0 )
+		{
+			int childCount = 0
+			foreach ( var nestedRui in oldItem.nestedRuiInstances )
+			{
+				if ( RuiIsAlive( nestedRui ) )
+				{
+					if ( oldItem.nestedRuiArgs.len() > childCount )
+					{
+						HudNotificationQueue_SetRuiArgs( nestedRui, oldItem.nestedRuiArgs[childCount] )
+					}
+
+					RuiSetGameTimeIfExists( nestedRui, "startTimeReplay", ClientTime() ) 
+				}
+
+				childCount++
+			}
+		}
+
+		if ( oldItem.soundAliases.len() > 0 )
+		{
+			entity player = GetLocalViewPlayer()
+
+			foreach ( string soundAlias in oldItem.soundAliases )
+			{
+				if ( soundAlias.len() != 0 )
+				{
+					EmitSoundOnEntity( player, soundAlias )
+				}
+			}
+		}
+
+		if ( oldItem.speakerDialogueLines.len() > 0 )
+		{
+			foreach ( string soundAlias in oldItem.speakerDialogueLines )
+			{
+				if ( soundAlias.len() != 0 )
+				{
+					int aliasID = GetAnyAliasIdForName( soundAlias )
+					if ( aliasID >= 0 )
+					{
+						SCB_PlayDialogueOnEnvironmentSpeakers( aliasID, NUM_NEARBY_SPEAKERS_TO_PLAY_FROM, 0, -1, null, -1 )
+					}
+					else
+					{
+						Warning( "Dialogue line " + soundAlias + " is not registered" )
+					}
+				}
+			}
+		}
+
+		HudNotificationQueueConfiguration queueConfig = HudNotificationQueue_GetConfigure( oldItem.queueId )
+		if ( queueConfig.itemUpdatesRefreshDuration )
+		{
+			oldItem.timeToStartOutro = Time() + oldItem.duration
+		}
+	}
+
+	if ( oldItem.onUpdate != null )
+	{
+		oldItem.onUpdate( isItemVisible, oldItem )
+	}
+}
+
+
+
+void function MatchModifiers_View_OnActiveStateChanged( entity player, int packed )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	MatchModifiers_View_ApplyActiveStateFromNetvar( packed, file.hasHydratedReplicatedState )
+}
+
+
+
+
+void function MatchModifiers_View_OnModifierUpdated( MatchModifierData data, int nextModifierRemovalRound, bool lastRoundWithModifiers, float nextCircleStartTime, bool showForClient )
+{
+	file.lastRoundWithModifiers = lastRoundWithModifiers
+
+	if ( data.index in file.matchModifierToRemovalRoundMap )
+	{
+		file.matchModifierToRemovalRoundMap[ data.index ] = nextModifierRemovalRound
+	}
+	else
+	{
+		file.matchModifierToRemovalRoundMap[ data.index ] <- nextModifierRemovalRound
+	}
+
+	if ( showForClient )
+	{
+		MatchModifiers_View_UpdatePersistentHud( data )
+	}
+
+	
+	MatchModifierSettings settings = MatchModifiers_GetModifierSettings( data.action.modifier )
+	if ( settings.viewOnUpdated != null )
+	{
+		settings.viewOnUpdated( data )
+	}
+}
+
+
+
+void function MatchModifiers_View_OnModifierDeactivated( MatchModifierData data, bool isNested )
+{
+	
+	MatchModifierSettings settings = MatchModifiers_GetModifierSettings( data.action.modifier )
+	if ( settings.viewOnDeactivated != null )
+	{
+		settings.viewOnDeactivated( data )
+	}
+
+	if ( isNested ) 
+		return
+
+	MatchModifiers_View_RefreshPersistentHud()
+
+	if ( data.deactivationSound != "" )
+	{
+		entity localViewPlayer = GetLocalViewPlayer()
+		if ( IsValid( localViewPlayer ) )
+		{
+			EmitSoundOnEntity( localViewPlayer, data.deactivationSound )
+		}
+	}
+}
+
+
+
+MatchModifierData function MatchModifiers_View_GetDummyModifier()
+{
+	MatchModifierData dummyEmptyModifier
+	dummyEmptyModifier.index = -1
+	dummyEmptyModifier.name = ""
+	dummyEmptyModifier.description = ""
+	dummyEmptyModifier.image = $"rui/events/unhinged/s29/icon_juiced_event_small"
+	return dummyEmptyModifier
+}
+
+
+
+void function MatchModifiers_View_RefreshPersistentHud()
+{
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+		return
+
+	MatchModifiers_View_UpdatePersistentHud( MatchModifiers_View_GetGetActiveTopLevelModifierOrDummy() )
+}
+
+
+
+void function MatchModifiers_View_UpdatePersistentHudPosition_Thread()
+{
+	AssertIsNewThread()
+	Signal( clGlobal.signalDummy, SIG_MM_V_REPOSITION_END )
+	EndSignal( clGlobal.signalDummy, SIG_MM_V_REPOSITION_END )
+
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+		return
+
+	WaitFrame()
+
+	vector lastValidPos = < 0.0, 0.0, 0.0 >
+	bool hasLastValidPos = false
+	int consecutiveStableValidFrames = 0
+
+	for ( int i = 0; i < 1000; i++ )
+	{
+		vector currentPos = MatchModifiers_View_UpdatePersistentHudPosition()
+		bool isValid = currentPos.x > 0.0 && currentPos.y > 0.0
+
+		if ( isValid && hasLastValidPos )
+		{
+			float deltaX = currentPos.x - lastValidPos.x
+			if ( deltaX < 0.0 )
+				deltaX = -deltaX
+
+			float deltaY = currentPos.y - lastValidPos.y
+			if ( deltaY < 0.0 )
+				deltaY = -deltaY
+
+			if ( deltaX <= 0.5 && deltaY <= 0.5 )
+				consecutiveStableValidFrames++
+			else
+				consecutiveStableValidFrames = 0
+		}
+		else
+		{
+			consecutiveStableValidFrames = 0
+		}
+
+		if ( isValid )
+		{
+			lastValidPos = currentPos
+			hasLastValidPos = true
+		}
+		else
+		{
+			hasLastValidPos = false
+		}
+
+		if ( consecutiveStableValidFrames >= 2 )
+		{
+			return
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function MatchModifiers_View_OnViewPlayerChanged( entity player )
+{
+	MatchModifiers_View_RefreshFromNetvars( true, true )
+}
+
+
+
+void function MatchModifiers_View_OnPlayerConnectionStateChanged( entity player )
+{
+	if ( IsValid( player ) && player == GetLocalClientPlayer() && player.IsConnectionActive() )
+	{
+		MatchModifiers_View_RefreshFromNetvars( true, true )
+	}
+}
+
+
+
+void function MatchModifiers_View_PlayerFreefallActiveChanged( entity player, bool isFreefallActive )
+{
+	MatchModifiers_View_RefreshPersistentHud()
+}
+
+
+
+void function MatchModifiers_View_OnMinimapLayoutChanged()
+{
+	thread MatchModifiers_View_UpdatePersistentHudPosition_Thread()
+}
+
+
+
+void function CinematicEventFlagChanged( entity player )
+{
+	thread MatchModifiers_View_UpdatePersistentHudPosition_Thread()
+}
+
+
+
+void function MatchModifiers_View_SetWeaponInspect( bool inspect )
+{
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+		return
+
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+		return
+
+	RuiSetBoolIfExists( file.persistentHudRui, "inspecting", inspect )
+}
+
+
+
+
+void function MatchModifiers_View_ActiveMenuChanged( string currentMenu )
+{
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+		return
+
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+		return
+
+	if ( currentMenu != "" )
+		return
+
+	 if ( clGlobal.isMenuOpen )
+		 return
+
+	if ( !IsAlive( GetLocalClientPlayer() ) )
+		return
+
+	thread MatchModifiers_View_UpdatePersistentHudPosition_Thread()
+}
+
+
+
+void function MatchModifiers_View_ActiveFakeMenuChanged( string currentFakeMenuName )
+{
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+		return
+
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+		return
+
+	if ( currentFakeMenuName != "" )
+		return
+
+	if ( clGlobal.isMenuOpen )
+		return
+
+	if ( !IsAlive( GetLocalClientPlayer() ) )
+		return
+
+	thread MatchModifiers_View_UpdatePersistentHudPosition_Thread()
+}
+
+
+
+void function MatchModifiers_View_InitPersistentHud()
+{
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+		return
+
+	if ( file.persistentHudRui != null && RuiIsAlive( file.persistentHudRui ) )
+		return
+
+	file.persistentHudRui = CreatePermanentCockpitPostFXRui( $"ui/juiced_modifier_tracker.rpak", HUD_Z_BASE )
+	RuiSetBoolIfExists( file.persistentHudRui, "visible", false )
+	RuiSetBoolIfExists( file.persistentHudRui, "showDescription", true )
+	RuiSetFloatIfExists( file.persistentHudRui, "durationFrac", 1.0 )
+	RuiSetFloatIfExists( file.persistentHudRui, "progressFrac", 0.0 )
+	RuiSetBoolIfExists( file.persistentHudRui, "rerolling", false )
+	RuiSetAssetIfExists( file.persistentHudRui, "previousModifier", $"" )
+	RuiSetAssetIfExists( file.persistentHudRui, "nextModifier", $"" )
+
+	MatchModifiers_View_UpdatePersistentHudPosition()
+}
+
+
+
+void function MatchModifiers_View_StartPersistentHudReroll( bool rerollToCurrentRound = false )
+{
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+	{
+		return
+	}
+
+	MatchModifiers_View_InitPersistentHud()
+
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+	{
+		return
+	}
+
+	asset currentIcon = $"rui/events/unhinged/s29/icon_juiced_event_small"
+	if ( file.persistentHudModifierIndex != -1 )
+	{
+		MatchModifierData currentData = MatchModifiers_GetDataFromIndex( file.persistentHudModifierIndex )
+		currentIcon = currentData.image
+	}
+
+	RuiSetBoolIfExists( file.persistentHudRui, "rerolling", true )
+	RuiSetAssetIfExists( file.persistentHudRui, "previousModifier", currentIcon )
+	RuiSetGameTimeIfExists( file.persistentHudRui, "rerollStartTime", Time() )
+
+	asset nextModifierIcon = $"rui/events/unhinged/s29/icon_juiced_event_small"
+	if ( rerollToCurrentRound )
+	{
+		nextModifierIcon = currentIcon
+		currentIcon = $"rui/events/unhinged/s29/icon_juiced_event_small"
+	}
+	else if ( MatchModifiers_View_HasScheduledTopLevelModifierOnNextStage() )
+	{
+		nextModifierIcon = MatchModifiers_GetDataFromIndex( MatchModifiers_View_GetNextStageScheduledModifierIndex() ).image
+	}
+
+	RuiSetAssetIfExists( file.persistentHudRui, "nextModifier", nextModifierIcon )
+}
+
+
+
+vector function MatchModifiers_View_UpdatePersistentHudPosition()
+{
+	vector minimapBottomRightPixels = Minimap_GetScreenPosByPin( 1.0, 1.0 )
+	if ( MatchModifiers_View_ShouldShowPersistentHud() && file.persistentHudRui != null && RuiIsAlive( file.persistentHudRui ) )
+	{
+		
+		
+		entity localViewPlayer = GetLocalViewPlayer()
+		if ( IsValid( localViewPlayer ) && !localViewPlayer.IsPhaseShifted() && !IsBitFlagSet( localViewPlayer.GetCinematicEventFlags(), CE_FLAG_TITAN_3P_CAM ) )
+		{
+			RuiSetFloat2IfExists( file.persistentHudRui, "offsetPx", < minimapBottomRightPixels.x + 3.0, minimapBottomRightPixels.y, 0.0 > )
+		}
+	}
+	return minimapBottomRightPixels
+}
+
+
+
+bool function MatchModifiers_View_ShouldShowPersistentHud()
+{
+	if ( !IsFullyConnected() )
+		return false
+
+	if ( !MatchModifiers_Enabled() )
+		return false
+
+	if ( GetCurrentPlaylistVarBool( "ks_matchmodifiers_hud", false ) )
+		return false
+
+	if ( GetGameState() != eGameState.Playing )
+		return false
+
+	return true
+}
+
+
+
+void function MatchModifiers_View_UpdatePersistentHud( MatchModifierData data )
+{
+	
+	if ( !MatchModifiers_View_ShouldShowPersistentHud() )
+	{
+		return
+	}
+
+	MatchModifiers_View_InitPersistentHud()
+
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+	{
+		return
+	}
+
+	MatchModifiers_View_SetPersistentHudVisualOverride( file.persistentHudModifierIndex, false, 0.0, false, 0.0 )
+
+	file.persistentHudModifierIndex = data.index
+
+	RuiSetBoolIfExists( file.persistentHudRui, "visible", true )
+	RuiSetBoolIfExists( file.persistentHudRui, "showDescription", true )
+	RuiSetBoolIfExists( file.persistentHudRui, "greyscale", data.index == -1 )
+	RuiSetStringIfExists( file.persistentHudRui, "name", Localize( data.name ) )
+	RuiSetStringIfExists( file.persistentHudRui, "description", Localize( data.description ) )
+	RuiSetAssetIfExists( file.persistentHudRui, "icon", data.image )
+	RuiSetGameTime( file.persistentHudRui, "modifierEnabledTime", Time() )
+
+	MatchModifiers_View_UpdatePersistentHudPosition()
+}
+
+void function MatchModifiers_View_PersistentHudSetEnding( bool isEndingSoon = false)
+{
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+	{
+		return
+	}
+	RuiSetBoolIfExists( file.persistentHudRui, "ending", isEndingSoon )
+}
+
+void function MatchModifiers_View_PersistentHudSetRerolling( bool isRerolling = false)
+{
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+	{
+		return
+	}
+	RuiSetBoolIfExists( file.persistentHudRui, "rerolling", isRerolling )
+}
+
+
+
+void function MatchModifiers_View_SetPersistentHudVisualOverride( int modifierIndex, bool useBar, float barFrac, bool fillUseScanlines, float fillFrac )
+{
+	if ( file.persistentHudRui == null || !RuiIsAlive( file.persistentHudRui ) )
+		return
+
+	if ( file.persistentHudModifierIndex != modifierIndex )
+		return
+
+	RuiSetBoolIfExists( file.persistentHudRui, "useBar", useBar )
+	RuiSetFloatIfExists( file.persistentHudRui, "barFrac", Clamp( barFrac, 0.0, 1.0 ) )
+	RuiSetBoolIfExists( file.persistentHudRui, "fillUseScanlines", fillUseScanlines )
+	RuiSetFloatIfExists( file.persistentHudRui, "fillFrac", Clamp( fillFrac, 0.0, 1.0 ) )
+}
+
+
+
+void function MatchModifiers_View_OnDeathFieldStartShrink( DeathFieldStageData deathFieldStageData )
+{
+	MatchModifiers_View_PredictModifierExpiry( true )
+}
+
+
+
+bool function MatchModifiers_View_ActiveTopLevelModifierRemovesOnNextStage()
+{
+	return MatchModifiers_View_GetActiveTopLevelModifierRemovalRound() == MatchModifiers_View_GetNextStage()
+}
+
+
+
+bool function MatchModifiers_View_ShouldTriggerPersistentHudTransitionOnNextStage()
+{
+	if ( MatchModifiers_View_ActiveTopLevelModifierRemovesOnNextStage() )
+	{
+		return true
+	}
+
+	if ( !MatchModifiers_View_HasActiveTopLevelModifier() && MatchModifiers_View_HasScheduledTopLevelModifierOnNextStage() )
+	{
+		return true
+	}
+
+	if ( ( MatchModifiers_View_GetCurrentStageScheduledModifierIndex() != MatchModifiers_View_GetNextStageScheduledModifierIndex() ) )
+	{
+		return MatchModifiers_View_GetNextStageScheduledModifierIndex() != MATCHMOD_ACTIVE_STATE_NONE
+	}
+
+	return false
+}
+
+
+
+void function MatchModifiers_View_PredictModifierExpiry( bool ringShrinking = false )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "ks_matchmodifiers_predictexpiry", false ) )
+		return
+
+	const float expiryConstant = 7.5
+	float now = Time()
+	float circleCloseTime = GetGlobalNetTime( "circleCloseTime" )
+	float circleClosesIn = circleCloseTime - now
+	float delayAnnounceExpiry = Clamp( circleClosesIn - expiryConstant, 0.0, FLT_MAX )
+	float delayAnnounceReroll = Clamp( circleClosesIn, 0.0, FLT_MAX )
+
+	string verySoonLine = PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.MATCH_MODIFIERS_ENDING_VERY_SOON )
+
+	if ( !MatchModifiers_View_ShouldTriggerPersistentHudTransitionOnNextStage() )
+	{
+		return
+	}
+
+	Signal( clGlobal.signalDummy, SIG_MM_PREDICTION_END )
+
+	if ( delayAnnounceExpiry >= expiryConstant )
+	{
+		thread MatchModifiers_View_PredictModifierExpiry_Thread( delayAnnounceExpiry, verySoonLine, delayAnnounceReroll )
+	}
+
+	if ( delayAnnounceReroll >= 0.5 )
+	{
+		thread MatchModifiers_View_PredictModifierReroll_Thread( delayAnnounceReroll )
+	}
+
+	if ( ringShrinking && delayAnnounceExpiry >= expiryConstant )
+	{
+		string soonLine = PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.MATCH_MODIFIERS_ENDING_SOON )
+		int aliasID = GetAnyAliasIdForName( soonLine )
+		if ( aliasID >= 0 )
+		{
+			SCB_PlayDialogueOnEnvironmentSpeakers( aliasID, NUM_NEARBY_SPEAKERS_TO_PLAY_FROM, 0, -1, null, -1 )
+		}
+	}
+}
+
+
+
+void function MatchModifiers_View_PredictModifierExpiry_Thread( float delayAnnounceExpiry, string line, float delayAnnounceReroll )
+{
+	AssertIsNewThread()
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValidPlayer(player) )
+		return
+
+	EndSignal( clGlobal.signalDummy, SIG_MM_PREDICTION_END )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ()
+		{
+			MatchModifiers_View_PersistentHudSetEnding( false )
+		}
+	)
+
+	wait delayAnnounceExpiry
+
+	player = GetLocalClientPlayer()
+	if ( !IsValidPlayer(player) || IsPlayerInPlane( player ) )
+		return
+
+	int aliasID = GetAnyAliasIdForName( line )
+	if ( aliasID >= 0 )
+	{
+		SCB_PlayDialogueOnEnvironmentSpeakers( aliasID, NUM_NEARBY_SPEAKERS_TO_PLAY_FROM, 0, -1, null, -1 )
+	}
+
+	MatchModifiers_View_PersistentHudSetEnding( true )
+
+	wait Clamp( ( delayAnnounceReroll - delayAnnounceExpiry ), 0.0, FLT_MAX )
+	wait 4.25 
+}
+
+
+
+void function MatchModifiers_View_PredictModifierReroll_Thread( float delayAnnounceReroll, bool noAnnouncement = false, bool noVO = false, bool rerollToCurrentRound = false )
+{
+	AssertIsNewThread()
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValidPlayer(player) )
+		return
+
+	EndSignal( clGlobal.signalDummy, SIG_MM_PREDICTION_END )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ()
+		{
+			Signal( clGlobal.signalDummy, SIG_MM_V_EFFECTS_END )
+			MatchModifiers_View_PersistentHudSetRerolling( false )
+			MatchModifiers_View_PersistentHudSetEnding( false )
+		}
+	)
+
+	wait delayAnnounceReroll
+
+	player = GetLocalClientPlayer()
+
+	if ( !IsValidPlayer(player) || IsPlayerInPlane( player ) )
+		return
+
+	EmitSoundOnEntity( player, MATCH_MODIFIERS_WIDGET_DEACTIVATE_WARNING_SFX )
+
+	MatchModifiers_View_StartPersistentHudReroll( rerollToCurrentRound )
+
+	if ( !noAnnouncement )
+	{
+		MatchModifiers_View_AnnounceImpendingModifierChange( noVO, rerollToCurrentRound )
+	}
+
+	wait 4.25 
+}
+
+
+
+void function MatchModifiers_View_Round0Announcement_Thread()
+{
+	AssertIsNewThread()
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValidPlayer(player) )
+		return
+
+	EndSignal( clGlobal.signalDummy, SIG_MM_PREDICTION_END )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+
+	Signal( clGlobal.signalDummy, SIG_MM_V_EFFECTS_END )
+	MatchModifiers_View_PersistentHudSetRerolling( false )
+	MatchModifiers_View_PersistentHudSetEnding( false )
+
+	bool noAnnouncement = CenterAnnouncements_IsActivelyDisplaying()
+
+	if ( file.viewAnnounceFilter != null && !file.viewAnnounceFilter() )
+		return
+
+	thread MatchModifiers_View_PredictModifierReroll_Thread( 0.0, noAnnouncement, true, true )
+
+	if ( noAnnouncement )
+		return
+
+	wait 4.0
+
+	MatchModifierData data = MatchModifiers_View_GetGetActiveTopLevelModifierOrDummy()
+	MatchModifiers_View_AnnounceModifier( data )
+}
+
+
+       

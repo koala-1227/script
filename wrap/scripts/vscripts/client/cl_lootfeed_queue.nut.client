@@ -1,0 +1,290 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function CLLootFeed_Init
+global function LootFeed_CreateItem 				
+global function LootFeed_QueueItem					
+global function LootFeed_CreateAndQueueItem			
+
+global struct LootFeedItem
+{
+	LootData& lootData
+	int    amountAdded
+	int    hasCount
+	int    maxCount
+	bool   isCompatible	= true
+	bool   isItemAtMax 	= false							
+
+	bool updateExistingItemTotalsCumulatively = true	
+
+	string amountPickedUpText = ""
+	string amountInInventoryText = ""
+	string itemNameText
+	vector itemNameTextColor = <1, 1, 1>
+
+	asset itemIconOverride = $""
+	asset itemIconShadow = $""
+	vector itemIconSize = <0, 0, 0>
+	vector itemIconColorOverride = <-1, -1, -1>
+
+	asset icon2Override = $""
+	vector icon2Size = <0, 0, 0>
+	vector icon2ColorOverride = <-1, -1, -1>
+
+	bool backgroundEnabled = false
+	vector backgroundColor = <0, 0, 0>
+
+	int persistenceContext = ePersistenceContext.PLAYER
+}
+
+const float MESSAGE_DURATION = 2.5
+const float OUTRO_DURATION = 0.25
+const vector MESSAGE_SIZE = <300, 40, 0>
+
+
+const string LOOT_FEED_QUEUE_KEY = "lootfeed"
+const string LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG 		= "amountAdded"
+const string LOOT_FEED_MISCDATA_TOTAL_AMOUNT_ARG 		= "totalAmount"
+const string LOOT_FEED_MISCDATA_MAX_COUNT_ARG 	 		= "maxCount"
+const string LOOT_FEED_MISCDATA_ITEM_NAME_TEXT_ARG		= "itemNameText"
+
+const array LOOT_FEED_VALID_GAME_STATES = [
+	eGameState.Playing,
+	eGameState.SuddenDeath
+]
+
+struct {
+	int queueId = -1
+} file
+
+void function CLLootFeed_Init()
+{
+	file.queueId = HudNotificationQueue_CreateAndRegisterQueue( LOOT_FEED_QUEUE_KEY )
+
+	HudNotificationQueueConfiguration configSettings = HudNotificationQueue_GetConfigure( file.queueId )
+	configSettings.maxVisibleItems = 3
+	configSettings.allowIndirectUpdates = true
+	configSettings.padding = 2
+	configSettings.stackDirection = eHudNotificationQueueStackDirection.BOTTOM_TO_TOP
+	configSettings.itemAnchorPin = <0, 0.5, 0>
+	configSettings.screenSpacePin = <0.5, 0.5, 0.0>
+	configSettings.startPosition = <100, 195, 0>
+	HudNotificationQueue_Configure( file.queueId, configSettings )
+
+	AddCallback_OnGameStateChanged( LootFeed_OnGameStateChanged )
+}
+
+
+LootFeedItem function LootFeed_CreateItem( entity player, LootData data, int amountPickedUp = 1 )
+{
+	LootFeedItem lootItem
+	lootItem.lootData 		= data
+	lootItem.amountAdded  	= amountPickedUp
+
+	bool hasCompatibleAmmo = ( data.lootType == eLootType.AMMO ) && Survival_IsAmmoCompatibleWithCurrentWeapons( player, data.ref )
+	int stockPileAmmo = Survival_GetAmmoForStockpileWeapon( player, data.ref )
+	if ( hasCompatibleAmmo && stockPileAmmo > 0 )
+	{
+		lootItem.hasCount = stockPileAmmo
+		lootItem.maxCount = Survival_GetMaxAmmoForStockpileWeapon( player, data.ref )
+	}
+	else
+	{
+		lootItem.hasCount = SURVIVAL_CountItemsInInventory( player, data.ref )
+		lootItem.maxCount = SURVIVAL_GetInventorySlotCountForPlayer( player, data )
+	}
+
+	lootItem.isCompatible 	= ( data.lootType == eLootType.AMMO ) ? hasCompatibleAmmo : true
+	lootItem.isItemAtMax  	= ( lootItem.hasCount == lootItem.maxCount )
+
+	if ( lootItem.maxCount == 1 )
+	{
+		if ( amountPickedUp >= 0 )
+		{
+			lootItem.amountPickedUpText    = ""
+			lootItem.amountInInventoryText = ""
+			lootItem.itemNameText = lootItem.lootData.pickupString
+		}
+		else
+		{
+			
+			lootItem.amountPickedUpText    = lootItem.isItemAtMax ? "" : Localize( "#AUTO_LOOT_MESSAGE_REMOVED", lootItem.amountAdded )
+			lootItem.amountInInventoryText = ""
+			lootItem.itemNameText = lootItem.lootData.pickupString
+		}
+	}
+	else
+	{
+		if ( amountPickedUp >= 0 )
+		{
+			lootItem.amountPickedUpText = lootItem.isItemAtMax ? "" : Localize( "#AUTO_LOOT_MESSAGE_ADDED", lootItem.amountAdded )
+		}
+		else
+		{
+			lootItem.amountPickedUpText = lootItem.isItemAtMax ? "" : Localize( "#AUTO_LOOT_MESSAGE_REMOVED", lootItem.amountAdded )
+		}
+		lootItem.amountInInventoryText = lootItem.isItemAtMax ? Localize("#AUTO_LOOT_MESSAGE_MAX" ).toupper() : Localize( "#AUTO_LOOT_MESSAGE_TOTAL", lootItem.hasCount )
+		lootItem.itemNameText = ( lootItem.hasCount == lootItem.amountAdded ) ? lootItem.lootData.pickupString : ""	
+	}
+
+	return lootItem
+}
+
+
+HudNotificationQueueItem function LootFeed_QueueItem( LootFeedItem item )
+{
+	HudNotificationQueueItem queueItem
+	queueItem.ruiAsset = $"ui/loot_feed_item.rpak"
+	queueItem.key = item.lootData.ref	
+	queueItem.size = MESSAGE_SIZE
+	queueItem.duration = MESSAGE_DURATION
+	queueItem.outroDuration = OUTRO_DURATION
+	queueItem.soundAliases = [ "UI_InGame_Crafting_Extractor_Collect_Squad" ]
+	queueItem.priority = eHudNotificationQueuePriority.LOW
+
+	vector amountInInventoryColor = item.isItemAtMax ? ( COLOR_GOLDEN_ROD / 255.0 ) : ( COLOR_DARK_GRAY / 255.0 )
+
+	asset itemIcon = item.itemIconOverride != $"" ? item.itemIconOverride : item.lootData.hudIcon
+	vector iconSize = item.itemIconSize != <0, 0, 0> ? item.itemIconSize : ( itemIcon != $"" ? GetImageSize( itemIcon ) : <0, 0, 0> )
+	vector iconColor = item.itemIconColorOverride != <-1, -1, -1> ? item.itemIconColorOverride : <1, 1, 1>
+
+	asset itemIconShadow = item.itemIconShadow != $"" ? item.itemIconShadow : $""
+	vector itemIconShadowSize = item.itemIconSize != <0, 0, 0> ? item.itemIconSize : ( ( itemIcon != $"" && itemIconShadow != $"" ) ? GetImageSize( itemIconShadow ) : <0, 0, 0> )
+
+	asset icon2 = item.icon2Override != $"" ? item.icon2Override : ( !item.isCompatible ? $"rui/menu/crossplatform/blocked_red" : $"" )
+	vector icon2Size = item.icon2Size != <0, 0, 0> ? item.icon2Size : ( icon2 != $"" ? GetImageSize( icon2 ) : <0, 0, 0> )
+	vector icon2Color = item.icon2ColorOverride != <-1, -1, -1> ? item.icon2ColorOverride : <1, 1, 1>
+
+	queueItem.ruiArgs = {
+		["message1"] 			= HudNotificationQueue_CreateRuiArg( "message1", item.amountPickedUpText ),
+		["message1Color"] 		= HudNotificationQueue_CreateRuiArg( "message1Color", <1, 1, 1> ),
+		["message2"] 			= HudNotificationQueue_CreateRuiArg( "message2", item.amountInInventoryText ),
+		["message2Color"] 		= HudNotificationQueue_CreateRuiArg( "message2Color", amountInInventoryColor ),
+		["itemNameText"] 		= HudNotificationQueue_CreateRuiArg( "itemNameText", item.itemNameText ),
+		["itemNameTextColor"] 	= HudNotificationQueue_CreateRuiArg( "itemNameTextColor", item.itemNameTextColor ),
+		["itemIcon"] 			= HudNotificationQueue_CreateRuiArg( "itemIcon", itemIcon ),
+		["itemIconColor"] 		= HudNotificationQueue_CreateRuiArg( "itemIconColor", iconColor, eRuiArgType.COLOR, [ 1.0 ] ),
+		["itemIconSize"]	 	= HudNotificationQueue_CreateRuiArg( "itemIconSize", iconSize, eRuiArgType.FLOAT2 ),
+		["itemIconShadow"] 		= HudNotificationQueue_CreateRuiArg( "itemIconShadow", itemIconShadow ),
+		["itemIconShadowSize"]	= HudNotificationQueue_CreateRuiArg( "itemIconShadowSize", itemIconShadowSize, eRuiArgType.FLOAT2 ),
+		["icon2"] 				= HudNotificationQueue_CreateRuiArg( "icon2", icon2 ),
+		["icon2Color"] 			= HudNotificationQueue_CreateRuiArg( "icon2Color", icon2Color, eRuiArgType.COLOR, [ 1.0 ] ),
+		["icon2Size"]	 		= HudNotificationQueue_CreateRuiArg( "icon2Size", icon2Size, eRuiArgType.FLOAT2 ),
+		["icon2Color"] 			= HudNotificationQueue_CreateRuiArg( "icon2Color", <1, 1, 1> ),
+		["sweepColor"] 			= HudNotificationQueue_CreateRuiArg( "sweepColor", <1, 1, 1> ),
+		["duration"] 			= HudNotificationQueue_CreateRuiArg( "duration", queueItem.duration ),
+		["backgroundColor"] 	= HudNotificationQueue_CreateRuiArg( "backgroundColor", item.backgroundColor, eRuiArgType.COLOR, [ item.backgroundEnabled ? 0.6 : 0.0 ] ),
+	}
+
+	
+	queueItem.miscArgs = {
+		[ LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG ] = item.amountAdded,
+		[ LOOT_FEED_MISCDATA_TOTAL_AMOUNT_ARG ] = item.hasCount,
+		[ LOOT_FEED_MISCDATA_MAX_COUNT_ARG ] = item.maxCount,
+		[ LOOT_FEED_MISCDATA_ITEM_NAME_TEXT_ARG ] = item.itemNameText,
+	}
+
+	
+	if ( item.updateExistingItemTotalsCumulatively )
+		queueItem.onUpdateOverride = LootFeed_OnUpdateOverride
+
+	HudNotificationQueue_QueueItem( file.queueId, queueItem, item.persistenceContext )
+	return queueItem
+}
+
+
+HudNotificationQueueItem function LootFeed_CreateAndQueueItem( entity player, LootData data, int amountAdded = 1 )
+{
+	return LootFeed_QueueItem( LootFeed_CreateItem( player, data, amountAdded ) )
+}
+
+void function LootFeed_OnUpdateOverride( bool isItemVisible, HudNotificationQueueItem oldItem, HudNotificationQueueItem ornull newItem )
+{
+	int maxCount = -1
+	
+	if ( LOOT_FEED_MISCDATA_MAX_COUNT_ARG in oldItem.miscArgs )
+	{
+		maxCount = expect int( oldItem.miscArgs[LOOT_FEED_MISCDATA_MAX_COUNT_ARG] )
+		if ( maxCount == 1 )
+			return
+	}
+
+	
+	if ( newItem != null )
+	{
+		expect HudNotificationQueueItem( newItem )
+
+		
+		int oldAmount = 0
+		if ( LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG in oldItem.miscArgs )
+			oldAmount = expect int( oldItem.miscArgs[LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG] )
+
+		
+		int newAmount = 0
+		if ( LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG in newItem.miscArgs )
+			newAmount = expect int( newItem.miscArgs[LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG] )
+
+		
+		int cumulativeAmount = oldAmount + newAmount
+
+		int hasCount = -1
+		if ( LOOT_FEED_MISCDATA_TOTAL_AMOUNT_ARG in oldItem.miscArgs )
+			hasCount = expect int( newItem.miscArgs[LOOT_FEED_MISCDATA_TOTAL_AMOUNT_ARG] )
+
+		bool isItemAtMax = ( hasCount >= maxCount )
+
+		
+		if ( LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG in newItem.miscArgs )
+			newItem.miscArgs[LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG] = cumulativeAmount
+		else
+			newItem.miscArgs[LOOT_FEED_MISCDATA_AMOUNT_ADDED_ARG] <- cumulativeAmount
+
+		
+		string amountText = ""
+		if ( cumulativeAmount >= 0 )
+		{
+			amountText = isItemAtMax ? "" : Localize( "#AUTO_LOOT_MESSAGE_ADDED", cumulativeAmount )
+		}
+		else
+		{
+			amountText = isItemAtMax ? "" : Localize( "#AUTO_LOOT_MESSAGE_REMOVED", cumulativeAmount )
+		}
+
+		newItem.ruiArgs["message1"].argValue = amountText
+
+		
+		if ( LOOT_FEED_MISCDATA_ITEM_NAME_TEXT_ARG in oldItem.miscArgs )
+			newItem.ruiArgs["itemNameText"].argValue = oldItem.miscArgs[LOOT_FEED_MISCDATA_ITEM_NAME_TEXT_ARG]
+	}
+
+	
+	HudNotificationQueue_OnUpdate_Base( isItemVisible, oldItem, newItem )
+}
+
+void function LootFeed_OnGameStateChanged( int gameState )
+{
+	if ( !LOOT_FEED_VALID_GAME_STATES.contains( gameState ) )
+	{
+		HudNotificationQueue_AddQueueBlocker( file.queueId, LootFeed_QueueBlocker_PauseDuringInvalidGameStates )
+	}
+}
+
+bool function LootFeed_QueueBlocker_PauseDuringInvalidGameStates()
+{
+	return LOOT_FEED_VALID_GAME_STATES.contains( GetGameState() )
+} 

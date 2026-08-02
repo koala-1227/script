@@ -1,0 +1,2093 @@
+global function PIN_Init
+global function PIN_Customization
+global function PIN_UltimateReadyPing
+global function PIN_DynamicDialogue
+global function PIN_NET_TraceRouteResult
+
+global function PIN_PageView_TutorialModal
+global function PIN_MarkOnMap
+
+
+global function PIN_GameStateChanged
+global function PIN_FadeOutScreen
+global function PIN_PlayerRepeatedTapstrafe
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function PIN_ReportPlayer
+
+global enum ePINPromoMessageStatus
+{
+	CLICK,
+	IMPRESSION,
+	CONVERSION,
+}
+
+struct
+{
+	float startupTime
+
+
+		entity networkWaypoint
+		float  lastStateStartTime = -1
+		int    lastGameState = -1
+
+
+
+
+
+
+
+
+
+} file
+
+
+const array<int> REQUIRED_GAME_STATES = [eGameState.WaitingForPlayers]
+
+
+table function PIN_GetPIDM( entity player )
+{
+	table pidm = {}
+
+	pidm.nucleus <- player.GetNucleusId()
+
+
+
+
+
+
+		
+		if ( PCPlat_IsSteam() )
+		{
+			pidm.steamuid_hash <- player.GetPINPlatformId()
+		}
+
+
+
+
+	return pidm
+}
+
+table function PIN_StandardHeader()
+{
+	entity player = GetLocalClientPlayer()
+
+	return {
+		pid				= player.GetPersonaId()
+		pidm			= PIN_GetPIDM( player ),
+		pidt			= "persona",
+		game_type		= "online",
+		mode_type		= "multiplayer",
+
+			game_mode	= GAMETYPE,
+			map			= GetMapName(),
+
+		plat			= player.GetPlayerPINPlatformName(),
+		title_id		= player.GetPlayerPINTitleId(),
+		sid				= PIN_GetSessionId(),
+		loc				= GetLocale()
+	}
+}
+
+
+void function PIN_Init()
+{
+
+
+
+	file.startupTime = Time()
+
+
+
+
+
+
+
+
+
+
+
+
+		Waypoints_RegisterCustomType( "PIN", OnPINWaypointCreated )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PIN_Customization( ItemFlavor ornull context, ItemFlavor itemFlavor, string customizeAction, int index, int ornull tier )
+{
+	table selections       = {}
+	string selection_index  = format( "selection%d", index + 1 ) 
+	string selection_rarity = format( "%s_rarity", selection_index )
+
+	string customizeQuality = ItemFlavor_HasQuality( itemFlavor ) ? GetPINRarity( ItemFlavor_GetQuality( itemFlavor ) + 1 ) : GetPINRarity( eRarityTier.COMMON )
+	string customizeTier = tier == null ? "NULL" : string( expect int( tier ) )
+
+	string customizeTarget = "NULL"
+	string customizeType = "NULL"
+	string customizeClass = "NULL"
+
+	switch ( ItemFlavor_GetType( itemFlavor ) )
+	{
+		case eItemType.digital_garment:
+			customizeTarget = "character"
+			customizeType = "digital_garment"
+			break
+
+		case eItemType.weapon_skin:
+			customizeTarget = "weapon"
+			customizeType = "skin"
+			break
+
+		case eItemType.weapon_charm:
+			customizeTarget = "weapon"
+			customizeType = "weapon_charm"
+			break
+
+		case eItemType.gladiator_card_stat_tracker:
+			customizeType = customizeType == "" ? "stat_tracker" : customizeType
+		case eItemType.gladiator_card_badge:
+			customizeType = customizeType == "" ? "badge" : customizeType
+		case eItemType.gladiator_card_stance:
+			customizeType = customizeType == "" ? "pose" : customizeType
+		case eItemType.gladiator_card_frame:
+			customizeType = customizeType == "" ? "frame" : customizeType
+		case eItemType.gladiator_card_kill_quip:
+			customizeType = customizeType == "" ? "kill_quip" : customizeType
+		case eItemType.gladiator_card_intro_quip:
+			customizeType = customizeType == "" ? "intro_quip" : customizeType
+			customizeTarget = "gladiator_card"
+			if ( context != null )
+				customizeClass = ItemFlavor_GetHumanReadableRefForPIN_Slow( expect ItemFlavor( context ) )
+			break
+
+		case eItemType.emote_icon:
+			customizeType = "holospray"
+			customizeTarget = "character"
+			if ( context != null )
+				customizeClass = ItemFlavor_GetHumanReadableRefForPIN_Slow( expect ItemFlavor( context ) )
+			break
+
+		case eItemType.character_skin:
+			customizeType = customizeType == "" ? "skin" : customizeType
+		case eItemType.character_execution:
+			customizeType = customizeType == "" ? "finisher" : customizeType
+		case eItemType.melee_skin:
+			customizeType = customizeType == "" ? "melee" : customizeType
+			customizeTarget = "character"
+			if ( context != null )
+				customizeClass = ItemFlavor_GetHumanReadableRefForPIN_Slow( expect ItemFlavor( context ) )
+			break
+
+
+
+
+
+
+
+
+	}
+
+	selections[ selection_index ] <- ItemFlavor_GetHumanReadableRefForPIN_Slow( itemFlavor ).tolower()
+	selections[ selection_rarity ] <- customizeQuality.tolower()
+	selections[ "s_class" ] <- customizeClass
+
+	AddPINTelemetryEvent( "customization",
+		PIN_StandardHeader(),
+		{
+			selection = selections,
+			target  = customizeTarget,
+			type    = customizeType,
+			action  = customizeAction,
+			tier = customizeTier
+		}
+	)
+}
+
+
+void function PIN_GameStateChanged( int gameState )
+{
+	if ( !GetConVarBool( "script_enable_ranked_game_state_pin" ) )
+	{
+		return
+	}
+	if ( !GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_RANKED ) ) 
+	{
+		return
+	}
+	printt( "PIN_GameStateChanged", UITime(), gameState )
+	
+	if ( REQUIRED_GAME_STATES.contains( gameState ) )
+	{
+		file.lastStateStartTime = UITime()
+	}
+	
+	else if ( REQUIRED_GAME_STATES.contains( gameState - 1 ) && gameState - 1 == file.lastGameState )
+	{
+		float durationTime = UITime() - file.lastStateStartTime
+		if ( file.lastStateStartTime != -1 && durationTime > 0 )
+		{
+			AddPINTelemetryEvent( "game_state",
+				PIN_StandardHeader(),
+				{
+					duration	= durationTime,
+					server_id 	= GetUniqueServerId(),
+					state_id 	= gameState - 1
+				} )
+		}
+	}
+	else
+	{
+		file.lastStateStartTime = -1
+	}
+	file.lastGameState = gameState
+}
+
+void function PIN_FadeOutScreen()
+{
+	printt( "PIN_FadeOutScreen", UITime() )
+	if ( !GetConVarBool( "script_enable_ranked_game_state_pin" ) )
+	{
+		return
+	}
+	if ( !GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_RANKED ) )
+	{
+		return
+	}
+	if ( file.lastGameState != eGameState.WaitingForPlayers )
+	{
+		return
+	}
+	float durationTime = UITime() - file.lastStateStartTime
+	if ( file.lastStateStartTime == -1 || durationTime < 0 )
+	{
+		return
+	}
+
+	AddPINTelemetryEvent( "page_view",
+		PIN_StandardHeader(),
+		{
+			pgid = "prematch_overview_ranked",
+			pgdur = durationTime,
+			type = "menu",
+			server_id = GetUniqueServerId()
+		}
+	)
+}
+
+string function PIN_GetPlayerClass( entity player )
+{
+	if ( !LoadoutSlot_IsReady( ToEHI( player ), Loadout_Character() ) )
+		return "unknown"
+
+	return ItemFlavor_GetCharacterRef( LoadoutSlot_GetItemFlavor( ToEHI( player ), Loadout_Character() ) )
+}
+
+void function PIN_PlayerRepeatedTapstrafe( entity player, bool wasSuccess )
+{
+	int gdur = PIN_GetSessionDuration()
+
+		AddPINTelemetryEvent( "advanced_movement",
+			PIN_StandardHeader(),
+			{
+				gdur			= gdur,
+				event_name = 	"tap_strafe"
+				was_success		= wasSuccess
+				p_char 			= PIN_GetPlayerClass( player ),
+				p_dir 			= VectorToAngles( player.GetViewVector() ),
+				p_loc 			= player.GetOrigin(),
+				p_team_id 		= string( player.GetTeam() ),
+			}
+		)
+}
+
+
+string function GetPINRarity( int tier )
+{
+	switch ( tier )
+			{
+		case 0:
+		case 1:
+			return "common"
+
+		case 2:
+			return "rare"
+
+		case 3:
+			return "epic"
+
+		case 4:
+			return "legendary"
+
+		case 5:
+			return "heirloom"
+
+		case 6:
+			return "iconic"
+
+		default:
+			Assert( false, "Unhandled loot rarity " + tier )
+			return "unknown_" + tier
+		}
+
+	unreachable
+}
+
+
+void function OnPINWaypointCreated( entity wp )
+{
+	file.networkWaypoint = wp
+
+	RunUIScript( "UpdateMatchPINData", "mid", wp.GetWaypointString( 0 ) )
+	RunUIScript( "UpdateMatchPINData", "map", GetMapName() )
+	RunUIScript( "UpdateMatchPINData", "match_type", GetCurrentPlaylistVarString( "pin_match_type", "survival" ) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PIN_UltimateReadyPing( entity player, string pingType, bool isUltinInventory )
+{
+	AddPINTelemetryEvent( "tag",
+		PIN_StandardHeader(),
+		{
+			tag_type = pingType,
+			ult_inv = isUltinInventory,
+		}
+	)
+}
+
+void function PIN_DynamicDialogue( string alias )
+{
+	AddPINTelemetryEvent( "tag",
+		PIN_StandardHeader(),
+		{
+			tag_type = alias,
+		}
+	)
+}
+
+void function PIN_NET_TraceRouteResult(entity player, table result)
+{
+	AddPINTelemetryEvent("trace_route_result", PIN_StandardHeader(), result)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PIN_PageView_TutorialModal( string type,  string uniqueId )
+{
+	table<string> metaData
+	metaData["hub_name"] <- uniqueId
+
+	AddPINTelemetryEvent( "page_view",
+		PIN_StandardHeader(),
+		{
+			pgid = uniqueId.tolower()
+			fromid = uniqueId.tolower()
+			type = "tutorial_modal"
+			meta = metaData
+		}
+	)
+}
+
+void function PIN_MarkOnMap ( string tagType, string uniqueId, string itemRef, vector pingPos )
+{
+		AddPINTelemetryEvent( "tag",
+		PIN_StandardHeader( ),
+		{
+			gdur = PIN_GetSessionDuration(),
+			tag_loc = pingPos,
+			tag_type = tagType.tolower(),
+			tag_id = uniqueId.tolower(),
+			item_id = itemRef,
+		}
+	)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PIN_ReportPlayer( string codePath, string targetUid, string targetHardware )
+{
+#if DEV
+	printt( "#EADP PIN " + codePath + " hardware=" + targetHardware + " uid=" + targetUid )
+#endif
+	AddPINTelemetryEvent( "report_player",
+		PIN_StandardHeader(),
+		{
+			code_path = codePath
+			target_uid = targetUid
+			target_hardware = targetHardware
+		}
+	)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

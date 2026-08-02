@@ -1,0 +1,819 @@
+global function GetPlaylistVar_AirdropMythicS24Enabled
+
+
+global function Sh_AirdropMythicS24_Init
+global function Sh_AirdropMythicS24_IsRampartAirdrop
+
+
+global function ServerToClient_AirdropMythicS24_Announcement
+
+
+
+
+
+
+global const string TARGETNAME_DROPPOD_RAMPART = "care_package_rampart"
+
+const asset ICON_DROPPOD_RAMPART_LARGE = $"rui/hud/gametype_icons/survival/icon_rampart_supply_depot_large"
+const asset ICON_DROPPOD_RAMPART_SMALL = $"rui/hud/gametype_icons/survival/icon_rampart_supply_depot_small"
+const asset MODEL_DROPPOD_RAMPART = $"mdl/vehicle/droppod_loot/droppod_loot_animated_rampart.rmdl"
+const asset MODEL_LEGEND_RAMPART = $"mdl/humans/class/medium/pilot_medium_rampart.rmdl"
+
+const asset MODEL_LEGEND_FUSE = $"mdl/humans/class/medium/pilot_medium_fuse.rmdl"
+
+
+
+
+const string SOUND_DROPPOD_RAMPART_MARKER = "Survival_LootPod_MythicR301_Beacon_Marker"
+const string SOUND_DROPPOD_RAMPART_STEAM = "Survival_LootPod_MythicR301_SteamSizzle"
+const float SOUND_DROPPOD_RAMPART_CODE_CONTROLLER = 5.0
+const string SKIN_LEGEND_HOLO = "holo"
+const string ANIM_DROPPOD_RAMPART = "rampart_igc_mythic_weapon_teaser"
+
+const string ANIM_DROPPOD_RAMPART_S26 = "rampart_poi_mythic_weapon_flatline"
+const string ANIM_DROPPOD_FUSE_S26 = "fuse_poi_mythic_weapon_flatline"
+
+
+
+
+
+const string SCRIPTNAME_DROPPOD_RAMPART_ICON = "waypoint_droppod_rampart_icon"
+
+const string SIG_ANIM_DROPPOD_RAMPART_END = "AnimDroppodRampartEnd"
+const string SIG_DROPPOD_RAMPART_PING = "PerkPropPinged"
+const string SIG_DROPPOD_RAMPART_PING_DESTROYED = "PerkPropPingDestroyed"
+const string SIG_DROPPOD_RAMPART_MARKER_DESTROY = "DroppodRampartMarkerDestroy"
+
+const float SCALE_DEATHFIELD_RADIUS = 0.85
+
+global const float OFFSET_DROPPOD_RAMPART_ICON_UP = 75
+const float SIZE_DROPPOD_RAMPART_WAYPOINT_MIN = 32
+const float SIZE_DROPPOD_RAMPART_WAYPOINT_MAX = 48
+const float DIST_DROPPOD_RAMPART_WAYPOINT_MIN = 40 * METERS_TO_INCHES
+const float DIST_DROPPOD_RAMPART_WAYPOINT_MAX = 150 * METERS_TO_INCHES
+const float DIST_DROPPOD_RAMPART_PING = 3250
+const vector OFFSET_DROPPOD_RAMPART_PING_ICON = < 0, 0, 75.0 >
+
+#if DEV
+const bool DEBUG_PRINT = false
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct AirdropData
+{
+	int round
+	int dropCount 
+	float preWait
+	bool startOnShrink
+	array< array<string> > content
+}
+
+struct AirdropObjectiveInfo
+{
+	bool hasObjective
+	entity mapObjective
+}
+
+struct AirdropIconInfo
+{
+	var mapRui
+	var minimapRui
+	var worldspaceRui
+
+	bool hasIcons = false
+	bool isWorldspaceVisible = false
+	bool isPinged = false
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+	table < EHI, AirdropIconInfo > airdropEHIToIconInfos
+	entity highlightedAirdrop
+
+} file
+
+
+
+void function Sh_AirdropMythicS24_Init()
+{
+	if ( !GetPlaylistVar_AirdropMythicS24Enabled() )
+		return
+
+	PrecacheScriptString( SCRIPTNAME_DROPPOD_RAMPART_ICON )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	RegisterSignal( SIG_DROPPOD_RAMPART_MARKER_DESTROY )
+
+	if ( GetPlaylistVar_AirdropMythicS24MapFeature() )
+	{
+		SetMapFeatureItem( 500, Localize( "#AIRDROP_MYTHIC_S24_MAP_FEATURE_TITLE" ), Localize( "#AIRDROP_MYTHIC_S24_MAP_FEATURE_DESC" ), ICON_DROPPOD_RAMPART_LARGE )
+	}
+
+
+	Remote_RegisterClientFunction( "ServerToClient_AirdropMythicS24_Announcement" )
+
+	Sh_AirdropMythicS24_RegisterWPObjective()
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________AirdropSetup___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________AirdropDeploy___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_AirdropMythicS24_Announcement()
+{
+	vector rampartColorMain = ColorPalette_GetColorFromID( COLORID_AIRDROP_RAMPART_COLOR ) / 255.0
+	vector rampartColorDark = rampartColorMain * 0.3
+
+	CenterAnnouncementItem paintBanner = CenterAnnouncements_CreateNotchedStyle()
+	paintBanner.mainText = Localize( "#UNHINGED_ANNOUNCE_RAMPART_CARE_PACKAGE_TITLE" )
+	paintBanner.frameColor = rampartColorMain
+	paintBanner.textureColor = rampartColorMain
+	paintBanner.textureAlpha = 0.6
+	paintBanner.backgroundColor = rampartColorDark
+	paintBanner.imageContainerFrameColor = rampartColorMain
+	paintBanner.imageContainerMaskColor = rampartColorDark
+	paintBanner.priority = eHudNotificationQueuePriority.LOW
+	paintBanner.mainIcon1 = $"rui/hud/loot/rampart_logo"
+	paintBanner.mainIcon1Color = rampartColorMain
+	paintBanner.leftTexture = $"rui/hud/splash/splash_rampart_paint"
+	paintBanner.rightTexture = $"rui/hud/splash/splash_rampart_paint"
+	paintBanner.imageContainerHeight = 70.0
+	paintBanner.paddingBottom = 5.0
+
+	CenterAnnouncementItem paintSubBanner = CenterAnnouncements_CreateGradientStyle()
+	paintSubBanner.mainText = Localize( "#UNHINGED_ANNOUNCE_RAMPART_CARE_PACKAGE_DESC_M27" )
+	paintSubBanner.scalar = 0.8
+	paintSubBanner.mainTextIsUpper = false
+	paintSubBanner.mainTextFontFace = HEADER_FONT
+	paintSubBanner.paddingTop = 5.0
+
+	AnnouncementBuilder paintBuilder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ paintBanner, paintSubBanner ] )
+	paintBuilder.priority = eHudNotificationQueuePriority.LOW
+
+	CenterAnnouncements_QueueBuilder( paintBuilder, ePersistenceContext.PLAYER )
+
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CallbackHandling___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Sh_AirdropMythicS24_IsRampartAirdrop( entity airdrop )
+{
+	if ( !IsValid( airdrop ) )
+		return false
+
+	return airdrop.GetTargetName() == TARGETNAME_DROPPOD_RAMPART
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________RampartHologram___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________WP_Objective___________________________(){}
+#endif
+
+
+void function Sh_AirdropMythicS24_RegisterWPObjective()
+{
+	WPObjective_Settings settings
+	settings.scriptName = SCRIPTNAME_DROPPOD_RAMPART_ICON
+
+	settings.enumWaypoint = eWaypoint.AIRDROP_RAMPART
+	settings.enumPingType = ePingType.AIRDROP_MYTHIC_S24
+	settings.enumCommsAction = eCommsAction.PING_AIRDROP_MYTHIC_S24
+	settings.enumMinimapObject_prop_script = eMinimapObject_prop_script.MYTHIC_S24
+
+	settings.iconInWorld = ICON_DROPPOD_RAMPART_LARGE
+	settings.iconMap = ICON_DROPPOD_RAMPART_LARGE
+
+	settings.worldIconPingDistance = 3000.0
+	settings.worldIconMinAlphaDistance = 3000.0
+	settings.worldIconMaxAlphaDistance = 3500.0
+
+	settings.pingText = "#AIRDROP_MYTHIC_S24_MAP_FEATURE_TITLE"
+
+	WPObjective_Register( settings )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEV_Commands___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PlaylistVariables___________________________(){}
+#endif
+
+bool function GetPlaylistVar_AirdropMythicS24Enabled()
+{
+	return GetCurrentPlaylistVarBool( "airdrop_mythic_s24_enabled", false )
+}
+
+bool function GetPlaylistVar_AirdropMythicS24MapFeature()
+{
+	return GetCurrentPlaylistVarBool( "airdrop_mythic_s24_map_feature", false ) && GetPlaylistVar_AirdropMythicS24Enabled()
+}
+
+bool function GetPlaylistVar_AirdropMythicS24MapIncoming()
+{
+	return GetCurrentPlaylistVarBool( "airdrop_mythic_s24_map_incoming", true )
+}
+
+string function GetPlaylistVar_AirdropMythicS24Anims()
+{
+	return GetCurrentPlaylistVarString( "airdrop_mythic_s24_anims", "-1" )
+}
+
+bool function GetPlaylistVar_AirdropMythicS24AnimDebug()
+{
+	return GetCurrentPlaylistVarBool( "airdrop_mythic_s24_anim_debug", false )
+}
+
+int function GetPlaylistVar_AirdropMythicS24AnimTriggerRadius()
+{
+	return GetCurrentPlaylistVarInt( "airdrop_mythic_s24_trigger_radius", 1024 )
+}
+
+int function GetPlaylistVar_AirdropMythicS24AnimTriggerHeight()
+{
+	return GetCurrentPlaylistVarInt( "airdrop_mythic_s24_trigger_height", 1024 )
+} 

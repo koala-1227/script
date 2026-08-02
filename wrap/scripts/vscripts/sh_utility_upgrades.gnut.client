@@ -1,0 +1,426 @@
+globalize_all_functions
+
+void function UpgradeHelper_RegisterUpgradesForCharacter( ItemFlavor character, array<ItemFlavor> upgrades,
+		table< ItemFlavor, array< ItemFlavor > > outCharacterToPassiveUpgrades,
+		table< ItemFlavor , UpgradeChoice > outPassiveFlavorToUpgradeData,
+		table< ItemFlavor, array<SettingsAssetGUID> > characterToPassiveUpgradeOverrides  )
+{
+	array<ItemFlavor> characterUpgrades
+
+#if DEV
+
+	array<int> distinctPassives
+
+#endif
+	for( int i=0; i < upgrades.len(); i++ )
+	{
+		ItemFlavor upgrade = upgrades[i]
+		UpgradeChoice parsedUpgrade
+		int passiveIndex = CharacterAbility_GetPassiveIndex( upgrade )
+
+		asset upgradeAsset = ItemFlavor_GetAsset( upgrade )
+		string description = GetGlobalSettingsString( upgradeAsset, "localizationKey_DESCRIPTION_LONG" )
+		string name = GetGlobalSettingsString( upgradeAsset, "localizationKey_NAME" )
+		string shortDesc = GetGlobalSettingsString( upgradeAsset, "localizationKey_DESCRIPTION_SHORT" )
+		if( shortDesc == "" )
+			shortDesc = description
+		asset icon = GetGlobalSettingsAsset( upgradeAsset, "icon" )
+		string passiveWeaponMod = CharacterAbility_GetPassiveWeaponMod( upgrade )
+
+		parsedUpgrade.passiveIndex = passiveIndex
+
+		parsedUpgrade.desc = Localize( description )
+		parsedUpgrade.title = Localize( name )
+		parsedUpgrade.shortDesc = Localize( shortDesc )
+		parsedUpgrade.icon = icon
+
+		parsedUpgrade.passiveWeaponMod = passiveWeaponMod
+		outPassiveFlavorToUpgradeData[upgrade] <- parsedUpgrade
+		characterUpgrades.append( upgrade )
+
+#if DEV
+
+		if( passiveIndex != ePassives.PAS_MOD_UPGRADE_ONLY )
+		{
+			if( distinctPassives.contains( passiveIndex ) )
+			{
+				Assert( false, "Upgrade passive " + passiveIndex + " was defined multiple times for character " + DEV_ItemFlavor_GetCleanedAssetPath( character ) )
+			}
+			else
+			{
+				distinctPassives.append( passiveIndex )
+			}
+		}
+
+#endif
+	}
+
+	outCharacterToPassiveUpgrades[character] <- characterUpgrades
+
+	UpgradeHelper_ApplyOverride_Internal( character, outCharacterToPassiveUpgrades, characterToPassiveUpgradeOverrides )
+}
+
+void function UpgradeHelper_ApplyOverride_Internal( ItemFlavor character,
+		table< ItemFlavor, array< ItemFlavor > > characterToPassiveUpgrades,
+		table< ItemFlavor, array<SettingsAssetGUID> > characterToPassiveUpgradeOverrides )
+{
+	if( !( character in characterToPassiveUpgradeOverrides ) )
+		return
+
+	if( !( character in characterToPassiveUpgrades ) )
+		return
+
+	for( int i=0; i < characterToPassiveUpgradeOverrides[character].len(); i++ )
+	{
+		SettingsAssetGUID guid = characterToPassiveUpgradeOverrides[character][i]
+		if( !IsValidItemFlavorGUID( guid ) )
+		{
+			continue
+		}
+		ItemFlavor upgradeFlav = GetItemFlavorByGUID( guid )
+		characterToPassiveUpgrades[character][i] = upgradeFlav
+	}
+}
+
+void function UpgradeHelper_ParseUpgradeOverrides( int expectedLength, string playlistVar,
+		table< ItemFlavor, array< ItemFlavor > > characterToPassiveUpgrades,
+		table< ItemFlavor, array<SettingsAssetGUID> > outCharacterToPassiveUpgradeOverrides )
+{
+	string overrideStr = GetCurrentPlaylistVarString( playlistVar, "" )
+	array<string> characterOverrides = GetTrimmedSplitString( overrideStr, " " )
+	foreach( string override in characterOverrides )
+	{
+		array<string> keys = GetTrimmedSplitString( override, ":" )
+		if( keys.len() < expectedLength ) 
+		{
+			continue
+		}
+		string characterStr = keys[0]
+		if( !IsValidItemFlavorCharacterRef( characterStr ) )
+		{
+			continue
+		}
+
+		ItemFlavor characterFlavor = GetItemFlavorByCharacterRef( characterStr )
+		array<SettingsAssetGUID> overrideGuids
+		for( int i=1; i < expectedLength; i++ )
+		{
+			SettingsAssetGUID guid = ConvertItemFlavorGUIDStringToGUID(keys[i])
+			overrideGuids.append( guid )
+		}
+		outCharacterToPassiveUpgradeOverrides[characterFlavor] <- overrideGuids
+
+		UpgradeHelper_ApplyOverride_Internal( characterFlavor, characterToPassiveUpgrades, outCharacterToPassiveUpgradeOverrides )
+	}
+}
+
+bool function LegendUpgrades_IsEnabled()
+{
+	
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return true
+	}
+
+	else if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return true
+	}
+
+
+
+
+
+
+
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array< int > function UpgradeHelper_GetPotentialClassPerkUpgradesForPlayer( entity player, array< UpgradeChoice > upgrades )
+{
+	array<int> result
+	for( int i=0; i < upgrades.len(); i++ )
+	{
+		UpgradeChoice upgrade = upgrades[i]
+		int perkIndex = ePerkIndex.INVALID
+		switch( upgrade.passiveIndex )
+		{
+			case ePassives.PAS_UPGRADE_CAREPACKAGE_INSIGHT:
+				perkIndex = ePerkIndex.CARE_PACKAGE_INSIGHT
+				break
+			case ePassives.PAS_UPGRADE_BEACON_SCAN:
+				perkIndex = ePerkIndex.BEACON_ENEMY_SCAN
+				break
+			case ePassives.PAS_UPGRADE_CONSOLE_SCAN:
+				perkIndex = ePerkIndex.BEACON_SCAN
+				break
+			case ePassives.PAS_UPGRADE_SUPPORT_PERKS_PLUS:
+				perkIndex = ePerkIndex.EXTRA_BIN_LOOT
+				break
+			case ePassives.PAS_UPGRADE_ASSAULT_PERKS_PLUS:
+				perkIndex = ePerkIndex.MUNITIONS_BOX
+				break
+			case ePassives.PAS_UPGRADE_CONTROLLER_PERKS_PLUS:
+				perkIndex = ePerkIndex.BEACON_SCAN
+				break
+			case ePassives.PAS_UPGRADE_RECON_PERKS_PLUS:
+				perkIndex = ePerkIndex.BEACON_ENEMY_SCAN
+				break
+			case ePassives.PAS_UPGRADE_ASSAULT_PERKS:
+				perkIndex = ePerkIndex.MUNITIONS_BOX
+				break
+			case ePassives.PAS_UPGRADE_KNOCK_EXPERT:
+				perkIndex = ePerkIndex.KNOCK_EXPERT
+				break
+			default:
+				continue
+		}
+
+		result.append( perkIndex )
+	}
+
+	if( PlayerHasPassive( player, ePassives.PAS_MIRAGE ) && !( PlayerHasPassive( player, ePassives.PAS_PAS_UPGRADE_ONE ) || PlayerHasPassive( player, ePassives.PAS_ULT_UPGRADE_TWO ) ) )
+	{
+		result.append( ePerkIndex.CARE_PACKAGE_INSIGHT )
+		result.append( ePerkIndex.BEACON_ENEMY_SCAN )
+		result.append( ePerkIndex.BEACON_SCAN )
+		result.append( ePerkIndex.MUNITIONS_BOX )
+	}
+
+	return result
+}
+
+
+
+string function UpgradeHelper_GetUpgradeTitleString( UpgradeChoice upgrade )
+{
+	if (upgrade.passiveIndex != ePassives.INVALID )
+		return Localize( upgrade.title )
+
+	return "Missing string"
+}
+
+string function UpgradeHelper_GetUpgradeDescString( UpgradeChoice upgrade )
+{
+	if (upgrade.passiveIndex != ePassives.INVALID )
+		return Localize( upgrade.desc )
+
+	return "Missing string"
+}
+
+string function UpgradeHelper_GetUpgradeTypeString( UpgradeChoice upgrade )
+{
+	if (upgrade.passiveIndex != ePassives.INVALID )
+		return upgrade.shortDesc
+
+	return "Missing string"
+}
+
+asset function UpgradeHelper_GetUpgradeIcon( UpgradeChoice upgrade )
+{
+	if (upgrade.passiveIndex != ePassives.INVALID )
+		return upgrade.icon
+
+	return $"rui/weapon_icons/r5/weapon_inspect"
+}
+
+bool function UpgradeHelper_ShowXpBar()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ArmorTiedToUpgrades() && UpgradeCore_ShowUpgradesUnitframe()
+	}
+
+	if ( LegendUpgrades_IsEnabled() )
+	{
+		return LinearUpgradeCore_ShowUpgradesUnitframe()
+	}
+
+
+	return false
+}
+
+
+bool function LegendUpgrades_ShowUpgradeTreeInventory()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ShowUpgradeTreeInventory()
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_ShowUpgradeTreeInventory()
+	}
+
+
+	return false
+}
+
+bool function LegendUpgrades_ArmorTiedToUpgrades()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ArmorTiedToUpgrades()
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_ArmorTiedToUpgrades()
+	}
+
+
+	return false
+}
+
+bool function LegendUpgrades_ShowHudUpgradeSelection()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ShowHudUpgradeSelection()
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_ShowHudUpgradeSelection()
+	}
+
+
+	return false
+}
+
+bool function LegendUpgrades_ShowUpgradeTree_LobbyMenu()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ShowUpgradeTree_LobbyMenu()
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_ShowUpgradeTree_LobbyMenu()
+	}
+
+
+	return false
+}
+
+bool function LegendUpgrades_ShowUpgradeTree_SkillsMenu()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ShowUpgradeTree_SkillsMenu()
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_ShowUpgradeTree_SkillsMenu()
+	}
+
+
+	return false
+}
+
+bool function LegendUpgrades_ShowUpgradeTree_CharacterSelect()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return UpgradeCore_ShowUpgradeTree_CharacterSelect()
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_ShowUpgradeTree_CharacterSelect()
+	}
+
+
+	return false
+}
+
+bool function LegendUpgrades_ShowLevelUpSequence()
+{
+	if ( UpgradeCore_IsEnabled() )
+	{
+		return true
+	}
+
+	if ( LinearUpgradeCore_IsEnabled() )
+	{
+		return LinearUpgradeCore_UseLegendUpgrades()
+	}
+
+
+	return false
+}
+ 

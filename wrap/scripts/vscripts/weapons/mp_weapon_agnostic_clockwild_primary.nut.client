@@ -1,0 +1,263 @@
+
+global function MpWeaponClockwildPrimary_Init
+
+global function OnWeaponActivate_weapon_agnostic_clockwild_primary
+global function OnWeaponDeactivate_weapon_agnostic_clockwild_primary
+
+
+
+
+
+const float DEFAULT_FX_FADE_TIME_SECONDS = 2.0
+
+const int AGNOSTIC_CLOCKWILD_WEAPON_GUID = 964338999
+
+const string AGNOSTIC_CLOCKWILD_ACTIVATED_SIGNAL_NAME = "agnostic_clockwild_activated"
+const string AGNOSTIC_CLOCKWILD_DEACTIVATED_SIGNAL_NAME = "agnostic_clockwild_deactivated"
+
+const string AGNOSTIC_CLOCKWILD_FX_CORE_IDLE = "P_wpn_clockwild_tonfa_core_idle"
+const string AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B = "P_wpn_clockwild_tonfa_core_idle_B"
+const string AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE = "P_wpn_clockwild_tonfa_blade_idle"
+const string AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_L = "P_wpn_clockwild_tonfa_core_idle_L"
+const string AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B_L = "P_wpn_clockwild_tonfa_core_idle_B_L"
+const string AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE_L = "P_wpn_clockwild_tonfa_blade_idle_L"
+const string AGNOSTIC_CLOCKWILD_FX_CORE_3P = "P_wpn_clockwild_tonfa_core_3P"
+
+
+
+
+
+
+
+const array<asset> AGNOSTIC_CLOCKWILD_FX_ASSETS_REFERENCES = [
+	$"P_wpn_clockwild_tonfa_core_idle",
+	$"P_wpn_clockwild_tonfa_core_idle_B",
+	$"P_wpn_clockwild_tonfa_blade_idle",
+	$"P_wpn_clockwild_tonfa_core_idle_L",
+	$"P_wpn_clockwild_tonfa_core_idle_B_L",
+	$"P_wpn_clockwild_tonfa_blade_idle_L",
+	$"P_wpn_clockwild_tonfa_core_3P",
+	$"P_clockwild_tonfa_swipe",
+	$"P_clockwild_tonfa_swipe_3P",
+	$"P_clockwild_tonfa_swipe_inspect",
+
+	$"P_wpn_clockwild_tonfa_core_idle_RT01",
+	$"P_wpn_clockwild_tonfa_core_idle_B_RT01",
+	$"P_wpn_clockwild_tonfa_blade_idle_RT01",
+	$"P_wpn_clockwild_tonfa_core_idle_RT01_L",
+	$"P_wpn_clockwild_tonfa_core_idle_B_RT01_L",
+	$"P_wpn_clockwild_tonfa_blade_idle_RT01_L",
+	$"P_wpn_clockwild_tonfa_core_3P_RT01",
+	$"P_clockwild_tonfa_swipe_RT01",
+	$"P_clockwild_tonfa_swipe_3P_RT01",
+	$"P_clockwild_tonfa_swipe_inspect_rt01",
+
+	$"P_wpn_clockwild_tonfa_core_idle_RT02",
+	$"P_wpn_clockwild_tonfa_core_idle_B_RT02",
+	$"P_wpn_clockwild_tonfa_blade_idle_RT02",
+	$"P_wpn_clockwild_tonfa_core_idle_RT02_L",
+	$"P_wpn_clockwild_tonfa_core_idle_B_RT02_L",
+	$"P_wpn_clockwild_tonfa_blade_idle_RT02_L",
+	$"P_wpn_clockwild_tonfa_core_3P_RT02",
+	$"P_clockwild_tonfa_swipe_RT02",
+	$"P_clockwild_tonfa_swipe_3P_RT02",
+	$"P_clockwild_tonfa_swipe_inspect_rt02",
+
+	$"P_wpn_clockwild_tonfa_core_idle_RT03",
+	$"P_wpn_clockwild_tonfa_core_idle_B_RT03",
+	$"P_wpn_clockwild_tonfa_blade_idle_RT03",
+	$"P_wpn_clockwild_tonfa_core_idle_RT03_L",
+	$"P_wpn_clockwild_tonfa_core_idle_B_RT03_L",
+	$"P_wpn_clockwild_tonfa_blade_idle_RT03_L",
+	$"P_wpn_clockwild_tonfa_core_3P_RT03",
+	$"P_clockwild_tonfa_swipe_RT03",
+	$"P_clockwild_tonfa_swipe_3P_RT03",
+	$"P_clockwild_tonfa_swipe_inspect_rt03",
+
+	$"P_wpn_clockwild_tonfa_spin_long",
+	$"P_wpn_clockwild_tonfa_spin_long_L",
+	$"P_wpn_clockwild_tonfa_spin2_short",
+	$"P_wpn_clockwild_tonfa_spin2_short_l",
+	$"P_wpn_clockwild_tonfa_spin_short",
+	$"P_wpn_clockwild_tonfa_spin_short_l",
+	$"P_wpn_clockwild_tonfa_spin_supper_short",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_l",
+	$"P_wpn_CW_tonfa_spin_fast_long",
+
+	$"P_wpn_clockwild_tonfa_spin_long_rt01",
+	$"P_wpn_clockwild_tonfa_spin_long_L_rt01",
+	$"P_wpn_clockwild_tonfa_spin2_short_rt01",
+	$"P_wpn_clockwild_tonfa_spin2_short_l_rt01",
+	$"P_wpn_clockwild_tonfa_spin_short_rt01",
+	$"P_wpn_clockwild_tonfa_spin_short_l_rt01",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_rt01",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_l_rt01",
+	$"P_wpn_CW_tonfa_spin_fast_long_rt01",
+
+	$"P_wpn_clockwild_tonfa_spin_long_rt02",
+	$"P_wpn_clockwild_tonfa_spin_long_L_rt02",
+	$"P_wpn_clockwild_tonfa_spin2_short_rt02",
+	$"P_wpn_clockwild_tonfa_spin2_short_l_rt02",
+	$"P_wpn_clockwild_tonfa_spin_short_rt02",
+	$"P_wpn_clockwild_tonfa_spin_short_l_rt02",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_rt02",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_l_rt02",
+	$"P_wpn_CW_tonfa_spin_fast_long_rt02",
+
+	$"P_wpn_clockwild_tonfa_spin_long_rt03",
+	$"P_wpn_clockwild_tonfa_spin_long_L_rt03",
+	$"P_wpn_clockwild_tonfa_spin2_short_rt03",
+	$"P_wpn_clockwild_tonfa_spin2_short_l_rt03",
+	$"P_wpn_clockwild_tonfa_spin_short_rt03",
+	$"P_wpn_clockwild_tonfa_spin_short_l_rt03",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_rt03",
+	$"P_wpn_clockwild_tonfa_spin_supper_short_l_rt03",
+	$"P_wpn_CW_tonfa_spin_fast_long_rt03",
+
+]
+
+
+
+void function MpWeaponClockwildPrimary_Init()
+{
+
+        
+		
+		AddCallback_OnItemFlavorRegistered( eItemType.melee_skin, void function( ItemFlavor skin ) {
+			ItemFlavor weapon = ItemFlavor_GetParentFlavorOFType( skin, eItemType.melee_weapon )
+			if ( ItemFlavor_GetGUID( weapon ) == AGNOSTIC_CLOCKWILD_WEAPON_GUID )
+			{
+				PrecacheAllParticleSystemsOfMeleeSkinVfxAliases( skin )
+			}
+		} )
+
+
+	RegisterScriptAnimWindowCallbacks(
+		"agnostic_clockwild_stop_persistent_fx_core_idle_b",
+		void function ( entity ent, string param ) { OnStopPersistentFxScriptAnimWindowStart( ent, param, AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B ) },
+		void function ( entity ent, string param ) { OnStopPersistentFxScriptAnimWindowStop( ent, param, AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B, "FX_core_180" ) } )
+
+	RegisterScriptAnimWindowCallbacks(
+		"agnostic_clockwild_stop_persistent_fx_core_idle",
+		void function ( entity ent, string param ) { OnStopPersistentFxScriptAnimWindowStart( ent, param, AGNOSTIC_CLOCKWILD_FX_CORE_IDLE ) },
+		void function ( entity ent, string param ) { OnStopPersistentFxScriptAnimWindowStop( ent, param, AGNOSTIC_CLOCKWILD_FX_CORE_IDLE, "FX_core" ) } )
+
+	RegisterScriptAnimWindowCallbacks(
+		"agnostic_clockwild_stop_persistent_fx_blade_idle",
+		void function ( entity ent, string param ) { OnStopPersistentFxScriptAnimWindowStart( ent, param, AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE ) },
+		void function ( entity ent, string param ) { OnStopPersistentFxScriptAnimWindowStop( ent, param, AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE, "FX_blade" ) } )
+
+	RegisterSignal( AGNOSTIC_CLOCKWILD_ACTIVATED_SIGNAL_NAME )
+	RegisterSignal( AGNOSTIC_CLOCKWILD_DEACTIVATED_SIGNAL_NAME )
+}
+
+void function OnStopPersistentFxScriptAnimWindowStart( entity ent, string parameter, string fxAliasName )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+	if ( IsValid( weapon ) )
+	{
+		weapon.StopWeaponEffectWithAlias( fxAliasName, "" )
+	}
+}
+
+void function OnStopPersistentFxScriptAnimWindowStop( entity ent, string parameter, string fxAliasName, string attachmentName )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+	if ( IsValid( weapon ) )
+	{
+		weapon.PlayWeaponEffectWithAlias( fxAliasName, "", attachmentName, true )
+	}
+}
+
+void function OnWeaponActivate_weapon_agnostic_clockwild_primary( entity weapon )
+{
+	
+	
+	weapon.Signal( AGNOSTIC_CLOCKWILD_ACTIVATED_SIGNAL_NAME )
+
+	StartPersistentFx_1P( weapon )
+	StartPersistentFx_3P( weapon )
+}
+
+void function OnWeaponDeactivate_weapon_agnostic_clockwild_primary( entity weapon )
+{
+	weapon.Signal( AGNOSTIC_CLOCKWILD_DEACTIVATED_SIGNAL_NAME )
+
+	thread WaitAndNotifyDeactivatedRecentlyThread( weapon ) 
+
+	
+	StopPersistentFx_3P( weapon )
+}
+
+
+
+
+
+
+
+
+void function WaitAndNotifyDeactivatedRecentlyThread( entity weapon )
+{
+	entity owner =  weapon.GetOwner()
+	if ( !IsValid( owner ) )
+		return
+
+	owner.EndSignal( "OnDestroy" )
+	owner.EndSignal( "OnDeath" )
+
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( AGNOSTIC_CLOCKWILD_ACTIVATED_SIGNAL_NAME  )
+	weapon.EndSignal( AGNOSTIC_CLOCKWILD_DEACTIVATED_SIGNAL_NAME  )
+
+	OnThreadEnd(
+		function( string signalID ) : ( weapon )
+		{
+			if ( IsValid( weapon ) )
+			{
+				StopPersistentFx_1P( weapon )
+			}
+		}
+	)
+
+	int frameCount = 0
+	float startTime = Time()
+	while ( ! owner.IsMantling() && Time() - startTime < DEFAULT_FX_FADE_TIME_SECONDS )
+		wait 0.25 
+}
+
+void function StartPersistentFx_1P( entity weapon )
+{
+	weapon.e.activatedWeaponEffects = true
+	weapon.PlayWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE, "", "FX_core", true )
+	weapon.PlayWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B, "", "FX_core_180", true )
+	weapon.PlayWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE, "", "FX_blade", true )
+	weapon.PlayWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_L, "", "FX_core_Left", true )
+	weapon.PlayWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B_L, "", "FX_core_180_Left", true )
+	weapon.PlayWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE_L, "", "FX_blade_Left", true )
+}
+
+void function StartPersistentFx_3P( entity weapon )
+{
+	weapon.PlayWeaponEffectWithAlias( "", AGNOSTIC_CLOCKWILD_FX_CORE_3P, "FX_blade", true )
+}
+
+void function StopPersistentFx_1P( entity weapon )
+{
+	if ( weapon.e.activatedWeaponEffects ) 
+	{
+		weapon.StopWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE, "" )
+        weapon.StopWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B, "" )
+        weapon.StopWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE, "" )
+		weapon.StopWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_L, "" )
+        weapon.StopWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_CORE_IDLE_B_L, "" )
+        weapon.StopWeaponEffectWithAlias( AGNOSTIC_CLOCKWILD_FX_BLADE_IDLE_L, "" )
+	}
+}
+
+void function StopPersistentFx_3P( entity weapon )
+{
+	weapon.StopWeaponEffectWithAlias( "", AGNOSTIC_CLOCKWILD_FX_CORE_3P )
+}
+
+
+ 

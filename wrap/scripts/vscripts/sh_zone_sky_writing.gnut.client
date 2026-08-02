@@ -1,0 +1,910 @@
+global function ZoneSkyWriting_Init
+
+
+
+
+
+
+
+global function ClientCodeCallback_SkyWriting_GetZoneData
+global function ZoneSkyWriting_FadeOutAllPOIs
+global function ZoneSkyWriting_GetActiveHeightFadeOut
+global function ZoneSkyWriting_GetZoneIdMapNamesToDisplay
+
+
+const float POI_UI_WIDTH = 3200
+const float POI_UI_HEIGHT = 3200
+const float POI_UI_WIDTH_HALF = 1600
+const float POI_UI_HEIGHT_HALF = 1600
+const int POI_AMMO_SLOTS = 4
+
+enum ePOIStatus
+{
+	INIT,
+	FACING_PLAYER,
+	FADE_OUT
+}
+
+struct POIData
+{
+	var topology = null
+	var rui = null
+	entity ruiHolderEnt = null
+	int status = ePOIStatus.INIT
+
+	bool isFadingPois = false
+}
+
+struct
+{
+
+	array< POIData > POIDatas
+
+	table< int, vector > zonePositions
+	table< int, vector > zoneSpecificOffsets
+	table< int, string > zoneIdMapNamesToDisplay
+	table< int, int > zonesTiers
+	bool ruisCreated = false
+	bool stopUpdatingSkyWriting = false
+	table< int, int > hotZonesTiers
+
+	float heightOffset  = 6000
+	float heightFadeOut = 4000
+
+
+		float heightArsenalsFadeOut = 7600
+
+
+		float heightEndorsementStationsFadeOut = 7600
+
+
+
+
+
+
+} file
+
+void function ZoneSkyWriting_Init()
+{
+	if( !ZoneSkyWriting_Enabled() )
+		return
+
+
+
+
+
+
+		file.ruisCreated = false
+		AddCallback_OnPlayerMatchStateChanged( OnPlayerMatchStateChanged )
+		AddOnSpectatorTargetChangedCallback( OnSpectatorTargetChanged )
+		LoadMapZoneData_Height()
+
+}
+
+bool function ZoneSkyWriting_Enabled()
+{
+	if ( !GetCurrentPlaylistVarBool( "jump_from_plane_enabled", true ) )
+		return false
+
+	return GetCurrentPlaylistVarBool( "zone_sky_writing_enabled" , true )
+}
+
+bool function ZoneSkyWriting_Arsenals_Supported()
+{
+	return Arsenals_Enabled() && ( GetCurrentPlaylistVarBool( "zone_sky_writing_arsenals_supported" , true ) )
+}
+
+bool function ZoneSkyWriting_Use_FixedSortKey()
+{
+	return GetCurrentPlaylistVarBool( "zone_sky_writing_use_fixed_sortkey" , true )
+}
+
+bool function ZoneSkyWriting_LootTier_Supported()
+{
+	return GetCurrentPlaylistVarBool( "zone_sky_writing_loot_tier_supported" , true )
+}
+
+bool function ZoneSkyWriting_Observer_Supported()
+{
+	return GetCurrentPlaylistVarBool( "zone_sky_writing_observer_supported" , true )
+}
+
+float function ZoneSkyWriting_HeightOffset()
+{
+	return GetCurrentPlaylistVarFloat( "zone_sky_writing_height_offset" , 6000 )
+}
+
+float function ZoneSkyWriting_HeightFadeOut()
+{
+	return GetCurrentPlaylistVarFloat( "zone_sky_writing_height_fadeout" , 4000 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function AddNewPOIsViaPlaylist( entity viewPlayer, bool isObserverPlayer )
+{
+	int numNewPOIs = GetCurrentPlaylistVarInt( "zone_sky_writing_new_count", 0 )
+
+	for ( int index = 0; index < numNewPOIs; index++ )
+	{
+		string skyWritingPrefix = "zone_sky_writing_new_" + index + "_"
+
+		vector originPOI = StringToVector( GetCurrentPlaylistVarString( skyWritingPrefix + "origin", "0 0 0" ) )
+		int tierPOI = GetCurrentPlaylistVarInt( skyWritingPrefix + "tier", 0  )
+		string namePOI = GetCurrentPlaylistVarString( skyWritingPrefix + "name", " ")
+
+		vector worldPos = originPOI + < 0, 0, file.heightOffset >
+
+		printt( "SKYWRITE: AddNewPOIsViaPlaylist : " + Localize ( namePOI ) + " tier : " + tierPOI )
+
+		CreatePOIDataAndRUI( viewPlayer, isObserverPlayer, Localize ( namePOI ), worldPos, originPOI, tierPOI )
+	}
+}
+
+void function ClientCodeCallback_SkyWriting_GetZoneData( array<int> zoneIDs, array<int> zoneTiers )
+{
+	if( zoneIDs.len() != zoneTiers.len() )
+	{
+		printt( "SKYWRITE: ClientCodeCallback_SkyWriting_GetZoneData invalid array size" )
+		return
+	}
+
+	printt( "SKYWRITE: Client GetZoneData" )
+
+	file.zonesTiers.clear()
+	file.hotZonesTiers.clear()
+
+	for ( int i = 0; i < zoneIDs.len(); i++ )
+	{
+		file.zonesTiers[zoneIDs[i]] <- zoneTiers[i]
+
+		if( zoneTiers[i] == ePOITier.HOT )
+		{
+			file.hotZonesTiers[zoneIDs[i]] <- ePOITier.HOT
+		}
+	}
+
+	thread SetupSkyWriting()
+}
+
+
+
+void function LoadMapZoneData_Height()
+{
+	file.heightOffset  = ZoneSkyWriting_HeightOffset()
+	file.heightFadeOut = ZoneSkyWriting_HeightFadeOut()
+
+	
+	file.heightOffset = 0
+
+	printt( "SKYWRITE: heightOffset : " + file.heightOffset )
+	printt( "SKYWRITE: heightFadeOut : " + file.heightFadeOut )
+
+
+	if ( Arsenals_Enabled() && Arsenals_FadePOINameArsenalIconAtDifferentHeight() )
+	{
+		file.heightArsenalsFadeOut = file.heightFadeOut + Arsenals_AdditionalHeightForPOINameArsenalIconFade()
+	}
+
+
+	if ( Endorsements_IsActive() && Endorsements_FadePOINameEndorsementStationIconAtDifferentHeight() )
+	{
+		file.heightEndorsementStationsFadeOut = file.heightFadeOut + Endorsements_AdditionalHeightForPOINameEndorsementStationIconFade()
+	}
+
+}
+
+void function LoadMapZoneData_FromLevelEditor()
+{
+	file.zonePositions.clear()
+	file.zoneSpecificOffsets.clear()
+	file.zoneIdMapNamesToDisplay.clear()
+	file.zonesTiers.clear()
+
+	array< SkyWritingPOIData > poiDataArray = SkyWriting_GetPOIData()
+	if ( poiDataArray.len() == 0 )
+	{
+		printt( "SKYWRITE: No POI data from level editor" )
+		return
+	}
+
+	printt( "SKYWRITE: Loading " + poiDataArray.len() + " POIs from level editor" )
+
+	foreach ( SkyWritingPOIData poiData in poiDataArray )
+	{
+		int zoneId = MapZones_GetZoneIdForTriggerName( poiData.zoneName )
+
+		if ( zoneId > -1 )
+		{
+			file.zonePositions[zoneId] <- poiData.origin
+			file.zonesTiers[zoneId] <- poiData.lootTier
+
+			if( zoneId in file.hotZonesTiers )
+			{
+				file.zonesTiers[zoneId] = ePOITier.HOT
+			}
+
+			string miniMapName = GetZoneMiniMapNameForZoneId( zoneId )
+			if ( miniMapName.len() > 0 )
+			{
+				file.zoneIdMapNamesToDisplay[zoneId] <- miniMapName
+			}
+			else
+			{
+				file.zoneIdMapNamesToDisplay[zoneId] <- GetZoneNameForZoneId( zoneId )
+			}
+		}
+		else
+		{
+			Assert( false, "SKYWRITE: Invalid zoneName in level editor" + poiData.zoneName )
+		}
+	}
+}
+
+void function ResetPOIDatas()
+{
+	printt( "SKYWRITE: ResetPOIDatas" )
+
+	foreach( POIData dataPOI in file.POIDatas )
+	{
+		if( dataPOI.status == ePOIStatus.FADE_OUT )
+		{
+			if ( dataPOI.rui != null )
+			{
+				RuiSetGameTime( dataPOI.rui, "fadeStartTime", RUI_BADGAMETIME )
+			}
+
+			dataPOI.status = ePOIStatus.INIT
+		}
+	}
+}
+
+void function ClearPOIDatas_Thread()
+{
+	printt( "SKYWRITE: ClearPOIDatas_Thread" )
+
+	wait 2.0
+
+	ZoneSkyWriting_ClearPOIDatas()
+}
+
+void function ZoneSkyWriting_FadeOutAllPOIs()
+{
+	if( file.stopUpdatingSkyWriting )
+		return
+
+	printt( "SKYWRITE: FadeOutAllPOIs" )
+
+	foreach( POIData dataPOI in file.POIDatas )
+	{
+		if ( dataPOI.rui != null && dataPOI.status == ePOIStatus.FACING_PLAYER )
+		{
+			dataPOI.status = ePOIStatus.FADE_OUT
+
+			RuiSetGameTime( dataPOI.rui, "fadeStartTime", Time() )
+		}
+	}
+
+	thread ClearPOIDatas_Thread()
+}
+
+void function ZoneSkyWriting_ClearPOIDatas()
+{
+	printt( "SKYWRITE: ClearPOIDatas" )
+
+	file.stopUpdatingSkyWriting = true
+
+	foreach( POIData dataPOI in file.POIDatas )
+	{
+		if ( dataPOI.rui != null )
+		{
+			RuiDestroy( dataPOI.rui )
+			dataPOI.rui = null
+		}
+
+		if ( dataPOI.topology != null )
+		{
+			RuiTopology_Destroy( dataPOI.topology )
+			dataPOI.topology = null
+		}
+
+		if( IsValid( dataPOI.ruiHolderEnt ) )
+		{
+			dataPOI.ruiHolderEnt.Destroy()
+			dataPOI.ruiHolderEnt = null
+		}
+	}
+
+	file.POIDatas.clear()
+}
+
+void function OnSpectatorTargetChanged( entity observer, entity prevTarget, entity newTarget )
+{
+#if DEV
+		printt( "SKYWRITE: OnSpectatorTargetChanged newTarget: " + newTarget )
+#endif
+
+	if( file.stopUpdatingSkyWriting )
+		return
+
+	if( !ZoneSkyWriting_Observer_Supported() )
+	{
+		printt( "SKYWRITE: unsupported when Observer TargetChanged" )
+		return
+	}
+
+	if ( !IsValid( observer ) )
+		return
+
+	if ( !IsValid( newTarget ) )
+		return
+
+	if( observer.IsObserver() && observer.GetTeam() == TEAM_SPECTATOR )
+	{
+		if( newTarget.GetOrigin().z > ( file.heightFadeOut + METERS_TO_INCHES * 20 ) )
+		{
+			printt( "SKYWRITE: OnSpectatorTargetChanged ResetPOIDatas" )
+
+			ResetPOIDatas()
+		}
+	}
+}
+
+void function OnPlayerMatchStateChanged( entity player, int newState )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	entity clientPlayer = GetLocalClientPlayer()
+	if ( !IsValid( clientPlayer ) )
+		return
+
+#if DEV
+		printt( "SKYWRITE: OnPlayerMatchStateChanged player: " + player + "newState: " + newState )
+#endif
+
+	if( clientPlayer.IsObserver() && clientPlayer.GetTeam() == TEAM_SPECTATOR )
+	{
+		
+
+
+
+
+
+
+
+
+	}
+	else
+	{
+		
+		if ( newState == ePlayerMatchState.NORMAL )
+		{
+			ZoneSkyWriting_ClearPOIDatas();
+		}
+	}
+}
+
+var function CreatePOINameTopo( vector org, vector ang, float width, float height )
+{
+	var topo = RuiTopology_CreatePlane( <0, -( width * 0.5 ), ( height * 0.5 )>, <0, width, 0>, <0, 0, -height>, false )
+
+	return topo
+}
+
+entity function CreatePOINameHolderEnt( vector org, vector ang, float width, float height  )
+{
+	entity holderEnt = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", org, ang )
+
+	return holderEnt
+}
+
+
+
+void function CreatePOIDataAndRUI( entity viewPlayer, bool isObserverPlayer, string poiName, vector worldPos, vector originPos, int zoneLootTier, int zoneId = -1 )
+{
+	const int sortKey = FULLMAP_Z_BASE + 1000
+
+	POIData dataPOI
+	var topology
+	var rui
+
+	
+
+	entity holderEnt = CreatePOINameHolderEnt( worldPos, < 0, 0, 0 >, POI_UI_WIDTH, POI_UI_HEIGHT )
+
+	topology = CreatePOINameTopo( < 0, 0, 0 >, < 0, 0, 0 >, POI_UI_WIDTH, POI_UI_HEIGHT )
+
+	RuiTopology_SetParent( topology, holderEnt )
+
+	dataPOI.ruiHolderEnt = holderEnt
+
+	if( ZoneSkyWriting_Use_FixedSortKey() && !isObserverPlayer && IsValid( viewPlayer ) )
+	{
+		
+		
+		
+		
+		
+		
+		
+
+		float distanceToEye = Distance( viewPlayer.EyePosition(), worldPos )
+		int fixedSortKey = int( -distanceToEye / 10 )
+
+		rui = RuiCreate( $"ui/skywriting_basic.rpak", topology, RUI_DRAW_WORLD, fixedSortKey )
+	}
+	else
+	{
+		rui = RuiCreate( $"ui/skywriting_basic.rpak", topology, RUI_DRAW_WORLD, sortKey )
+	}
+
+	RuiSetString( rui, "poiName", poiName )
+	if( ZoneSkyWriting_LootTier_Supported() )
+	{
+		RuiSetInt( rui, "rarity", zoneLootTier )
+	}
+	RuiSetFloat3( rui, "worldPos", worldPos )
+
+	vector indicatorDownPos = worldPos - < 0, 0, ZoneSkyWriting_HeightOffset() >
+	RuiSetFloat3( rui, "originPos", indicatorDownPos )
+
+	RuiSetFloat( rui, "mapSize", SURVIVAL_Deathfield_GetStartRadius() * 2.0 )
+
+	if( IsValid( viewPlayer ) )
+	{
+		RuiSetFloat( rui, "distanceTo", Distance( viewPlayer.GetOrigin(), worldPos ) )
+	}
+
+	RuiKeepSortKeyUpdated( rui, true, "worldPos" )
+
+
+		if( ZoneSkyWriting_Arsenals_Supported() )
+		{
+			array< ArsenalData > nearbyArsenalData = Arsenals_GetArsenalsWithinRangeOfPOIZone( zoneId )
+			array< EHI > nearbyArsenalEHI
+			if ( nearbyArsenalData.len() == 0 )
+			{
+				
+				
+				nearbyArsenalEHI = GetClosestArsenalEHIArrayWithinRangeOfLocation( originPos, 5000, Arsenals_MaxDisplayedPerPOI() )
+			}
+			else
+			{
+				foreach( arsenalData in nearbyArsenalData )
+					nearbyArsenalEHI.append( arsenalData.arsenalEHI )
+			}
+
+			int count = 1
+			asset arsenalBGIcon = Arsenals_GetArsenalBGIcon()
+			foreach ( arsenalEHI in nearbyArsenalEHI )
+			{
+				asset ammoIcon = Arsenals_GetArsenalIcon( FromEHI( arsenalEHI ) )
+
+				if( count <= POI_AMMO_SLOTS )
+				{
+#if DEV
+						printt("WARNING: sh_zone_sky_writing.gnut - Can only display " + POI_AMMO_SLOTS +  " ammo slots per POI ")
+#endif
+					RuiSetAssetIfExists( rui, format( "poiFeature%d", count ), ammoIcon )
+					RuiSetAssetIfExists( rui, format( "poiFeatureBackground%d", count ), arsenalBGIcon )
+					count++
+				}
+			}
+		}
+
+
+		if ( Endorsements_IsActive() )
+		{
+			asset endorsementStationIcon = Endorsements_GetEndorsementStationIcon()
+			asset endorsementStationBGIcon = Endorsements_GetEndorsementStationBackgroundIcon()
+			array< entity > activeEndorsementStationsInZone = Endorsements_Delivery_GetCraftersInZone( zoneId )
+			int stationsCount = minint( activeEndorsementStationsInZone.len(), POI_AMMO_SLOTS )
+			if ( stationsCount > 0 )
+			{
+				for ( int stationIndex = 0; stationIndex < stationsCount; ++stationIndex )
+				{
+					int stationNum = stationIndex + 1
+					RuiSetAssetIfExists( rui, format( "poiFeature%d", stationNum ), endorsementStationIcon )
+					RuiSetAssetIfExists( rui, format( "poiFeatureBackground%d", stationNum ), endorsementStationBGIcon )
+				}
+
+
+					RuiSetColorAlpha( rui, "rarityOverrideColor", SrgbToLinear( UNHINGED_COLOR / 255.0 ), 1 )
+
+			}
+		}
+
+
+	RuiSetDepthWrite( rui, true )
+
+
+
+	dataPOI.rui = rui
+	dataPOI.topology = topology
+	dataPOI.status = ePOIStatus.INIT
+
+	file.POIDatas.append( dataPOI )
+}
+
+const string PVAR_PLAYLIST_FIX_BASE = "zone_sky_writing_fix_"
+void function CreatePOI( entity viewPlayer, bool isObserverPlayer, int zoneId, string nameString )
+{
+	string poiName = Localize ( nameString )
+
+	if( ! ( zoneId in file.zonePositions ) )
+	{
+		printt( "SKYWRITE: zoneId is not in zonePositions :" + zoneId )
+		return
+	}
+
+	vector originPos = file.zonePositions[zoneId]
+	if ( GetPlaylistVar_ZoneSkyWriting_CheckDeathfield() )
+	{
+		if ( !Cl_SURVIVAL_PosInsideRing( originPos ) )
+		{
+			printt( "SKYWRITE: Disable by Deathfield. zoneId: " + zoneId )
+			return
+		}
+	}
+
+	if( zoneId in file.zoneSpecificOffsets )
+	{
+		originPos = file.zoneSpecificOffsets[zoneId] + originPos
+	}
+
+	vector worldPos = originPos + < 0, 0, file.heightOffset >
+
+	int zoneLootTier = 1
+
+	if( zoneId in file.zonesTiers )
+	{
+		zoneLootTier = file.zonesTiers[ zoneId ]
+	}
+	else
+	{
+		printt( "SKYWRITE: ZONE Skywriting skipped, NO INDEX LIKELY THE MAP DATA HAS CHANGED. zoneId : " + zoneId )
+	}
+
+	
+	string prefixPlaylistZone = PVAR_PLAYLIST_FIX_BASE + zoneId + "_"
+	string prefixPlaylistAll = PVAR_PLAYLIST_FIX_BASE + "all_"
+
+	if ( GetCurrentPlaylistVarBool( prefixPlaylistZone + "disable", false ) )
+	{
+		printt( "SKYWRITE: Disable by Playlist. zoneId: " + zoneId )
+		return
+	}
+
+	string stringOriginPOI = GetCurrentPlaylistVarString( prefixPlaylistZone + "origin", "" )
+	if( stringOriginPOI.len() > 0 )
+	{
+		vector originPOI = StringToVector( stringOriginPOI )
+		originPos = originPOI
+		worldPos = originPos + < 0, 0, file.heightOffset >
+	}
+
+	int allTierPOI = GetCurrentPlaylistVarInt( prefixPlaylistAll + "tier", -1 )
+	if ( allTierPOI != -1 )
+	{
+		zoneLootTier = allTierPOI
+	}
+	int tierPOI = GetCurrentPlaylistVarInt( prefixPlaylistZone + "tier", -1 )
+	if( tierPOI != -1 )
+	{
+		zoneLootTier = tierPOI
+	}
+
+	string namePOI = GetCurrentPlaylistVarString( prefixPlaylistZone + "name", "" )
+	if( namePOI.len() > 0 )
+	{
+		poiName = Localize ( namePOI )
+	}
+
+#if DEV
+		printt( "SKYWRITE CreatePOI zoneId: " + zoneId + " nameString: " + nameString + " zoneLootTier: " + zoneLootTier + " worldPos: " + worldPos + " originPos: " + originPos )
+#endif
+
+	CreatePOIDataAndRUI( viewPlayer, isObserverPlayer, poiName, worldPos, originPos, zoneLootTier, zoneId )
+}
+
+void function SetupSkyWriting( )
+{
+	if ( !file.ruisCreated )
+	{
+		file.ruisCreated = true
+	}
+	else
+	{
+		return
+	}
+
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( !IsValid( viewPlayer ) )
+		return
+
+	LoadMapZoneData_FromLevelEditor()
+
+	if( file.zonePositions.len() == 0 )
+	{
+		printt( "SKYWRITE: unsupported map when SetupSkyWriting" )
+		return
+	}
+
+	bool isObserverPlayer = false
+
+	entity clientPlayer = GetLocalClientPlayer()
+	if ( IsValid( clientPlayer ) )
+	{
+		if( clientPlayer.IsObserver() && clientPlayer.GetTeam() == TEAM_SPECTATOR )
+		{
+			isObserverPlayer = true
+
+			if( !ZoneSkyWriting_Observer_Supported() )
+			{
+				printt( "SKYWRITE: unsupported when Observer" )
+				return
+			}
+		}
+	}
+
+
+		if ( Arsenals_Enabled() )
+		{
+			Arsenals_LoadPOINameData( clone file.zonePositions )
+		}
+
+
+	if ( GetPlaylistVar_ZoneSkyWriting_CheckDeathfield() )
+	{
+		FlagWait( "DeathFieldStartClient" )
+	}
+
+	if( ZoneSkyWriting_Use_FixedSortKey() && !isObserverPlayer )
+	{
+		
+		while( IsValid( viewPlayer ) )
+		{
+			if( IsPlayerInPlane( viewPlayer  ) )
+			{
+				break
+			}
+			WaitFrame()
+		}
+	}
+
+	CreateRUIs( viewPlayer, isObserverPlayer )
+
+	AddNewPOIsViaPlaylist( viewPlayer, isObserverPlayer )
+
+	thread ZoneRUIFacePlayerUpdate_Thread()
+
+}
+
+void function CreateRUIs( entity viewPlayer, bool isObserverPlayer )
+{
+	foreach ( zoneId, zoneName in file.zoneIdMapNamesToDisplay )
+	{
+		CreatePOI( viewPlayer, isObserverPlayer, zoneId, zoneName )
+	}
+}
+
+
+
+void function ZoneRUIFacePlayerUpdate_Thread( )
+{
+	if( file.POIDatas.len() == 0 )
+	{
+		return
+	}
+
+	
+
+	while( !file.stopUpdatingSkyWriting )
+	{
+		entity viewPlayer = GetLocalViewPlayer()
+		if ( !IsValid( viewPlayer ) )
+			return
+
+		entity clientPlayer = GetLocalClientPlayer()
+		if ( !IsValid( clientPlayer ) )
+			return
+
+		
+
+		foreach( POIData dataPOI in file.POIDatas )
+		{
+			entity holderEnt = dataPOI.ruiHolderEnt
+
+			if ( !IsValid( holderEnt ) )
+				continue
+
+			vector angles = <0,0,0>
+
+			bool updateAngle = false
+
+			vector orgPOI = holderEnt.GetOrigin()
+
+			
+
+			
+			
+			if ( dataPOI.rui != null )
+			{
+				UISize screenSize = GetScreenSize()
+				float[2] screenPos = GetScreenSpace( holderEnt.GetOrigin()  )
+				RuiSetFloat2( dataPOI.rui, "screenPos", < screenPos[0] / screenSize.width, screenPos[1] / screenSize.height, 0 > )
+			}
+
+#if DEV
+				
+				
+#endif
+
+			vector dir = viewPlayer.GetOrigin() - orgPOI
+
+			angles = VectorToAngles( dir )
+			angles.z = 0
+
+			switch( dataPOI.status )
+			{
+				case ePOIStatus.INIT:
+				{
+					dataPOI.status = ePOIStatus.FACING_PLAYER
+
+					updateAngle = true
+				}
+					break
+				case ePOIStatus.FACING_PLAYER:
+				{
+					const float THRESHOLD_DIST3D_SQR = 15000000.0
+
+					float distSqr = DistanceSqr( orgPOI, viewPlayer.GetOrigin() )
+
+					if( distSqr < THRESHOLD_DIST3D_SQR )
+					{
+						
+						updateAngle = false
+
+						dataPOI.status = ePOIStatus.FADE_OUT
+						if ( dataPOI.rui != null )
+						{
+							RuiSetGameTime( dataPOI.rui, "fadeStartTime", Time() )
+						}
+					}
+					else
+					{
+						updateAngle = true
+					}
+
+					
+					if ( viewPlayer.Player_IsSkydiving()
+						|| ( clientPlayer.IsObserver() && clientPlayer.GetTeam() == TEAM_SPECTATOR && ( clientPlayer.GetObserverMode() == OBS_MODE_CHASE || clientPlayer.GetObserverMode() == OBS_MODE_ROAMING ) ) )
+					{
+
+							if ( Arsenals_Enabled() && Arsenals_FadePOINameArsenalIconAtDifferentHeight() && !dataPOI.isFadingPois && viewPlayer.GetOrigin().z < file.heightArsenalsFadeOut  )
+							{
+								dataPOI.isFadingPois = true
+
+								if ( dataPOI.rui != null )
+								{
+									RuiSetGameTime( dataPOI.rui, "poiFeatureIconFadeStartTime", Time() )
+								}
+							}
+
+
+							if ( Endorsements_IsActive() && Endorsements_FadePOINameEndorsementStationIconAtDifferentHeight() && !dataPOI.isFadingPois && (viewPlayer.GetOrigin().z < file.heightEndorsementStationsFadeOut) )
+							{
+								dataPOI.isFadingPois = true
+
+								if ( dataPOI.rui != null )
+								{
+									RuiSetGameTime( dataPOI.rui, "poiFeatureIconFadeStartTime", Time() )
+								}
+							}
+
+
+						if( viewPlayer.GetOrigin().z < file.heightFadeOut )
+						{
+							updateAngle = false
+
+							dataPOI.status = ePOIStatus.FADE_OUT
+							if ( dataPOI.rui != null )
+							{
+								RuiSetGameTime( dataPOI.rui, "fadeStartTime", Time() )
+							}
+						}
+					}
+				}
+					break
+				case ePOIStatus.FADE_OUT:
+				{
+					updateAngle = false
+				}
+					break
+				default:
+					printt( "SKYWRITE: unsupported dataPOI status : " + dataPOI.status )
+					break
+			}
+
+			if ( updateAngle && angles.y > FLT_EPSILON )
+				holderEnt.SetAngles( angles )
+		}
+
+		WaitFrame()
+	}
+}
+
+float function ZoneSkyWriting_GetActiveHeightFadeOut()
+{
+	return file.heightFadeOut
+}
+
+table < int, string > function ZoneSkyWriting_GetZoneIdMapNamesToDisplay()
+{
+	return file.zoneIdMapNamesToDisplay
+}
+
+
+bool function GetPlaylistVar_ZoneSkyWriting_CheckDeathfield()
+{
+	return GetCurrentPlaylistVarBool( "zone_sky_writing_check_deathfield", false )
+}
+
+void function DEBUG_DrawSkywritingEntPositions()
+{
+#if DEV
+		foreach( POIData dataPOI in file.POIDatas )
+		{
+			entity holderEnt = dataPOI.ruiHolderEnt
+
+			if ( !IsValid( holderEnt ) )
+				continue
+
+			DebugDrawSphere( holderEnt.GetOrigin(), 100, COLOR_BLUE, true, 1000 )
+
+			DebugDrawArrow( holderEnt.GetOrigin(), holderEnt.GetOrigin() + holderEnt.GetForwardVector() * 1000 , 50, COLOR_CYAN, true, 1000 )
+		}
+#endif
+}
+
+ 

@@ -1,0 +1,6894 @@
+
+
+global function BeamstickStave_Init
+global function BeamstickStave_IsEnabled
+
+global function OnWeaponActivate_BeamstickStave
+global function OnWeaponDeactivate_BeamstickStave
+global function OnWeaponPrimaryAttack_BeamstickStave
+global function BeamstickStave_IsValidRef
+global function IsInFiringRange
+
+global function OnCreateClientOnlyModel_BeamstickStave
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ServerToClient_BeamstickStave_EnableStaveHUD
+global function ServerToClient_BeamstickStave_ClientSetBeamstickUI
+
+global function ServerToClient_BeamstickStave_Messaging
+global function ServerToClient_BeamstickStave_Drone_CreateARIndicator
+global function ServerToClient_BeamstickStave_Drone_CreateWaypointIndicator
+global function ServerToClient_BeamstickStave_Drone_CreatePreviewFx
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const asset BEAMSTICK_STAVE_STAVE_MODEL = $"mdl/props/single_joint_props/breachbeam_drone_01.rmdl"
+const asset BEAMSTICK_STAVE_DRONE_MODEL = $"mdl/props/single_joint_props/breachbeam_drone_02.rmdl"
+global const string BEAMSTICK_STAVE_WEAPON_REF = "mp_ability_beamstick_stave"
+const asset BEAMSTICK_STAVE_SHIELD_MODEL = $"mdl/fx/forged_shadows_shield_physX.rmdl"
+
+
+const float BEAMSTICK_STAVE_STAVE_HP = 25.0
+const int BEAMSTICK_STAVE_STAVE_NUMBER = 2
+const vector BEAMSTICK_STAVE_STAVE_IDLE_START_POSITION_SMALL = <-10, 66, 0>
+const vector BEAMSTICK_STAVE_STAVE_IDLE_START_POSITION_MED = <-10, 72, 0>
+const vector BEAMSTICK_STAVE_STAVE_IDLE_START_POSITION_LARGE = <-10, 80, 0>
+const float MAX_STAVE_IDLE_POSITION_DEGREE = 30
+
+const vector BEAMSTICK_STAVE_STAVE_SHIELD_START_POSITION_SMALL = <20, 30, 45>
+const vector BEAMSTICK_STAVE_STAVE_SHIELD_START_POSITION_MED = <20, 30, 50>
+const vector BEAMSTICK_STAVE_STAVE_SHIELD_START_POSITION_LARGE = <20, 30, 55>
+const float MAX_STAVE_SHIELD_POSITION_DEGREE = 86
+
+const string BEAMSTICK_STAVE_SHIELD_DEACTIVATE_SIGNAL = "beamstick_stave_shield_deactivate"
+const float BEAMSTICK_STAVE_SHIELD_ACTIVE_DURATION = 30
+const float BEAMSTICK_STAVE_SHIELD_EXPIRE_WARNING = 5
+const int BEAMSTICK_STAVE_SHIELD_COOLDOWN = 30
+const float BEAMSTICK_STAVE_SHIELD_1P_IDLE_SCALE = 0.7
+
+const float BEAMSTICK_STAVE_RECALL_STAVES_HOLD_TIME = 1
+const string BEAMSTICK_STAVE_GADGET_RELEASE_SIGNAL = "beamstick_stave_gadget_release"
+
+const string BEAMSTICK_STAVE_REGENERATION_STOP_SIGNAL = "beamstick_stave_regeneration_stop"
+const float BEAMSTICK_STAVE_REGENERATION_WAIT_TIME = 0
+const float BEAMSTICK_STAVE_REGENERATION_HP_PER_SEC = 1.25
+
+
+const asset BEAMSTICK_SHIELD_MODE_BIT_01 = $"P_bit_stave_FP_bit_01"
+const asset BEAMSTICK_SHIELD_MODE_BIT_02 = $"P_bit_stave_FP_bit_02"
+const asset BEAMSTICK_SHIELD_MODE_BIT_03 = $"P_bit_stave_FP_bit_03"
+const asset BEAMSTICK_SHIELD_MODE_BIT_ERROR = $"P_bit_stave_FP_bit_xx"
+
+
+const string NETVAR_BEAMSTICK_STAVE_PLAYER_STATE = "beamstick_stave_player_state_netvar"
+const string NETVAR_BEAMSTICK_CURRENT_STAVE_STATES = "beamstick_all_current_stave_states_netvar"
+const string NETVAR_BEAMSTICK_STAVE_CURRENT_HEALTH = "beamstick_all_current_stave_health_netvar"
+
+
+
+const string PVAR_BEAMSTICK_DRONE_ENABLED 						= "beamstick_drone_enabled"
+const string PVAR_BEAMSTICK_DRONE_USE_PATHFINDING 				= "beamstick_drone_use_pathfinding"
+const string PVAR_BEAMSTICK_DRONE_HIGHT_ADJUST_INITIAL_ORDER 	= "beamstick_drone_initial_height_adjust"
+const string PVAR_BEAMSTICK_DRONE_PATHFIND_DURING_COMBAT 		= "beamstick_drone_pathfind_during_combat"
+const string PVAR_BEAMSTICK_DRONE_ENABLE_SIMPLE_PATHFIND_COMBAT = "beamstick_drone_enable_simple_pathfind"
+const string PVAR_BEAMSTICK_DRONE_PATHFIND_MAX_LENGTH_RATIO 	= "beamstick_drone_pathfind_max_ratio"
+const string PVAR_BEAMSTICK_DRONE_PATHFIND_MAX_TIME_DIFF 		= "beamstick_drone_pathfind_max_diff"
+const string PVAR_BEAMSTICK_DRONE_SPEED_BASE 					= "beamstick_stave_drone_speed_base"
+const string PVAR_BEAMSTICK_DRONE_SCAN_RADIUS 					= "beamstick_stave_drone_scan_radius"
+const string PVAR_BEAMSTICK_DRONE_DAMAGE						= "beamstick_stave_drone_damage"
+const string PVAR_BEAMSTICK_DRONE_COOLDOWN_BETWEEN_SHOTS		= "beamstick_stave_drone_cooldown_between_shots"
+const string PVAR_BEAMSTICK_DRONE_ENABLE_RECALL_ON_RESEND		= "beamstick_stave_drone_enable_recall_on_resend"
+
+
+global const string SIG_BEAMSTICK_DRONE_PATHFINDING_ROUTE_CLEARED = "beamstick_drone_pathfinding_route_cleared"
+global const string SIG_BEAMSTICK_DRONE_END_LIFETIME = "EndBitStaveLifetime_Signal"
+global const string SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED = "BeamstickDronePlacementModeChanged_Signal"
+global const string SIG_BEAMSTICK_DRONE_RECALL_ACTION = "BeamstickDronePlacementModeRecallAction_Signal"
+global const string SIG_BEAMSTICK_DRONE_TRIGGER_EXIT = "Drone_OnTrigger_Exit"
+global const string SIG_BEAMSTICK_DRONE_END_FX_PREVIEW = "Drone_EndFxPreview"
+global const string SIG_BEAMSTICK_DRONE_REPOSITIONING = "Drone_Repositioning"
+global const string SIG_BEAMSTICK_ON_DISCONNECT = "BeamstickStave_OnPlayerDisconnect"
+global const string SIG_BEAMSTICK_PASSIVE_LOST = "BeamstickStave_OnPassiveLost"
+global const string SIG_BEAMSTICK_STAVE_VFXHUD_POSITION_THREAD = "BeamstickStave_VFXHUD_PositionThread_Start_Signal"
+
+
+const string BEAMSTICK_DRONE_COMPANION_SCRIPTNAME = "beamstick_drone_stave"
+
+
+const float DRONE_RANGE_BASE = 75.0 * METERS_TO_INCHES 
+const float DRONE_RANGE_MAX = 100.0 * METERS_TO_INCHES 
+const float DRONE_SLOW_DOWN_RANGE = 8.0 * METERS_TO_INCHES
+const float DRONE_BASE_SPEED = 1200
+const float DRONE_SCAN_RADIUS = 20 * METERS_TO_INCHES
+const float DRONE_COOLDOWN_BETWEEN_SHOTS = 1.15
+const int DRONE_DAMAGE = 10
+const float DRONE_SCAN_DELAY_BEFORE_FINDING_NEW_TARGET = 3.0
+const float DRONE_LOW_SPEED_THRESHOLD = 75
+const float DRONE_ANG_ACCEL_LOW_SPEED = 180 
+const float DRONE_ANG_ACCEL_MAX_SPEED = 360 
+const float DRONE_CLOSE_TO_DESTINATION_DIST = 12
+const vector DRONE_BOUND_MINS = <-10, -10, -10>
+const vector DRONE_BOUND_MAXS = <10, 10, 15>
+const float DRONE_ORDER_LEDGE_CHECK_UP = 2.5 * METERS_TO_INCHES
+const float DRONE_ORDER_LEDGE_CHECK_BACK = 1 * METERS_TO_INCHES
+const float DRONE_ORDER_MIN_HEIGHT = 3.5 * METERS_TO_INCHES 
+const float DRONE_FINAL_HEIGHT_OFFSET = -20
+const float DRONE_INIT_HEIGHT_OFFSET = 50
+const int DRONE_MAX_PATH_LEN = 30
+const float DRONE_ENTER_DOOR_HEIGHT = 70
+const float DRONE_DOOR_ERROR_RADIUS = 12
+const vector DRONE_INITIAL_DEPLOY_OFFSET = <30, -15, 80>
+const float DRONE_TURRET_RANGE = 100
+const float DRONE_WAIT_BETWEEN_LOS_CHECKS = 2.0
+const float BEAMSTICK_DRONE_FOLLOW_RECOVERY_RANGE = 10 * METERS_TO_INCHES
+const int DRONE_COLLISION_MASK = TRACE_MASK_SOLID
+
+
+
+const float COMPANION_AR_MARKER_LIFETIME = 2.0
+const float COMPANION_AR_SPEED_THRESHOLD_SQR = 100 * 100
+const float DRONE_ICON_FADE_DIST_NEAR = 4 * METERS_TO_INCHES
+
+
+const asset FX_COMPANION_TRAIL 					= $"P_bit_stave_3P_move_trail"
+const asset FX_COMPANION_TRAIL_ENEMY 			= $"P_bit_stave_3P_move_trail_nme"
+const asset FX_COMPANION_ORDER_AR_GROUND 		= $"P_bit_stave_AR_ping_ground"
+const asset FX_COMPANION_ORDER_AR_WALL 			= $"P_bit_stave_AR_ping_CP"
+const asset FX_COMPANION_ORDER_AR_CORNER 		= $"P_bit_stave_AR_ping_wall_dir"
+const asset FX_COMPANION_ORDER_AR_CORNER_TOP 	= $"P_bit_stave_AR_ping_wall_top"
+const asset FX_COMPANION_ORDER_AR_AIR 			= $"P_bit_stave_AR_ping_air"
+
+const asset BEAMSTICK_STAVE_HUD_1P 			= $"P_bit_stave_FP_idle"
+const asset FX_TURRET_ON_RECALL				= $"P_bit_stave_teleport_bit_ally" 
+const asset FX_TURRET_ON_RECALL_ENEMY		= $"P_bit_stave_teleport_bit_nme" 
+const asset FX_BIT_ON_RECALL_01				= $"P_bit_stave_teleport_bit_01" 
+const asset FX_BIT_ON_RECALL_02				= $"P_bit_stave_teleport_bit_02" 
+const asset FX_BIT_ON_RECALL_03				= $"P_bit_stave_teleport_bit_03" 
+const asset FX_FIRE_BOLT_HIT 				= $"P_bit_stave_3P_attack_beam"  
+const asset FX_DRONE_LOCKED_ON 				= $"P_bit_stave_3P_attack_glow"  
+const asset FX_ZONE_PREVIEW 				= $"P_bit_stave_AR_Radius" 
+const asset FX_TARGETING_LASER 				= $"P_bit_stave_3P_targeting_laser" 
+const asset FX_TARGETING_LASER_ENEMY 		= $"P_bit_stave_3P_targeting_laser_nme" 
+const asset FX_TURRET_DESTROYED 			= $"P_bit_stave_3P_exp" 
+const asset BEAMSTICK_DRONE_HOVER_OVER_AR 	= $"P_bit_stave_3P_idle"
+
+
+const asset FX_SHIELD_ACTIVE_1P 			= $"P_bit_stave_FP_active"    
+const asset FX_SHIELD_ENDCAP_1P 			= $"P_bit_stave_FP_active_endcap"
+const asset FX_SHIELD_ACTIVATION_3P 		= $"P_bit_shield_3P_start"
+const asset FX_SHIELD_ACTIVE_3P 			= $"P_bit_shield_3P_idle"
+const asset FX_SHIELD_HIT_3P 				= $"P_bit_shield_3P_dmg"
+const asset FX_SHIELD_BREAK_3P 				= $"P_bit_shield_3P_end"
+
+
+
+const string SFX_DEPLOY_TURRET_DRONE_3P = "Beamstick_DroneStaves_Drone_SendOut_3p" 
+const string SFX_RECALL_DRONE_APPEAR_3P = "Beamstick_DroneStaves_Drone_Teleport_Appear_3p"
+const string SFX_RECALL_DRONE_FROM_REACH_MAX_RANGE_3P = "Beamstick_DroneStaves_Drone_Teleport_Disappear_3p"
+const string SFX_STAVE_DRONE_DESTROYED = "Beamstick_DroneStaves_Drone_Killshot_1p_vs_3p" 
+const string SFX_STAVE_UNAVAILABLE_1P = "Beamstick_DroneStaves_UI_NotReady_1p"
+const string SFX_STAVE_SHIELD_MODE_START_1P = "Beamstick_DroneStaves_Shield_Activate_Loop_1p" 
+const string SFX_STAVE_SHIELD_MODE_START_3P = "Beamstick_DroneStaves_Shield_Activate_Loop_3p" 
+const string SFX_STAVE_SHIELD_MODE_SHIELD_DESTROYED_1P = "Beamstick_DroneStaves_Shield_Break_1p"
+const string SFX_STAVE_SHIELD_MODE_SHIELD_DESTROYED_3P = "Beamstick_DroneStaves_Shield_Break_3p"
+const string SFX_STAVE_SHIELD_MODE_SHIELD_DESTROYED_1P_V_3P = "Beamstick_DroneStaves_Shield_Break_1p_vs_3p" 
+const string SFX_STAVE_SHIELD_MODE_SHIELD_EXPIRE_WARNING = "Beamstick_DroneStaves_Shield_EndWarning_1p" 
+const string SFX_STAVE_SHIELD_MODE_STAVE_DESTROYED_1P = "Beamstick_DroneStaves_Drone_Destroyed_ShieldMode_1p" 
+const string SFX_STAVE_SHIELD_MODE_STAVE_DESTROYED_3P = "Beamstick_DroneStaves_Drone_Destroyed_ShieldMode_3p" 
+const string SFX_STAVE_REGENERATED_3P = "Beamstick_DroneStaves_Drone_Regenerate_Appear_3p"
+const string SFX_STAVE_SHIELD_MODE_SHIELD_HIT_1P_V_3P = "Beamstick_DroneStaves_Shield_Bullet_Impacts_1p_vs_3p" 
+const string SFX_STAVE_SHIELD_MODE_SHIELD_HIT_3P_V_1P = "Beamstick_DroneStaves_Shield_Bullet_Impacts_3p_vs_1p" 
+const string SFX_STAVE_SHIELD_MODE_SHIELD_HIT_3P_V_3P = "Beamstick_DroneStaves_Shield_Bullet_Impacts_3p_vs_3p" 
+
+const string SFX_STAVE_CHARGE_SHOT_3P = "Beamstick_DroneStaves_Drone_Laser_Buildup_3p" 
+const string SFX_STAVE_TURRET_FIRE_3P = "Beamstick_DroneStaves_Drone_Laser_Shot_3p" 
+const string SFX_STAVE_TURRET_FLESH_IMPACT_1P = "Beamstick_DroneStaves_Drone_Laser_Impact_Flesh_3p_vs_1p" 
+const string SFX_STAVE_TURRET_FLESH_IMPACT_3P = "Beamstick_DroneStaves_Drone_Laser_Impact_Flesh_3p_vs_3p" 
+const string SFX_STAVE_TURRET_ANDROID_IMPACT_1P = "Beamstick_DroneStaves_Drone_Laser_Impact_Android_3p_vs_1p" 
+const string SFX_STAVE_TURRET_ANDROID_IMPACT_3P = "Beamstick_DroneStaves_Drone_Laser_Impact_Android_3p_vs_3p" 
+const string SFX_STAVE_TURRET_EVO_SHIELD_IMPACT_1P = "humanshield_light_bulletimpact_3p_vs_1p" 
+const string SFX_STAVE_TURRET_EVO_SHIELD_IMPACT_3P = "humanshield_light_bulletimpact_3p_vs_3p" 
+const string SFX_STAVE_TURRET_DESTROYED_3P = "Beamstick_DroneStaves_Drone_Destroyed_SentryMode_3p" 
+const string SFX_STAVE_TURRET_TARGET_LOCK_3P = "Beamstick_DroneStaves_Drone_TargetLock_3p" 
+
+const string SFX_UI_STAVE_TURRET_DESTROYED = "Beamstick_DroneStaves_UI_Drone_Destroyed_1p" 
+const string SFX_UI_STAVE_REGENERATE_COMPLETE = "Beamstick_DroneStaves_UI_Drone_HealthRefilled_1p" 
+const string SFX_UI_STAVE_DEPLOY = "Beamstick_DroneStaves_UI_Drone_Place_1p" 
+const string SFX_UI_STAVE_REDIRECT = "Beamstick_DroneStaves_UI_Drone_Redirect_1p" 
+const string SFX_UI_STAVE_RECALL_SINGLE = "Beamstick_DroneStaves_UI_Drone_Recall_Single_1p" 
+const string SFX_UI_STAVE_RECALL_ALL = "Beamstick_DroneStaves_UI_Drone_Recall_All_1p" 
+const string SFX_UI_STAVE_REGENERATED = "Beamstick_DroneStaves_UI_Drone_Regenerated_1p" 
+const string SFX_UI_ENTER_PLACEMENT_MODE = "Beamstick_DroneStaves_UI_PlacementMode_Enter_1p" 
+const string SFX_UI_EXIT_PLACEMENT_MODE = "Beamstick_DroneStaves_UI_PlacementMode_Exit_1p" 
+
+
+const asset BEAMSTICK_DRONE_PLACEMENT_HINT_RUI = $"ui/beamstick_drone_placement_hint.rpak"
+
+
+
+const string STAVE_COMMAND_SHIELD_MODE_1 = "%speed%"
+const string STAVE_COMMAND_SHIELD_MODE_2 = "%melee%"
+const string STAVE_SHIELD_MODE_TAP = "+scriptCommand6"
+
+
+const string STAVE_COMMAND_HOLD = "+scriptCommand6"
+const string STAVE_EXIT_DRONE_MODE_PROMPT = "+weaponcycle"
+
+const string STAVE_COMMAND_SEND_DRONE = "+attack"
+
+const string STAVE_COMMAND_RECALL = "+zoom"
+const string STAVE_COMMAND_RECALL_ALT = "+toggle_zoom"
+
+const int RECALL_REASON_INPUT_HOLD_START = 1
+const int RECALL_REASON_INPUT_HOLD_COMPLETE = 2
+const int RECALL_REASON_SINGLE = 3
+
+const float STAVE_DRONE_RECALL_MAX_ANGLE = 10.0
+
+
+
+const string ANIM_STAVE_SHIELD_MODE_IDLE = "beamstick_drone_shield_idle"
+const string ANIM_STAVE_IDLE = "beamstick_drone_idle"
+
+const string ANIM_STAVE_DRONE_IDLE = "beamstick_drone_attack_idle"
+const string ANIM_STAVE_DRONE_ATTACK = "beamstick_drone_attck_action"
+
+
+
+const string BC_STAVE_INCREASE_MAX_COUNT = "bc_staveKitIncrease"
+const string BC_STAVE_ACTIVATED = "bc_droneStaveActivate"
+const string BC_STAVE_RECALL = "bc_droneStaveRecall"
+
+#if DEV
+bool DRONE_DEBUG_DRAW = false
+bool DRONE_ORDER_DEBUG_DRAW = false
+const string DEBUG_STAVE_STATE_TEXT_THREAD_SIGNAL = "BeamstickStaveDebugStateTextSignal"
+#endif
+
+
+enum eStavePlayerState
+{
+	NONE,
+	IDLE,
+	DRONE_MODE_PLACEMENT,
+	DRONE_MODE_PASSIVE,
+	SHIELD_MODE,
+}
+
+global enum eStaveModeState
+{
+	INVALID,
+	IDLE,
+	TURRET,
+	SEND_OUT,
+	SHIELD,
+	REGENERATE,
+	RECALL
+}
+
+enum eDroneTurretState
+{
+	INVALID,
+	SEARCHING_FOR_TARGET,
+	TARGET_ACQUIRED,
+	TARGET_LOST,
+	FIRING_AT_TARGET
+}
+
+
+const int BITS_PER_GROUP = 4
+const int GROUPS_PER_STAVE = 2
+
+
+const int HEALTH_BITS_PER_STAVE   = 7
+const int HEALTH_MASK   = ( 1 << HEALTH_BITS_PER_STAVE ) - 1;
+
+struct StaveStateData
+{
+	int mode = eStaveModeState.INVALID
+	int droneTurretState = eDroneTurretState.INVALID
+	float staveHP = -1.0
+}
+
+enum eStaveHUDBitStates
+{
+	BIT_STATE_INVALID = -1,
+	BIT_STATE_IDLE,
+	BIT_STATE_TURRET_IDLE,
+	BIT_STATE_TURRET_ATTACKING,
+	BIT_STATE_SHIELD,
+	BIT_STATE_REGENERATE
+}
+
+struct StaveEffects
+{
+	entity droneAREffect = null
+	entity droneTrailEffect = null
+	entity droneTrailEffect_Enemy = null
+}
+
+struct Stave
+{
+	float hp = BEAMSTICK_STAVE_STAVE_HP
+	int mode = eStaveModeState.IDLE
+	entity staveEntity
+	entity staveDroneEntity
+	vector ornull orderPosOrNull
+	CompanionData companionData
+	entity ornull droneTarget
+	int droneTurretState = eDroneTurretState.INVALID
+	float lastDamageTaken = 0.0 
+	entity droneTrigger
+	array<entity> playersInDroneTrigger
+	float dronePlacedTimestamp = -1.0
+	bool hasDroneArrived = false
+	bool isDroneNavigating = false
+	StaveEffects staveEffects
+}
+
+struct StavesData
+{
+	array<Stave> staves
+	entity shieldEntity = null
+}
+
+enum eOrderType
+{
+	NONE,
+	GROUND,
+	WALL,
+	AIR,
+	CORNER
+}
+
+struct OrderPosData
+{
+	vector	orderPos = ZERO_VECTOR
+	vector	arPos = ZERO_VECTOR
+	vector	arNormal = ZERO_VECTOR
+	vector	arPosSecondary = ZERO_VECTOR
+	vector	arNormalSecondary = ZERO_VECTOR
+	int		orderType = eOrderType.NONE
+}
+
+global struct BitStaveAnalytics
+{
+	int dronesDeployedCount = 0
+	int dronesRedeployedCount = 0
+	int dronesRecalledCount = 0
+	int shieldModeEnabledCount = 0
+	int shieldModeEndedEarlyCount = 0
+	float shieldModeTimeActive = 0
+}
+
+array <vector> followCheckOffsets = [
+	<1,0,0>,
+	<1,0.5,0>,
+	<1,-0.5,0>,
+	<1,0,0.5>,
+	<1,0.5,0.5>,
+	<1,1,0.7>,
+	<1,1,0>,
+	<1,-1,0>,
+	<1,0,0.7>,
+	<1,-1,0.7>,
+	<1,1,-0.7>,
+	<1,-1,-0.7>
+]
+
+
+const array<asset> BIT_ASSETS = [
+	BEAMSTICK_SHIELD_MODE_BIT_01,
+	BEAMSTICK_SHIELD_MODE_BIT_02,
+	BEAMSTICK_SHIELD_MODE_BIT_03
+]
+const array<asset> BIT_RETURN_FX = [
+	FX_BIT_ON_RECALL_01,
+	FX_BIT_ON_RECALL_02,
+	FX_BIT_ON_RECALL_03
+]
+
+
+
+const array<vector> STAVE_POSITIONS_IDLE = [
+	< -92, -16, 1 >,
+	< 92, -16, 1 >,
+	< 0, 48, 1 >
+]
+
+const array<vector> STAVE_POSITIONS_SHIELD = [
+	< -40, 40, 1 >,
+	< 40, 40, 1 >,
+	< 0, 40, 1 >
+]
+
+const array<vector> DRONE_POSITIONS_IDLE = [
+	< -89, 17, 1 >,
+	< 89, 17, 1 >,
+	< 0, 46, 1 >
+]
+
+
+#if SUPPORTS_COMPACT_UI
+const array<vector> DRONE_POSITIONS_IDLE_COMPACT = [
+	< -89, 10, 1 >,
+	< 89, 10, 1 >,
+	< 0, 46, 1 >
+]
+#endif
+
+
+const array<vector> DRONE_POSITIONS_PLACEMENT = [
+	< -80, -12, 1 >,
+	< 80, -12, 1 >,
+	< 0, 40, 1 >
+]
+
+
+const array<vector> BASE_VFX_POSITIONS_IDLE = [
+	STAVE_POSITIONS_IDLE[0] + < -8, 0, 0 >,
+	STAVE_POSITIONS_IDLE[1] + < 8, 0, 0 >,
+	STAVE_POSITIONS_IDLE[2] + < 0, 15, 0 >
+]
+
+const array<vector> BASE_VFX_POSITIONS_POSITIONS_SHIELD = [
+	STAVE_POSITIONS_SHIELD[0] + < 0, 0, 0 >,
+	STAVE_POSITIONS_SHIELD[1] + < 0, 0, 0 >,
+	STAVE_POSITIONS_SHIELD[2] + < 0, 0, 0 >
+]
+
+const array<vector> BASE_VFX_POSITIONS_DRONE_IDLE = [
+	DRONE_POSITIONS_IDLE[0] + < -6, 0, 0 >,
+	DRONE_POSITIONS_IDLE[1] + < 6, 0, 0 >,
+	DRONE_POSITIONS_IDLE[2] + < 0, 20, 0 >
+]
+
+
+#if SUPPORTS_COMPACT_UI
+const array<vector> BASE_VFX_POSITIONS_DRONE_IDLE_COMPACT = [
+	DRONE_POSITIONS_IDLE_COMPACT[0] + < -6, 0, 0 >,
+	DRONE_POSITIONS_IDLE_COMPACT[1] + < 6, 0, 0 >,
+	DRONE_POSITIONS_IDLE_COMPACT[2] + < 0, 20, 0 >
+]
+#endif
+
+
+const array<vector> BASE_VFX_POSITIONS_DRONE_PLACEMENT = [
+	DRONE_POSITIONS_PLACEMENT[0] + < -29, -4, 0 >,
+	DRONE_POSITIONS_PLACEMENT[1] + < 29, -4, 0 >,
+	DRONE_POSITIONS_PLACEMENT[2] + < 0, 30, 0 >
+]
+
+
+const vector STAVE_VFX_SCALE_ALPHA_INVALID = < 1, 0.0, 0 >
+const vector STAVE_VFX_SCALE_ALPHA_IDLE = < 1, 0.2, 0 >
+const vector STAVE_VFX_SCALE_ALPHA_DRONE_PLACEMENT = < 1.2, 0.5, 0 >
+const vector STAVE_VFX_SCALE_ALPHA_DRONE_IDLE = < 0.8, 1.0, 0 >
+const vector STAVE_VFX_SCALE_ALPHA_SHIELD = < 1, 0.5, 0 >
+const vector STAVE_VFX_SCALE_ALPHA_REGEN = < 1, 0.3, 0 >
+
+const vector BASE_VFX_OFFSCREEN_POS = < 0, 200, 0 >
+
+const vector BASE_VFX_RING_RADIUS_ALPHA_IDLE = < 0.5, 0.05, 0 >
+const vector BASE_VFX_RING_RADIUS_ALPHA_PLACEMENT_MODE = < 0.8, 0.6, 0 >
+const vector BASE_VFX_RING_RADIUS_ALPHA_SHIELD_MODE = < 0.5, 0.0, 0 >
+
+
+
+
+const vector DRONE_COLOR_DARK = <72, 21, 137>
+const vector DRONE_COLOR_LIGHT = <151, 71, 255>
+
+const vector SHIELD_COLOR_DARK = <68, 84, 255>
+const vector SHIELD_COLOR_LIGHT = <94, 167, 230>
+
+const vector IDLE_COLOR_DARK = <248, 178, 15>
+const vector IDLE_COLOR_LIGHT = <255, 207, 95>
+
+const vector REGEN_COLOR_DARK = <243, 6, 0>
+const vector REGEN_COLOR_LIGHT = <255, 89, 90>
+
+
+
+const table<int, vector> STAVE_STATE_VFX_COLORS = {
+	[eStaveHUDBitStates.BIT_STATE_IDLE] = IDLE_COLOR_DARK * 0.1,
+	[eStaveHUDBitStates.BIT_STATE_TURRET_IDLE] = <DRONE_COLOR_DARK.x * 0.075, DRONE_COLOR_DARK.y * 0.075, DRONE_COLOR_DARK.z * 0.075>,
+	[eStaveHUDBitStates.BIT_STATE_TURRET_ATTACKING] = <DRONE_COLOR_LIGHT.x * 0.05, DRONE_COLOR_LIGHT.y * 0.05, DRONE_COLOR_LIGHT.z * 0.05>,
+	[eStaveHUDBitStates.BIT_STATE_SHIELD] = SHIELD_COLOR_DARK * 0.075,
+	[eStaveHUDBitStates.BIT_STATE_REGENERATE] = REGEN_COLOR_DARK * 0.1,
+}
+
+
+enum eStaveMessageState
+{
+	SHIELD_MODE_ENABLE,
+	SHIELD_MODE_DISABLED,
+	SHIELD_STAVE_DESTROYED,
+	SHIELD_MODE_DESTROYED,
+	SHIELD_MODE_ON_COOLDOWN,
+	SENDING_OUT_DRONE, 
+	RECALLING_DRONE,
+	RECALLING_DRONE_ALL,
+	ALL_DRONES_SENT,
+	NO_STAVES_AVAILABLE,
+	NO_STAVES_TO_RECALL,
+	STAVE_REGENERATED,
+	ENTER_DEPLOY_MODE,
+	EXIT_DEPLOY_MODE,
+	DRONE_TURRET_DESTROYED,
+	SEND_DRONE_TO_NEW_LOCATION 
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+
+	bool droneModeEnabled = true
+	bool isInFiringRange = false
+
+
+		table< string, void functionref( entity player ) > registeredDronePlacementInputBindings
+		int playerBitStaveHUD = -1
+		int shieldFx1P
+		bool isShieldModeButton1Down = false
+		bool isShieldModeButton2Down = false
+
+		array< var > worldspaceStaveRuis
+		array< entity > placedTurrets
+		var placementRui
+
+} file
+
+struct
+{
+	float recallStaveHold = BEAMSTICK_STAVE_RECALL_STAVES_HOLD_TIME
+	float shieldActiveDuration = BEAMSTICK_STAVE_SHIELD_ACTIVE_DURATION
+	int shieldCooldown = BEAMSTICK_STAVE_SHIELD_COOLDOWN
+
+	
+	float droneBaseRange = DRONE_RANGE_BASE
+	float droneMaxRange = DRONE_RANGE_MAX
+	float droneBaseSpeed = DRONE_BASE_SPEED
+	float droneScanRadius = DRONE_SCAN_RADIUS
+	float cooldownBetweenShots = DRONE_COOLDOWN_BETWEEN_SHOTS
+	int damage = DRONE_DAMAGE
+	float droneFollowRecoveryRange = BEAMSTICK_DRONE_FOLLOW_RECOVERY_RANGE
+	float clientHudBitMoveDuration = 0.1
+	bool followOwnerAtMaxRange = true 
+	bool enableRecallOnResend = true
+} tuning
+
+bool function BeamstickStave_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "beamstick_stave_enabled", false )
+}
+
+void function BeamstickStave_Init()
+{
+	if ( !BeamstickStave_IsEnabled() )
+	{
+		SURVIVAL_Loot_AddDisabledRef( BEAMSTICK_STAVE_WEAPON_REF )
+		return
+	}
+
+	RegisterTuningStruct( "tuning", "beamstick_stave_" )
+	BeamstickStave_Drone_Setup()
+
+	PrecacheModel( BEAMSTICK_STAVE_STAVE_MODEL )
+	PrecacheModel( BEAMSTICK_STAVE_DRONE_MODEL )
+	PrecacheModel( BEAMSTICK_STAVE_SHIELD_MODEL )
+
+	PrecacheParticleSystem( BEAMSTICK_STAVE_HUD_1P )
+	PrecacheParticleSystem( BEAMSTICK_SHIELD_MODE_BIT_ERROR )
+	PrecacheParticleSystem( BEAMSTICK_DRONE_HOVER_OVER_AR )
+
+	foreach ( fx in BIT_ASSETS )
+	{
+		PrecacheParticleSystem( fx )
+	}
+
+	PrecacheParticleSystem( FX_SHIELD_ACTIVE_1P )
+	PrecacheParticleSystem( FX_SHIELD_ENDCAP_1P )
+	PrecacheParticleSystem( FX_SHIELD_ACTIVATION_3P )
+	PrecacheParticleSystem( FX_SHIELD_ACTIVE_3P )
+	PrecacheParticleSystem( FX_SHIELD_HIT_3P )
+	PrecacheParticleSystem( FX_SHIELD_BREAK_3P )
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_BEAMSTICK_STAVE, BeamstickStave_OnPassiveChanged )
+	RegisterNetworkedVariable( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE, SNDC_PLAYER_GLOBAL, SNVT_INT, eStavePlayerState.NONE )
+	RegisterNetworkedVariable( NETVAR_BEAMSTICK_CURRENT_STAVE_STATES, SNDC_PLAYER_GLOBAL, SNVT_BIG_INT, 0 )
+	RegisterNetworkedVariable( NETVAR_BEAMSTICK_STAVE_CURRENT_HEALTH, SNDC_PLAYER_GLOBAL, SNVT_BIG_INT, 0 )
+
+	AddCallback_OnPlayerMatchStateChanged( BeamstickStave_OnPlayerMatchStateChanged )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	RegisterSignal( BEAMSTICK_STAVE_SHIELD_DEACTIVATE_SIGNAL )
+	RegisterSignal( SIG_BEAMSTICK_ON_DISCONNECT )
+	RegisterSignal( SIG_BEAMSTICK_PASSIVE_LOST )
+
+
+		RegisterNetVarIntChangeCallback( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE, BeamstickStave_OnPlayerStaveStateChanged )
+		RegisterNetVarIntChangeCallback( NETVAR_BEAMSTICK_CURRENT_STAVE_STATES, BeamstickStave_OnPackedStaveStatesChanged )
+		RegisterNetVarIntChangeCallback( NETVAR_BEAMSTICK_STAVE_CURRENT_HEALTH, BeamstickStave_OnPackedStaveHealthChanged )
+
+		RegisterSignal( BEAMSTICK_STAVE_GADGET_RELEASE_SIGNAL )
+		RegisterSignal( SIG_BEAMSTICK_STAVE_VFXHUD_POSITION_THREAD )
+		AddCallback_OnControllerModeChanged( BeamstickStave_OnControllerModeChanged )
+		Survival_AddInventorySlotVisibilityCallback( "gadgetslot", Beamstick_ShouldShowGadgetSlot )
+		Survival_AddInventoryPreventGadgetSlotUnequipCallback( BeamstickStave_ShouldPreventGadgetUnequip )
+		AddCallback_OnClientScriptInit( Beamstick_RegisterTooltipCallback )
+		AddCallback_OnPlayerDisconnected( BeamstickStave_OnPlayerDisconnected )
+		AddCallback_GameStateEnter( eGameState.WinnerDetermined, BeamstickStave_OnWinnerDetermined )
+
+
+	Remote_RegisterServerFunction( "BeamstickStave_ClientToServer_ToggleShieldMode" )
+	Remote_RegisterClientFunction( "ServerToClient_BeamstickStave_EnableStaveHUD", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_BeamstickStave_ClientSetBeamstickUI", "entity" )
+}
+
+void function BeamstickStave_Drone_Setup()
+{
+	file.droneModeEnabled = GetCurrentPlaylistVarBool( PVAR_BEAMSTICK_DRONE_ENABLED, file.droneModeEnabled )
+
+	if ( !file.droneModeEnabled )
+		return
+
+	
+	PrecacheScriptString( BEAMSTICK_DRONE_COMPANION_SCRIPTNAME )
+
+	
+	PrecacheParticleSystem( FX_TURRET_ON_RECALL )
+	PrecacheParticleSystem( FX_TURRET_ON_RECALL_ENEMY )
+	PrecacheParticleSystem( FX_COMPANION_ORDER_AR_GROUND )
+	PrecacheParticleSystem( FX_COMPANION_ORDER_AR_WALL )
+	PrecacheParticleSystem( FX_COMPANION_ORDER_AR_CORNER )
+	PrecacheParticleSystem( FX_COMPANION_ORDER_AR_CORNER_TOP )
+	PrecacheParticleSystem( FX_COMPANION_ORDER_AR_AIR )
+
+	PrecacheParticleSystem( FX_ZONE_PREVIEW )
+	PrecacheParticleSystem( FX_COMPANION_TRAIL )
+	PrecacheParticleSystem( FX_COMPANION_TRAIL_ENEMY )
+
+	PrecacheParticleSystem( FX_FIRE_BOLT_HIT )
+	PrecacheParticleSystem( FX_DRONE_LOCKED_ON )
+	PrecacheParticleSystem( FX_TARGETING_LASER )
+	PrecacheParticleSystem( FX_TARGETING_LASER_ENEMY )
+
+	PrecacheParticleSystem( FX_TURRET_DESTROYED )
+
+	foreach ( fx in BIT_RETURN_FX )
+	{
+		PrecacheParticleSystem( fx )
+	}
+
+	
+	RegisterSignal( SIG_BEAMSTICK_DRONE_END_LIFETIME )
+	RegisterSignal( SIG_BEAMSTICK_DRONE_PATHFINDING_ROUTE_CLEARED )
+	RegisterSignal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+	RegisterSignal( SIG_BEAMSTICK_DRONE_RECALL_ACTION )
+	RegisterSignal( SIG_BEAMSTICK_DRONE_END_FX_PREVIEW )
+
+
+
+
+
+
+	
+
+		AddCreateCallback( "player", BeamstickStave_OnPlayerCreated )
+
+
+	
+	Remote_RegisterClientFunction( "ServerToClient_BeamstickStave_Messaging", "entity", "int", -1, 16 )
+	Remote_RegisterClientFunction( "ServerToClient_BeamstickStave_Drone_CreateARIndicator", "entity", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_BeamstickStave_Drone_CreateWaypointIndicator", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_BeamstickStave_Drone_CreatePreviewFx", "entity", "entity" )
+
+	
+	tuning.droneBaseSpeed = GetCurrentPlaylistVarFloat( PVAR_BEAMSTICK_DRONE_SPEED_BASE, tuning.droneBaseSpeed )
+	tuning.droneScanRadius = GetCurrentPlaylistVarFloat( PVAR_BEAMSTICK_DRONE_SCAN_RADIUS, tuning.droneScanRadius )
+	tuning.cooldownBetweenShots = GetCurrentPlaylistVarFloat( PVAR_BEAMSTICK_DRONE_COOLDOWN_BETWEEN_SHOTS, tuning.cooldownBetweenShots )
+	tuning.damage = GetCurrentPlaylistVarInt( PVAR_BEAMSTICK_DRONE_DAMAGE, tuning.damage )
+	tuning.enableRecallOnResend = GetCurrentPlaylistVarBool( PVAR_BEAMSTICK_DRONE_ENABLE_RECALL_ON_RESEND, tuning.enableRecallOnResend )
+}
+
+bool function BeamstickStave_IsValidRef( string ref )
+{
+	return ref.find( BEAMSTICK_STAVE_WEAPON_REF ) != -1
+}
+
+bool function IsInFiringRange()
+{
+	return file.isInFiringRange
+}
+
+bool function IsTrainingDummieDead( entity dummie )
+{
+	return IsTrainingDummie( dummie ) && dummie.GetHealth() <= 0
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____CALLBACKS___________________________(){}
+#endif
+
+void function BeamstickStave_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( didHave )
+	{
+
+
+
+
+
+
+
+
+
+
+			BeamstickStave_UnregisterModeChangeInputBindings()
+			BeamstickStave_CleanupUI()
+
+	}
+
+	if ( nowHas )
+	{
+
+
+
+
+
+
+
+
+
+			if ( !IsInFiringRange() )
+			{
+				BeamstickStave_RegisterModeChangeInputBindings( IsControllerModeActive() )
+				BeamstickStave_SetupGadgetSlotInputUI()
+			}
+
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function BeamstickStave_OnPlayerMatchStateChanged( entity player, int newValue )
+{
+	if ( !IsValidPlayer( player ) )
+		return
+
+	if ( !file.isInFiringRange && newValue < ePlayerMatchState.NORMAL )
+	{
+		file.isInFiringRange = GetMapName() == "mp_rr_canyonlands_staging_mu1_breach"
+	}
+
+	if ( newValue == ePlayerMatchState.STAGING_AREA && IsInFiringRange() )
+	{
+
+
+
+
+			ResetToDefaultGadgetRui()
+
+
+		return
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	if ( newValue == ePlayerMatchState.NORMAL )
+	{
+		BeamstickStave_Create_Stave_Hud( player )
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function BeamstickStave_OnWinnerDetermined()
+{
+	entity player = GetLocalViewPlayer()
+
+	if ( !IsValidPlayer( player ) )
+		return
+
+	
+	player.Signal( SIG_BEAMSTICK_DRONE_RECALL_ACTION )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____GADGET_ACTIONS___________________________(){}
+#endif
+
+
+
+void function BeamstickStave_HUD_Think( entity player )
+{
+	AssertIsNewThread()
+
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( SIG_BEAMSTICK_PASSIVE_LOST )
+
+	var rui = GetCustomGadgetRui()
+
+	while ( IsValidPlayer( player ) && RuiIsAlive( rui ) )
+	{
+		RuiSetInt( rui, "maxPipCount", Beamstick_GetMaxStaveCount( player ) )
+
+		RuiSetBool( rui, "inShieldMode", BeamstickStave_IsInShieldMode( player ) )
+
+		bool anyStavesAvailable = false
+		array<StaveStateData> staveStates = BeamstickStave_GetStaveStatesFromPackedNetvar( player, player.GetPlayerNetInt( NETVAR_BEAMSTICK_CURRENT_STAVE_STATES ) )
+		foreach ( StaveStateData stateData in staveStates )
+		{
+			if ( stateData.mode == eStaveModeState.REGENERATE )
+				continue
+
+			anyStavesAvailable = true
+			break
+		}
+		RuiSetBool( rui, "isShieldModeAvailable", anyStavesAvailable )
+
+		RuiSetBool( rui, "inDronePlacementMode", BeamstickStave_IsInDronePlacementMode( player ) )
+		RuiSetBool( rui, "inDronePassiveMode", BeamstickStave_IsInDronePassiveMode( player ) )
+
+		if ( StatusEffect_HasSeverity( player, eStatusEffect.beamstick_stave_shield_cooldown ) )
+		{
+			float timeRemaining     = StatusEffect_GetTimeRemaining( player, eStatusEffect.beamstick_stave_shield_cooldown )
+			float rechargeFrac 		= 1.0 - ( timeRemaining / BeamstickStave_GetCooldownTotal() )
+			int rechargeFracRounded = int( rechargeFrac * 100 )
+
+			RuiSetBool( rui, "isShieldModeInCooldown", true )
+			RuiSetFloat( rui, "shieldModeCooldownFrac", rechargeFrac )
+			RuiSetFloat( rui, "shieldModeCooldownTimeRemaining", timeRemaining )
+		}
+		else
+		{
+			RuiSetBool( rui, "isShieldModeInCooldown", false )
+			RuiSetFloat( rui, "shieldModeCooldownFrac", 1.0 )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____MANAGE_STAVES___________________________(){}
+#endif
+
+int function BeamstickStave_GetCooldownTotal()
+{
+	return tuning.shieldCooldown
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array<StaveStateData> function BeamstickStave_GetStaveStatesFromPackedNetvar( entity player, int packedStaveStates )
+{
+	array<StaveStateData> staveStates
+
+	for ( int idx = 0; idx < Beamstick_GetMaxStaveCount( player ); idx++ )
+	{
+		StaveStateData stateData = BeamstickStave_GetStaveState( player, idx )
+		staveStates.append( stateData )
+	}
+
+	return staveStates
+}
+
+StaveStateData function BeamstickStave_GetStaveState( entity player, int staveIndex )
+{
+	StaveStateData stateData
+
+	if ( !IsValidPlayer( player ) )
+		return stateData
+
+	int packedStaveStates 		= player.GetPlayerNetInt( NETVAR_BEAMSTICK_CURRENT_STAVE_STATES )
+	int baseGroupShift 			= staveIndex * GROUPS_PER_STAVE
+	stateData.mode 				= ( packedStaveStates >> ( ( baseGroupShift + 0 ) * BITS_PER_GROUP ) ) & 0xF
+	stateData.droneTurretState 	= ( packedStaveStates >> ( ( baseGroupShift + 1 ) * BITS_PER_GROUP ) ) & 0xF
+
+	return stateData
+}
+
+int function BeamstickStave_SortStaves( StaveStateData a, StaveStateData b )
+{
+	bool aIsShield = a.mode == eStaveModeState.SHIELD
+	bool bIsShield = b.mode == eStaveModeState.SHIELD
+
+	bool aIsIdle = a.mode == eStaveModeState.IDLE || a.mode == eStaveModeState.RECALL
+	bool bIsIdle = b.mode == eStaveModeState.IDLE || b.mode == eStaveModeState.RECALL
+
+	bool aIsRegen = a.mode == eStaveModeState.REGENERATE
+	bool bIsRegen = b.mode == eStaveModeState.REGENERATE
+
+	bool aIsTurret = a.mode == eStaveModeState.TURRET || a.mode == eStaveModeState.SEND_OUT
+	bool bIsTurret = b.mode == eStaveModeState.TURRET || b.mode == eStaveModeState.SEND_OUT
+
+	
+	if ( aIsShield && !bIsShield )
+	{
+		return -1
+	}
+	else if ( !aIsShield && bIsShield )
+	{
+		return 1
+	}
+	else if ( aIsShield && bIsShield )
+	{
+		
+		if ( a.staveHP > b.staveHP )
+		{
+			return -1
+		}
+		else if ( a.staveHP < b.staveHP )
+		{
+			return 1
+		}
+		else
+		{
+			return 0
+		}
+	}
+
+	
+	if ( aIsTurret && !bIsTurret )
+	{
+		return -1
+	}
+	else if ( !aIsTurret && bIsTurret )
+	{
+		return 1
+	}
+	else if ( aIsTurret && bIsTurret )
+	{
+		return 0
+	}
+
+	
+	if ( aIsIdle && !bIsIdle )
+	{
+		return -1
+	}
+	else if ( !aIsIdle && bIsIdle )
+	{
+		return 1
+	}
+	else if ( aIsIdle && bIsIdle )
+	{
+		return 0
+	}
+
+	
+	if ( aIsRegen && !bIsRegen )
+	{
+		return -1
+	}
+	else if ( !aIsRegen && bIsRegen )
+	{
+		return 1
+	}
+	else
+	{
+		return 0
+	}
+
+	unreachable
+}
+
+array<int> function BeamstickStave_GetStaveHealthFromPackedNetvar( entity player, int packedStaveHealth )
+{
+	array<int> staveHealth
+
+	for ( int idx = 0; idx < Beamstick_GetMaxStaveCount( player ); idx++ )
+	{
+		int health = BeamstickStave_GetStaveHealth( player, idx )
+		staveHealth.append( health )
+	}
+
+	return staveHealth
+}
+
+int function BeamstickStave_GetStaveHealth( entity player, int staveIndex )
+{
+	if ( !IsValidPlayer( player ) )
+		return -1
+
+	int packedStaveHealth		= player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_CURRENT_HEALTH )
+	return ( packedStaveHealth >> ( staveIndex * HEALTH_BITS_PER_STAVE ) ) & HEALTH_MASK
+}
+
+
+
+void function BeamstickStave_OnPackedStaveStatesChanged( entity player, int packedStaveStates )
+{
+	if ( !IsValidPlayer( player ) )
+		return
+
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	if ( packedStaveStates <= 0 )
+		return
+
+	const int MAX_SUPPORTED_STAVE_PIPS_UI = 4
+
+	array<StaveStateData> staveStates = BeamstickStave_GetStaveStatesFromPackedNetvar( player, packedStaveStates )
+
+	if ( staveStates.len() <= 0 )
+		return
+
+	
+	for ( int i = 0; i < MAX_SUPPORTED_STAVE_PIPS_UI; i++ )
+	{
+		if ( file.worldspaceStaveRuis.len() > i && RuiIsAlive( file.worldspaceStaveRuis[i] ) )
+		{
+			bool isStaveAttacking = staveStates[i].mode == eStaveModeState.TURRET && staveStates[i].droneTurretState == eDroneTurretState.FIRING_AT_TARGET
+			RuiSetBool( file.worldspaceStaveRuis[i], "isAttacking", isStaveAttacking )
+		}
+	}
+
+	
+	staveStates.sort( BeamstickStave_SortStaves )
+
+	
+	var rui = GetCustomGadgetRui()
+	if ( rui != null && RuiIsAlive( rui ) )
+	{
+		for ( int i = 0; i < MAX_SUPPORTED_STAVE_PIPS_UI; i++ )
+		{
+			if ( staveStates.len() > i )
+			{
+				RuiSetIntIfExists( rui, "staveState" + string( i ), staveStates[i].mode )
+			}
+			else
+			{
+				RuiSetIntIfExists( rui, "staveState" + string( i ), -1 )
+			}
+		}
+	}
+}
+
+void function BeamstickStave_OnPackedStaveHealthChanged( entity player, int packedStaveHealth )
+{
+	if ( !IsValidPlayer( player ) )
+		return
+
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	int packedStaveStates 		= player.GetPlayerNetInt( NETVAR_BEAMSTICK_CURRENT_STAVE_STATES )
+	array<StaveStateData> staveStates = BeamstickStave_GetStaveStatesFromPackedNetvar( player, packedStaveStates )
+	array<int> staveHealth = BeamstickStave_GetStaveHealthFromPackedNetvar( player, packedStaveHealth )
+
+	
+	for ( int i = 0; i < staveStates.len(); i++ )
+	{
+		if ( i >= staveHealth.len() )
+			break
+
+		
+		staveStates[i].staveHP = staveHealth[i] / 100.0
+	}
+
+	staveStates.sort( BeamstickStave_SortStaves )
+
+	const int MAX_SUPPORTED_STAVE_PIPS_UI = 4
+
+	var rui = GetCustomGadgetRui()
+	if ( rui != null && RuiIsAlive( rui ) )
+	{
+		for ( int i = 0; i < MAX_SUPPORTED_STAVE_PIPS_UI; i++ )
+		{
+			if ( staveStates.len() > i )
+			{
+				RuiSetFloatIfExists( rui, "staveFrac" + string( i ), staveStates[i].staveHP )
+			}
+			else
+			{
+				RuiSetFloatIfExists( rui, "staveFrac" + string( i ), -1 )
+			}
+		}
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____MANAGE_STAVES_ENDORSEMENT__________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____IDLE_MODE___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____SHIELD_MODE___________________________(){}
+#endif
+
+
+bool function BeamstickStave_IsInShieldMode( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	return player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE ) == eStavePlayerState.SHIELD_MODE
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function Beamstick_GetMaxStaveCount( entity player )
+{
+	entity weapon = BeamstickStave_GetStaveWeapon( player )
+
+	if ( !IsValid( weapon ) )
+		return 0
+
+	return weapon.GetScriptInt1()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function BeamstickStave_GetHealthyStaveCount( entity player )
+{
+	entity weapon = BeamstickStave_GetStaveWeapon( player )
+
+	if ( !IsValid( weapon ) )
+		return 0
+
+	return weapon.GetScriptInt0()
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____SHIELD_MODE_CLIENT__________________________(){}
+#endif
+
+
+
+void function BeamstickStave_OnPlayerStaveStateChanged( entity player, int state )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( state < 0 )
+		return
+
+	player.Signal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+
+	switch ( state )
+	{
+		case eStavePlayerState.NONE :
+			break
+		case eStavePlayerState.IDLE :
+			break
+		case eStavePlayerState.DRONE_MODE_PLACEMENT :
+			if ( IsLocalClientPlayer( player ) )
+			{
+				thread BeamstickStave_ManageDronePlacementInputHints_Thread( player )
+			}
+			break
+		case eStavePlayerState.DRONE_MODE_PASSIVE :
+			break
+		case eStavePlayerState.SHIELD_MODE :
+			BeamstickStave_UpdateStaveHUD_ShieldMode( player )
+			break
+	}
+}
+
+
+void function BeamstickStave_Create_Stave_Hud( entity player )
+{
+	thread BeamstickStave_Create_Stave_Hud_Think( player )
+}
+
+void function BeamstickStave_Create_Stave_Hud_Think( entity player )
+{
+	
+	
+	AssertIsNewThread()
+
+	if ( !IsInFiringRange() ) 
+	{
+		wait 2.0
+	}
+
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( file.playerBitStaveHUD != -1 )
+		return
+
+	int baseHudEffect = StartParticleEffectOnEntity( viewPlayer, GetParticleSystemIndex( BEAMSTICK_STAVE_HUD_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( baseHudEffect, true )
+	EffectSetControlPointVector( baseHudEffect, 1, BeamstickStave_GetHUDVFXRadiusAlphaForBase( eStavePlayerState.IDLE ) ) 
+	EffectSetControlPointVector( baseHudEffect, 2, BeamstickStave_GetHUDVFXPositionForBase( 0, eStaveHUDBitStates.BIT_STATE_IDLE, eStavePlayerState.IDLE ) ) 	
+	EffectSetControlPointVector( baseHudEffect, 3, BeamstickStave_GetHUDVFXPositionForBase( 1, eStaveHUDBitStates.BIT_STATE_IDLE, eStavePlayerState.IDLE ) ) 	
+	EffectSetControlPointVector( baseHudEffect, 4, BeamstickStave_GetHUDVFXPositionForBase( 2, eStaveHUDBitStates.BIT_STATE_INVALID, eStavePlayerState.NONE ) ) 	
+
+	file.playerBitStaveHUD = baseHudEffect
+
+	player.EndSignal( "OnDeath", "OnDestroy", SIG_BEAMSTICK_ON_DISCONNECT, SIG_BEAMSTICK_PASSIVE_LOST )
+
+	OnThreadEnd(
+		function() : ( baseHudEffect )
+		{
+			if ( IsValid( baseHudEffect ) )
+			{
+				EffectStop( baseHudEffect, true, true )
+				file.playerBitStaveHUD = -1
+			}
+		}
+	)
+
+	thread BeamstickStaves_HandleBitHudElements_Thread( player, baseHudEffect )
+	WaitForever()
+}
+
+void function BeamstickStave_UpdateStaveHUD_ShieldMode( entity player )
+{
+	thread BeamstickStave_UpdateStaveHUD_ShieldMode_Think( player )
+}
+
+void function BeamstickStave_UpdateStaveHUD_ShieldMode_Think( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	EndSignal( player, "OnDeath", "OnDestroy", "BleedOut_OnStartDying", BEAMSTICK_STAVE_SHIELD_DEACTIVATE_SIGNAL )
+
+	file.shieldFx1P = StartParticleEffectOnEntity( viewPlayer, GetParticleSystemIndex( FX_SHIELD_ACTIVE_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( file.shieldFx1P, true )
+	EffectSetControlPointVector( file.shieldFx1P, 1, < BEAMSTICK_STAVE_SHIELD_1P_IDLE_SCALE, 0, 0 > ) 
+	Rumble_Play( "rumble_stim_activate", {} )
+
+	OnThreadEnd(
+		function() : ( viewPlayer )
+		{
+			if ( EffectDoesExist( file.shieldFx1P ) )
+			{
+				EffectStop( file.shieldFx1P, true, true )
+			}
+
+			StartParticleEffectOnEntity( viewPlayer, GetParticleSystemIndex( FX_SHIELD_ENDCAP_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+		}
+	)
+
+	bool previousFirstPerson = !player.IsPlayerCameraInThirdPerson()
+
+	while ( player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE ) == eStavePlayerState.SHIELD_MODE )
+	{
+		bool firstPerson = !player.IsPlayerCameraInThirdPerson()
+		if ( firstPerson != previousFirstPerson )
+		{
+			float scale = firstPerson ? BEAMSTICK_STAVE_SHIELD_1P_IDLE_SCALE : 0.0
+			EffectSetControlPointVector( file.shieldFx1P, 0, <scale,0,0> )
+			firstPerson = previousFirstPerson
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function BeamstickStaves_HandleBitHudElements_Thread( entity player, int baseHudEffect )
+{
+	AssertIsNewThread()
+
+	if ( !IsValidPlayer( player ) )
+		return
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	player.EndSignal( "OnDeath", "OnDestroy", SIG_BEAMSTICK_PASSIVE_LOST )
+
+	int maxStaveCount = Beamstick_GetMaxStaveCount( player )
+	int currentStaves = BeamstickStave_GetHealthyStaveCount( player )
+	int playerState = BeamstickStave_GetPlayerState( player )
+	bool isFirstPerson = !player.IsPlayerCameraInThirdPerson()
+
+	array<int> bitHudVfxElements
+	array<int> bitHudStates
+
+	for ( int bit = 0; bit < maxStaveCount; bit++ )
+	{
+		int state = eStaveHUDBitStates.BIT_STATE_REGENERATE
+
+		if  ( bit < currentStaves )
+		{
+			state = BeamstickStave_GetHUDBitState( player, bit )
+		}
+
+		bitHudVfxElements.append( BeamstickStave_MakeBitHudElement( cockpit, bit, state, playerState ) )
+		bitHudStates.append( state )
+	}
+
+	OnThreadEnd(
+		function() : ( bitHudVfxElements, bitHudStates )
+		{
+			foreach ( fx in bitHudVfxElements )
+			{
+				if ( EffectDoesExist( fx ) )
+				{
+					EffectStop( fx, true, true )
+				}
+			}
+			bitHudVfxElements.clear()
+			bitHudStates.clear()
+		}
+	)
+
+	while ( IsValid( player ) && player.IsPlayer() && IsValid( cockpit ) )
+	{
+		int remainingStaves = BeamstickStave_GetHealthyStaveCount( player )
+
+		int previousMaxStaveCount = maxStaveCount
+		maxStaveCount = Beamstick_GetMaxStaveCount( player )
+
+		if ( bitHudStates.len() != maxStaveCount || bitHudVfxElements.len() != maxStaveCount ) 
+		{
+			if ( bitHudVfxElements.len() > maxStaveCount )
+			{
+				
+				EffectStop( bitHudVfxElements[bitHudVfxElements.len() -1], true, true )
+			}
+
+			bitHudVfxElements.resize( maxStaveCount, -1 )
+			bitHudStates.resize( maxStaveCount, eStaveHUDBitStates.BIT_STATE_REGENERATE )
+		}
+
+		bool anyBitStatesChanged = false
+		array<int> previousBitHudStates
+
+		int previousPlayerState = playerState
+		playerState = BeamstickStave_GetPlayerState( player )
+
+		bool previousFirstPerson = isFirstPerson
+		isFirstPerson = !player.IsPlayerCameraInThirdPerson()
+
+		for ( int i = 0; i < maxStaveCount; i++ )
+		{
+			int bitState = BeamstickStave_GetHUDBitState( player, i )
+			int previousBitState = bitHudStates[i]
+
+			if ( bitState != previousBitState )
+			{
+				
+				
+				if ( !anyBitStatesChanged )
+				{
+					anyBitStatesChanged = true
+					previousBitHudStates = clone bitHudStates
+				}
+
+				
+				if ( EffectDoesExist( bitHudVfxElements[i] ) )
+				{
+					EffectStop( bitHudVfxElements[i], true, true )
+				}
+
+				
+				bitHudVfxElements[i] = BeamstickStave_MakeBitHudElement( cockpit, i, bitState, playerState )
+
+				vector color = BeamstickStave_GetHUDVFXColorForBitState( bitState )
+				EffectSetControlPointVector( bitHudVfxElements[i], 3, color )
+
+				
+				bitHudStates[i] = bitState
+			}
+		}
+
+		if ( anyBitStatesChanged || playerState != previousPlayerState || isFirstPerson != previousFirstPerson || maxStaveCount != previousMaxStaveCount )
+		{
+			BeamstickStave_UpdateBitStavesPosition( player, baseHudEffect, bitHudVfxElements, previousBitHudStates, bitHudStates, previousPlayerState, playerState, previousFirstPerson, isFirstPerson, previousMaxStaveCount, maxStaveCount )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+int function BeamstickStave_MakeBitHudElement( entity cockpit, int bit, int bitState, int playerState )
+{
+	asset bitAsset
+	vector color = BeamstickStave_GetHUDVFXColorForBitState( bitState )
+	int isAttackingElement = 0
+
+	vector screenLocation = BeamstickStave_GetHUDVFXPositionForBit( bit, bitState, playerState )
+
+	switch ( bitState )
+	{
+		case eStaveHUDBitStates.BIT_STATE_TURRET_ATTACKING:
+			isAttackingElement = 1
+		case eStaveHUDBitStates.BIT_STATE_TURRET_IDLE:
+			bitAsset = Beamstick_Shield_Mode_GetBitAsset( bit )
+			break
+
+		case eStaveHUDBitStates.BIT_STATE_SHIELD:
+			bitAsset = Beamstick_Shield_Mode_GetBitAsset( bit )
+			break
+
+		case eStaveHUDBitStates.BIT_STATE_REGENERATE:
+			bitAsset = BEAMSTICK_SHIELD_MODE_BIT_ERROR
+			break
+
+		case eStaveHUDBitStates.BIT_STATE_IDLE:
+		default:
+			bitAsset = Beamstick_Shield_Mode_GetBitAsset( bit )
+			break
+	}
+
+	int bitViewPiece = StartParticleEffectOnEntity( cockpit, GetParticleSystemIndex( bitAsset ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( bitViewPiece, true )
+
+	
+	EffectSetControlPointVector( bitViewPiece, 1, screenLocation )
+
+	
+	float scale = 1.0
+	float alpha = 0.25
+	EffectSetControlPointVector( bitViewPiece, 2, < scale, alpha, isAttackingElement > ) 
+
+	
+	EffectSetControlPointVector( bitViewPiece, 3, color ) 
+
+	return bitViewPiece
+}
+
+
+
+asset function Beamstick_Shield_Mode_GetBitAsset( int bit )
+{
+	return BIT_ASSETS[bit]
+}
+
+
+
+void function BeamstickStave_UpdateBitStavesPosition( entity player, int baseHudEffect, array<int> bitVfxElements, array<int> previousBitStates, array<int> currentBitStates, int prevPlayerState, int playerState, bool prevFirstPerson, bool isFirstPerson, int prevMaxStaveCount, int maxStaveCount )
+{
+	thread BeamstickStave_UpdateBitStavesPosition_Thread( player, baseHudEffect, bitVfxElements, previousBitStates, currentBitStates, prevPlayerState, playerState, prevFirstPerson, isFirstPerson, prevMaxStaveCount, maxStaveCount )
+}
+
+
+
+void function BeamstickStave_UpdateBitStavesPosition_Thread( entity player, int baseHudEffect, array<int> bitVfxElements, array<int> previousBitStates, array<int> currentBitStates, int prevPlayerState, int playerState, bool prevFirstPerson, bool isFirstPerson, int prevMaxStaveCount, int maxStaveCount )
+{
+	AssertIsNewThread()
+
+	float clientTimeStart = ClientTime()
+	player.Signal( SIG_BEAMSTICK_STAVE_VFXHUD_POSITION_THREAD )
+	player.EndSignal( "OnDeath", "OnDestroy", SIG_BEAMSTICK_STAVE_VFXHUD_POSITION_THREAD )
+
+	float frac = 0.0
+	vector fullAlpha = <1, 0.75, 0>
+	vector hideAlpha = <1, 0, 0>
+
+	while ( frac < 1.0 )
+	{
+		float elapsedTime = ClientTime() - clientTimeStart
+
+		if ( tuning.clientHudBitMoveDuration > 0.0 )
+		{
+			frac = min( elapsedTime / tuning.clientHudBitMoveDuration, 1.0 )
+		}
+		else
+		{
+			frac = 1.0
+		}
+
+		for ( int bit = 0; bit < bitVfxElements.len(); bit++ )
+		{
+			
+			bool forceUpdateIndex = ( bit > prevMaxStaveCount - 1 )
+
+			
+			int prevState = previousBitStates.len() > bit ? previousBitStates[bit] : currentBitStates[bit]
+			int currentState = currentBitStates[bit]
+
+			
+			int baseHudEffectCPIdx = bit + 2
+
+			
+			if ( IsValid( baseHudEffect ) && EffectDoesExist( baseHudEffect ) )
+			{
+				vector baseEffectStartPosition = BeamstickStave_GetHUDVFXPositionForBase( bit, prevState, prevPlayerState )
+				vector baseEffectEndPosition   = BeamstickStave_GetHUDVFXPositionForBase( bit, currentState, playerState )
+				vector baseEffectPosition
+
+				if ( baseEffectStartPosition != baseEffectEndPosition || forceUpdateIndex )
+				{
+					baseEffectPosition = LerpVector( baseEffectStartPosition, baseEffectEndPosition, EaseOut( frac ) )
+					EffectSetControlPointVector( baseHudEffect, baseHudEffectCPIdx, baseEffectPosition )
+				}
+			}
+
+			if ( bitVfxElements.len() <= bit )
+				continue
+
+			if ( !IsValid( bitVfxElements[bit] ) || !EffectDoesExist( bitVfxElements[bit] ) )
+				continue
+
+			
+			vector startPosition = BeamstickStave_GetHUDVFXPositionForBit( bit, prevState, prevPlayerState )
+			vector endPosition = BeamstickStave_GetHUDVFXPositionForBit( bit, currentState, playerState )
+			vector position
+
+			if ( startPosition != endPosition || forceUpdateIndex )
+			{
+				position = LerpVector( startPosition, endPosition, EaseOut( frac ) )
+				EffectSetControlPointVector( bitVfxElements[bit], 1, position )
+			}
+
+			
+			vector startScaleAlpha = BeamstickStave_GetHUDVFXScaleAlphaForBit( bit, prevState, prevPlayerState )
+			vector endScaleAlpha = BeamstickStave_GetHUDVFXScaleAlphaForBit( bit, currentState, playerState )
+			vector scaleAlpha
+
+			if ( isFirstPerson != prevFirstPerson )
+			{
+				scaleAlpha = isFirstPerson ? endScaleAlpha : <0, 0, 0>
+				EffectSetControlPointVector( bitVfxElements[bit], 2, scaleAlpha )
+			}
+			else if ( startScaleAlpha != endScaleAlpha || forceUpdateIndex )
+			{
+				scaleAlpha = LerpVector( startScaleAlpha, endScaleAlpha, EaseOut( frac ) )
+				EffectSetControlPointVector( bitVfxElements[bit], 2, scaleAlpha )
+			}
+		}
+
+		
+		if ( IsValid( baseHudEffect ) && EffectDoesExist( baseHudEffect )  )
+		{
+			if ( maxStaveCount < prevMaxStaveCount )
+			{
+				for ( int bit = maxStaveCount; bit < prevMaxStaveCount; bit++ )
+				{
+					
+					int baseHudEffectCPIdx = bit + 2
+					EffectSetControlPointVector( baseHudEffect, baseHudEffectCPIdx, BASE_VFX_OFFSCREEN_POS )
+				}
+			}
+
+			
+			vector baseEffectRadAlphaStart = BeamstickStave_GetHUDVFXRadiusAlphaForBase( prevPlayerState )
+			vector baseEffectRadAlphaEnd = BeamstickStave_GetHUDVFXRadiusAlphaForBase( playerState )
+			vector baseEffectRadAlpha
+
+			if ( isFirstPerson != prevFirstPerson )
+			{
+				baseEffectRadAlpha = isFirstPerson ? baseEffectRadAlphaEnd : <baseEffectRadAlphaEnd.x, 0, baseEffectRadAlphaEnd.z>
+				EffectSetControlPointVector( baseHudEffect, 1, baseEffectRadAlpha )
+			}
+			else if ( baseEffectRadAlphaStart != baseEffectRadAlphaEnd )
+			{
+				baseEffectRadAlpha = LerpVector( baseEffectRadAlphaStart, baseEffectRadAlphaEnd, EaseOut( frac ) )
+				EffectSetControlPointVector( baseHudEffect, 1, baseEffectRadAlpha )		
+			}
+		}
+
+		WaitFrame()
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____DRONE_MODE___________________________(){}
+#endif
+
+
+int function BeamstickStave_GetPlayerState( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return eStavePlayerState.NONE
+
+	return player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE )
+}
+
+
+
+bool function BeamstickStave_IsInDronePlacementMode( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	return player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE ) == eStavePlayerState.DRONE_MODE_PLACEMENT
+}
+
+
+
+bool function BeamstickStave_IsInDronePassiveMode( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	return player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE ) == eStavePlayerState.DRONE_MODE_PASSIVE
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function BeamstickStave_Drone_OrderDrone( entity player, entity drone, bool showAR = true, vector ornull overrideOrderPos = null )
+{
+	OrderPosData companionOrderData
+	if ( overrideOrderPos != null )
+	{
+		companionOrderData.orderType = eOrderType.GROUND
+		companionOrderData.orderPos = expect vector(overrideOrderPos)
+	}
+	else
+	{
+		companionOrderData = BeamstickStave_Drone_FindDroneOrderPos( player, drone )
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Beamstick_Drone_IsStaveUnderAim( entity player, entity drone )
+{
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	if ( !IsValid( drone ) )
+		return false
+
+	if ( GetViewAngleToPos( player, drone.GetOrigin() ) > STAVE_DRONE_RECALL_MAX_ANGLE )
+		return false
+
+	return true
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DRONE_TURRET_MODE___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DRONE_MOVEMENT___________________________(){}
+#endif
+
+OrderPosData function BeamstickStave_Drone_FindDroneOrderPos( entity player, entity drone )
+{
+	OrderPosData orderPosData
+
+	if ( !IsValid( player ) || !IsValid( drone ) )
+		return orderPosData
+
+
+
+
+
+
+
+
+
+	
+	
+	vector startTraceInitial = player.EyePosition()
+	vector playerViewVector  = player.GetPlayerOrNPCViewVector()
+	vector endTraceInitial   = startTraceInitial + playerViewVector * BeamstickStave_Drone_GetRangeBase()
+	array<entity> ignoreEnts = [ player, drone ]
+	ignoreEnts.extend( GetPlayerArray_Alive() )
+
+	TraceResults trInitial = TraceLine( startTraceInitial, endTraceInitial,ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, player )
+
+	vector orderEndPos = trInitial.endPos
+	orderPosData.orderPos    = trInitial.endPos
+	orderPosData.arPos = trInitial.endPos
+	orderPosData.orderType = eOrderType.AIR
+
+	if ( trInitial.fraction < 0.99 )
+	{
+		float boundsAdj = fabs(DRONE_BOUND_MAXS.z)*1.5
+		vector startHullTrace = trInitial.endPos + (trInitial.surfaceNormal * boundsAdj) + (playerViewVector * -boundsAdj)
+
+		TraceResults trHull = TraceHull( startHullTrace, trInitial.endPos, DRONE_BOUND_MINS*1.5, DRONE_BOUND_MAXS*1.5, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, UP_VECTOR, player )
+
+		if ( trHull.startSolid )
+		{
+			
+			TraceResults trInitialHullRedo = TraceHull( startTraceInitial, endTraceInitial, DRONE_BOUND_MINS*1.5, DRONE_BOUND_MAXS*1.5, [ ignoreEnts ], DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, UP_VECTOR, player )
+
+			
+			if ( Distance( trHull.endPos, trInitialHullRedo.endPos ) < (3 * METERS_TO_INCHES) )
+			{
+				startHullTrace = trInitialHullRedo.endPos + (trInitialHullRedo.surfaceNormal * boundsAdj) + (playerViewVector * -boundsAdj)
+
+				trHull = TraceHull( startHullTrace, trInitialHullRedo.endPos, DRONE_BOUND_MINS * 1.5, DRONE_BOUND_MAXS * 1.5, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, UP_VECTOR, player )
+			}
+		}
+
+		orderPosData.orderPos    = trHull.endPos
+		orderPosData.arNormal = trInitial.surfaceNormal
+		orderPosData.orderType = eOrderType.GROUND
+
+		float upDot = DotProduct( trInitial.surfaceNormal, UP_VECTOR )
+		float upDotAbs  = fabs( upDot )
+		bool normalIsFlat = upDotAbs < DOT_45DEGREE
+
+		if ( normalIsFlat )
+		{
+			orderPosData.orderType = eOrderType.WALL
+			
+			vector flatNormal = FlattenNormalizeVec( trInitial.surfaceNormal )
+
+			
+			
+			vector traceUpStart = trInitial.endPos + (trInitial.surfaceNormal * DRONE_ORDER_LEDGE_CHECK_BACK / 2.0)
+			vector traceUpEnd = traceUpStart + (UP_VECTOR * DRONE_ORDER_LEDGE_CHECK_UP )
+			TraceResults trUp = TraceLine( traceUpStart, traceUpEnd, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, player )
+
+			if ( trUp.fraction > 0.99 )
+			{
+
+				
+				
+				vector traceBackStart = trUp.endPos
+				vector traceBackEnd = traceBackStart - (flatNormal * DRONE_ORDER_LEDGE_CHECK_BACK * 1.5 )
+				TraceResults trBack = TraceLine( traceBackStart, traceBackEnd, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, player )
+
+				if ( trBack.fraction > 0.99 )
+				{
+					vector ledgeStartTrace = trBack.endPos
+					vector ledgeEndTrace = ledgeStartTrace - (UP_VECTOR * DRONE_ORDER_LEDGE_CHECK_UP * 2)
+
+					TraceResults trLedge = TraceHull( ledgeStartTrace, ledgeEndTrace, DRONE_BOUND_MINS, DRONE_BOUND_MAXS, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, UP_VECTOR, player )
+
+					if ( !trLedge.startSolid && trLedge.fraction < 0.99 )
+					{
+						orderPosData.orderPos = trLedge.endPos
+						orderPosData.arPosSecondary = trLedge.endPos
+						orderPosData.arNormalSecondary = trLedge.surfaceNormal
+						orderPosData.orderType = eOrderType.CORNER
+					}
+				}
+			}
+		}
+	}
+
+
+	
+	
+	vector adjustedPoint = AdjustDronePosForHeight( orderPosData.orderPos, player )
+	orderPosData.orderPos  = adjustedPoint
+
+
+
+
+
+
+
+	Assert( orderPosData.orderType != eOrderType.NONE, "FindDroneOrderPos: Tried to find a position but orderType was NONE" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	return orderPosData
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vector function AdjustDronePosForHeight( vector proposedCompanionPos , entity player )
+{
+	vector adjustedPoint = proposedCompanionPos
+
+	
+	array<entity> allDronesArr = GetEntArrayByScriptName( BEAMSTICK_DRONE_COMPANION_SCRIPTNAME )
+	array<entity> nearbyDrones = GetEntitiesFromArrayNearPos(allDronesArr, proposedCompanionPos, 30.0 )
+
+	
+	int dronesToStack = nearbyDrones.len()
+	if (dronesToStack > 0)
+	{
+		
+		adjustedPoint = adjustedPoint + <0, 0, -25.0 * dronesToStack>
+	}
+
+	bool traceDownHit = false
+
+	array <entity> ignoreEnts = [ player ]
+	ignoreEnts.extend( GetPlayerArray_Alive() )
+
+	
+	vector endTracePoint    = adjustedPoint - UP_VECTOR * DRONE_ORDER_MIN_HEIGHT
+	TraceResults trHullDown = TraceHull( adjustedPoint, endTracePoint, DRONE_BOUND_MINS, DRONE_BOUND_MAXS, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, UP_VECTOR, player )
+	TraceResults trHullUp
+	if ( trHullDown.fraction < 1.0 )
+	{
+		traceDownHit = true
+
+		
+		trHullUp = TraceHull( trHullDown.endPos, trHullDown.endPos + UP_VECTOR * DRONE_ORDER_MIN_HEIGHT, DRONE_BOUND_MINS, DRONE_BOUND_MAXS, ignoreEnts, DRONE_COLLISION_MASK, TRACE_COLLISION_GROUP_PLAYER_MOVEMENT, UP_VECTOR, player )
+
+		
+		
+		adjustedPoint = trHullUp.endPos 
+	}
+
+	return adjustedPoint
+}
+
+vector function BeamstickStave_Drone_FindAndDisplayOrderPos( entity player, entity drone )
+{
+	OrderPosData droneOrderData = BeamstickStave_Drone_FindDroneOrderPos( player, drone )
+
+
+
+
+
+
+	return droneOrderData.orderPos
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DRONE_RECALL___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DRONE_GETTERS_SETTERS___________________________(){}
+#endif
+
+float function BeamstickStave_Drone_GetRangeBase()
+{
+	return tuning.droneBaseRange
+}
+float function BeamstickStave_Drone_GetRangeMax()
+{
+	return tuning.droneMaxRange
+}
+float function BeamstickStave_Drone_GetRangeMaxSqr()
+{
+	return tuning.droneMaxRange * tuning.droneMaxRange
+}
+float function BeamstickStave_Drone_GetSpeed()
+{
+	return tuning.droneBaseSpeed
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vector function GetDroneIdlePos( entity player )
+{
+	
+	
+	int attach_id = player.LookupAttachment( "OFFSET" )
+	vector attachPos = player.GetAttachmentOrigin( attach_id )
+	vector attachAngles = player.GetAttachmentAngles( attach_id )
+
+	vector attachUp = AnglesToUp( attachAngles )
+	vector attachRight = AnglesToRight( attachAngles )
+
+	vector pos = attachPos + attachUp* 85 + attachRight *-10
+
+	return pos
+}
+
+CompanionFlightParams function GetDroneFlightData()
+{
+	CompanionFlightParams flightData
+
+	flightData.boundsMin			= DRONE_BOUND_MINS
+	flightData.boundsMax			= DRONE_BOUND_MAXS
+	flightData.entSpeed				= BeamstickStave_Drone_GetSpeed()
+	flightData.initHeightOffset		= DRONE_INIT_HEIGHT_OFFSET
+	flightData.minHeightOffset		= DRONE_ORDER_MIN_HEIGHT
+	flightData.finalOffset			= DRONE_FINAL_HEIGHT_OFFSET
+	flightData.maxPathLength 		= DRONE_MAX_PATH_LEN
+	flightData.maxLengthRatio 		= GetCurrentPlaylistVarFloat( PVAR_BEAMSTICK_DRONE_PATHFIND_MAX_LENGTH_RATIO, 1.6 )
+	flightData.maxTimeDiff 			= GetCurrentPlaylistVarFloat( PVAR_BEAMSTICK_DRONE_PATHFIND_MAX_TIME_DIFF, 1.8 )
+	flightData.doorErrorRadius		= DRONE_DOOR_ERROR_RADIUS
+	flightData.doorEnterHeight		= DRONE_ENTER_DOOR_HEIGHT
+	flightData.eBailCondition		= ePathfindingBailCondition.TIME_AND_RATIO
+
+	return flightData
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function BeamstickStave_Drone_GetScanRadius()
+{
+	float radius = tuning.droneScanRadius
+
+	
+
+	return radius
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function BeamstickStave_GetHUDBitState( entity player, int staveIdx )
+{
+	if ( !IsValidPlayer( player ) )
+		return eStaveHUDBitStates.BIT_STATE_INVALID
+
+	StaveStateData stateData = BeamstickStave_GetStaveState( player, staveIdx )
+	switch ( stateData.mode )
+	{
+		case eStaveModeState.TURRET:
+		case eStaveModeState.SEND_OUT:
+			switch ( stateData.droneTurretState )
+			{
+				case eDroneTurretState.FIRING_AT_TARGET:
+				case eDroneTurretState.TARGET_ACQUIRED:
+					return eStaveHUDBitStates.BIT_STATE_TURRET_ATTACKING
+
+				case eDroneTurretState.SEARCHING_FOR_TARGET:
+				case eDroneTurretState.TARGET_LOST:
+				default:
+					return eStaveHUDBitStates.BIT_STATE_TURRET_IDLE
+			}
+
+		case eStaveModeState.SHIELD:
+			return eStaveHUDBitStates.BIT_STATE_SHIELD
+
+		case eStaveModeState.REGENERATE:
+			return eStaveHUDBitStates.BIT_STATE_REGENERATE
+
+		case eStaveModeState.IDLE:
+		case eStaveModeState.RECALL:
+		default:
+			return eStaveHUDBitStates.BIT_STATE_IDLE
+	}
+
+	unreachable
+}
+
+vector function BeamstickStave_GetHUDVFXColorForBitState( int bitState )
+{
+	Assert( bitState in STAVE_STATE_VFX_COLORS, "Bit State does not have an assigned color in STAVE_STATE_VFX_COLORS" )
+	return STAVE_STATE_VFX_COLORS[bitState]
+}
+
+vector function BeamstickStave_GetHUDVFXPositionForBit( int bit, int bitState, int playerState )
+{
+	switch ( bitState )
+	{
+		case eStaveHUDBitStates.BIT_STATE_TURRET_IDLE:
+		case eStaveHUDBitStates.BIT_STATE_TURRET_ATTACKING:
+
+#if SUPPORTS_COMPACT_UI
+			if ( IsUsingCompactUILayout() )
+			{
+				return DRONE_POSITIONS_IDLE_COMPACT[bit]
+			}
+			else
+#endif
+
+			{
+				return DRONE_POSITIONS_IDLE[bit]
+			}
+
+		case eStaveHUDBitStates.BIT_STATE_SHIELD:
+			return STAVE_POSITIONS_SHIELD[bit]
+
+		case eStaveHUDBitStates.BIT_STATE_REGENERATE:
+			return STAVE_POSITIONS_IDLE[bit]
+
+		case eStaveHUDBitStates.BIT_STATE_IDLE:
+		default:
+			if ( playerState == eStavePlayerState.DRONE_MODE_PLACEMENT )
+			{
+				return DRONE_POSITIONS_PLACEMENT[bit]
+			}
+			else
+			{
+				return STAVE_POSITIONS_IDLE[bit]
+			}
+	}
+
+	unreachable
+}
+
+vector function BeamstickStave_GetHUDVFXScaleAlphaForBit( int bit, int bitState, int playerState )
+{
+	switch ( bitState )
+	{
+		case eStaveHUDBitStates.BIT_STATE_TURRET_IDLE:
+		case eStaveHUDBitStates.BIT_STATE_TURRET_ATTACKING:
+			return STAVE_VFX_SCALE_ALPHA_DRONE_IDLE
+
+		case eStaveHUDBitStates.BIT_STATE_SHIELD:
+			return STAVE_VFX_SCALE_ALPHA_SHIELD
+
+		case eStaveHUDBitStates.BIT_STATE_REGENERATE:
+			return STAVE_VFX_SCALE_ALPHA_REGEN
+
+		case eStaveHUDBitStates.BIT_STATE_IDLE:
+			if ( playerState == eStavePlayerState.DRONE_MODE_PLACEMENT )
+			{
+				return STAVE_VFX_SCALE_ALPHA_DRONE_PLACEMENT
+			}
+			else if ( playerState == eStavePlayerState.SHIELD_MODE )
+			{
+				return STAVE_VFX_SCALE_ALPHA_SHIELD
+			}
+			else
+			{
+				return STAVE_VFX_SCALE_ALPHA_IDLE
+			}
+
+		case eStaveHUDBitStates.BIT_STATE_INVALID:
+		default:
+			return STAVE_VFX_SCALE_ALPHA_INVALID
+	}
+
+	unreachable
+}
+
+vector function BeamstickStave_GetHUDVFXPositionForBase( int bit, int bitState, int playerState )
+{
+	switch ( bitState )
+	{
+		case eStaveHUDBitStates.BIT_STATE_TURRET_IDLE:
+		case eStaveHUDBitStates.BIT_STATE_TURRET_ATTACKING:
+
+#if SUPPORTS_COMPACT_UI
+			if ( IsUsingCompactUILayout() )
+			{
+				return BASE_VFX_POSITIONS_DRONE_IDLE_COMPACT[bit]
+			}
+			else
+#endif
+
+			{
+				return BASE_VFX_POSITIONS_DRONE_IDLE[bit]
+			}
+
+		case eStaveHUDBitStates.BIT_STATE_SHIELD:
+			return BASE_VFX_POSITIONS_POSITIONS_SHIELD[bit]
+
+		case eStaveHUDBitStates.BIT_STATE_REGENERATE:
+			return BASE_VFX_POSITIONS_IDLE[bit]
+
+		case eStaveHUDBitStates.BIT_STATE_IDLE:
+			if ( playerState == eStavePlayerState.DRONE_MODE_PLACEMENT )
+			{
+				return BASE_VFX_POSITIONS_DRONE_PLACEMENT[bit]
+			}
+			else
+			{
+				return BASE_VFX_POSITIONS_IDLE[bit]
+			}
+
+		case eStaveHUDBitStates.BIT_STATE_INVALID:
+		default:
+			return BASE_VFX_OFFSCREEN_POS
+	}
+
+	unreachable
+}
+
+vector function BeamstickStave_GetHUDVFXRadiusAlphaForBase( int playerState )
+{
+	switch ( playerState )
+	{
+		case eStavePlayerState.DRONE_MODE_PLACEMENT:
+			return BASE_VFX_RING_RADIUS_ALPHA_PLACEMENT_MODE
+
+		case eStavePlayerState.SHIELD_MODE:
+			return BASE_VFX_RING_RADIUS_ALPHA_SHIELD_MODE
+
+		default:
+			return BASE_VFX_RING_RADIUS_ALPHA_IDLE
+	}
+
+	unreachable
+}
+
+
+
+bool function HasExtraStavePassive( entity player )
+{
+	return player.HasPassive( ePassives.PAS_ENDORSEMENT_EXTRA_BEAMSTICK_STAVE )
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DRONE_UTILITY___________________________(){}
+#endif
+
+
+bool function BeamstickStave_CanPerformStaveAction( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	if ( player.IsNPC() )
+		return false
+
+
+		if ( !IsLocalClientPlayer( player ) )
+			return false
+
+
+	if ( !IsAlive( player ) )
+		return false
+
+	if ( Bleedout_IsBleedingOut( player ) )
+		return false
+
+	
+	if ( IsVantagePerformingTactical( player ) )
+		return false
+
+	if ( IsPlayerInCryptoDroneCameraView( player ) )
+		return false
+
+
+
+
+
+
+	return true
+}
+
+
+
+bool function IsVantagePerformingTactical( entity player )
+{
+	entity weapon = player.GetOffhandWeapon( eOffhandInv.EQUIPMENT )
+
+	if ( !IsValid( weapon ) )
+		return false
+
+	entity activeWeapon = player.GetActiveWeapon( weapon.GetOffhandActiveSlot() )
+	if ( IsValid( activeWeapon ) && activeWeapon.GetWeaponClassName() == VANTAGE_RECALL_WEAPON_NAME )
+		return true
+
+	if ( VantageCompanion_GetPlayerLaunchState( player ) == ePlayerLaunchState.LAUNCHING )
+		return true
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function DroneHasLOSToTarget( entity drone, entity target, string attachId, float maxDist )
+{
+	int attachID       = drone.LookupAttachment( attachId )
+	vector startOrigin = drone.GetAttachmentOrigin( attachID )
+	int traceMask    = TRACE_MASK_BLOCKLOS  | CONTENTS_WINDOW_NOCOLLIDE | CONTENTS_WINDOW
+
+	array<entity> ignoreEnts = GetPlayerArray_Alive()
+	ignoreEnts.append( drone )
+
+	return IsEntityVisibleFromPoint( target, startOrigin, ignoreEnts, traceMask )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+entity function BeamstickStave_GetStaveWeapon( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return null
+
+	entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != BEAMSTICK_STAVE_WEAPON_REF )
+	{
+		return null
+	}
+
+	return weapon
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Drone_client___________________________(){}
+#endif
+
+
+asset function GetARParticleSystemAsset( int orderType )
+{
+	asset arAsset = FX_COMPANION_ORDER_AR_GROUND
+	switch( orderType )
+	{
+		case eOrderType.GROUND:
+			arAsset = FX_COMPANION_ORDER_AR_GROUND
+			break
+		case eOrderType.WALL:
+			arAsset = FX_COMPANION_ORDER_AR_WALL
+			break
+		case eOrderType.CORNER:
+			arAsset = FX_COMPANION_ORDER_AR_CORNER
+			break
+		case eOrderType.AIR:
+			arAsset = FX_COMPANION_ORDER_AR_AIR
+			break
+	}
+
+	return arAsset
+}
+
+void function ServerToClient_BeamstickStave_Drone_CreateARIndicator( entity player, entity drone )
+{
+	if ( !IsValid( player ) || !IsValid( drone ) )
+		return
+
+	OrderPosData droneOrderData = BeamstickStave_Drone_FindDroneOrderPos( player, drone )
+
+	CreateDroneARIndicator( player, drone, droneOrderData )
+}
+
+void function CreateDroneARIndicator( entity player, entity drone, OrderPosData orderPosData )
+{
+	
+	asset arAsset = GetARParticleSystemAsset( orderPosData.orderType )
+	int arID     = GetParticleSystemIndex( arAsset )
+
+	int fxHandle = StartParticleEffectInWorldWithHandle( arID, orderPosData.arPos, <0, 0, 1> )
+	vector endAngles = VectorToAngles( orderPosData.arNormal )
+	EffectSetControlPointAngles( fxHandle, 0, endAngles )
+	EffectSetControlPointVector( fxHandle, 1, FRIENDLY_COLOR_FX )
+
+	thread DestroyDroneARAfterTime( fxHandle, COMPANION_AR_MARKER_LIFETIME )
+
+
+	if ( orderPosData.orderType == eOrderType.CORNER )
+	{
+		vector flatVecToPrimary = FlattenNormalizeVec(orderPosData.arPosSecondary - orderPosData.arPos )
+		int arID2     = GetParticleSystemIndex( FX_COMPANION_ORDER_AR_CORNER_TOP )
+		int fxHandle2 = StartParticleEffectInWorldWithHandle( arID2, orderPosData.arPosSecondary, <0, 0, 1> )
+		vector secToPrimAngles = VectorToAngles( flatVecToPrimary )
+		vector secAngles = VectorToAngles( orderPosData.arNormalSecondary )
+		vector finalAngles = secAngles + secToPrimAngles
+		EffectSetControlPointAngles( fxHandle2, 0, finalAngles )
+		EffectSetControlPointVector( fxHandle2, 1, FRIENDLY_COLOR_FX )
+
+
+		thread DestroyDroneARAfterTime( fxHandle2, COMPANION_AR_MARKER_LIFETIME )
+	}
+}
+
+void function DestroyDroneARAfterTime( int fxHandle, float time )
+{
+	OnThreadEnd(
+		function() : ( fxHandle )
+		{
+			if ( !EffectDoesExist( fxHandle ) )
+				return
+
+			EffectStop( fxHandle, false, true )
+		}
+	)
+	wait(time)
+}
+
+void function ServerToClient_BeamstickStave_Drone_CreatePreviewFx( entity weapon, entity drone )
+{
+	thread BeamstickStave_Drone_ShowDronePositionPreview_Thread( weapon, drone )
+}
+
+void function ServerToClient_BeamstickStave_Drone_CreateWaypointIndicator( entity droneEnt )
+{
+	thread BeamstickStave_Drone_CreateHUDMarker_Thread( droneEnt )
+}
+
+void function BeamstickStave_Drone_CreateHUDMarker_Thread( entity drone )
+{
+	AssertIsNewThread()
+
+	entity localViewPlayer = GetLocalViewPlayer()
+
+	if ( !IsValidPlayer( localViewPlayer ) )
+		return
+
+	if ( !IsValid( drone ) )
+		return
+
+	if ( localViewPlayer != drone.GetOwner() )
+		return
+
+	
+	if ( file.placedTurrets.contains( drone ) )
+		return
+
+	EndSignal( drone, "OnDestroy", SIG_BEAMSTICK_DRONE_RECALL_ACTION, SIGNAL_WAYPOINT_DESTROY )
+	EndSignal( localViewPlayer, "OnDeath", "OnDestroy", SIG_BEAMSTICK_DRONE_RECALL_ACTION )
+
+	file.placedTurrets.append( drone )
+
+	var rui = CreateFullscreenRui( $"ui/worldspace_icon_beamstick.rpak", -1 )
+	file.worldspaceStaveRuis.append( rui )
+
+	OnThreadEnd( function() : ( rui, drone )
+	{
+		file.placedTurrets.removebyvalue( drone )
+
+		file.worldspaceStaveRuis.removebyvalue( rui )
+		RuiDestroyIfAlive( rui )
+	})
+
+	RuiSetResolutionToScreenSize( rui )
+	RuiTrackFloat3( rui, "worldPos", drone, RUI_TRACK_ABSORIGIN_FOLLOW )
+	RuiTrackFloat3( rui, "entAngles", drone, RUI_TRACK_EYEANGLES_FOLLOW )
+	RuiSetAsset( rui, "icon", $"rui/hud/wildcard_huds/beamstick_staves/beamstick_stave_attack_icon" )
+	RuiSetFloat2( rui, "iconSize", <32, 32, 0> )
+	RuiSetColorAlpha( rui, "iconPadding", <17.0, 19.0, 19.0>, 17.0 )	
+
+	RuiSetColorAlpha( rui, "iconColor", SrgbToLinear( ( DRONE_COLOR_LIGHT * 1.2 ) / 255.0 ), 1.0 )
+	RuiSetColorAlpha( rui, "frameColor", SrgbToLinear( ( DRONE_COLOR_LIGHT * 1.2 ) / 255.0 ), 1.0 )
+
+	RuiSetColorAlpha( rui, "backgroundColor", <0, 0, 0>, 0.9 )
+
+	RuiSetBool( rui, "screenEdgeClampingEnabled", true )
+	RuiSetBool( rui, "screenEdgeClampingHideIconWhileOnScreen", true )
+
+	float distanceEffectsStartRange = tuning.droneMaxRange * 0.65
+
+	RuiSetBool( rui, "maxDistanceScalingEnabled", true )
+	RuiSetFloat( rui, "maxDistanceScalingStartUnits", distanceEffectsStartRange )
+	RuiSetFloat( rui, "maxDistanceScalingEndUnits", tuning.droneMaxRange )
+	RuiSetFloat( rui, "maxDistanceScalingAtScaleEnd", 0.7 )
+
+	RuiSetBool( rui, "maxDistancePulsingEnabled", true )
+	RuiSetFloat( rui, "maxDistancePulsingStartUnits", distanceEffectsStartRange )
+	RuiSetFloat( rui, "maxDistancePulsingEndUnits", tuning.droneMaxRange )
+
+	RuiSetFloat( rui, "maxDistancePulsingStartFrequency", 0.5 )
+	RuiSetFloat( rui, "maxDistancePulsingEndFrequency", 1.75 )
+
+	RuiSetBool( rui, "maxDistancePulsingEffectsAlpha", true )
+	RuiSetFloat( rui, "maxDistancePulsingMinAlpha", 0.4 )
+	RuiSetFloat( rui, "maxDistancePulsingMaxAlpha", 1.0 )
+
+	RuiSetBool( rui, "distanceTextColoredByDistance", true )
+	RuiSetColorAlpha( rui, "distanceTextColorStart", <1, 1, 1>, 1.0 )
+	RuiSetColorAlpha( rui, "distanceTextColorMiddle", SrgbToLinear( GetKeyColor( COLORID_DANGER_WARNING_YELLOW ) / 255.0 ), 1.0 )
+	RuiSetColorAlpha( rui, "distanceTextColorEnd", SrgbToLinear( GetKeyColor( COLORID_DANGER_WARNING_ORANGE ) / 255.0 ), 1.0 )
+	RuiSetFloat( rui, "distanceTextColorStartUnits", distanceEffectsStartRange )
+	RuiSetFloat( rui, "distanceTextColorEndUnits", tuning.droneMaxRange )
+
+	WaitForever()
+}
+
+void function ServerToClient_BeamstickStave_EnableStaveHUD( entity player )
+{
+	BeamstickStave_Create_Stave_Hud( player )
+}
+
+void function ServerToClient_BeamstickStave_ClientSetBeamstickUI( entity player )
+{
+	CreateCustomGadgetRui( $"ui/beamstick_stave_gadget_slot.rpak" )
+	UpdateDpadHud( player )
+
+	BeamstickStave_RegisterModeChangeInputBindings( IsControllerModeActive() )
+	BeamstickStave_SetupGadgetSlotInputUI()
+	BeamstickStave_Create_Stave_Hud( player )
+	thread BeamstickStave_HUD_Think( player )
+}
+
+void function ServerToClient_BeamstickStave_Messaging( entity drone, int actionID )
+{
+	BeamstickStave_Messaging( drone, actionID )
+}
+
+void function BeamstickStave_Messaging( entity drone, int actionID )
+{
+	entity player = GetLocalClientPlayer()
+
+	string textToDisplay = ""
+	string soundToPlay = ""
+	bool isDroneSfx = false
+
+	switch( actionID )
+	{
+		case eStaveMessageState.SHIELD_MODE_ENABLE:
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_SHIELD_MODE_ENABLE"
+			player.Signal( SIG_BEAMSTICK_DRONE_RECALL_ACTION )
+			break
+		case eStaveMessageState.SHIELD_MODE_DISABLED:
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_SHIELD_MODE_DISABLE"
+			break
+		case eStaveMessageState.SHIELD_STAVE_DESTROYED:
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_SHIELD_STAVE_DESTROYED"
+			break
+		case eStaveMessageState.SHIELD_MODE_DESTROYED:
+			HidePlayerHint( "#BEAMSTICK_STAVE_HINT_SHIELD_STAVE_DESTROYED" )
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_SHIELD_MODE_DESTROYED"
+			break
+		case eStaveMessageState.SHIELD_MODE_ON_COOLDOWN:
+			HidePlayerHint( "#BEAMSTICK_STAVE_HINT_SHIELD_MODE_DISABLE" )
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_SHIELD_ON_COOLDOWN"
+			soundToPlay = SFX_STAVE_UNAVAILABLE_1P
+			break
+		case eStaveMessageState.ALL_DRONES_SENT:
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_ALL_DRONES_SENT"
+			soundToPlay = SFX_STAVE_UNAVAILABLE_1P
+			break
+		case eStaveMessageState.NO_STAVES_AVAILABLE:
+			textToDisplay = "#BEAMSTICK_STAVE_HINT_NO_STAVES_AVAILABLE"
+			soundToPlay = SFX_STAVE_UNAVAILABLE_1P
+			break
+		case eStaveMessageState.NO_STAVES_TO_RECALL:
+			if ( player.GetPlayerNetInt( NETVAR_BEAMSTICK_STAVE_PLAYER_STATE ) != eStavePlayerState.SHIELD_MODE )
+			{
+				textToDisplay = "#BEAMSTICK_STAVE_HINT_NO_STAVES_TO_RECALL"
+				soundToPlay = SFX_STAVE_UNAVAILABLE_1P
+			}
+			break
+		case eStaveMessageState.SENDING_OUT_DRONE:
+			textToDisplay =  "#BEAMSTICK_STAVE_HINT_SEND_OUT"
+			soundToPlay = SFX_UI_STAVE_DEPLOY
+			break
+		case eStaveMessageState.SEND_DRONE_TO_NEW_LOCATION:
+			textToDisplay =  "#BEAMSTICK_STAVE_HINT_SEND_TO_NEW_LOCATION"
+			soundToPlay = SFX_UI_STAVE_REDIRECT
+			break
+		case eStaveMessageState.RECALLING_DRONE_ALL:
+			HidePlayerHint( "#BEAMSTICK_STAVE_HINT_RECALL" )
+			textToDisplay =  "#BEAMSTICK_STAVE_HINT_RECALL_ALL"
+			player.Signal( SIG_BEAMSTICK_DRONE_RECALL_ACTION )
+			break
+		case eStaveMessageState.RECALLING_DRONE:
+			textToDisplay =  "#BEAMSTICK_STAVE_HINT_RECALL"
+			soundToPlay = SFX_UI_STAVE_RECALL_SINGLE
+			if ( IsValid( drone ) )
+			{
+				drone.Signal( SIG_BEAMSTICK_DRONE_RECALL_ACTION )
+			}
+			break
+		case eStaveMessageState.STAVE_REGENERATED:
+			textToDisplay =  "#BEAMSTICK_STAVE_HINT_STAVE_REGENERATED"
+			soundToPlay = SFX_UI_STAVE_REGENERATED
+			break
+		case eStaveMessageState.ENTER_DEPLOY_MODE:
+			soundToPlay = SFX_UI_ENTER_PLACEMENT_MODE
+			break
+		case eStaveMessageState.EXIT_DEPLOY_MODE:
+			soundToPlay = SFX_UI_EXIT_PLACEMENT_MODE
+			break
+		case eStaveMessageState.DRONE_TURRET_DESTROYED:
+			textToDisplay = "#BEAMSTICK_STAVE_TURRET_DESTROYED"
+			soundToPlay = SFX_UI_STAVE_TURRET_DESTROYED
+			if ( IsValid( drone ) )
+			{
+				drone.Signal( SIGNAL_WAYPOINT_DESTROY )
+			}
+			break
+	}
+
+	if ( textToDisplay != "" )
+	{
+		AddPlayerHint( 2.0, 0.25, $"", textToDisplay )
+	}
+
+	if ( isDroneSfx )
+	{
+		if ( IsValid( drone ) && soundToPlay != "" )
+		{
+			EmitSoundOnEntity( drone, soundToPlay )
+		}
+	}
+	else
+	{
+		if ( IsValidPlayer( player ) && !player.Player_IsSkydiving() && soundToPlay != "" )
+		{
+			EmitSoundOnEntity( player, soundToPlay )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function BeamstickStave_Drone_ShowDronePositionPreview_Thread( entity weapon, entity drone ) 
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( weapon ) )
+		return
+
+	weapon.EndSignal( "OnDestroy", SIG_BEAMSTICK_DRONE_END_FX_PREVIEW )
+
+	entity localClientPlayer = GetLocalClientPlayer()
+
+	entity player = weapon.GetOwner()
+
+	if ( player != localClientPlayer )
+		return
+
+	player.EndSignal( "OnDeath", "OnDestroy" )
+
+	wait 0.2
+
+	int radiusFxHandle
+	entity effectProp
+	if ( IsValid( weapon ) )
+	{
+		effectProp = CreateClientSidePropDynamic( weapon.GetOrigin(), <0,0,90>, BEAMSTICK_STAVE_DRONE_MODEL )
+
+		radiusFxHandle = StartParticleEffectInWorldWithHandle( GetParticleSystemIndex( FX_ZONE_PREVIEW ), <0, 0, 0>, <0, 0, 0> )
+
+		EffectSetControlPointVector( radiusFxHandle, 3, < tuning.droneScanRadius, 0,0> )  
+
+		if ( effectProp.HasModel() )
+		{
+			DeployableModelHighlight( effectProp )
+		}
+	}
+
+	OnThreadEnd(
+		function() : ( radiusFxHandle, effectProp )
+		{
+			if ( radiusFxHandle != -1 )
+			{
+				EffectStop( radiusFxHandle, false, true )
+			}
+
+			if ( IsValid( effectProp ) )
+			{
+				effectProp.Destroy()
+			}
+		}
+	)
+
+	while( IsValid( radiusFxHandle ) )
+	{
+		vector dropPosition = BeamstickStave_Drone_FindDroneOrderPos( player, drone ).orderPos
+		EffectSetControlPointVector( radiusFxHandle, 0, dropPosition )
+
+		effectProp.SetOrigin( dropPosition )
+		vector viewVec           = player.GetViewVector()
+		effectProp.SetAngles( < 0, VectorToAngles( viewVec ).y, 0 > )
+
+		WaitFrame()
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____DECOY_HANDLING___________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____DEV___________________________(){}
+#endif
+
+#if DEV
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function DEV_BeamstickStave_Drone_SetDebugDraw( bool enabled )
+{
+	DRONE_DEBUG_DRAW = enabled
+}
+
+void function DEV_BeamstickStave_Drone_SetOrderDebugDraw( bool enabled )
+{
+	DRONE_ORDER_DEBUG_DRAW = enabled
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#endif
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____INPUT_BINDINGS___________________________(){}
+#endif
+
+
+void function BeamstickStave_RegisterModeChangeInputBindings( bool isControllerMode )
+{
+	
+	LinkButtonPair( IN_SPEED, IN_MELEE, IN_OFFHAND3, true, 1 )
+	BeamstickStave_UpdateInputBindingUI( isControllerMode )
+}
+
+void function BeamstickStave_UnregisterModeChangeInputBindings()
+{
+	LinkButtonPair( -1, -1, -1, false, 1 )
+}
+
+void function BeamstickStave_OnControllerModeChanged( bool isControllerMode )
+{
+	BeamstickStave_RegisterModeChangeInputBindings( isControllerMode )
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValidPlayer( player ) )
+		return
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____INPUT_HANDLING___________________________(){}
+#endif
+
+
+
+void function BeamstickStave_ShieldMode_Input1Down( var button )
+{
+	file.isShieldModeButton1Down = true
+
+	if ( !file.isShieldModeButton2Down )
+		return
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !BeamstickStave_CanPerformStaveAction( player ) )
+		return
+
+	player.Signal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+
+	Remote_ServerCallFunction( "BeamstickStave_ClientToServer_ToggleShieldMode" )
+}
+
+void function BeamstickStave_ShieldMode_Input1Up( entity player )
+{
+	file.isShieldModeButton1Down = false
+}
+
+void function BeamstickStave_ShieldMode_Input2Down( var button )
+{
+	file.isShieldModeButton2Down = true
+
+	if ( !file.isShieldModeButton1Down )
+		return
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !BeamstickStave_CanPerformStaveAction( player ) )
+		return
+
+	player.Signal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+
+	Remote_ServerCallFunction( "BeamstickStave_ClientToServer_ToggleShieldMode" )
+}
+
+void function BeamstickStave_ShieldMode_Input2Up( entity player )
+{
+	file.isShieldModeButton2Down = false
+}
+
+void function BeamstickStave_ShieldMode_InputDown( entity player )
+{
+	if ( !BeamstickStave_CanPerformStaveAction( player ) )
+		return
+
+	player.Signal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+
+	Remote_ServerCallFunction( "BeamstickStave_ClientToServer_ToggleShieldMode" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____WEAPON___________________________(){}
+#endif
+
+void function OnWeaponActivate_BeamstickStave( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	entity ownerPlayer = weapon.GetWeaponOwner()
+
+	if ( !BeamstickStave_CanPerformStaveAction( ownerPlayer ) )
+		return
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function OnWeaponDeactivate_BeamstickStave( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	entity ownerPlayer = weapon.GetWeaponOwner()
+
+	if ( !IsValidPlayer( ownerPlayer ) )
+		return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( IsLocalClientPlayer( ownerPlayer ) )
+		{
+			ownerPlayer.Signal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+		}
+		weapon.Signal( SIG_BEAMSTICK_DRONE_END_FX_PREVIEW )
+
+}
+
+var function OnWeaponPrimaryAttack_BeamstickStave( entity weapon, WeaponPrimaryAttackParams params )
+{
+
+
+
+		return 0
+
+}
+
+
+void function OnCreateClientOnlyModel_BeamstickStave( entity weapon, entity model, bool validHighlight )
+{
+	if ( validHighlight )
+		DeployableModelHighlight( model )
+	else
+		DeployableModelInvalidHighlight( model )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____CUSTOM_ITEM_INPUT_SETTINGS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____USER_INTERFACE___________________________(){}
+#endif
+
+
+void function BeamstickStave_SetupGadgetSlotInputUI()
+{
+	bool isControllerMode = IsControllerModeActive()
+	BeamstickStave_UpdateInputBindingUI( isControllerMode )
+}
+
+void function BeamstickStave_CleanupUI()
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( IsInFiringRange() )
+	{
+		player.Signal( SIG_BEAMSTICK_PASSIVE_LOST )
+		ResetToDefaultGadgetRui()
+	}
+}
+
+void function BeamstickStave_OnPlayerCreated( entity player )
+{
+	if ( IsInFiringRange() )
+		return
+
+	if ( !IsValidPlayer( player ) )
+		return
+
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	CreateCustomGadgetRui( $"ui/beamstick_stave_gadget_slot.rpak" )
+	thread BeamstickStave_HUD_Think( player )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____INPUT_UI___________________________(){}
+#endif
+
+void function BeamstickStave_UpdateInputBindingUI( bool isControllerMode )
+{
+	var customGadgetRui = GetCustomGadgetRui()
+
+	if ( customGadgetRui == null )
+		return
+
+	
+	string droneModePrompt = Localize( "#BEAMSTICK_STAVE_MODE_PROMPT", "%" + STAVE_COMMAND_HOLD.slice(1) + "%" )
+	RuiSetString( customGadgetRui, "droneModePromptText", droneModePrompt )
+
+	if ( isControllerMode )
+	{
+		string shieldModePrompt = Localize( "#GEAR_SLOT_PROMPT_SHIELD_MODE", STAVE_COMMAND_SHIELD_MODE_1, STAVE_COMMAND_SHIELD_MODE_2 )
+		RuiSetString( customGadgetRui, "shieldModePromptText", shieldModePrompt )
+	}
+	else
+	{
+		string shieldModePrompt = "%" + STAVE_SHIELD_MODE_TAP.slice(1) + "%"
+		RuiSetString( customGadgetRui, "shieldModePromptText", shieldModePrompt )
+	}
+}
+
+void function BeamstickStave_ManageDronePlacementInputHints_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	if ( !IsValidPlayer( player ) )
+		return
+
+	player.Signal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED )
+	player.EndSignal( SIG_BEAMSTICK_DRONE_PLACEMENT_MODE_CHANGED, "OnDeath", "OnDestroy" )
+
+	vector pos = player.GetOrigin() + <0, 0, 16>
+	var placementRui = CreateCockpitPostFXRui( BEAMSTICK_DRONE_PLACEMENT_HINT_RUI, RuiCalculateDistanceSortKey( player.EyePosition(), pos ) )
+
+	file.placementRui = placementRui
+
+	OnThreadEnd(
+		function() : ( placementRui ) {
+			RuiDestroyIfAlive( placementRui )
+			file.placementRui = null
+		}
+	)
+
+	
+	while ( RuiIsAlive( placementRui ) && IsValidPlayer( player ) )
+	{
+		array<StaveStateData> staveStates = BeamstickStave_GetStaveStatesFromPackedNetvar( player, player.GetPlayerNetInt( NETVAR_BEAMSTICK_CURRENT_STAVE_STATES ) )
+
+		int availableCount = 0
+		int idleCount = 0
+		int turretCount = 0
+		int regenCount = 0
+		int shieldCount = 0
+
+		foreach ( StaveStateData stateData in staveStates )
+		{
+			if ( stateData.mode == eStaveModeState.REGENERATE )
+			{
+				regenCount++
+				continue
+			}
+
+			availableCount++
+
+			switch ( stateData.mode )
+			{
+				case eStaveModeState.IDLE:
+				case eStaveModeState.RECALL:
+					idleCount++
+					break
+
+				case eStaveModeState.SHIELD:
+					shieldCount++
+					break
+
+				case eStaveModeState.TURRET:
+				case eStaveModeState.SEND_OUT:
+					turretCount++
+					break
+			}
+		}
+
+		
+		string sendDronePromptStringToken = idleCount > 0 ? "#DRONE_PLACEMENT_MODE_SEND_DRONE" : "#DRONE_PLACEMENT_MODE_RELOCATE_OLDEST_DRONE"
+		bool sendDronePromptTextVisible = availableCount > 0 ? true : false
+		bool sendDronePromptTextDisabled = false
+		string sendDronePromptText = Localize( sendDronePromptStringToken, "%" + STAVE_COMMAND_SEND_DRONE.slice(1) + "%" )
+
+		
+		bool anyDronesUnderAim = false
+		foreach ( entity drone in file.placedTurrets )
+		{
+			if ( Beamstick_Drone_IsStaveUnderAim( player, drone ) )
+			{
+				anyDronesUnderAim = true
+				break
+			}
+		}
+
+		
+		string recallSinglePromptStringToken = "#DRONE_PLACEMENT_MODE_RECALL_DRONE"
+		bool recallSinglePromptTextVisible = anyDronesUnderAim ? true : false
+		bool recallSinglePromptTextDisabled = false
+		string recallSinglePromptText = Localize( recallSinglePromptStringToken, "%" + STAVE_COMMAND_RECALL.slice(1) + "%" )
+
+		
+		string recallAllPromptStringToken = "#DRONE_PLACEMENT_MODE_RECALL_ALL_DRONES"
+		bool recallAllPromptTextVisible = turretCount > 0 ? true : false
+		bool recallAllPromptTextDisabled = false
+		string recallAllPromptText = Localize( recallAllPromptStringToken, "%" + STAVE_COMMAND_RECALL.slice(1) + "%" )
+
+		
+		string exitPlacementPromptStringToken = "#DRONE_PLACEMENT_MODE_EXIT"
+		bool exitPlacementPromptTextVisible = true
+		bool exitPlacementPromptTextDisabled = false
+		string exitPlacementPromptText = Localize( exitPlacementPromptStringToken, "%" + STAVE_EXIT_DRONE_MODE_PROMPT.slice(1) + "%" )
+
+		
+		string shieldModePromptStringToken = "#DRONE_PLACEMENT_MODE_SWITCH_TO_SHIELD_MODE"
+
+		bool isShieldModeOnCooldown = false
+		if ( StatusEffect_HasSeverity( player, eStatusEffect.beamstick_stave_shield_cooldown ) )
+		{
+			float timeRemaining = StatusEffect_GetTimeRemaining( player, eStatusEffect.beamstick_stave_shield_cooldown )
+			isShieldModeOnCooldown = timeRemaining > FLT_EPSILON
+		}
+
+		bool shieldModePromptTextVisible = true
+		bool shieldModePromptTextDisabled = availableCount <= 0 || isShieldModeOnCooldown ? true : false
+		string shieldModeKeybind = IsControllerModeActive() ? Localize( "#GEAR_SLOT_PROMPT_SHIELD_MODE", STAVE_COMMAND_SHIELD_MODE_1, STAVE_COMMAND_SHIELD_MODE_2 ) : "%" + STAVE_SHIELD_MODE_TAP.slice(1) + "%"
+		string shieldModePromptText = Localize( shieldModePromptStringToken, shieldModeKeybind )
+
+
+		RuiSetString( placementRui, "promptText0", sendDronePromptText )
+		RuiSetBool( placementRui, "promptVisible0", sendDronePromptTextVisible )
+		RuiSetBool( placementRui, "promptDisabled0", sendDronePromptTextDisabled )
+
+		RuiSetString( placementRui, "promptText1", recallSinglePromptText )
+		RuiSetBool( placementRui, "promptVisible1", recallSinglePromptTextVisible )
+		RuiSetBool( placementRui, "promptDisabled1", recallSinglePromptTextDisabled )
+
+		RuiSetString( placementRui, "promptText2", recallAllPromptText )
+		RuiSetBool( placementRui, "promptVisible2", recallAllPromptTextVisible )
+		RuiSetBool( placementRui, "promptDisabled2", recallAllPromptTextDisabled )
+
+		RuiSetString( placementRui, "promptText3", exitPlacementPromptText )
+		RuiSetBool( placementRui, "promptVisible3", exitPlacementPromptTextVisible )
+		RuiSetBool( placementRui, "promptDisabled3", exitPlacementPromptTextDisabled )
+
+		RuiSetString( placementRui, "promptText4", shieldModePromptText )
+		RuiSetBool( placementRui, "promptVisible4", shieldModePromptTextVisible )
+		RuiSetBool( placementRui, "promptDisabled4", shieldModePromptTextDisabled )
+
+		WaitFrame()
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____INVENTORY___________________________(){}
+#endif
+
+
+bool function Beamstick_ShouldShowGadgetSlot()
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return false
+
+	return PlayerHasPassive( player, ePassives.PAS_BEAMSTICK_STAVE )
+}
+
+bool function BeamstickStave_ShouldPreventGadgetUnequip( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( IsInFiringRange() )
+		return false
+
+	return PlayerHasPassive( player, ePassives.PAS_BEAMSTICK_STAVE )
+}
+
+void function Beamstick_RegisterTooltipCallback( entity player )
+{
+	AddCallback_OnUpdateTooltip( eTooltipStyle.DEFAULT, Beamstick_OnUpdateTooltip )
+}
+
+void function BeamstickStave_OnPlayerDisconnected( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return
+
+	player.Signal( SIG_BEAMSTICK_ON_DISCONNECT )
+}
+
+
+
+void function Beamstick_OnUpdateTooltip( int style, ToolTipData tooltipData )
+{
+	entity player = GetLocalViewPlayer()
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_BEAMSTICK_STAVE ) )
+		return
+
+	entity gadget = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( gadget ) )
+		return
+
+	if ( gadget.GetWeaponClassName() != BEAMSTICK_STAVE_WEAPON_REF )
+		return
+
+	if ( tooltipData.titleText == "#BEAMSTICK_STAVE_NAME" )
+		return
+
+	if ( tooltipData.titleText.find( "#ENDORSEMENT" ) != -1 )
+		return
+
+	string beamStickLocalizedName = Localize( "#BEAMSTICK_STAVE_NAME" )
+	if ( tooltipData.titleText.find( beamStickLocalizedName ) == -1 )
+		return
+
+	tooltipData.titleText = "#BEAMSTICK_STAVE_NAME"
+	tooltipData.descText = IsControllerModeActive() ? "#BEAMSTICK_STAVE_TOOLTIP_CONTROLLER_DESC" : "#BEAMSTICK_STAVE_TOOLTIP_KEYBOARD_DESC"
+	tooltipData.actionHint1 = ""
+	tooltipData.actionHint2 = ""
+	tooltipData.actionHint3 = ""
+	tooltipData.actionHint4 = ""
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ____ANALYTICS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              

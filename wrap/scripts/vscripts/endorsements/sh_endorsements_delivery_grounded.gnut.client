@@ -1,0 +1,1044 @@
+global function Endorsements_Delivery_GroundedInit
+
+global function Endorsements_Delivery_GetPlayerTicketCount
+global function Endorsements_Delivery_SetCrafterModel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Endorsements_Delivery_PingClosestCrafter
+global function Endorsements_Delivery_GetCraftersInZone
+global function Endorsements_IsPingNagVisible
+global function Endorsements_PingClosestCrafterAndHidePingNag
+global function Endorsements_HidePingNagWithoutPinging
+
+
+global function ServerToClient_Endorsements_Delivery_ReceivedTicket
+global function ServerToClient_Endorsements_Delivery_MidMatchCraftersIncoming
+global function ServerToClient_Endorsements_Delivery_MidMatchCraftersDropped
+
+global function ClientToServer_Endorsements_Delivery_FullmapPing_PingCrafterFromMap
+
+global const string ENDORSEMENT_CRAFTER_ZONE_ID_KEY = "targetname"
+global const string ENDORSEMENT_CRAFTER_ZONE_ID_NONE = ""
+
+const string ENDORSEMENT_CRAFTER_CLEAR_PING_NAG = "Endorsements_Delivery_Grounded_ClearNag"
+
+const asset ENDORSEMENT_CRAFTER_MODEL = $"mdl/props/crafting_replicator/uh_endorsement_unit_02.rmdl"
+const string ENDORSEMENT_CRAFTER_SCRIPTNAME = "endorsement_crafter_grounded"
+const string ENDORSEMENT_CRAFTER_GROUP_SCRIPTNAME = "endorsement_crafter_spawn_group"
+const asset ENDORSEMENT_CRAFTER_INCOMING_MARKER_FX = $"P_ar_loot_drop_point_cp"
+const asset ENDORSEMENT_CRAFTER_INCOMING_BEAM_FX = $"P_ar_loot_endorsement_beam"
+const asset ENDORSEMENT_CRAFTER_HOLOGRAM_FX = $"P_ar_loot_endorsement_logo"
+
+const string NETVAR_PLAYER_TICKETS = "Endorsements_Delivery_PlayerTicketCount"
+const asset ENDORSEMENT_MAP_ICON = $"rui/hud/gametype_icons/survival/endorsement_map_icon"
+const string ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS = "unhinged_wildcard_banner_ui_1p"
+
+
+struct EndorsementCrafterClientEntity
+{
+	entity crafter
+	int beamFX = -1
+	int hologramFX = -1
+
+	bool forceDisabled = false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const string ENDORSEMENTS_DELIVERY_ADDITIONAL_DEFAULTS = "3:1"
+
+struct {
+
+
+
+} tunings
+
+
+struct {
+
+
+
+
+
+
+
+	table< int, array< entity > > zoneIDToCrafters
+	table< entity, EndorsementCrafterClientEntity > craftersForHighlightTracking
+
+	bool endorsementsPingNagIsVisible = false
+
+
+	asset crafterModel																	= $""
+} file
+
+void function Endorsements_Delivery_GroundedInit()
+{
+	
+	PrecacheParticleSystem( $"P_lootpod_trail_smoke_linger_cheap" )
+	PrecacheParticleSystem( $"P_lootpod_trail_fire_cheap" )
+
+	PrecacheParticleSystem( ENDORSEMENT_CRAFTER_INCOMING_MARKER_FX )
+	PrecacheParticleSystem( ENDORSEMENT_CRAFTER_INCOMING_BEAM_FX )
+	PrecacheParticleSystem( ENDORSEMENT_CRAFTER_HOLOGRAM_FX )
+
+	PrecacheScriptString( ENDORSEMENT_CRAFTER_SCRIPTNAME )
+
+	RegisterNetworkedVariable( NETVAR_PLAYER_TICKETS, SNDC_PLAYER_GLOBAL, SNVT_INT, 1 )
+
+		RegisterNetVarIntChangeCallback( NETVAR_PLAYER_TICKETS, Endorsements_NetVarChanged_PlayerTicketCount )
+
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_Delivery_ReceivedTicket ) )
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_Delivery_MidMatchCraftersIncoming ) )
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_Delivery_MidMatchCraftersDropped ) )
+
+	Remote_RegisterServerFunction( string( ClientToServer_Endorsements_Delivery_FullmapPing_PingCrafterFromMap ), "typed_entity", "prop_script" )
+
+	AddCallback_GameStateEnter( eGameState.Playing, Endorsements_Delivery_PlayCinematicCrafterDropin )
+
+	Endorsements_Delivery_InitTuning()
+
+
+
+
+
+
+
+
+
+		RegisterSignal( ENDORSEMENT_CRAFTER_CLEAR_PING_NAG )
+		AddScriptNameCreateCallback( ENDORSEMENT_CRAFTER_SCRIPTNAME, Endorsements_Delivery_OnCrafterCreated )
+		AddScriptNameCreateCallback( ENDORSEMENT_CRAFTER_SCRIPTNAME, Endorsements_Delivery_InitCrafterUsability )
+		AddCreateCallback( "prop_script", Endorsements_Delivery_TrackCrafterForHighlight )
+		AddDestroyCallback( "prop_script", Endorsements_Delivery_UntrackCrafterForHighlight )
+		RegisterScriptAnimWindowCallbacks( "DisableEndorsementCrafterFX", Endorsements_Delivery_ForceDisableFX, Endorsements_Delivery_EndForceDisableFX )
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.ENDORSEMENT_CRAFTER, MINIMAP_OBJECT_RUI, MinimapPackage_EndorsementCrafter, PERK_FULL_MINIMAP_OBJECT, FullmapPackage_EndorsementCrafter )
+		AddCallback_OnFindFullMapAimEntity( Endorsements_Delivery_FullmapPing_GetUnderAim, Endorsements_Delivery_FullmapPing_PingUnderAim )
+		Fullmap_AddCallback_OnMapLegendCreated( Endorsements_Delivery_OnMapLegendCreated )
+
+
+	if ( file.crafterModel == $"" )
+	{
+		Endorsements_Delivery_SetCrafterModel( ENDORSEMENT_CRAFTER_MODEL )
+	}
+}
+
+void function Endorsements_Delivery_InitTuning()
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Endorsements_Delivery_PlayCinematicCrafterDropin()
+{
+
+
+
+
+
+
+	
+	foreach ( entity crafterEnt, EndorsementCrafterClientEntity crafter in file.craftersForHighlightTracking )
+	{
+		crafter.forceDisabled = true
+		Endorsements_Delivery_UpdateCrafterLights( crafter )
+	}
+
+}
+
+int function Endorsements_Delivery_GetPlayerTicketCount( entity player )
+{
+	if ( Endorsements_GetDeliveryType() != eEndorsementDeliveryType.GROUNDED_CRAFTERS )
+	{
+		Warning( "Endorsements_Delivery_GetPlayerTicketCount called on playlist not using grounded crafters delivery method" )
+		return Endorsements_GetMaxEndorsementCount()
+	}
+
+	if ( Endorsements_IsPlayerLockedOutFromCrafter( player ) )
+		return 0
+
+	return player.GetPlayerNetInt( NETVAR_PLAYER_TICKETS )
+}
+
+bool function Endorsements_Delivery_PlayerCanUseCrafter( entity player, entity crafter )
+{
+
+
+
+
+
+	return Endorsements_Delivery_GetPlayerTicketCount( player ) != 0
+			&& !IsValid( player.GetParent() ) 
+			&& SURVIVAL_PlayerCanUse_AnimatedInteraction( player, crafter ) 
+}
+
+string function Endorsements_Delivery_GetPlayerCantUseCrafterReason( entity player, entity crafter )
+{
+	Assert( !Endorsements_Delivery_PlayerCanUseCrafter( player, crafter ) )
+
+	if ( Endorsements_Delivery_GetPlayerTicketCount( player ) == 0 )
+	{
+		return "#ENDORSEMENTS_DELIVERY_CRAFTER_NO_TICKETS"
+	}
+
+	return ""
+}
+
+void function Endorsements_Delivery_InitCrafterUsability( entity crafter )
+{
+
+
+
+
+
+
+	SetCallback_ShouldUseBlockReloadCallback( crafter, SimpleShouldNotBlockReloadCallback )
+	AddCallback_OnUseEntity_ClientServer( crafter, void function( entity crafter, entity player, int useInputFlags ) {
+		if ( !IsBitFlagSet( useInputFlags, USE_INPUT_LONG ) )
+			return
+
+		if ( !Endorsements_Delivery_PlayerCanUseCrafter( player, crafter ) )
+		{
+			return
+		}
+
+		ExtendedUseSettings settings
+		settings.duration = 0.3
+
+			settings.loopSound = "UI_Survival_PickupTicker"
+			settings.hint = "#PROMPT_OPEN"
+
+
+
+
+
+
+
+
+		thread ExtendedUse( crafter, player, settings )
+	} )
+
+		AddEntityCallback_GetUseEntOverrideText( crafter, string function( entity crafter )
+		{
+			entity player = GetLocalViewPlayer()
+
+			if ( !SURVIVAL_PlayerCanUse_AnimatedInteraction( player, crafter ) )
+			{
+				CustomUsePrompt_Hide()
+				return ""
+			}
+
+			if ( PlayerIsInADS( player ) )
+			{
+				CustomUsePrompt_ShowSourcePos( false )
+			}
+			else
+			{
+				CustomUsePrompt_ShowSourcePos( true )
+			}
+
+			CustomUsePrompt_Show( crafter )
+			CustomUsePrompt_SetSourcePos( crafter.GetOrigin() + < 0, 0, 62 > )
+
+			CustomUsePrompt_SetLineColor( SrgbToLinear( UNHINGED_COLOR / 255.0 ) )
+
+			if ( !Endorsements_Delivery_PlayerCanUseCrafter( player, crafter ) )
+			{
+				CustomUsePrompt_SetText( Localize( Endorsements_Delivery_GetPlayerCantUseCrafterReason( player, crafter ) ) )
+			}
+			else
+			{
+				bool hasMultipleTickets = Endorsements_Delivery_GetPlayerTicketCount( player ) > 1
+				CustomUsePrompt_SetText( Localize( hasMultipleTickets ? "#ENDORSEMENTS_DELIVERY_CRAFTER_USE_PLURAL" : "#ENDORSEMENTS_DELIVERY_CRAFTER_USE" ) )
+			}
+
+			return ""
+		})
+
+}
+
+
+void function Endorsements_Delivery_OnCrafterCreated( entity crafter )
+{
+	SetMapFeatureItem( 1011, Localize( "#ENDORSEMENTS_MAP_LEGEND" ), Localize( "#ENDORSEMENTS_MAP_LEGEND_DESC" ), ENDORSEMENT_CRAFTER_MINIMAP_ICON )
+
+	int zoneID = crafter.GetTargetName().tointeger()
+	if ( zoneID <= 0 )
+		return
+
+	if ( !(zoneID in file.zoneIDToCrafters) )
+	{
+		file.zoneIDToCrafters[zoneID] <- []
+	}
+
+	file.zoneIDToCrafters[zoneID].append( crafter )
+}
+
+
+
+array< entity > function Endorsements_Delivery_GetCraftersInZone( int zoneID )
+{
+	if ( !(zoneID in file.zoneIDToCrafters) )
+		return []
+
+	return clone file.zoneIDToCrafters[zoneID]
+}
+
+
+void function Endorsements_Delivery_SetCrafterModel( asset crafterModel )
+{
+	PrecacheModel( crafterModel )
+	file.crafterModel = crafterModel
+}
+
+void function ClientToServer_Endorsements_Delivery_FullmapPing_PingCrafterFromMap( entity player, entity crafter )
+{
+
+
+
+	Assert( false, "Called on wrong VM" )
+
+}
+
+
+void function Endorsements_Delivery_TrackCrafterForHighlight( entity crafter )
+{
+	if ( crafter.GetScriptName() != ENDORSEMENT_CRAFTER_SCRIPTNAME )
+		return
+
+	EndorsementCrafterClientEntity crafterStruct
+	crafterStruct.crafter = crafter
+
+	file.craftersForHighlightTracking[ crafter ] <- crafterStruct
+
+	Endorsements_Delivery_UpdateCrafterLights( crafterStruct )
+}
+
+void function Endorsements_Delivery_UntrackCrafterForHighlight( entity crafter )
+{
+	if ( crafter in file.craftersForHighlightTracking )
+	{
+		delete file.craftersForHighlightTracking[ crafter ]
+	}
+}
+
+const asset ENDORSEMENT_CRAFTER_MINIMAP_ICON = $"rui/hud/gametype_icons/survival/endorsement_map_icon"
+
+void function MinimapPackage_EndorsementCrafter( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", ENDORSEMENT_CRAFTER_MINIMAP_ICON )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetBool( rui, "useTeamColor", false )
+}
+
+void function FullmapPackage_EndorsementCrafter( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", ENDORSEMENT_CRAFTER_MINIMAP_ICON )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetBool( rui, "useTeamColor", false )
+}
+
+entity function Endorsements_Delivery_FullmapPing_GetUnderAim( vector worldPos, float worldRange )
+{
+	float closestDistSqr = FLT_MAX
+	float worldRangeSqr = worldRange * worldRange
+	entity closestEnt = null
+
+	if ( MapPing_Modify_DistanceCheck_Enabled() )
+	{
+		float modifier = MapPing_DistanceCheck_GetModifier()
+
+		if ( worldRange >= MapPing_DistanceCheck_GetDistanceRange() )
+		{
+			modifier *= 0.5
+		}
+
+		worldRangeSqr = ( worldRange * modifier ) * ( worldRange * modifier )
+	}
+
+	foreach ( EndorsementCrafterClientEntity crafter in file.craftersForHighlightTracking.clonevalues() )
+	{
+		vector objOrigin = crafter.crafter.GetOrigin()
+
+		float distSqr = Distance2DSqr( objOrigin, worldPos )
+		if ( distSqr < worldRangeSqr && distSqr < closestDistSqr )
+		{
+			closestDistSqr = distSqr
+			closestEnt     = crafter.crafter
+		}
+	}
+
+	if ( !IsValid( closestEnt ) )
+	{
+		return null
+	}
+
+	return closestEnt
+}
+
+bool function Endorsements_Delivery_FullmapPing_PingUnderAim( entity airdrop )
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return false
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return false
+
+	if ( IsValid( airdrop ) )
+	{
+		Remote_ServerCallFunction( string( ClientToServer_Endorsements_Delivery_FullmapPing_PingCrafterFromMap ), airdrop )
+	}
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+
+	return true
+}
+
+void function Endorsements_Delivery_UpdateCrafterLights( EndorsementCrafterClientEntity crafter )
+{
+	
+	bool enable = IsValid( GetLocalViewPlayer() ) && Endorsements_Delivery_GetPlayerTicketCount( GetLocalViewPlayer() ) != 0 && !crafter.forceDisabled
+
+	
+	if ( !enable )
+	{
+		crafter.crafter.Highlight_OverrideParam( 1, <MAX_WORLD_COORD, MAX_WORLD_COORD, MAX_WORLD_COORD> )
+		crafter.crafter.SetClientSkinOverride( crafter.crafter.GetSkinIndexByName( "off" ) )
+		EffectStop( crafter.beamFX, true, true )
+		crafter.beamFX = -1
+		EffectStop( crafter.hologramFX, true, true )
+		crafter.hologramFX = -1
+	}
+	else
+	{
+		crafter.crafter.Highlight_ClearOverrideParam( 1 )
+		crafter.crafter.SetClientSkinOverride( crafter.crafter.GetSkinIndexByName( "on" ) )
+		if ( crafter.beamFX == -1 )
+		{
+			crafter.beamFX = StartParticleEffectInWorldWithHandle( GetParticleSystemIndex( ENDORSEMENT_CRAFTER_INCOMING_BEAM_FX ), crafter.crafter.GetOrigin(), crafter.crafter.GetAngles() + <0, 180, 0> )
+			EffectSetControlPointVector( crafter.beamFX, 4, UNHINGED_COLOR )
+			crafter.hologramFX = StartParticleEffectInWorldWithHandle( GetParticleSystemIndex( ENDORSEMENT_CRAFTER_HOLOGRAM_FX ), crafter.crafter.GetOrigin(), crafter.crafter.GetAngles() )
+		}
+	}
+}
+
+void function Endorsements_NetVarChanged_PlayerTicketCount( entity player, int newVal )
+{
+	
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( !IsValidPlayer( player ) || !IsValidPlayer( viewPlayer ) )
+		return
+
+	int viewPlayerTeam = viewPlayer.GetTeam()
+	bool isViewPlayer = player == viewPlayer
+	bool isFriendlyPlayer = IsFriendlyTeam( player.GetTeam(), viewPlayerTeam )
+
+	if ( !isViewPlayer && !isFriendlyPlayer )
+		return
+
+	Endorsements_UpdateUnitframeRuiForPlayer( player )
+	Endorsements_Crafting_UpdateTicketCount( newVal )
+
+	if ( isViewPlayer )
+	{
+		foreach ( EndorsementCrafterClientEntity crafter in file.craftersForHighlightTracking.clonevalues() )
+		{
+			Endorsements_Delivery_UpdateCrafterLights( crafter )
+		}
+	}
+}
+
+void function Endorsements_Delivery_ForceDisableFX( entity crafterEnt, string arg )
+{
+	EndorsementCrafterClientEntity crafter = file.craftersForHighlightTracking[ crafterEnt ]
+	crafter.forceDisabled = true
+	Endorsements_Delivery_UpdateCrafterLights( crafter )
+}
+
+void function Endorsements_Delivery_EndForceDisableFX( entity crafterEnt, string arg )
+{
+	EndorsementCrafterClientEntity crafter = file.craftersForHighlightTracking[ crafterEnt ]
+	crafter.forceDisabled = false
+	Endorsements_Delivery_UpdateCrafterLights( crafter )
+}
+
+void function Endorsements_Delivery_PingClosestCrafter()
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return
+
+	float closestDistInRing = FLT_MAX
+	entity closestEntInRing = null
+	float closestDist = FLT_MAX
+	entity closestEnt = null
+	foreach ( EndorsementCrafterClientEntity crafterEnt in file.craftersForHighlightTracking )
+	{
+		float dist = Distance2DSqr( player.GetOrigin(), crafterEnt.crafter.GetOrigin() )
+		if ( dist < closestDist )
+		{
+			closestDist = dist
+			closestEnt = crafterEnt.crafter
+		}
+
+		if ( dist < closestDistInRing && Cl_SURVIVAL_PosInsideRing( crafterEnt.crafter.GetOrigin() ) )
+		{
+			closestDistInRing = dist
+			closestEntInRing = crafterEnt.crafter
+		}
+	}
+
+	entity actualEnt
+	if ( IsValid( closestEntInRing ) )
+	{
+		actualEnt = closestEntInRing
+	}
+	else
+	{
+		actualEnt = closestEnt
+	}
+
+	if ( IsValid( actualEnt ) )
+	{
+		Remote_ServerCallFunction( string( ClientToServer_Endorsements_Delivery_FullmapPing_PingCrafterFromMap ), actualEnt )
+	}
+}
+
+void function Endorsements_Delivery_OnMapLegendCreated( var mapLegend )
+{
+	if ( mapLegend != null && Endorsements_AreEndorsementStationsEnabled() )
+	{
+		RuiSetString( mapLegend, "hintMidLeftText", "#ENDORSEMENTS_FULLMAP_PING_NEAREST_CRAFTER" )
+	}
+}
+
+
+void function ServerToClient_Endorsements_Delivery_ReceivedTicket()
+{
+
+		if ( !GetCurrentPlaylistVarBool( "endorsements_delivery_received_ticket_announcement", true ) )
+			return
+
+		
+		CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+		mainBanner.mainText = Localize( "#ENDORSEMENTS_DELIVERY_ANNOUNCE_GOT_TICKET" )
+		mainBanner.mainIcon1 = ENDORSEMENT_MAP_ICON
+		CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+		mainBanner.imageContainerFrameColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.frameColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.leftIntensityTextureCount = 2
+		mainBanner.rightIntensityTextureCount = 2
+
+		
+		AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner ] )
+		builder.soundAliases = [ ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS ]
+		builder.onIntro = Endorsements_AnnounceIntro_ShowPingNag
+		builder.priority = eHudNotificationQueuePriority.MEDIUM
+
+		builder.onPreIntro = bool function( HudNotificationQueueItem queueItem )
+		{
+			entity player = GetLocalViewPlayer()
+
+			if ( !IsValid( player ) )
+				return false
+
+			return Endorsements_Delivery_GetPlayerTicketCount( player ) > 0
+		}
+
+		entity player = GetLocalClientPlayer()
+		int ticketCount = Endorsements_Delivery_GetPlayerTicketCount( player )
+		int endorsementCount = Endorsements_GetPlayerEndorsementCount( player )
+
+		int commentaryBucket = Endorsements_AreEndorsementStationsEnabled() ? eSurvivalCommentaryBucket.ENDORSEMENTS_ACTIVATED : eSurvivalCommentaryBucket.ENDORSEMENTS_UNLOCKED
+		if ( ticketCount + endorsementCount == Endorsements_GetMaxEndorsementCount() )
+		{
+			commentaryBucket = Endorsements_AreEndorsementStationsEnabled() ? eSurvivalCommentaryBucket.FINAL_ENDORSEMENTS_ACTIVATED : eSurvivalCommentaryBucket.FINAL_ENDORSEMENTS_UNLOCKED
+		}
+		builder.speakerDialogueLines.append( PickCommentaryLineFromBucket( commentaryBucket ) )
+
+		CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.GLOBAL )
+
+
+
+}
+
+void function ServerToClient_Endorsements_Delivery_MidMatchCraftersIncoming()
+{
+
+		
+		CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+		mainBanner.mainText = Localize( "#ENDORSEMENTS_DELIVERY_ANNOUNCE_MIDMATCH_CRAFTER_INCOMING" )
+		mainBanner.mainIcon1 = ENDORSEMENT_MAP_ICON
+		CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+		mainBanner.imageContainerFrameColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.frameColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.textureColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.leftIntensityTextureCount = 2
+		mainBanner.rightIntensityTextureCount = 2
+
+		
+		CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+		subBanner.mainText = Localize( "#ENDORSEMENTS_VIEW_INVENTORY_PROMPT" )
+		subBanner.mainTextIsUpper = false
+		subBanner.scalar = 0.5
+		subBanner.paddingTop = 10
+		subBanner.leftEndPadding = 200
+		subBanner.rightEndPadding = 200
+
+		
+		AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+		builder.soundAliases = [ ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS ]
+		builder.speakerDialogueLines.append( PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.ENDORSEMENT_REPLICATOR_DROPPING ) )
+
+		if ( MinimapAnnouncements_IsEnabled() && GetCurrentPlaylistVarBool( "secondary_announcement_location_midmatchcrafters", true ) )
+		{
+			MapAnnouncementItem mapAnnouncementItem
+			mapAnnouncementItem.message = Localize( "#ENDORSEMENTS_DELIVERY_ANNOUNCE_MIDMATCH_CRAFTER_INCOMING" )
+			mapAnnouncementItem.colorIn = < 255, 255, 255 > / 255.0
+			mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_loot_reset"
+			mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_loot_reset_shadow"
+			mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+			mapAnnouncementItem.speakerDialogueLines = builder.speakerDialogueLines
+
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+		}
+		else
+		{
+			CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.GLOBAL )
+		}
+
+
+
+}
+
+void function ServerToClient_Endorsements_Delivery_MidMatchCraftersDropped()
+{
+
+		
+		if ( Endorsements_GetPlayerEndorsementCount( GetLocalClientPlayer() ) >= Endorsements_GetMaxEndorsementCount() )
+			return
+
+		
+		CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+		mainBanner.mainText = Localize( "#ENDORSEMENTS_DELIVERY_ANNOUNCE_MIDMATCH_CRAFTER_DROPPED_NAG" )
+		mainBanner.mainIcon1 = ENDORSEMENT_MAP_ICON
+		CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+		mainBanner.imageContainerFrameColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.frameColor = ( UNHINGED_COLOR / 255 )
+		mainBanner.leftIntensityTextureCount = 2
+		mainBanner.rightIntensityTextureCount = 2
+
+		
+		AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner ] )
+		builder.soundAliases = [ ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS ]
+		builder.onIntro = Endorsements_AnnounceIntro_ShowPingNag
+		CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.GLOBAL )
+
+
+
+}
+
+
+void function Endorsements_AnnounceIntro_ShowPingNag( HudNotificationQueueItem queueItem )
+{
+	if ( Endorsements_AreEndorsementStationsEnabled() )
+	{
+		thread EndorsementCrafterNag_Thread()
+	}
+}
+
+void function EndorsementCrafterNag_Thread()
+{
+	const float NAG_ANIM_LENGTH = 280/60
+	const float NAG_ANIM_LINGER = 8.0
+	const float NAG_AUTOHIDE_DELAY = 30.0
+
+	AssertIsNewThread()
+
+	Signal( clGlobal.signalDummy, ENDORSEMENT_CRAFTER_CLEAR_PING_NAG ) 
+	EndSignal( clGlobal.signalDummy, ENDORSEMENT_CRAFTER_CLEAR_PING_NAG )
+
+	file.endorsementsPingNagIsVisible = true
+
+	var rui = CreateCockpitPostFXRui( $"ui/endorsement_ping_nag.rpak", HUD_Z_BASE )
+	RuiSetFloat( rui, "animStartTime", Time() )
+
+	OnThreadEnd( function() : ( rui )
+	{
+		RuiSetFloat( rui, "destroyAnimStartTime", Time() ) 
+		file.endorsementsPingNagIsVisible = false
+	})
+
+	wait NAG_AUTOHIDE_DELAY
+}
+
+bool function Endorsements_IsPingNagVisible()
+{
+	return file.endorsementsPingNagIsVisible
+}
+
+void function Endorsements_PingClosestCrafterAndHidePingNag()
+{
+	Endorsements_Delivery_PingClosestCrafter()
+	Signal( clGlobal.signalDummy, ENDORSEMENT_CRAFTER_CLEAR_PING_NAG )
+}
+
+void function Endorsements_HidePingNagWithoutPinging()
+{
+	Signal( clGlobal.signalDummy, ENDORSEMENT_CRAFTER_CLEAR_PING_NAG )
+}
+
+ 

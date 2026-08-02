@@ -1,0 +1,609 @@
+global function ExtendedUse
+
+global function ExtendedUse_Init
+
+
+global function ExtendedUseTextOverride
+
+
+global function CodeCallback_ExtendedUseUpdate
+
+const string EXTENDED_USE_END_SIGNAL = "ExtendedUse_Stop"
+
+const bool EXTENDED_USE_DEBUG = false
+
+global enum eExtendedUseRuiDisplayType
+{
+	COCKPIT,
+	FULLSCREEN,
+	NONE
+}
+
+global enum eExtendedUseRui
+{
+	DEFAULT, 
+	PROGRESS_BAR, 
+	CUSTOM
+}
+
+global enum eExtendedUseResult
+{
+	NOT_STARTED,
+	IN_PROGRESS,
+	CANCELLED,
+	COMPLETED
+}
+
+global struct ExtendedUseSettings
+{
+	void functionref( entity ent, entity player, ExtendedUseSettings settings ) successFunc
+	void functionref( entity ent, entity player, ExtendedUseSettings settings ) failureFunc
+	void functionref( entity ent, entity player, ExtendedUseSettings settings ) startFunc
+	void functionref( entity ent, entity player, ExtendedUseSettings settings ) endFunc
+
+	int    useInputFlag = IN_USE_LONG
+
+	
+	string successSound = ""
+	float  duration = 1.0
+	entity entityArg = null
+	bool   requireMatchingUseEnt = false
+
+		string hint = ""
+		string holdHint = "%use_long%"
+		int    displayRuiType = eExtendedUseRuiDisplayType.COCKPIT
+		int    ruiType = eExtendedUseRui.DEFAULT
+		asset  customDisplayRui = $""
+		float  outlineAlpha = 1.0
+		asset  icon = $""
+		string loopSound = ""
+		bool   isSupportClass = false
+		vector supportClassColor = <1.0, 1.0, 1.0>
+
+		void functionref( entity ent, entity player, var rui, ExtendedUseSettings settings ) displayRuiFunc = null
+
+
+	bool movementDisable = false
+
+
+
+
+
+
+
+
+
+
+	array< string > additional_EndSignals_Player
+	array< string > additional_EndSignals_Ent
+
+	
+	float startTime_Internal = 0.0
+	entity useEnt_Internal
+	int result_Internal = eExtendedUseResult.NOT_STARTED
+	float maxUseDist2
+}
+
+struct
+{
+
+		var extendedUseRui
+
+
+	table< entity, ExtendedUseSettings > playerToExtendedUseSettings
+} file
+
+struct
+{
+	bool allowInteruption = false
+} tuning
+
+void function ExtendedUse_Init()
+{
+	RegisterTuningStruct( "tuning", "extended_use_" )
+
+	RegisterSignal( EXTENDED_USE_END_SIGNAL )
+
+
+
+}
+
+void function ExtendedUse( entity ent, entity player, ExtendedUseSettings settings, bool shouldSetBusy = true )
+{
+	Assert ( IsNewThread(), "Must be started as new thread" )
+
+#if EXTENDED_USE_DEBUG
+	printt("EXTENDED USE: Starting Thread at " + Time())
+#endif
+
+
+	if ( !InPrediction() )
+	{
+		Assert( false, "Extended use should only be started from within prediction" )
+		return
+	}
+
+
+	if( !IsValid( ent ) )
+		return
+
+	if( !IsValid( player ) )
+		return
+
+	if ( player.p.isInExtendedUse )
+		return
+
+	if ( ent.e.isBusy )
+		return
+
+	ent.EndSignal( "OnDestroy" )
+	foreach( endSignal in settings.additional_EndSignals_Ent )
+	{
+		ent.EndSignal( endSignal )
+	}
+
+	player.EndSignal( "OnContinousUseStopped", EXTENDED_USE_END_SIGNAL, "OnDeath", "OnDestroy", "BleedOut_OnStartDying" )
+	foreach( endSignal in settings.additional_EndSignals_Player )
+	{
+		player.EndSignal( endSignal )
+	}
+
+	settings.startTime_Internal = Time()
+
+	settings.result_Internal = eExtendedUseResult.IN_PROGRESS
+	settings.useEnt_Internal = ent
+	settings.maxUseDist2 = DistanceSqr( player.GetOrigin(), ent.GetOrigin() ) + (64 * 64)
+
+	player.p.extendedUseInputFlags = settings.useInputFlag
+
+	Assert( !( player in file.playerToExtendedUseSettings ), "Player is already in the extended use table!" )
+	file.playerToExtendedUseSettings[player] <- settings
+
+	player.StartExtendedUse()
+
+	player.p.isInExtendedUse = true
+	player.p.lastExtededUseEnt = ent
+
+	if ( shouldSetBusy )
+		ent.e.isBusy = true
+
+#if EXTENDED_USE_DEBUG
+		printt("EXTENDED USE: Running Start Funcs")
+#endif
+	if ( settings.startFunc != null )
+		settings.startFunc( ent, player, settings )
+
+	entity localViewPlayer = null
+
+		if ( settings.displayRuiType != eExtendedUseRuiDisplayType.NONE )
+		{
+			asset ruiToCreate
+			if ( settings.ruiType == eExtendedUseRui.DEFAULT )
+			{
+				ruiToCreate = $"ui/extended_use_hint.rpak"
+			}
+			else if ( settings.ruiType == eExtendedUseRui.PROGRESS_BAR )
+			{
+				ruiToCreate = $"ui/health_use_progress.rpak"
+			}
+			else
+			{
+				Assert( settings.customDisplayRui != $"", "Extended use wants to create a custom RUI, but didn't provide one to be created!" )
+
+				ruiToCreate = settings.customDisplayRui
+			}
+
+			var rui
+			if ( settings.displayRuiType == eExtendedUseRuiDisplayType.FULLSCREEN )
+			{
+				rui = CreateFullscreenRui( ruiToCreate )
+			}
+			else
+			{
+				rui = CreateCockpitRui( ruiToCreate )
+			}
+
+#if EXTENDED_USE_DEBUG
+				printt("EXTENDED USE: Creating RUI")
+#endif
+
+			thread SetupRui_Thread( ent, player, rui, settings )
+
+			file.extendedUseRui = rui
+
+			OnThreadEnd(
+				function() : ( rui )
+				{
+					file.extendedUseRui = null
+					RuiDestroy( rui )
+				}
+			)
+		}
+
+		localViewPlayer = GetLocalViewPlayer()
+
+
+	PassByReferenceBool result
+	result.value = false
+
+
+		if ( settings.loopSound != "" && (!IsValid( localViewPlayer ) || localViewPlayer.DoesShareRealms( player )) )
+			EmitSoundOnEntity( ent, settings.loopSound )
+
+
+	int oldUsableValue
+	int startingStanceHandle
+	bool exclusiveUse = false
+
+	if ( settings.movementDisable )
+	{
+
+
+
+
+
+
+
+
+
+
+		player.MovementDisable()
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	OnThreadEnd(
+		function() : ( result, ent, player, localViewPlayer, settings, exclusiveUse, oldUsableValue, startingStanceHandle, shouldSetBusy )
+		{
+#if EXTENDED_USE_DEBUG
+				printt("EXTENDED USE: Running End Funcs")
+#endif
+			if ( settings.endFunc != null )
+			{
+#if EXTENDED_USE_DEBUG
+					printt("EXTENDED USE: End Func is not null")
+#endif
+				settings.endFunc( ent, player, settings )
+			}
+
+			if ( IsValid( ent ) )
+			{
+				if ( shouldSetBusy )
+				{
+					ent.e.isBusy = false
+				}
+
+
+					if ( settings.loopSound != "" )
+						StopSoundOnEntity( ent, settings.loopSound )
+
+			}
+
+			if ( settings.result_Internal == eExtendedUseResult.COMPLETED )
+			{
+#if EXTENDED_USE_DEBUG
+					printt("EXTENDED USE: Running Success Funcs")
+#endif
+				if ( settings.successFunc != null )
+					thread settings.successFunc( ent, player, settings )
+
+
+					if ( !IsValid( localViewPlayer ) || localViewPlayer.DoesShareRealms( player ) )
+					{
+						if ( settings.successSound != "" )
+							EmitSoundAtPosition( TEAM_UNASSIGNED, ent.GetOrigin(), settings.successSound )
+					}
+
+
+
+
+
+
+				result.value = true
+			}
+			else
+			{
+				settings.result_Internal = eExtendedUseResult.CANCELLED
+
+#if EXTENDED_USE_DEBUG
+					printt("EXTENDED USE: Running Failure Funcs")
+#endif
+				if ( settings.failureFunc != null )
+					thread settings.failureFunc( ent, player, settings )
+
+				result.value = false
+			}
+
+			delete file.playerToExtendedUseSettings[player]
+
+			if ( IsValid( player ) )
+			{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+					if ( settings.movementDisable )
+					{
+						if ( InPrediction() )
+							player.MovementEnable()
+					}
+
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		}
+	)
+
+	WaitForever()
+}
+
+void function CodeCallback_ExtendedUseUpdate( entity player )
+{
+
+	if ( !IsFirstTimePredicted() )
+		return
+
+
+	if ( !player.p.isInExtendedUse )
+		return
+
+	if ( !(player in file.playerToExtendedUseSettings) )
+	{
+		if ( !UseHeld( player, player.p.extendedUseInputFlags ) )
+		{
+			player.p.isInExtendedUse = false
+			player.EndExtendedUse()
+#if EXTENDED_USE_DEBUG
+				printt("EXTENDED USE: ending extended use " + Time() )
+#endif
+		}
+
+		return
+	}
+
+#if EXTENDED_USE_DEBUG
+		string failReason = "none"
+#endif
+
+	ExtendedUseSettings settings = file.playerToExtendedUseSettings[player]
+
+	entity useTarget = settings.useEnt_Internal
+
+	bool extendedUseValid = true
+
+	if ( !UseHeld( player, settings.useInputFlag ) )
+	{
+		extendedUseValid = false
+
+#if EXTENDED_USE_DEBUG
+			failReason = "button not held (" + settings.useInputFlag + ")"
+#endif
+	}
+
+	if ( extendedUseValid && player.IsPhaseShifted() )
+	{
+		extendedUseValid = false
+
+#if EXTENDED_USE_DEBUG
+			failReason = "phase shifted"
+#endif
+	}
+
+	if ( extendedUseValid && tuning.allowInteruption )
+	{
+		if ( StatusEffect_HasSeverity( player, eStatusEffect.interrupted ) )
+		{
+			extendedUseValid = false
+
+#if EXTENDED_USE_DEBUG
+				failReason = "interrupted"
+#endif
+		}
+	}
+
+	if ( extendedUseValid )
+	{
+		bool checkMoveDistance = !IsBitFlagSet(useTarget.GetUsableValue(), USABLE_FROM_EXTENDED_RANGE)
+
+		if ( !checkMoveDistance && useTarget.GetNetworkedClassName() == "prop_death_box" )
+		{
+			checkMoveDistance = IsPlayerWithinStandardDeathBoxUseDistance( player, useTarget )
+		}
+
+		if ( checkMoveDistance )
+		{
+			vector eyePos      = player.UseableEyePosition( useTarget )
+			vector eyePos2D    = <eyePos.x, eyePos.y, 0.0>
+			vector useTargetOrigin = useTarget.GetOrigin()
+			vector useOrigin2D = <useTargetOrigin.x, useTargetOrigin.y, 0.0>
+			float vertDist     = player.GetOrigin().z - useTargetOrigin.z
+			if ( (DistanceSqr( eyePos2D, useOrigin2D ) > settings.maxUseDist2) || ((vertDist * vertDist) > settings.maxUseDist2) )
+			{
+				extendedUseValid = false
+
+#if EXTENDED_USE_DEBUG
+					failReason = "too far"
+#endif
+			}
+		}
+	}
+
+	if ( extendedUseValid && settings.requireMatchingUseEnt && player.GetUseEntity() != useTarget )
+	{
+		extendedUseValid = false
+
+#if EXTENDED_USE_DEBUG
+			failReason = "use ent doesn't match requirement"
+#endif
+	}
+
+
+	if ( IsBitFlagSet( useTarget.GetUsableValue(), USABLE_EXCLUSIVE_USE ) )
+	{
+		entity exclusiveUseEnt = useTarget.GetExclusiveUseEnt()
+		if ( IsValid( exclusiveUseEnt ) && exclusiveUseEnt != player )
+		{
+
+
+
+
+
+				extendedUseValid = false
+
+#if EXTENDED_USE_DEBUG
+					failReason = "exclusive use ent doesn't match."
+#endif
+
+		}
+	}
+
+
+
+	if ( extendedUseValid )
+	{
+		if ( Time() >= (settings.startTime_Internal + settings.duration) )
+		{
+#if EXTENDED_USE_DEBUG
+				printt("EXTENDED USE: Completed Successfully")
+#endif
+
+			settings.result_Internal = eExtendedUseResult.COMPLETED
+			Signal( player, EXTENDED_USE_END_SIGNAL )
+		}
+	}
+	else
+	{
+#if EXTENDED_USE_DEBUG
+			printt("EXTENDED USE: Failed: " + failReason)
+#endif
+
+		settings.result_Internal = eExtendedUseResult.CANCELLED
+		Signal( player, EXTENDED_USE_END_SIGNAL )
+	}
+}
+
+bool function UseHeld( entity player, int inputFlag )
+{
+	if ( player.IsInputCommandHeld( inputFlag ) )
+		return true
+
+	return false
+}
+
+
+
+
+void function SetupRui_Thread( entity ent, entity player, var rui, ExtendedUseSettings settings )
+{
+	WaitEndFrame()
+
+	if ( settings.result_Internal != eExtendedUseResult.IN_PROGRESS )
+		return
+
+	if ( settings.displayRuiFunc != null )
+	{
+		settings.displayRuiFunc( ent, player, rui, settings )
+	}
+	else
+	{
+		DefaultExtendedUseRui( ent, player, rui, settings )
+	}
+}
+
+void function DefaultExtendedUseRui( entity ent, entity player, var rui, ExtendedUseSettings settings )
+{
+	if ( settings.ruiType == eExtendedUseRui.DEFAULT )
+	{
+		RuiSetString( rui, "holdButtonHint", settings.holdHint )
+		RuiSetString( rui, "hintText", settings.hint )
+		RuiSetFloat( rui, "outlineAlpha", settings.outlineAlpha )
+	}
+	if ( settings.ruiType == eExtendedUseRui.PROGRESS_BAR )
+	{
+		RuiSetBool( rui, "isVisible", true )
+		RuiSetImage( rui, "icon", settings.icon )
+		RuiSetString( rui, "hintKeyboardMouse", settings.hint  )
+		RuiSetString( rui, "hintController", settings.hint  )
+		RuiSetBool( rui, "isSupportClass", settings.isSupportClass )
+		RuiSetColorAlpha( rui, "supportClassColor", settings.supportClassColor, 1.0 )
+	}
+
+	RuiSetGameTime( rui, "startTime", Time() )
+	RuiSetGameTime( rui, "endTime", Time() + settings.duration )
+}
+
+string function ExtendedUseTextOverride( entity ent )
+{
+	if ( ent.e.isBusy )
+		return " "
+
+	return ""
+}
+
+ 

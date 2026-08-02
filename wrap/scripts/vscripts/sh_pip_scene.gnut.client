@@ -1,0 +1,1194 @@
+
+
+
+
+
+
+
+const bool ENABLE_CHARACTER_SELECT_FEATURE_PARITY_TEST = false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ShPIPScene_LevelInit
+
+
+global function UIToClient_CreatePIPScene
+global function CreatePIPScene
+global function ReleasePIPScene
+global function ChangePIPSceneParam_ItemFlavor
+global function ChangePIPSceneParam_Int
+global function ChangePIPSceneParamGeneric
+global function ApplyPIPSceneParamChanges
+global function SetIsPIPSceneAnimPaused
+global function SetIsPIPSceneAnimLooping
+global function SetPIPSceneHorizontalFOV
+global function SetPIPSceneZFar
+global function GetPIPSceneState
+
+
+global typedef PIPScenePIPSlotReservedCallback void functionref( int pipSlotID )
+
+
+global enum PIPSceneAnimationType
+{
+	CHARACTER_SELECT = 0,
+	CHARACTER_SELECT_READY = 1,
+	GLADIATOR_CARD = 2,
+
+
+
+}
+
+global enum PIPSceneParamType
+{
+	ANIMATION_TYPE,
+	CHARACTER,
+	CHARACTER_SELECT,
+	CHARACTER_SKIN,
+	GLADIATOR_CARD_STANCE,
+}
+
+
+global enum PIPSceneCommandType
+{
+	CHANGE_PARAM,
+	APPLY_PARAM_CHANGES,
+	PAUSE_ANIM,
+	UNPAUSE_ANIM,
+}
+
+global struct PIPSceneCommand
+{
+	int		commandType
+	int 	paramType
+	int		intValue
+	string	stringValue
+}
+
+
+
+global struct PIPSceneTemplate
+{
+	float	cameraHorizontalFOV
+	float	cameraZFar
+	float	cameraExposure
+	string	colorCorrectionRawPath
+}
+
+global struct PIPSceneParams
+{
+	int					animationType
+	ItemFlavor ornull	character
+	ItemFlavor ornull	characterSelect
+	ItemFlavor ornull	characterSkin
+	ItemFlavor ornull	gladiatorCardStance
+}
+
+
+
+
+
+
+
+
+
+
+
+global struct ClientPIPSceneState
+{
+	string 							key
+
+	PIPScenePIPSlotReservedCallback	pipSlotReservedCallback
+
+	PIPSceneTemplate&				pipSceneTemplate
+
+	array<PIPSceneCommand>			commands
+	PIPSceneParams					params
+	bool 							isAnimLooping = false
+
+	CaptureRoom ornull				captureRoom
+	PIPSlotState ornull				pipSlotState
+	entity        					model
+	entity        					camera
+	entity							backgroundModelGeo
+	entity							backgroundModelSmoke
+	entity							lightingRig
+	int								colorCorrectionLayer = -1
+	int								playingAnimIndex = -1
+	string							animName0
+	string							animName1
+	string							actualAnimSeq0
+	string							actualAnimSeq1
+	string							lightingRigAnimSeq
+}
+
+
+
+struct
+{
+
+
+
+	table<string, ClientPIPSceneState> clientStates
+
+} file
+
+
+void function ShPIPScene_LevelInit()
+{
+
+	RegisterSignal( "StopRunPIPSceneClientThread" )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function UIToClient_CreatePIPScene( string key, int pipSceneTemplateGUID )
+{
+	CreatePIPScene( key, pipSceneTemplateGUID, void function( int pipSlotID ) : ( key ) {
+		RunUIScript( "ClientToUI_OnPIPScenePIPSlotReserved", key, pipSlotID )
+	} )
+}
+
+void function CreatePIPScene( string key, int pipSceneTemplateGUID, PIPScenePIPSlotReservedCallback pipSlotReservedCallback )
+{
+	Assert( !( key in file.clientStates ) )
+
+	PrintIfVerbose( key, "CreatePIPScene" )
+
+	ClientPIPSceneState newState
+	newState.key = key
+	newState.pipSlotReservedCallback = pipSlotReservedCallback
+	newState.pipSceneTemplate = BuildPIPSceneTemplate( GetItemFlavorByGUID( pipSceneTemplateGUID ) )
+	file.clientStates[key] <- newState
+
+	thread RunClientPIPSceneThread( newState )
+}
+
+void function ChangePIPSceneParam_ItemFlavor( string key, int paramType, ItemFlavor itemFlav )
+{
+	Assert( IsPIPSceneParamTypeItemFlavor( paramType ) )
+	int guid = ItemFlavor_GetGUID( itemFlav )
+	PrintIfVerbose( key, format( "ChangePIPSceneParam_ItemFlavor(%d): '%s' (%d)", paramType, ItemFlavor_GetAssetName( itemFlav ), guid ) )
+	ChangePIPSceneParamGeneric( key, paramType, guid, "" )
+}
+
+void function ChangePIPSceneParam_Int( string key, int paramType, int intValue )
+{
+	Assert( IsPIPSceneParamTypeInt( paramType ) )
+	PrintIfVerbose( key, format( "ChangePIPSceneParam_Int(%d): %d", paramType, intValue ) )
+	ChangePIPSceneParamGeneric( key, paramType, intValue, "" )
+}
+
+void function ChangePIPSceneParamGeneric( string key, int paramType, int intValue, string stringValue )
+{
+	PIPSceneCommand command
+	command.commandType		= PIPSceneCommandType.CHANGE_PARAM
+	command.paramType   	= paramType
+	command.intValue 		= intValue
+	command.stringValue 	= stringValue
+	file.clientStates[key].commands.append( command )
+}
+
+void function ApplyPIPSceneParamChanges( string key )
+{
+	PIPSceneCommand command
+	command.commandType	= PIPSceneCommandType.APPLY_PARAM_CHANGES
+	file.clientStates[key].commands.append( command )
+}
+
+void function SetIsPIPSceneAnimPaused( string key, bool isPaused )
+{
+	PrintIfVerbose( key, format( "Set is anim paused : %d", isPaused ? 1 : 0 ) )
+	PIPSceneCommand command
+	command.commandType	= isPaused ? PIPSceneCommandType.PAUSE_ANIM : PIPSceneCommandType.UNPAUSE_ANIM
+	file.clientStates[key].commands.append( command )
+}
+
+void function SetIsPIPSceneAnimLooping( string key, bool isLooping )
+{
+	PrintIfVerbose( key, format( "Set is anim looping : %d", isLooping ? 1 : 0 ) )
+	file.clientStates[key].isAnimLooping = isLooping
+}
+
+
+ClientPIPSceneState function GetPIPSceneState( string key )
+{
+	return file.clientStates[key]
+}
+
+void function SetPIPSceneHorizontalFOV( string key, float fov )
+{
+	PrintIfVerbose( key, format( "Set FOV : %f", fov ) )
+	file.clientStates[key].pipSceneTemplate.cameraHorizontalFOV = fov
+}
+
+void function SetPIPSceneZFar( string key, float zFar )
+{
+	PrintIfVerbose( key, format( "Set ZFar : %f", zFar ) )
+	file.clientStates[key].pipSceneTemplate.cameraZFar = zFar
+}
+
+void function RunClientPIPSceneThread( ClientPIPSceneState state )
+{
+	EndSignal( state, "StopRunPIPSceneClientThread" )
+
+	OnThreadEnd( function() : ( state ) {
+		PrintIfVerbose( state.key, "OnThreadEnd. Cleaning up..." )
+		CleanupMutableSceneState( state )
+		CleanupConstSceneState( state )
+	} )
+
+	SetupConstSceneState( state )
+
+	while ( true )
+	{
+		WaitFrame()
+
+		foreach ( PIPSceneCommand command in state.commands )
+		{
+			ExecuteCommand( state, command )
+		}
+		state.commands.clear()
+
+		UpdatePlayingAnimations( state )
+	}
+}
+
+void function UpdatePlayingAnimations( ClientPIPSceneState state )
+{
+	if ( state.playingAnimIndex == 0 )
+	{
+		if ( state.model.IsSequenceFinished() )
+		{
+			if ( state.animName1 != "" )
+			{
+				state.model.Anim_Play( state.animName1 )
+				state.actualAnimSeq1 = state.model.GetCurrentSequenceName()
+				state.playingAnimIndex = 1
+			}
+			else if ( state.isAnimLooping )
+			{
+				TryPlayLightingRigAnimSeq( state )
+				state.model.Anim_Play( state.animName0 )
+				state.actualAnimSeq0 = state.model.GetCurrentSequenceName()
+			}
+		}
+	}
+
+	if ( state.playingAnimIndex == 1 )
+	{
+		if ( state.model.IsSequenceFinished() )
+		{
+			if ( state.isAnimLooping )
+			{
+				TryPlayLightingRigAnimSeq( state )
+				state.model.Anim_Play( state.animName0 )
+				state.actualAnimSeq0 = state.model.GetCurrentSequenceName()
+				state.playingAnimIndex = 0
+			}
+		}
+	}
+}
+
+void function ExecuteCommand( ClientPIPSceneState state, PIPSceneCommand command )
+{
+	switch ( command.commandType )
+	{
+		case PIPSceneCommandType.CHANGE_PARAM:
+			ExecuteChangeParams( state, command )
+			break
+
+		case PIPSceneCommandType.APPLY_PARAM_CHANGES:
+			ExecuteApplyParamChanges( state )
+			break
+
+		case PIPSceneCommandType.PAUSE_ANIM:
+			state.model.Anim_SetPaused( true )
+			break
+
+		case PIPSceneCommandType.UNPAUSE_ANIM:
+			state.model.Anim_SetPaused( false )
+			break
+
+		default:
+			Assert( false )
+	}
+}
+
+void function SetupConstSceneState( ClientPIPSceneState state )
+{
+	CreateColorCorrectionLayerAsync( state )
+	ReserveCaptureRoomForPIPScene( state )
+}
+
+void function ReleasePIPScene( string key )
+{
+	if ( key in file.clientStates )
+	{
+		PrintIfVerbose( key, "ReleasePIPScene" )
+		ClientPIPSceneState state = file.clientStates[key]
+		Signal( state, "StopRunPIPSceneClientThread" )
+		delete file.clientStates[key]
+	}
+}
+
+void function CleanupConstSceneState( ClientPIPSceneState state )
+{
+	if ( state.colorCorrectionLayer != -1 )
+	{
+		ColorCorrection_Release( state.colorCorrectionLayer )
+		state.colorCorrectionLayer = -1
+	}
+
+	if ( state.captureRoom != null )
+	{
+		ReleaseCaptureRoom( expect CaptureRoom( state.captureRoom ) )
+		state.captureRoom = null
+	}
+}
+
+void function CleanupMutableSceneState( ClientPIPSceneState state )
+{
+	if ( state.pipSlotState != null )
+	{
+		ReleasePIPSlot( expect PIPSlotState( state.pipSlotState ) )
+		state.pipSlotState = null
+	}
+
+	if ( IsValid( state.lightingRig ) )
+	{
+		state.lightingRig.Destroy()
+		state.lightingRig = null
+	}
+
+	if ( IsValid( state.backgroundModelGeo ) )
+	{
+		state.backgroundModelGeo.Destroy()
+		state.backgroundModelGeo = null
+	}
+
+	if ( IsValid( state.backgroundModelSmoke ) )
+	{
+		state.backgroundModelSmoke.Destroy()
+		state.backgroundModelSmoke = null
+	}
+
+	if ( IsValid( state.camera ) )
+	{
+		state.camera.Destroy()
+		state.camera = null
+	}
+
+	if ( IsValid( state.model ) )
+	{
+		state.model.Destroy()
+		state.model = null
+	}
+}
+
+void function ReserveCaptureRoomForPIPScene( ClientPIPSceneState state )
+{
+	state.captureRoom = WaitForReserveCaptureRoom()
+	PrintIfVerbose( state.key, format( "Reserved CaptureRoom:%s", string( state.captureRoom ) ) )
+}
+
+bool function ReservePIPSlotForPIPScene( ClientPIPSceneState state )
+{
+	Assert( state.camera != null )
+	Assert( state.pipSlotState == null )
+
+	state.pipSlotState = BeginMovingPIP( state.camera, false, state.colorCorrectionLayer )
+
+	if ( state.pipSlotState != null )
+	{
+		int slotID = PIPSlotState_GetSlotID( expect PIPSlotState( state.pipSlotState ) )
+		PrintIfVerbose( state.key, format( "Reserved PIPSlot:%d", slotID ) )
+		if ( state.pipSlotReservedCallback != null )
+		{
+			state.pipSlotReservedCallback( slotID )
+		}
+	}
+
+	if ( state.pipSlotState == null )
+	{
+		Warning( "Failed to reserve PIPSlot for PIPScene." )
+		return false
+	}
+
+	return true
+}
+
+void function CreateColorCorrectionLayerAsync( ClientPIPSceneState state )
+{
+	if ( GetConVarBool( "monitor_postfx" ) && GetConVarBool( "monitor_cc" ) )
+	{
+		if ( state.pipSceneTemplate.colorCorrectionRawPath != "" )
+		{
+			PrintIfVerbose( state.key, format( "Loading ColorCorrectionLayer '%s'", state.pipSceneTemplate.colorCorrectionRawPath ) )
+			Assert( state.colorCorrectionLayer == -1 )
+			state.colorCorrectionLayer = ColorCorrection_LoadAsync( state.pipSceneTemplate.colorCorrectionRawPath )
+			while ( !ColorCorrection_PollAsync( state.colorCorrectionLayer ) )
+			{
+				WaitFrame()
+			}
+		}
+	}
+}
+
+void function ExecuteChangeParams( ClientPIPSceneState state, PIPSceneCommand command )
+{
+	Assert( command.commandType == PIPSceneCommandType.CHANGE_PARAM )
+
+	switch ( command.paramType )
+	{
+		case PIPSceneParamType.ANIMATION_TYPE:
+			state.params.animationType = command.intValue
+			PrintIfVerbose( state.key, format( "Change ANIMATION_TYPE=%d", command.intValue ) )
+			break
+		case PIPSceneParamType.CHARACTER:
+			ItemFlavor character = GetItemFlavorByGUID( command.intValue )
+			Assert( ItemFlavor_GetType( character ) == eItemType.character )
+			state.params.character = character
+			PrintIfVerbose( state.key, format( "Change CHARACTER=%s", ItemFlavor_GetAssetName( character ) ) )
+			break
+		case PIPSceneParamType.CHARACTER_SELECT:
+			ItemFlavor characterSelect = GetItemFlavorByGUID( command.intValue )
+			Assert( ItemFlavor_GetType( characterSelect ) == eItemType.character_select )
+			state.params.characterSelect = characterSelect
+			PrintIfVerbose( state.key, format( "Change CHARACTER_SELECT=%s", ItemFlavor_GetAssetName( characterSelect ) ) )
+			break
+		case PIPSceneParamType.CHARACTER_SKIN:
+			ItemFlavor characterSkin = GetItemFlavorByGUID( command.intValue )
+			Assert( ItemFlavor_GetType( characterSkin ) == eItemType.character_skin )
+			state.params.characterSkin = characterSkin
+			PrintIfVerbose( state.key, format( "Change CHARACTER_SKIN=%s", ItemFlavor_GetAssetName( characterSkin ) ) )
+			break
+		case PIPSceneParamType.GLADIATOR_CARD_STANCE:
+			ItemFlavor stance = GetItemFlavorByGUID( command.intValue )
+			Assert( ItemFlavor_GetType( stance ) == eItemType.gladiator_card_stance )
+			state.params.gladiatorCardStance = stance
+			PrintIfVerbose( state.key, format( "Change GLADIATOR_CARD_STANCE=%s", ItemFlavor_GetAssetName( stance ) ) )
+			break
+		default:
+			Assert( false )
+	}
+}
+
+LightData function ResolveLightData( ClientPIPSceneState state )
+{
+	if ( state.params.characterSelect != null )
+	{
+		ItemFlavor characterSelect = expect ItemFlavor( state.params.characterSelect )
+		if ( CharacterSelect_HasMenuCustomLighting( characterSelect ) )
+		{
+			PrintIfVerbose( state.key, format( "Using character_select for lighting: '%s'", ItemFlavor_GetAssetName( characterSelect ) ) )
+			return CharacterSelect_GetMenuCustomLightData( characterSelect )
+		}
+	}
+
+	if ( state.params.characterSkin != null )
+	{
+		ItemFlavor characterSkin = expect ItemFlavor( state.params.characterSkin )
+		if ( CharacterSkin_HasMenuCustomLighting( characterSkin ) )
+		{
+			PrintIfVerbose( state.key, format( "Using character_skin for lighting: '%s'", ItemFlavor_GetAssetName( characterSkin ) ) )
+			return CharacterSkin_GetMenuCustomLightData( characterSkin )
+		}
+	}
+
+	if ( state.params.character != null )
+	{
+		ItemFlavor character = expect ItemFlavor( state.params.character )
+		PrintIfVerbose( state.key, format( "Using character for lighting: '%s'", ItemFlavor_GetAssetName( character ) ) )
+		return CharacterClass_GetMenuLightData( character )
+	}
+
+	LightData emptyData
+	return emptyData
+}
+
+void function SetTweakLightCastShadows( entity light, bool doesCastShadows )
+{
+	light.SetTweakLightRealtimeShadows( doesCastShadows )
+	light.SetTweakLightUpdateShadowsEveryFrame( doesCastShadows )
+}
+
+void function SetupLighting( ClientPIPSceneState state, CaptureRoom room )
+{
+	LightData lightData = ResolveLightData( state )
+
+	if ( state.params.animationType == PIPSceneAnimationType.GLADIATOR_CARD )
+	{
+		if ( state.params.gladiatorCardStance != null )
+		{
+			ItemFlavor stance = expect ItemFlavor( state.params.gladiatorCardStance )
+			if ( GladiatorCardStance_HasMovingAnimSeq( stance ) )
+			{
+				state.lightingRigAnimSeq = string( GladiatorCardStance_GetLightingRigMovingAnimSeq( stance ) )
+			}
+			else
+			{
+				state.lightingRigAnimSeq = string( GladiatorCardStance_GetLightingRigStillAnimSeq( stance ) )
+			}
+		}
+	}
+	else
+	{
+		state.lightingRigAnimSeq = string( lightData.animSeq )
+	}
+
+	
+	
+	
+	
+	
+	const int FILL_INDEX = 0
+	const int RIML_INDEX = 1
+	const int RIMR_INDEX = 2
+	const int KEY_INDEX = 3
+
+	foreach ( int lightIndex, entity light in room.tweakLights )
+	{
+		if ( lightIndex == KEY_INDEX )
+		{
+			light.SetTweakLightColor( lightData.key_color )
+			light.SetTweakLightBrightness( lightData.key_brightness )
+			light.SetTweakLightCone( lightData.key_cone )
+			light.SetTweakLightInnerCone( lightData.key_innercone )
+			light.SetTweakLightDistance( lightData.key_distance )
+			light.SetTweakLightHalfBrightFrac( lightData.key_halfbrightfrac )
+			light.SetTweakLightSpecIntensity( lightData.key_specint )
+			light.SetTweakLightPBRFalloff( lightData.key_pbrfalloff )
+			SetTweakLightCastShadows( light, lightData.key_castshadows )
+		}
+		else if ( lightIndex == FILL_INDEX )
+		{
+			light.SetTweakLightColor( lightData.fill_color )
+			light.SetTweakLightBrightness( lightData.fill_brightness )
+			light.SetTweakLightCone( lightData.fill_cone )
+			light.SetTweakLightInnerCone( lightData.fill_innercone )
+			light.SetTweakLightDistance( lightData.fill_distance )
+			light.SetTweakLightHalfBrightFrac( lightData.fill_halfbrightfrac )
+			light.SetTweakLightSpecIntensity( lightData.fill_specint )
+			light.SetTweakLightPBRFalloff( lightData.fill_pbrfalloff )
+			SetTweakLightCastShadows( light, lightData.fill_castshadows )
+		}
+		else if ( lightIndex == RIML_INDEX )
+		{
+			light.SetTweakLightColor( lightData.rimL_color )
+			light.SetTweakLightBrightness( lightData.rimL_brightness )
+			light.SetTweakLightCone( lightData.rimL_cone )
+			light.SetTweakLightInnerCone( lightData.rimL_innercone )
+			light.SetTweakLightDistance( lightData.rimL_distance )
+			light.SetTweakLightHalfBrightFrac( lightData.rimL_halfbrightfrac )
+			light.SetTweakLightSpecIntensity( lightData.rimL_specint )
+			light.SetTweakLightPBRFalloff( lightData.rimL_pbrfalloff )
+			SetTweakLightCastShadows( light, lightData.rimL_castshadows )
+		}
+		else if ( lightIndex == RIMR_INDEX )
+		{
+			light.SetTweakLightColor( lightData.rimR_color )
+			light.SetTweakLightBrightness( lightData.rimR_brightness )
+			light.SetTweakLightCone( lightData.rimR_cone )
+			light.SetTweakLightInnerCone( lightData.rimR_innercone )
+			light.SetTweakLightDistance( lightData.rimR_distance )
+			light.SetTweakLightHalfBrightFrac( lightData.rimR_halfbrightfrac )
+			light.SetTweakLightSpecIntensity( lightData.rimR_specint )
+			light.SetTweakLightPBRFalloff( lightData.rimR_pbrfalloff )
+			SetTweakLightCastShadows( light, lightData.rimR_castshadows )
+		}
+		else
+		{
+			Assert( false, "Unsupported Light Index : " + lightIndex )
+		}
+	}
+}
+
+void function SyncAnimSequencesToParams( ClientPIPSceneState state )
+{
+	state.animName0 = ""
+	state.animName1 = ""
+	state.actualAnimSeq0 = ""
+	state.actualAnimSeq1 = ""
+
+	switch ( state.params.animationType )
+	{
+		case PIPSceneAnimationType.GLADIATOR_CARD:
+
+
+
+			if ( state.params.gladiatorCardStance != null )
+			{
+				ItemFlavor stance = expect ItemFlavor( state.params.gladiatorCardStance )
+				if ( GladiatorCardStance_HasMovingAnimSeq( stance ) )
+				{
+					state.animName0 = string( GladiatorCardStance_GetMovingAnimSeq( stance ) )
+
+				}
+				else
+				{
+					state.animName0 = string( GladiatorCardStance_GetStillAnimSeq( stance ) )
+				}
+			}
+			break
+
+		case PIPSceneAnimationType.CHARACTER_SELECT:
+			if ( state.params.characterSelect != null )
+			{
+				ItemFlavor characterSelect = expect ItemFlavor( state.params.characterSelect )
+				state.animName0 = string( CharacterSelect_GetCustomIntroAnim( characterSelect, null ) )
+				state.animName1 = string( CharacterSelect_GetCustomIdleAnim( characterSelect, null ) )
+			}
+
+			if ( state.animName0 == "" && state.params.characterSkin != null )
+			{
+				ItemFlavor characterSkin = expect ItemFlavor( state.params.characterSkin )
+				state.animName0 = string( CharacterSkin_GetCustomCharSelectIntroAnim( characterSkin ) )
+				state.animName1 = string( CharacterSkin_GetCustomCharSelectIdleAnim( characterSkin ) )
+			}
+
+			if ( state.animName0 == "" )
+			{
+				state.animName0 = "ACT_MP_MENU_MAIN_INTRO"
+				state.animName1 = "ACT_MP_MENU_MAIN_IDLE"
+			}
+
+			break
+
+		case PIPSceneAnimationType.CHARACTER_SELECT_READY:
+			if ( state.params.characterSelect != null )
+			{
+				ItemFlavor characterSelect = expect ItemFlavor( state.params.characterSelect )
+				state.animName0 = string( CharacterSelect_GetCustomReadyIntroAnim( characterSelect, null ) )
+				state.animName1 = string( CharacterSelect_GetCustomReadyIdleAnim( characterSelect, null ) )
+			}
+
+			if ( state.animName0 == "" && state.params.characterSkin != null )
+			{
+				ItemFlavor characterSkin = expect ItemFlavor( state.params.characterSkin )
+				state.animName0 = string( CharacterSkin_GetCustomCharSelectReadyIntroAnim( characterSkin ) )
+				state.animName1 = string( CharacterSkin_GetCustomCharSelectReadyIdleAnim( characterSkin ) )
+			}
+
+			if ( state.animName0 == "" )
+			{
+				state.animName0 = "ACT_MP_MENU_READYUP_INTRO"
+				state.animName1 = "ACT_MP_MENU_READYUP_IDLE"
+			}
+
+			break
+
+		default:
+			Assert( false, "unknown animationType : " + state.params.animationType )
+	}
+
+	if ( state.animName0 != "" )
+	{
+		PrintIfVerbose( state.key, format( "SyncAnimSequencesToParams. %s -> %s", state.animName0, state.animName1 ) )
+	}
+}
+
+void function ExecuteApplyParamChanges( ClientPIPSceneState state )
+{
+	PIPSceneParams p = state.params
+
+	if ( p.character == null )
+	{
+		Warning( "ExecuteApplyParamChanges ignored (no character)" )
+		return
+	}
+
+	if ( p.characterSkin == null )
+	{
+		Warning( "ExecuteApplyParamChanges ignored (no characterSkin)" )
+		return
+	}
+
+	SyncAnimSequencesToParams( state )
+
+	if ( state.animName0 == "" )
+	{
+		Warning( "ExecuteApplyParamChanges ignored (no animName0)" )
+		return
+	}
+
+	CleanupMutableSceneState( state )
+
+	CaptureRoom room = expect CaptureRoom( state.captureRoom )
+
+	if ( !CreateModelPropsAndCamera( state, room ) )
+	{
+		return
+	}
+
+	if ( !ReservePIPSlotForPIPScene( state ) )
+	{
+		return
+	}
+
+	if ( ENABLE_CHARACTER_SELECT_FEATURE_PARITY_TEST )
+		return 
+
+	if ( !WaitStreamModelsForAnim( state.model, state.animName0 ) )
+	{
+		return
+	}
+
+	if ( !WaitStreamModelsForAnim( state.model, state.animName1 ) )
+	{
+		return
+	}
+
+	SetupLighting( state, room )
+
+	TryPlayLightingRigAnimSeq( state )
+
+	WaitEndFrame()
+	state.model.Show()
+
+	state.model.Anim_Play( state.animName0 )
+	state.actualAnimSeq0 = state.model.GetCurrentSequenceName()
+	state.playingAnimIndex = 0
+}
+
+bool function CreateModelPropsAndCamera( ClientPIPSceneState state, CaptureRoom room )
+{
+	Assert( state.params.character != null )
+	Assert( state.params.characterSkin != null )
+	Assert( state.model == null )
+	Assert( state.camera == null )
+	Assert( state.lightingRig == null )
+
+	bool ok = false
+
+	switch ( state.params.animationType )
+	{
+		case PIPSceneAnimationType.GLADIATOR_CARD:
+			ok = CreateModelPropsAndCameraForGladiatorCard( state, room )
+			break
+
+		case PIPSceneAnimationType.CHARACTER_SELECT:
+		case PIPSceneAnimationType.CHARACTER_SELECT_READY:
+			ok = CreateModelPropsAndCameraForCharacterSelect( state, room )
+			break
+
+
+
+
+
+
+
+		default:
+			Assert( false )
+	}
+
+	if ( state.model != null )
+	{
+		state.model.e.animWindowCosmeticItemFlavor = state.params.character
+		state.model.e.animWindowSkinItemFlavor = state.params.characterSkin
+	}
+
+	return ok
+}
+
+bool function CreateModelPropsAndCameraForGladiatorCard( ClientPIPSceneState state, CaptureRoom room )
+{
+	vector modelPos = GetRoomOffset( state, room )
+	vector modelAng = AnglesCompose( room.ang, <0, 180, 0> )
+	state.model = CreateClientSidePropDynamic( modelPos, modelAng, $"mdl/dev/empty_model.rmdl" )
+	state.model.SetForceVisibleInPhaseShift( true )
+	state.model.MakeSafeForUIScriptHack()
+
+	asset setFile = CharacterClass_GetSetFile( expect ItemFlavor( state.params.character ) )
+	asset bodyModel = GetGlobalSettingsAsset( setFile, "bodyModel" )
+	state.model.SetModel( bodyModel )
+	CharacterSkin_Apply( state.model, expect ItemFlavor( state.params.characterSkin ) )
+	state.model.Hide()
+
+	state.camera = CreateClientSidePointCamera( modelPos, modelAng, state.pipSceneTemplate.cameraHorizontalFOV )
+	state.camera.SetMonitorZFar( state.pipSceneTemplate.cameraZFar )
+	state.camera.SetMonitorExposure( state.pipSceneTemplate.cameraExposure )
+	state.camera.SetParent( state.model, "VDU", false )
+
+	state.lightingRig = CreateClientSidePropDynamic( modelPos, modelAng, CAPTURE_ROOM_LIGHTING_RIG_MODEL )
+	state.lightingRig.MakeSafeForUIScriptHack()
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function CreateModelPropsAndCameraForCharacterSelect( ClientPIPSceneState state, CaptureRoom room )
+{
+	
+
+	ItemFlavor character = expect ItemFlavor( state.params.character )
+	ItemFlavor characterSkin = expect ItemFlavor( state.params.characterSkin )
+
+	vector roomOffset = GetRoomOffset( state, room )
+
+	entity cameraEnt = GetEntByScriptName( CHARACTER_SELECT_CAMERA_ENT_NAME )
+	if ( !IsValid( cameraEnt ) )
+	{
+		Warning( format( "cameraEnt '%s' not valid", CHARACTER_SELECT_CAMERA_ENT_NAME ) )
+		return false
+	}
+
+	vector cameraOrigin = cameraEnt.GetOrigin() + roomOffset
+	vector cameraAngles = cameraEnt.GetAngles() + CharacterSelect_GetExtraCameraAngles()
+
+	
+	
+
+	state.camera = CreateClientSidePointCamera( cameraOrigin, cameraAngles, state.pipSceneTemplate.cameraHorizontalFOV )
+	state.camera.SetMonitorZFar( state.pipSceneTemplate.cameraZFar )
+	state.camera.SetMonitorExposure( state.pipSceneTemplate.cameraExposure )
+
+	if ( ENABLE_CHARACTER_SELECT_FEATURE_PARITY_TEST )
+		return true 
+
+	vector characterOrigin	= <0,0,0>
+	vector characterAngles	= <0,0,0>
+	entity characterEnt = GetEntByScriptName( CHARACTER_SELECT_CHARACTER_ENT_NAME )
+	if ( IsValid( characterEnt ) )
+	{
+		characterOrigin = characterEnt.GetOrigin() + roomOffset
+		characterAngles = characterEnt.GetAngles()
+	}
+
+	PrintIfVerbose( state.key, format( "characterOrigin = %s", string( characterOrigin ) ) )
+	state.model = CreateClientSidePropDynamic( characterOrigin, characterAngles, $"mdl/dev/empty_model.rmdl" )
+	state.model.SetForceVisibleInPhaseShift( true )
+	state.model.MakeSafeForUIScriptHack()
+
+	asset setFile = CharacterClass_GetSetFile( character )
+	asset bodyModel = GetGlobalSettingsAsset( setFile, "bodyModel" )
+	state.model.SetModel( bodyModel )
+	CharacterSkin_Apply( state.model, characterSkin )
+	state.model.Hide()
+
+	entity backgroundEnt = GetEntByScriptName( CHARACTER_SELECT_BACKGROUND_ENT_NAME )
+	if ( IsValid( backgroundEnt ) )
+	{
+		vector backgroundAngles = backgroundEnt.GetAngles() + CharacterSelect_GetExtraCameraAngles()
+
+		vector backgroundOrigin = backgroundEnt.GetOrigin()
+		backgroundOrigin = backgroundOrigin + CharacterSelect_GetBackgroundOffset()
+		backgroundOrigin = backgroundOrigin + roomOffset
+
+		PrintIfVerbose( state.key, format( "backgroundOrigin = %s", string( backgroundOrigin ) ) )
+		state.backgroundModelGeo = CharacterSelect_CreateBackgroundModelGeo( backgroundOrigin, backgroundAngles )
+		state.backgroundModelGeo.SetSkin( CharacterClass_GetMenuBackgroundSkinIndex( character ) )
+
+		state.backgroundModelSmoke = CharacterSelect_CreateBackgroundModelSmoke( backgroundOrigin, backgroundAngles )
+		state.backgroundModelSmoke.SetSkin( CharacterClass_GetMenuSmokeSkinIndex( character ) )
+
+		state.lightingRig = CharacterSelect_CreateLightRigModel( backgroundEnt.GetOrigin() + roomOffset, backgroundEnt.GetAngles(), backgroundEnt )
+	}
+
+	return true
+}
+
+
+bool function WaitStreamModelsForAnim( entity model, string animSeq )
+{
+	if ( animSeq != "" )
+	{
+		if ( !model.Anim_HasSequence( animSeq ) )
+		{
+			Warning( format( "Model '%s' does not have AnimSeq '%s'", string( model.GetModelName() ), animSeq ) )
+			return false
+		}
+
+		while ( !model.StreamModelsForAnim( animSeq ) )
+		{
+			WaitFrame()
+		}
+	}
+
+	return true
+}
+
+vector function GetRoomOffset( ClientPIPSceneState state, CaptureRoom room )
+{
+	switch ( state.params.animationType )
+	{
+		case PIPSceneAnimationType.GLADIATOR_CARD:
+			return room.center
+
+
+
+
+
+		case PIPSceneAnimationType.CHARACTER_SELECT:
+		case PIPSceneAnimationType.CHARACTER_SELECT_READY:
+			
+			return < 0, 0, 0 >
+	}
+
+	return < 0, 0, 0 >
+}
+
+void function SetTweakLightOriginAngles( ClientPIPSceneState state )
+{
+	array<string> lightAttachmentNameMap = [ "LIGHT_1", "LIGHT_2", "LIGHT_3", "LIGHT_4" ]
+	CaptureRoom room = expect CaptureRoom( state.captureRoom )
+	foreach ( int lightIndex, entity light in room.tweakLights )
+	{
+		string attachmentName = lightAttachmentNameMap[lightIndex]
+		int attachmentIndex = state.lightingRig.LookupAttachment( attachmentName )
+
+		vector lightOrigin  = state.lightingRig.GetAttachmentOrigin( attachmentIndex )
+		vector lightAngles  = state.lightingRig.GetAttachmentAngles( attachmentIndex )
+
+		light.SetTweakLightOrigin( lightOrigin )
+		light.SetTweakLightAngles( lightAngles )
+
+		PrintIfVerbose( state.key, format( "%s = %s", attachmentName, string( lightOrigin ) ) )
+	}
+}
+
+void function TryPlayLightingRigAnimSeq( ClientPIPSceneState state )
+{
+	if ( state.captureRoom == null )
+		return
+
+	if ( state.lightingRig == null )
+		return
+
+	if ( state.lightingRigAnimSeq == "" )
+		return
+
+	if ( !state.lightingRig.Anim_HasSequence( state.lightingRigAnimSeq ) )
+		return
+
+	state.lightingRig.Anim_Play( state.lightingRigAnimSeq )
+
+	SetTweakLightOriginAngles( state )
+}
+
+
+
+bool function IsVerbose()
+{
+#if DEV
+		return GetConVarBool( "pip_scene_verbose" )
+#endif
+	return false
+}
+
+void function PrintIfVerbose( string key, string message )
+{
+	if ( IsVerbose() )
+	{
+		printf( "[PIP_SCENE:%s] %s", key, message )
+	}
+}
+
+PIPSceneTemplate function BuildPIPSceneTemplate( ItemFlavor templateItemFlav )
+{
+	Assert( ItemFlavor_GetType( templateItemFlav ) == eItemType.pip_scene_template )
+	var block = ItemFlavor_GetSettingsBlock( templateItemFlav )
+	PIPSceneTemplate template
+	template.cameraHorizontalFOV = GetSettingsBlockFloat( block, "cameraHorizontalFOV" )
+	template.cameraExposure = GetSettingsBlockFloat( block, "cameraExposure" )
+	template.cameraZFar = GetSettingsBlockFloat( block, "cameraZFar" )
+	template.colorCorrectionRawPath = GetSettingsBlockString( block, "colorCorrectionRawPath" )
+	return template
+}
+
+bool function IsPIPSceneParamTypeItemFlavor( int paramType )
+{
+	return (
+		paramType == PIPSceneParamType.CHARACTER ||
+		paramType == PIPSceneParamType.CHARACTER_SELECT ||
+		paramType == PIPSceneParamType.CHARACTER_SKIN ||
+		paramType == PIPSceneParamType.GLADIATOR_CARD_STANCE )
+}
+
+bool function IsPIPSceneParamTypeInt( int paramType )
+{
+	return paramType == PIPSceneParamType.ANIMATION_TYPE
+}
+ 

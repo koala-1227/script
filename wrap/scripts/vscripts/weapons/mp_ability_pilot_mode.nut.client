@@ -1,0 +1,1403 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function MpAbilityHoverboard_Init
+
+global function CodeCallback_OnPlayerHoverboardStateChanged
+global function CodeCallback_OnPlayerHoverboardTrick
+
+global function OnWeaponPrimaryAttack_ability_pilot_mode
+global function OnWeaponPrimaryAttackAnimEvent_ability_pilot_mode
+global function OnWeaponAttemptOffhandSwitch_ability_pilot_mode
+
+global function IsHoverboardEnabled
+global function Hoverboard_IsHoverboardWeaponClass
+
+global function Hoverboard_GetCooldownTotal
+global function Hoverboard_TryActivate
+
+
+
+
+
+
+
+
+global function ServerToClient_ShowHoverboardLandingUI
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CONSTS___________________________()
+{}
+#endif
+
+
+global const string HOVERBOARD_SCRIPTNAME = "mp_ability_pilot_mode"
+const string HOVERBOARD_OFFHAND_SCRIPTNAME = HOVERBOARD_SCRIPTNAME + "_offhand"
+const string HOVERBOARD_PROP_SCRIPTNAME = "PropHoverboard"
+
+const asset HOVERBOARD_MODEL = $"mdl/props/hoverboard_01/hoverboard_01.rmdl"
+const string HOVERBOARD_PLAYER_MOD = "hoverboard"
+
+
+const asset HOVERBOARD_TRAIL_FX = $"P_veh_hoverboard_trail_main"
+const asset HOVERBOARD_BOOST_TRAIL_FX = $"P_veh_hoverboard_legend_boost"
+const asset HOVERBOARD_JUMPJET_IDLE_LEFT_FX = $"P_veh_hoverboard_legend_jet"
+const asset HOVERBOARD_JUMPJET_IDLE_RIGHT_FX = $"P_veh_hoverboard_legend_jet"
+const asset HOVERBOARD_JUMPJET_BURST_LEFT_FX = $"P_veh_hoverboard_legend_jet_burst"
+const asset HOVERBOARD_JUMPJET_BURST_RIGHT_FX = $"P_veh_hoverboard_legend_jet_burst"
+const asset HOVERBOARD_HOVERBOARD_IDLE_FRONT_FX = $"P_veh_hoverboard_idle"
+const asset HOVERBOARD_HOVERBOARD_IDLE_BACK_FX = $"P_veh_hoverboard_idle"
+const asset HOVERBOARD_HOVERBOARD_BURST_FRONT_FX = $"P_veh_hoverboard_burst"
+const asset HOVERBOARD_HOVERBOARD_BURST_BACK_FX = $"P_veh_hoverboard_burst"
+const asset HOVERBOARD_HOVERBOARD_WALLRIDE_FX = $"P_veh_hoverboard_wallride"
+const string HOVERBOARD_RAM_IMPACT_TABLE = "melee_hoverboard"
+
+
+const asset HOVERBOARD_BOOST_SCREEN_FX = $"P_screen_buff_speedboost_CP"
+const asset HOVERBOARD_SCREEN_FX = $"P_screen_buff_speed"
+
+
+const vector HOVERBOARD_HOVERBOARD_BOOST_FRIENDLY_COLOR = < 48, 180, 255 >
+const vector HOVERBOARD_HOVERBOARD_BOOST_ENEMY_COLOR = < 155, 0, 0 >
+
+
+const string HOVERBOARD_ACTIVE_SOUND_1P = "Hoverboard_Engine_Loop_3p"
+const string HOVERBOARD_ACTIVE_SOUND_3P_FRIENDLY = "Hoverboard_Engine_Loop_3p_Friendly"
+const string HOVERBOARD_ACTIVE_SOUND_3P_ENEMY = "Hoverboard_Engine_Loop_3p_Enemy"
+const string HOVERBOARD_ZIPLINE_SOUND = "Hoverboard_Engine_Idle_Offboard_ZipRails_Loop_3p"
+const string HOVERBOARD_WALLRUN_SOUND = "Hoverboard_Wall_Grinding_Loop_3p"
+const string HOVERBOARD_BOOST_ZIPLINE_SOUND = "Hoverboard_Boost_WallZiplineJumps_3p"
+const string HOVERBOARD_BOOST_DOUBLEJUMP_SOUND = "Hoverboard_Boost_DoubleJump_3p"
+const string HOVERBOARD_BOOST_HIGHLANDING_SOUND = "Hoverboard_Boost_Landing_3p"
+const string HOVERBOARD_BOOST_GENERIC_SOUND = "Hoverboard_Boost_3p"
+
+
+const float HOVERBOARD_COOLDOWN_SEC = 5.0
+const float HOVERBOARD_ACTIVATE_COOLDOWN_SEC = 1.0
+const float HOVERBOARD_DAMAGE_THRESHOLD = 100.0
+const float HOVERBOARD_DAMAGE_KNOCKOFF_TIME_DELAY = 3.0
+const float HOVERBOARD_EVO_BOOST_STREAK_TIME_THRESHOLD = 4.0
+const float HOVERBOARD_MAX_VELOCITY_FOR_VFX = 800.0
+const float HOVERBOARD_MIN_VELOCITY_FOR_VFX = 350.0
+
+const float HOVERBOARD_NORMAL_SPEED_THRESHOLD = 575.0  	  
+const float HOVERBOARD_DISPLAY_MAX_SPEED = 1200.0         
+const float HOVERBOARD_BOOST_HINT_DEFAULT_DURATION = 2.0
+const float HOVERBOARD_BOOST_VFX_TIME = 2.0
+
+const string SIG_HOVERBOARD_STATS_STARTED 	= "HOVERBOARD_STATS_STARTED"
+const string SIG_HOVERBOARD_END				= "EndHoverboard"
+const string SIG_HOVERBOARD_BOOST			= "HoverboardBoost"
+const string SIG_HOVERBOARD_WALLRUN_END		= "HoverboardWallrunEnd"
+const string SIG_HOVERBOARD_DAMAGE_TICK		= "EndHoverboard"
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________STRUCTS___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct
+{
+
+#if DEV
+		bool	debugSpeedDisplay = false
+#endif
+	float	trickLastTime
+	vector	trickVelocity
+	int boostHintQueueId = -1
+	bool hasShownLandingAnnouncement
+	entity currentHoverboardProp
+
+
+
+
+
+} file
+
+struct {
+
+
+
+
+
+
+
+
+
+} tuning
+
+
+struct HoverboardBoostHint
+{
+	string hintText
+	float duration = HOVERBOARD_BOOST_HINT_DEFAULT_DURATION
+}
+
+
+void function MpAbilityHoverboard_Init()
+{
+	if( !IsHoverboardEnabled() )
+		return
+
+	PrecacheWeapon( HOVERBOARD_OFFHAND_SCRIPTNAME )
+	PrecacheModel( HOVERBOARD_MODEL )
+
+	PrecacheScriptString( HOVERBOARD_PROP_SCRIPTNAME )
+
+
+	PrecacheParticleSystem( HOVERBOARD_SCREEN_FX )
+	PrecacheParticleSystem( HOVERBOARD_BOOST_SCREEN_FX )
+
+	PrecacheParticleSystem( HOVERBOARD_TRAIL_FX )
+	PrecacheParticleSystem( HOVERBOARD_BOOST_TRAIL_FX )
+	PrecacheParticleSystem( HOVERBOARD_JUMPJET_IDLE_LEFT_FX )
+	PrecacheParticleSystem( HOVERBOARD_JUMPJET_IDLE_RIGHT_FX )
+	PrecacheParticleSystem( HOVERBOARD_JUMPJET_BURST_LEFT_FX )
+	PrecacheParticleSystem( HOVERBOARD_JUMPJET_BURST_RIGHT_FX )
+	PrecacheParticleSystem( HOVERBOARD_HOVERBOARD_IDLE_FRONT_FX )
+	PrecacheParticleSystem( HOVERBOARD_HOVERBOARD_IDLE_BACK_FX )
+	PrecacheParticleSystem( HOVERBOARD_HOVERBOARD_BURST_FRONT_FX )
+	PrecacheParticleSystem( HOVERBOARD_HOVERBOARD_BURST_BACK_FX )
+	PrecacheParticleSystem( HOVERBOARD_HOVERBOARD_WALLRIDE_FX )
+
+	PrecacheImpactEffectTable( HOVERBOARD_RAM_IMPACT_TABLE )
+
+	RegisterSignal( SIG_HOVERBOARD_BOOST )
+	RegisterSignal( SIG_HOVERBOARD_END )
+	RegisterSignal( SIG_HOVERBOARD_STATS_STARTED )
+	RegisterSignal( SIG_HOVERBOARD_WALLRUN_END )
+
+	Remote_RegisterClientFunction( "ServerToClient_ShowHoverboardLandingUI" )
+	Remote_RegisterServerFunction( "ClientToServer_Hoverboard_ForceDeactivateHoverboard" )
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_HOVERBOARD, Hoverboard_OnPassiveChanged )
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+			file.debugSpeedDisplay = GetCurrentPlaylistVarBool( "hoverboard_debug_speed", file.debugSpeedDisplay )
+#endif
+		Survival_AddInventorySlotVisibilityCallback( "gadgetslot", Hoverboard_ShouldShowGadgetSlot )
+		Survival_AddInventoryPreventGadgetSlotUnequipCallback( Hoverboard_ShouldPreventGadgetUnequip )
+		AddCallback_OnClientScriptInit( Hoverboard_RegisterTooltipCallback )
+		AddCallback_OnViewPlayerChanged( Hoverboard_ViewPlayerChanged )
+		
+		
+		RegisterConCommandTriggeredCallback( "+weaponCycle", Hoverboard_OnAlternateExitButtonPressed )
+		RegisterConCommandTriggeredCallback( "weaponSelectPrimary0", Hoverboard_OnAlternateExitButtonPressed )
+		RegisterConCommandTriggeredCallback( "weaponSelectPrimary1", Hoverboard_OnAlternateExitButtonPressed )
+		RegisterConCommandTriggeredCallback( "weaponSelectPrimary2", Hoverboard_OnAlternateExitButtonPressed )
+		RegisterConCommandTriggeredCallback( "weaponSelectOrdnance", Hoverboard_OnAlternateExitButtonPressed )
+		RegisterConCommandTriggeredCallback( "+scriptcommand3", Hoverboard_OnAlternateExitButtonPressed ) 
+
+		AddScriptNameCreateCallback( HOVERBOARD_PROP_SCRIPTNAME, Hoverboard_OnHoverboardPropCreated )
+
+}
+
+bool function IsHoverboardEnabled()
+{
+	return GetCurrentPlaylistVarBool( "hoverboard_enabled", false )
+}
+
+float function Hoverboard_GetCooldownTotal( entity player )
+{
+	bool hoverboardActive = player.IsPilotModeActive() || StatusEffect_HasSeverity( player, eStatusEffect.hoverboard_active )
+	return hoverboardActive ? GetCurrentPlaylistVarFloat( "hoverboard_cooldown_sec", HOVERBOARD_COOLDOWN_SEC ) : GetCurrentPlaylistVarFloat( "hoverboard_activate_cooldown_sec", HOVERBOARD_ACTIVATE_COOLDOWN_SEC )
+}
+
+float function Hoverboard_GetDamageThreshold()
+{
+	return GetCurrentPlaylistVarFloat( "hoverboard_damage_thresh", HOVERBOARD_DAMAGE_THRESHOLD )
+}
+
+float function Hoverboard_GetDamageTimeThreshold()
+{
+	return GetCurrentPlaylistVarFloat( "hoverboard_damage_thresh_time", HOVERBOARD_DAMAGE_KNOCKOFF_TIME_DELAY )
+}
+
+bool function Hoverboard_IsHoverboardWeaponClass( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	return (weapon.GetWeaponClassName() == HOVERBOARD_SCRIPTNAME)
+}
+
+void function Hoverboard_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( didHave )
+	{
+
+
+
+
+	}
+
+	if ( nowHas )
+	{
+
+
+
+
+	}
+}
+
+bool function Hoverboard_TryActivate( entity player, entity gadget ) 
+{
+	if( !IsHoverboardEnabled() )
+		return false
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_HOVERBOARD ) )
+		return false
+
+	if ( !BoostKit_IsValidOffhand( player, HOVERBOARD_OFFHAND_SCRIPTNAME ) )
+		return false
+
+	if ( HoverVehicle_IsPlayerInAnyVehicle( player ) )
+		return false
+
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.hoverboard_active ) )
+		return false
+
+	float hoverboardCooldown = Hoverboard_GetCooldownTotal( player )
+
+	if ( !BoostKit_TryActivate( player, hoverboardCooldown ) )
+		return false
+
+	printt( "Hoverboard_TryActivate" )
+
+	StatusEffect_AddTimed( player, eStatusEffect.hoverboard_active, 1.0, hoverboardCooldown, 0.0 )
+	player.ClearOffhand( eActiveInventorySlot.altHand )
+
+	BoostKit_ActivateOffhand( player )
+
+	return true
+}
+
+var function OnWeaponPrimaryAttackAnimEvent_ability_pilot_mode( entity weapon, WeaponPrimaryAttackParams attackParams ) { return 1 }
+bool function OnWeaponAttemptOffhandSwitch_ability_pilot_mode( entity weapon ) { return true }
+var function OnWeaponPrimaryAttack_ability_pilot_mode( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	PlayerUsedOffhand( player, weapon )
+
+
+
+
+
+
+
+
+
+
+
+
+	printt( "Hoverboard_OnWeaponPrimaryAttack_ability_pilot_mode" )
+
+	return 1
+}
+
+void function CodeCallback_OnPlayerHoverboardStateChanged( entity player )
+{
+	if ( player.IsPilotModeActive() )
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		thread Hoverboard_DoSpeedLines_Thread()
+		thread Hoverboard_UpdateRUI_Thread( player )
+
+
+		if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.BEGIN_WALLRUN, Hoverboard_PlayerBeginWallrunSFX ) )
+		{
+			AddPlayerMovementEventCallback( player, ePlayerMovementEvents.BEGIN_WALLRUN, Hoverboard_PlayerBeginWallrunSFX )
+			AddPlayerMovementEventCallback( player, ePlayerMovementEvents.END_WALLRUN, Hoverboard_PlayerEndWallrunSFX )
+		}
+
+
+
+
+		
+		thread function() : ( player ) { WaitEndFrame(); player.DoAnimationEvent( PLAYERANIMEVENT_HOVERBOARD_MOUNT, 0 ) }()
+
+	}
+	else
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		player.Signal( SIG_HOVERBOARD_END )
+
+		if ( HasPlayerMovementEventCallback( player, ePlayerMovementEvents.BEGIN_WALLRUN, Hoverboard_PlayerBeginWallrunSFX ) )
+		{
+			RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.BEGIN_WALLRUN, Hoverboard_PlayerBeginWallrunSFX )
+			RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.END_WALLRUN, Hoverboard_PlayerEndWallrunSFX )
+		}
+
+		if ( !Bleedout_IsBleedingOut( player ) && !player.Player_IsSkydiving() )
+		{
+
+
+
+			player.DoAnimationEvent( PLAYERANIMEVENT_HOVERBOARD_DISMOUNT, 0 )
+
+		}
+	}
+}
+
+
+void function Hoverboard_ViewPlayerChanged( entity player )
+{
+	if ( IsLocalViewPlayer( player ) && player.IsPilotModeActive() )
+	{
+		
+		
+		CodeCallback_OnPlayerHoverboardStateChanged( player )
+	}
+}
+
+
+
+void function Hoverboard_OnAlternateExitButtonPressed( entity player )
+{
+	if ( player.IsPilotModeActive() )
+	{
+		player.Signal( SIG_HOVERBOARD_END )
+	}
+
+	Remote_ServerCallFunction( "ClientToServer_Hoverboard_ForceDeactivateHoverboard" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________TRICKS_BOOSTS___________________________()
+{}
+#endif
+
+void function CodeCallback_OnPlayerHoverboardTrick( entity player, vector newVel2d, int source )
+{
+	Signal( player, SIG_HOVERBOARD_BOOST )
+
+
+
+
+
+	entity hoverboard
+
+		if ( !IsValid( file.currentHoverboardProp ) )
+			return
+
+		hoverboard = file.currentHoverboardProp
+		file.trickLastTime = Time()
+		file.trickVelocity = newVel2d
+
+
+
+
+	array<FXHandle> boostFXHandleCreated
+	float boostVelocityMagnitude = Length( newVel2d )
+	float boostVelocityIntensityNormalized = (boostVelocityMagnitude - HOVERBOARD_MIN_VELOCITY_FOR_VFX) / (HOVERBOARD_MAX_VELOCITY_FOR_VFX - HOVERBOARD_MIN_VELOCITY_FOR_VFX)
+	Hoverboard_MakePredictedEffectCP( player, HOVERBOARD_BOOST_TRAIL_FX, "ORIGIN", 1, < boostVelocityIntensityNormalized,0,0 >, boostFXHandleCreated )
+
+	Hoverboard_MakePredictedEffect( player, HOVERBOARD_JUMPJET_BURST_LEFT_FX, "vent_left", boostFXHandleCreated )
+	Hoverboard_MakePredictedEffect( player, HOVERBOARD_JUMPJET_BURST_RIGHT_FX, "vent_right", boostFXHandleCreated )
+	
+	
+
+
+	string hintText = "#PILOT_MODE_BOOST"
+
+
+
+
+	string boostSound = HOVERBOARD_BOOST_GENERIC_SOUND
+	switch ( source )
+	{
+		case HOVERBOARD_TRICK_TYPE_DOUBLEJUMP:
+
+			hintText = "#PILOT_MODE_BOOST_DOUBLEJUMP"
+
+
+
+
+			boostSound = HOVERBOARD_BOOST_DOUBLEJUMP_SOUND
+			break
+		case HOVERBOARD_TRICK_TYPE_WALLJUMP:
+
+			hintText = "#PILOT_MODE_BOOST_WALLRIDE"
+
+
+
+
+			boostSound = HOVERBOARD_BOOST_ZIPLINE_SOUND
+			break
+		case HOVERBOARD_TRICK_TYPE_LONGFALL:
+
+			hintText = "#PILOT_MODE_BOOST_LONGFALL"
+
+
+
+
+			boostSound = HOVERBOARD_BOOST_HIGHLANDING_SOUND
+			break
+		case HOVERBOARD_TRICK_TYPE_ZIPLINEJUMP:
+
+			hintText = "#PILOT_MODE_BOOST_ZIPLINE"
+
+
+
+
+			boostSound = HOVERBOARD_BOOST_ZIPLINE_SOUND
+			break
+		case HOVERBOARD_TRICK_TYPE_POWERSLIDE:
+			Assert( false, "Slide Boost Type not supported!" )
+
+			hintText = "#PILOT_MODE_BOOST_SLIDE"
+
+			break
+		default:
+			Assert( false, "Unhandled boost type" )
+			break
+	}
+	EmitSoundOnEntity_Predicted( player, boostSound )
+
+	HoverboardBoostHint_QueueHint( hintText, boostVelocityIntensityNormalized )
+
+	thread PassiveHoverboardBoost_Play1PVfx_Thread( player, boostVelocityIntensityNormalized )
+
+
+
+
+
+
+	thread Hoverboard_CleanUpBoostFX( player, boostFXHandleCreated )
+
+}
+
+void function Hoverboard_MakePredictedEffect( entity player, asset fxAsset, string attachPoint, array<FXHandle> trackingFXHandles )
+{
+
+	int fxHandle = StartParticleEffectOnEntity( player, GetParticleSystemIndex( fxAsset ), FX_PATTACH_POINT_FOLLOW, player.LookupAttachment( attachPoint ) )
+	trackingFXHandles.append( fxHandle )
+
+
+
+
+
+
+}
+
+void function Hoverboard_MakePredictedEffectCP( entity player, asset fxAsset, string attachPoint, int controlPointIdx, vector controlPointVector, array<FXHandle> trackingFXHandles )
+{
+
+		int fxHandle = StartParticleEffectOnEntity( player, GetParticleSystemIndex( fxAsset ), FX_PATTACH_POINT_FOLLOW, player.LookupAttachment( attachPoint ) )
+		EffectSetControlPointVector( fxHandle, controlPointIdx, controlPointVector )
+		trackingFXHandles.append( fxHandle )
+
+
+
+
+
+
+
+}
+
+void function Hoverboard_CleanUpBoostFX( entity player, array<FXHandle> trackingBoostFxHandle )
+{
+	EndSignal( player, "OnDestroy", "OnDeath", SIG_HOVERBOARD_BOOST )
+
+	OnThreadEnd( function() : ( trackingBoostFxHandle ) {
+		foreach ( FXHandle fx in trackingBoostFxHandle )
+		{
+
+
+
+
+
+
+			if ( EffectDoesExist( fx ) )
+			{
+				EffectStop( fx, false, true )
+			}
+
+		}
+	} )
+
+	const float FX_CLEANUP_MAX_TIME = 2.0
+	wait FX_CLEANUP_MAX_TIME
+}
+
+void function Hoverboard_PlayerBeginWallrunSFX( entity player )
+{
+	thread Hoverboard_WallRunVFX_Thread( player )
+}
+
+void function Hoverboard_PlayerEndWallrunSFX( entity player )
+{
+	player.Signal( SIG_HOVERBOARD_WALLRUN_END )
+}
+
+void function Hoverboard_WallRunVFX_Thread( entity player )
+{
+	AssertIsNewThread()
+	EndSignal( player, "OnDestroy", "OnDeath", SIG_HOVERBOARD_END, SIG_HOVERBOARD_WALLRUN_END )
+
+	EmitSoundOnEntity_Predicted( player, HOVERBOARD_WALLRUN_SOUND )
+
+	array<FXHandle> fXHandleCreated
+	Hoverboard_MakePredictedEffect( player, HOVERBOARD_HOVERBOARD_WALLRIDE_FX, "ORIGIN", fXHandleCreated )
+
+	OnThreadEnd( function() : ( player, fXHandleCreated ) {
+		if ( IsValid( player ) )
+		{
+			StopSoundOnEntity( player, HOVERBOARD_WALLRUN_SOUND )
+		}
+
+		foreach ( FXHandle fx in fXHandleCreated )
+		{
+
+
+
+
+
+
+			if ( EffectDoesExist( fx ) )
+			{
+				EffectStop( fx, false, true )
+			}
+
+		}
+	} )
+
+	WaitForever()
+}
+
+
+void function Hoverboard_OnHoverboardPropCreated( entity hoverboard )
+{
+	if ( hoverboard.GetOwner() == GetLocalViewPlayer() )
+	{
+		file.currentHoverboardProp = hoverboard
+	}
+}
+
+void function PassiveHoverboardBoost_Play1PVfx_Thread( entity player, float controlPointValue )
+{
+	AssertIsNewThread()
+
+	player.EndSignal( "OnDestroy", "OnDeath", SIG_HOVERBOARD_BOOST )
+
+	int screenFXHandle = StartParticleEffectOnEntityWithPos( player, GetParticleSystemIndex( HOVERBOARD_BOOST_SCREEN_FX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+	EffectSetControlPointVector( screenFXHandle, 1, < controlPointValue, 0, 0 > )
+	EffectSetIsWithCockpit( screenFXHandle, true )
+
+	OnThreadEnd(
+		function(): ( player, screenFXHandle )
+		{
+			if ( EffectDoesExist( screenFXHandle ) )
+			{
+				EffectStop( screenFXHandle, true, true )
+			}
+		}
+	)
+
+	wait HOVERBOARD_BOOST_VFX_TIME
+}
+
+
+void function Hoverboard_DoSpeedLines_Thread()
+{
+	AssertIsNewThread()
+
+	entity player = GetLocalViewPlayer()
+	if( !IsValid( player ) )
+		return
+
+	PassByReferenceInt fxHandle
+	OnThreadEnd( function() : ( fxHandle )
+	{
+		if ( EffectDoesExist( fxHandle.value ) )
+		{
+			EffectStop( fxHandle.value, true, true )
+		}
+	} )
+
+	const float CAM_DIST = 80
+	const float CAM_DIST_FAST = 125
+	const float CAM_DIST_FAST_ACCEL = 150
+
+	const float FAST_FX_SPEED = 575
+
+	const int SPECTATE_VELOCITY_SAMPLES = 10
+	array<float> velocitySamples
+	float currentSpeed
+	float lastFrameTime
+	vector lastPos
+
+	EndSignal( player, "OnDestroy", "OnDeath", SIG_HOVERBOARD_END )
+	EndSignal( clGlobal.signalDummy, "ViewPlayerChanged" )
+	while ( true )
+	{
+		WaitFrame()
+
+		if ( !IsValidPlayer( player ) )
+			return
+
+		float rawSpeed
+		if ( IsLocalClientPlayer( player ) )
+		{
+			rawSpeed = Length2D( player.GetVelocity() )
+		}
+		else
+		{
+			rawSpeed = fabs( Distance2D( lastPos, player.GetOrigin() ) ) / Clamp( FrameTime(), 0.001, 1.0 )
+		}
+
+		velocitySamples.insert( 0, rawSpeed )
+
+		if ( IsLocalClientPlayer( player ) || velocitySamples.len() == 0 )
+		{
+			currentSpeed = rawSpeed
+		}
+		else
+		{
+			float dt = Time() - lastFrameTime
+			if ( rawSpeed > currentSpeed )
+				currentSpeed = min( currentSpeed + 400.0 * dt, rawSpeed )
+			if ( rawSpeed < currentSpeed )
+				currentSpeed = max( currentSpeed - 400.0 * dt, rawSpeed )
+
+			currentSpeed = GetAverageValueInArray( velocitySamples )
+		}
+
+		if ( currentSpeed >= FAST_FX_SPEED )
+		{
+			if ( !EffectDoesExist( fxHandle.value ) )
+			{
+				fxHandle.value = StartParticleEffectOnEntityWithPos( player, GetParticleSystemIndex( HOVERBOARD_SCREEN_FX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+				EffectSetIsWithCockpit( fxHandle.value, true )
+			}
+			else if ( Time() - file.trickLastTime <= HOVERBOARD_BOOST_VFX_TIME )
+			{
+				EffectStop( fxHandle.value, true, true )
+			}
+		}
+		else if ( currentSpeed < FAST_FX_SPEED && EffectDoesExist( fxHandle.value ) )
+		{
+			EffectStop( fxHandle.value, true, true )
+		}
+
+
+
+		if ( player.GetTrackEntityDistanceMode() == "scriptOffsetClientOnly" )
+		{
+			float baseDist = LerpFloat( CAM_DIST, CAM_DIST_FAST, EaseIn( min( 1.0, currentSpeed / FAST_FX_SPEED ) ) )
+			if ( Time() - file.trickLastTime <= 1.0 && Length2D( file.trickVelocity ) >= FAST_FX_SPEED )
+			{
+				baseDist = LerpFloat( baseDist, CAM_DIST_FAST_ACCEL, Tween_QuadEaseInOut( 1.0 - ( Time() - file.trickLastTime ) ) )
+			}
+			player.SetTrackEntityOffsetDistance( baseDist )
+		}
+
+#if DEV
+		if ( file.debugSpeedDisplay )
+		{
+			UISize screenSize = GetScreenSize()
+			float xSize       = float( ( screenSize.width / 2 ) + 180 ) / float( screenSize.width )
+			float ySize       = float( ( screenSize.height / 2 ) + 25 ) / float( screenSize.height )
+			DebugDrawScreenText( xSize, ySize, format( "Speed: %.1f / 575.0", currentSpeed ) )
+		}
+#endif
+
+		if ( velocitySamples.len() > SPECTATE_VELOCITY_SAMPLES )
+		{
+			velocitySamples.pop()
+		}
+
+		lastFrameTime = Time()
+		lastPos = player.GetOrigin()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Hoverboard_UpdateRUI_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	if( !IsValid( player ) )
+		return
+
+	player.EndSignal( "OnDeath", "OnDestroy", SIG_HOVERBOARD_END )
+	EndSignal( clGlobal.signalDummy, "ViewPlayerChanged" )
+
+	var hoverboardRui = CreatePermanentCockpitPostFXRui( $"ui/pilot_mode_ui.rpak" )
+	RuiSetBool( hoverboardRui, "isActive", true )
+
+	HudOverrideSettings hoverboardHudSettings
+	hoverboardHudSettings.weapon = false
+	hoverboardHudSettings.dpadMenu = false
+	hoverboardHudSettings.slingPassive = false
+	hoverboardHudSettings.shouldCollapseTac = true
+	hoverboardHudSettings.showButtonHints = false
+	hoverboardHudSettings.alphaOverride = 0.5
+	hoverboardHudSettings.ordnanceAlphaOverride = 0.5
+	hoverboardHudSettings.gadgetAlphaOverride = 1.0
+	hoverboardHudSettings.gadgetHintAlpha = 1.0
+	hoverboardHudSettings.healthUIAlphaOverride = 0.5
+
+	OnThreadEnd(
+		function() : ( player, hoverboardRui )
+		{
+			RuiDestroyIfAlive( hoverboardRui )
+
+			SetHudOverrides(null)
+
+
+			if ( EvoWeapons_IsEnabled() )
+			{
+				EvoWeapons_SetForceVisible( false )
+			}
+
+		}
+	)
+
+	
+	bool wasOnGround = player.IsOnGround()
+	bool hasJumped = false
+	bool hasDoubleJumped = false
+	const int SPECTATE_VELOCITY_SAMPLES = 10
+	array<float> velocitySamples
+	float currentSpeed
+	float lastFrameTime
+	vector lastPos
+	while( IsValid( player ) )
+	{
+		WaitFrame()
+
+		SetHudOverrides( hoverboardHudSettings )
+
+		entity weapon0 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+		entity weapon1 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 )
+
+		bool hasValidWeapon = (IsValid( weapon0 ) && weapon0.GetWeaponClassName() != "melee_pilot_emptyhanded") || (IsValid( weapon1 ) && weapon1.GetWeaponClassName() != "melee_pilot_emptyhanded")
+
+
+			if ( EvoWeapons_IsEnabled() )
+			{
+				EvoWeapons_SetForceVisible( hasValidWeapon )
+			}
+
+
+		bool isOnGround = player.IsOnGround()
+
+		if ( wasOnGround && !isOnGround )
+		{
+			if ( !hasJumped )
+			{
+				hasJumped = true
+				hasDoubleJumped = false
+			}
+			else
+			{
+				hasDoubleJumped = true
+			}
+		}
+		else if ( isOnGround )
+		{
+			hasJumped = false
+			hasDoubleJumped = false
+		}
+
+		wasOnGround = isOnGround
+
+		float normalThreshold = HOVERBOARD_NORMAL_SPEED_THRESHOLD
+		float maxSpeed = HOVERBOARD_DISPLAY_MAX_SPEED
+
+		
+		float rawSpeed
+		if ( IsLocalClientPlayer( player ) )
+		{
+			rawSpeed = Length2D( player.GetVelocity() )
+		}
+		else
+		{
+			rawSpeed = fabs( Distance2D( lastPos, player.GetOrigin() ) ) / Clamp( FrameTime(), 0.001, 1.0 )
+		}
+
+		velocitySamples.insert( 0, rawSpeed )
+
+		if ( IsLocalClientPlayer( player ) || velocitySamples.len() == 0 )
+		{
+			currentSpeed = rawSpeed
+		}
+		else
+		{
+			float dt = Time() - lastFrameTime
+			if ( rawSpeed > currentSpeed )
+				currentSpeed = min( currentSpeed + 400.0 * dt, rawSpeed )
+			if ( rawSpeed < currentSpeed )
+				currentSpeed = max( currentSpeed - 400.0 * dt, rawSpeed )
+
+			currentSpeed = GetAverageValueInArray( velocitySamples )
+		}
+
+		float speedRatio = 0.0
+		if ( currentSpeed <= normalThreshold )
+		{
+			speedRatio = currentSpeed / normalThreshold
+		}
+		else
+		{
+			float boostSpeed = currentSpeed - normalThreshold
+			float boostRange = maxSpeed - normalThreshold
+			speedRatio = 1.0 + (boostSpeed / boostRange)
+		}
+
+		
+		RuiSetFloat( hoverboardRui, "displaySpeedRatio", speedRatio )
+		RuiSetBool( hoverboardRui, "hasJumped", hasJumped )
+		RuiSetBool( hoverboardRui, "hasDoubleJumped", hasDoubleJumped )
+
+		if ( velocitySamples.len() > SPECTATE_VELOCITY_SAMPLES )
+		{
+			velocitySamples.pop()
+		}
+
+		lastFrameTime = Time()
+		lastPos = player.GetOrigin()
+	}
+}
+
+
+
+void function CLHoverboardBoostHint_Init()
+{
+	if ( file.boostHintQueueId != -1 )
+		return  
+
+	
+	file.boostHintQueueId = HudNotificationQueue_CreateAndRegisterQueue( "hoverboard_boost_hint" )
+
+	HudNotificationQueueConfiguration configSettings = HudNotificationQueue_GetConfigure( file.boostHintQueueId )
+	configSettings.maxVisibleItems = 3
+	configSettings.allowIndirectUpdates = true
+	configSettings.allowDirectUpdates = true
+	configSettings.padding = 0
+	configSettings.stackDirection = eHudNotificationQueueStackDirection.LEFT_TO_RIGHT
+	configSettings.startPosition = <-20, 0, 0>
+	HudNotificationQueue_Configure( file.boostHintQueueId, configSettings )
+}
+
+
+
+HudNotificationQueueItem ornull function HoverboardBoostHint_QueueHint( string hintText, float boostIntensity, float duration = HOVERBOARD_BOOST_HINT_DEFAULT_DURATION )
+{
+	CLHoverboardBoostHint_Init()
+
+	if ( file.boostHintQueueId == -1 )
+		return null
+
+	boostIntensity = Clamp( boostIntensity, 0.0, 1.0 )
+
+	HoverboardBoostHint hint
+	hint.hintText = hintText
+	hint.duration = duration
+
+	HudNotificationQueueItem queueItem
+	queueItem.ruiAsset = $"ui/pilot_mode_boost_hint.rpak"
+	queueItem.key = hintText
+	queueItem.duration = duration
+	queueItem.outroDuration = 3.5
+	queueItem.priority = eHudNotificationQueuePriority.MEDIUM
+
+	queueItem.ruiArgs = {
+		["hintText"] 		= HudNotificationQueue_CreateRuiArg( "hintText", hintText ),
+		["duration"] 		= HudNotificationQueue_CreateRuiArg( "duration", duration ),
+		["startTime"]		= HudNotificationQueue_CreateRuiArg( "startTime", Time() ),
+		["boostIntensity"]	= HudNotificationQueue_CreateRuiArg( "boostIntensity", boostIntensity ),
+	}
+
+	HudNotificationQueue_QueueItem( file.boostHintQueueId, queueItem, ePersistenceContext.PLAYER )
+	return queueItem
+}
+
+
+
+bool function Hoverboard_ShouldShowGadgetSlot()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return false
+
+	return PlayerHasPassive( player, ePassives.PAS_HOVERBOARD )
+}
+
+
+
+bool function Hoverboard_ShouldPreventGadgetUnequip( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	return PlayerHasPassive( player, ePassives.PAS_HOVERBOARD )
+}
+
+
+
+void function Hoverboard_RegisterTooltipCallback( entity player )
+{
+	AddCallback_OnUpdateTooltip( eTooltipStyle.DEFAULT, Hoverboard_OnUpdateTooltip )
+}
+
+
+
+void function Hoverboard_OnUpdateTooltip( int style, ToolTipData tooltipData )
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_HOVERBOARD ) )
+		return
+
+	entity gadget = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( gadget ) )
+		return
+
+	if ( gadget.GetWeaponClassName() != HOVERBOARD_SCRIPTNAME )
+		return
+
+	if ( tooltipData.titleText.find( "#ENDORSEMENT" ) != -1 )
+		return
+
+	string hoverboardLocalizedName = Localize( "#SURVIVAL_PILOT_MODE_NAME" )
+	if ( tooltipData.titleText.find( hoverboardLocalizedName ) == -1 )
+		return
+
+	tooltipData.titleText = "#SURVIVAL_PILOT_MODE_NAME"
+	tooltipData.descText = "#SURVIVAL_PILOT_MODE_TOOLTIP_DESC"
+	tooltipData.actionHint1 = ""
+	tooltipData.actionHint2 = ""
+	tooltipData.actionHint3 = ""
+	tooltipData.actionHint4 = ""
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_ShowHoverboardLandingUI()
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	if ( file.hasShownLandingAnnouncement )
+		return
+
+	CenterAnnouncementItem landingAnnouncement = CenterAnnouncements_CreateNotchedStyle()
+
+	
+	landingAnnouncement.mainText = Localize( "#SURVIVAL_PILOT_MODE_NAME" )
+	landingAnnouncement.subText = Localize( "#SURVIVAL_PILOT_MODE_ANNOUNCEMENT_SUBTEXT" )
+
+	
+	landingAnnouncement.priority = eHudNotificationQueuePriority.LOW
+	landingAnnouncement.announcementHeight = 60
+	landingAnnouncement.contentVerticalPaddingBottom = 12.0
+	landingAnnouncement.contentVerticalPaddingTop = 12.0
+
+	landingAnnouncement.leftEndPadding = 120
+	landingAnnouncement.rightEndPadding = 120
+
+	
+	CenterAnnouncements_QueueItem( landingAnnouncement, ePersistenceContext.PLAYER )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________TELEMETRY___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

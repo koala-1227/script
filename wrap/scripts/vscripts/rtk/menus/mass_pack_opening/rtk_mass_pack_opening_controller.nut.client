@@ -1,0 +1,877 @@
+
+global function CLMassLootBoxCeremony_Init
+global function UIToClient_MassLootCeremonyExit
+global function OnGRXMassPackOpeningResultsAvailable
+global function UIToClient_AllLootTick_Sequence
+global function UIToClient_MassLootCeremony_SetGlobalAnimationEventsTokenize
+global function UIToClient_MassLootCeremony_DeleteGlobalAnimationEventsTokenize
+
+
+
+
+
+
+
+
+
+
+
+
+const float BLACK_FADE_TIME = 0.25
+const float BLACK_FADE_TIME_HOLD = 0.25
+const float CAMERA_FOV = 35.5
+
+
+const asset TICK_FX_RARITY_BEAM = $"P_lobby_m_eye_opening"
+const asset TICK_FX_TRAIL = $"P_loot_tick_m_jump_jet_trail"
+
+const asset TICK_FX_FIREWORK_T1 = $"P_lobby_m_fireworks_sparkler"
+const asset TICK_FX_FIREWORK_T2 = $"P_lobby_m_fireworks_sparkler"
+const asset TICK_FX_FIREWORK_T3 = $"P_lobby_m_fireworks_grp"
+const asset TICK_FX_FIREWORK_T4 = $"P_lobby_m_fireworks"
+const asset TICK_FX_FIREWORK_T5 = $"P_lobby_m_fireworks"
+
+const string ATTACHNAME_LEFT = "FX_L_EYE_X"
+const string ATTACHNAME_CENTER = "FX_R_EYE_X"        
+const string ATTACHNAME_RIGHT = "FX_C_EYE_X"        
+
+const table<int, string> MassLootCeremonyRarityToFireworkFX = {
+	[eRarityTier.COMMON] 	= TICK_FX_FIREWORK_T1,
+	[eRarityTier.RARE] 		= TICK_FX_FIREWORK_T2,
+	[eRarityTier.EPIC] 		= TICK_FX_FIREWORK_T3,
+	[eRarityTier.LEGENDARY] = TICK_FX_FIREWORK_T4,
+	[eRarityTier.ICONIC] 	= TICK_FX_FIREWORK_T5,
+	[eRarityTier.MYTHIC] 	= TICK_FX_FIREWORK_T5
+}
+
+
+const string SOUND_LIGHT_FLASH = "LootCeremony_Tick_LightFlash"
+const string SOUND_HOLOGRAM_LOOP = "LootCeremony_Inspect_HologramLoop"
+
+const string SOUND_BEAM_SWEETEN_TIER1 = "LootCeremony_MassPack_Tick_Deploy_BeamSweet_Rare"
+const string SOUND_BEAM_SWEETEN_TIER2 = "LootCeremony_MassPack_Tick_Deploy_BeamSweet_Epic"
+const string SOUND_BEAM_SWEETEN_TIER3 = "LootCeremony_MassPack_Tick_Deploy_BeamSweet_Legendary"
+const string SOUND_BEAM_SWEETEN_TIER4 = "LootCeremony_MassPack_Tick_Deploy_BeamSweet_Heirloom"
+
+const string SOUND_FIREWORK_SWEETEN_TIER1 = "LootCeremony_MassPack_Tick_FireworksSweet_Rare"
+const string SOUND_FIREWORK_SWEETEN_TIER2 = "LootCeremony_MassPack_Tick_FireworksSweet_Epic"
+const string SOUND_FIREWORK_SWEETEN_TIER3 = "LootCeremony_MassPack_Tick_FireworksSweet_Legendary"
+const string SOUND_FIREWORK_SWEETEN_TIER4 = "LootCeremony_MassPack_Tick_FireworksSweet_Heirloom"
+
+const table<int, string> MassLootCeremonyRarityToBeamSFX = {
+	[eRarityTier.RARE] 		= SOUND_BEAM_SWEETEN_TIER1,
+	[eRarityTier.EPIC] 		= SOUND_BEAM_SWEETEN_TIER2,
+	[eRarityTier.LEGENDARY] = SOUND_BEAM_SWEETEN_TIER3,
+	[eRarityTier.ICONIC] 	= SOUND_BEAM_SWEETEN_TIER4,
+	[eRarityTier.MYTHIC] 	= SOUND_BEAM_SWEETEN_TIER4
+}
+
+
+const table<int, string> MassLootCeremonyRarityToFireworkSFX = {
+	[eRarityTier.RARE] 		= SOUND_FIREWORK_SWEETEN_TIER1,
+	[eRarityTier.EPIC] 		= SOUND_FIREWORK_SWEETEN_TIER2,
+	[eRarityTier.LEGENDARY] = SOUND_FIREWORK_SWEETEN_TIER3,
+	[eRarityTier.ICONIC] 	= SOUND_FIREWORK_SWEETEN_TIER4,
+	[eRarityTier.MYTHIC] 	= SOUND_FIREWORK_SWEETEN_TIER4
+}
+
+
+const array<string> ANIMSEQ_DEPLOYMENT_MULTI = [ 
+	"loot_ceremony_tick_deployment_multi_base", 
+	"loot_ceremony_tick_deployment_multi_base_2",
+	"loot_ceremony_tick_deployment_multi_base_3",
+	"loot_ceremony_tick_deployment_multi_base_4",
+	"loot_ceremony_tick_deployment_multi_base_5",
+	"loot_ceremony_tick_deployment_multi_base_6",
+	"loot_ceremony_tick_deployment_multi_base_7",
+	"loot_ceremony_tick_deployment_multi_base_8",
+]
+
+struct FileLevelStruct
+{
+
+		table  signalDummy
+
+		var                           menu
+		bool                          inspectMenuIsNavigatingBack = false
+		entity lootTickMover
+		entity lootTickModel
+		entity cameraMover
+		entity cameraEnt
+		array<entity> multiPackMovers
+		array<entity> multiPackTicks
+
+		
+		ItemFlavor& currentPackFlav
+		bool        grxRewardsReceived = false
+
+		
+		array<int> rarityBeamFXHandles
+		bool       tickRandomFlashFXStarted = false
+		array<int> highestsRarities
+		int		   highestRarityItem = 4
+		int		   vfxTrailsPlayedCounter = 0
+		int		   vfxFireworksPlayedCounter = 0
+
+
+
+
+
+
+
+	bool menuActive = false
+}
+FileLevelStruct& fileLevel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CLMassLootBoxCeremony_Init()
+{
+	RegisterSignal( "MassLootCeremonyExit" )
+	RegisterSignal( "MassLootCeremonyAnimSeqStart" )
+	RegisterSignal( "MassTickAnimStartDisplayLoot" )
+	RegisterSignal( "MassTickAnimStartDeployment" )
+	RegisterSignal( "MassLootCeremonyTickCancelAnim" )
+
+	AddCallback_FullUpdate( MassLootCeremonyOnFullUpdate )
+	AddCallback_EntitiesDidLoad( EntitiesDidLoad )
+}
+
+
+
+void function EntitiesDidLoad()
+{
+	entity targetAnimRef = GetEntByScriptName( "target_loot_ceremony_ref" )
+	fileLevel.lootTickMover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", targetAnimRef.GetOrigin(), targetAnimRef.GetAngles() )
+	fileLevel.lootTickModel = CreatePropDynamic( TICK_MODEL_DEFAULT, fileLevel.lootTickMover.GetOrigin(), fileLevel.lootTickMover.GetAngles() )
+
+	for ( int i = 0; i < ANIMSEQ_DEPLOYMENT_MULTI.len() - 1; i++ ) 
+	{
+		entity multiPackMover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", targetAnimRef.GetOrigin(), targetAnimRef.GetAngles() )
+		entity multiPackTick = CreatePropDynamic( TICK_MODEL_DEFAULT, fileLevel.lootTickMover.GetOrigin(), fileLevel.lootTickMover.GetAngles() )
+		fileLevel.multiPackTicks.append( multiPackTick )
+		fileLevel.multiPackMovers.append( multiPackMover )
+		multiPackTick.SetParent( multiPackMover )
+		thread PlayAnim( multiPackTick, ANIMSEQ_ENTRANCE_NORMAL_IDLE, multiPackMover )
+		HideEntityAndChildren( multiPackTick )
+	}
+
+	
+	table< string, table< string, vector > > tickAttachmentOriginsAngles
+	Attachment camResult = fileLevel.lootTickModel.Anim_GetAttachmentAtTime( ANIMSEQ_TRIADS_IDLE, "CAMERA", 0 )
+	foreach ( string attachment in TICK_LOOT_ATTACHMENTS )
+	{
+		tickAttachmentOriginsAngles[attachment] <- {}
+
+		Attachment attachResult = fileLevel.lootTickModel.Anim_GetAttachmentAtTime( ANIMSEQ_TRIADS_IDLE, attachment, 0 )
+		vector pos              = attachResult.position
+		vector angles           = VectorToAngles( FlattenVec( camResult.position - pos ) )
+
+		tickAttachmentOriginsAngles[ attachment ]["origin"] <- pos
+		tickAttachmentOriginsAngles[ attachment ]["angles"] <- angles
+	}
+	InitLootCeremonyLightingRigs( tickAttachmentOriginsAngles )
+
+	fileLevel.lootTickModel.SetParent( fileLevel.lootTickMover )
+	thread PlayAnim( fileLevel.lootTickModel, ANIMSEQ_ENTRANCE_NORMAL_IDLE, fileLevel.lootTickMover )
+	HideEntityAndChildren( fileLevel.lootTickModel )
+
+	fileLevel.cameraMover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", targetAnimRef.GetOrigin(), targetAnimRef.GetAngles() )
+	fileLevel.cameraEnt = CreateClientSidePointCamera( targetAnimRef.GetOrigin(), targetAnimRef.GetAngles(), CAMERA_FOV )
+	fileLevel.cameraEnt.SetParent( fileLevel.cameraMover, "REF" )
+	fileLevel.cameraMover.SetParent( fileLevel.lootTickModel, "CAMERA" )
+}
+
+
+
+void function MassLootCeremonyOnFullUpdate()
+{
+	if ( !fileLevel.menuActive )
+		return
+
+	printt( "#################" )
+	printf( "%s() ", FUNC_NAME() )
+	printt( "#################" )
+
+	entity localClientPlayer = GetLocalClientPlayer()
+	if ( IsValid( localClientPlayer ) && IsValid( fileLevel.cameraEnt ) )
+		localClientPlayer.SetMenuCameraEntityWithAudio( fileLevel.cameraEnt )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnGRXMassPackOpeningResultsAvailable()
+{
+	ItemFlavorBag bag = GRX_GetMostRecentPackOpeningResults()
+
+	
+	int error = GRX_INVENTORYERROR_NONE
+	if ( bag.associatedError != GRX_INVENTORYERROR_NONE )
+		error = bag.associatedError
+	GRXPackOpened_ErrorHandling( error )
+
+	
+	fileLevel.grxRewardsReceived = true
+	fileLevel.highestsRarities = ItemFlavorBag_GetHighestRarities( bag, ANIMSEQ_DEPLOYMENT_MULTI.len() )
+
+	foreach ( ItemFlavor reward in bag.flavors )
+	{
+		if ( Mythics_IsItemFlavorMythicSkin( reward ) )
+		{
+			Remote_ServerCallFunction( "ClientCallback_UpdateMythicChallenges" )
+			break
+		}
+	}
+}
+
+
+
+array<int> function ItemFlavorBag_GetHighestRarities( ItemFlavorBag bag, int quantity )
+{
+	array<int> highestQualities
+	array<ItemFlavor> items = clone(bag.flavors)
+	items.sort( ItemFlavor_SortByTier )
+
+	for ( int i = 0; i < quantity; i++ )
+	{
+		if ( items.len() > i )
+			highestQualities.append( ItemFlavor_GetQuality( items[i] ) )
+		else
+			highestQualities.append( eRarityTier.COMMON )
+	}
+
+	return highestQualities
+}
+
+
+
+void function UIToClient_AllLootTick_Sequence( int packFlavGUID )
+{
+	ItemFlavor packFlav = GetItemFlavorByGUID( packFlavGUID )
+	fileLevel.menuActive = true
+	Chroma_LootCeremonyStart()
+	LootCeremonySceneLightsUpdateShadows( true )
+	ShowEntityAndChildren( fileLevel.lootTickModel )
+	fileLevel.currentPackFlav = packFlav
+	fileLevel.grxRewardsReceived = false
+	thread TickAnimationSequence( packFlav )
+}
+
+
+
+
+void function TickAnimationSequence( ItemFlavor packFlav )
+{
+	
+	Signal( fileLevel.signalDummy, "MassLootCeremonyAnimSeqStart" )
+
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyExit" )
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyAnimSeqStart" )
+
+	
+	fileLevel.lootTickModel.SetModel( GRXPack_GetTickModel( packFlav ) )
+	fileLevel.lootTickModel.SetSkin( fileLevel.lootTickModel.GetSkinIndexByName( GRXPack_GetTickModelSkin( packFlav ) ) )
+
+	array<string> deployAnims = clone ANIMSEQ_DEPLOYMENT_MULTI
+	OnThreadEnd(
+		function() : ()
+		{
+			Signal( fileLevel.lootTickModel, "MassLootCeremonyTickCancelAnim" )
+			if ( IsFullyConnected() && IsLobby() )
+				RunUIScript( "PlayCustomUIMusic", "" )
+		}
+	)
+
+	if ( !IsValid( fileLevel.cameraMover.GetParent() ) )
+		fileLevel.cameraMover.SetParent( fileLevel.lootTickModel, "CAMERA" )
+
+	GetLocalClientPlayer().SetMenuCameraEntityWithAudio( fileLevel.cameraEnt )
+
+	wait 0.25 
+
+	RunUIScript( "PlayCustomUIMusic", MASS_LOOT_CEREMONY_MUSIC_P1 )
+
+	
+	PlayAnim( fileLevel.lootTickModel, ANIMSEQ_ENTRANCE_NORMAL, fileLevel.lootTickMover )
+	thread PlayAnim( fileLevel.lootTickModel, ANIMSEQ_IDLE, fileLevel.lootTickMover )
+
+	
+	wait 0.5
+
+	
+	while( !fileLevel.grxRewardsReceived )
+		WaitFrame()
+
+	
+	Signal( fileLevel.lootTickModel, "MassTickAnimStartDeployment" )
+
+	
+	RunUIScript( "PlayCustomUIMusic", MASS_LOOT_CEREMONY_MUSIC_P2 )
+
+	
+	string longestSeq = deployAnims[0]
+	float maxDuration = fileLevel.lootTickModel.GetSequenceDuration( longestSeq )
+	entity longestAnimatingTick = fileLevel.lootTickModel
+	foreach ( int deployIdx, string deployAnim in deployAnims )
+	{
+		if ( deployIdx == 0 )
+		{
+			thread PlayAnim( fileLevel.lootTickModel, deployAnim, fileLevel.lootTickMover )
+		}
+		else
+		{
+			ShowEntityAndChildren( fileLevel.multiPackTicks[deployIdx-1] )
+			thread PlayAnim( fileLevel.multiPackTicks[deployIdx-1], deployAnim, fileLevel.multiPackMovers[deployIdx-1] )
+			float seqDuration = fileLevel.lootTickModel.GetSequenceDuration( deployAnim )
+			if ( seqDuration > maxDuration )
+			{
+				maxDuration = seqDuration
+				longestSeq = deployAnim
+				longestAnimatingTick = fileLevel.multiPackTicks[deployIdx-1]
+			}
+		}
+	}
+
+	thread WaitForTickAnimCompleteAndSignalDisplayLoot( longestAnimatingTick, longestSeq )
+
+	
+	bool animReachedDisplayEvent = false
+	array<string> signalsToWait  = ["MassTickAnimStartDisplayLoot", "TickAnimSkip", "MassLootCeremonyTickCancelAnim"]
+	string resultSignal          = GetWaitMultipleSignal_Entity( fileLevel.lootTickModel, signalsToWait, "LootCeremonyAnimShowLootOrSkip" )
+
+	if ( resultSignal == "MassTickAnimStartDisplayLoot" )
+		animReachedDisplayEvent = true
+	
+	if ( animReachedDisplayEvent )
+	{
+		thread OpenRewardDisplayMenu()
+		WaittillAnimDone( fileLevel.lootTickModel )
+	}
+	else
+	{
+		MassLootCeremony_RarityBeamFX_Stop( true )
+		thread PlayAnim( fileLevel.lootTickModel, ANIMSEQ_TRIADS_IDLE, fileLevel.lootTickMover )
+		thread OpenRewardDisplayMenu()
+	}
+
+	WaitForever()
+}
+
+
+
+void function OpenRewardDisplayMenu()
+{
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyExit" )
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyAnimSeqStart" )
+	RunUIScript( "ClientToUI_OpenMassPackRewardsMenu" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+void function LootCeremony_RandomFlashFX_Thread( entity tickModel )
+{
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyExit" )
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyAnimSeqStart" )
+	EndSignal( fileLevel.lootTickModel, "MassTickAnimStartDeployment" )
+
+	if ( fileLevel.tickRandomFlashFXStarted )
+		return
+
+	fileLevel.tickRandomFlashFXStarted = true
+
+	OnThreadEnd(
+		function() : ()
+		{
+			fileLevel.tickRandomFlashFXStarted = false
+		}
+	)
+
+	int attachID = tickModel.LookupAttachment( "FX_C_EYE" )
+
+	while( true )
+	{
+		int rarity  = 0
+		int randInt = RandomInt( 1000 )
+
+		if ( randInt > 995 )
+			rarity = 4
+		if ( randInt > 970 )
+			rarity = 3
+		else if ( randInt > 900 )
+			rarity = 2
+		else if ( randInt > 600 )
+			rarity = 1
+
+		vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+
+		int fxIndex = StartParticleEffectOnEntity( tickModel, GetParticleSystemIndex( TICK_FX_RARITY_IDLE ), FX_PATTACH_POINT_FOLLOW, attachID )
+		EffectSetControlPointVector( fxIndex, 1, rarityColor )
+
+		
+
+		Wait( RandomFloatRange( 0.2, 0.4 ) )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function UIToClient_MassLootCeremonyExit()
+{
+	Signal( fileLevel.signalDummy, "MassLootCeremonyExit" )
+	fileLevel.menuActive = false
+	if ( IsValid( GetLocalClientPlayer() ) )
+		GetLocalClientPlayer().ClearMenuCameraEntity()
+	LootCeremonySceneLightsUpdateShadows( false )
+	MassLootCeremony_RarityBeamFX_Stop( true )
+	Chroma_Lobby()
+
+	if ( IsFullyConnected() && IsLobby() )
+		RunUIScript( "CancelCustomUIMusic" )
+}
+
+
+
+void function UIToClient_MassLootCeremony_SetGlobalAnimationEventsTokenize()
+{
+	AddGlobalAnimEventTokenize( "loot_tick_m_rarity_random_flash_fx", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_rarity_beam_start_fx", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_rarity_beam_start_sfx", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_rarity_beam_stop_fx", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_rarity_flash_start_fx", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_play_sound", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_rarity_firework_fx", OnLootTickAnimEvent )
+	AddGlobalAnimEventTokenize( "loot_tick_m_jump_jet_trail_fx", OnLootTickAnimEvent )
+
+	fileLevel.vfxTrailsPlayedCounter = 0
+	fileLevel.vfxFireworksPlayedCounter = 0
+}
+
+
+
+void function UIToClient_MassLootCeremony_DeleteGlobalAnimationEventsTokenize()
+{
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_rarity_random_flash_fx")
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_rarity_beam_start_fx" )
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_rarity_beam_start_sfx" )
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_rarity_beam_stop_fx" )
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_rarity_flash_start_fx" )
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_play_sound" )
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_rarity_firework_fx" )
+	DeleteGlobalAnimEventTokenize( "loot_tick_m_jump_jet_trail_fx" )
+}
+
+
+
+void function OnLootTickAnimEvent( entity ent, array<string> tokens )
+{
+	switch ( tokens[0] )
+	{
+		case "loot_tick_m_rarity_random_flash_fx":
+		{
+			thread MassLootCeremony_RandomFlashFX_Thread( ent )
+			break
+		}
+
+		case "loot_tick_m_rarity_beam_start_fx":
+		{
+			MassLootCeremony_RarityBeamFX( ent, tokens[1] )
+			break
+		}
+
+		case "loot_tick_m_rarity_beam_start_sfx":
+		{
+			MassLootCeremony_RarityBeamSFX( ent, tokens[1] )
+			break
+		}
+
+		case "loot_tick_m_rarity_beam_stop_fx":
+		{
+			MassLootCeremony_RarityBeamFX_Stop()
+			break
+		}
+
+		case "loot_tick_m_rarity_flash_start_fx":
+		{
+			MassLootCeremony_RarityFlashFX( ent, tokens[1], tokens[2] )
+			break
+		}
+
+		case "loot_tick_m_play_sound":
+		{
+			MassLootCeremony_PlayLootTickSound( ent, tokens[1] )
+			break
+		}
+
+		case "loot_tick_m_rarity_firework_fx":
+		{
+			MassLootCeremony_FireworkFX( ent, tokens[1] )
+			break
+		}
+
+		case "loot_tick_m_jump_jet_trail_fx":
+		{
+			MassLootCeremony_TrailFX( ent, tokens[1] )
+			break
+		}
+
+		default: Assert( false )
+	}
+}
+
+
+
+void function WaitForTickAnimCompleteAndSignalDisplayLoot( entity tickModel, string tickAnim )
+{
+	
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyExit" )
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyAnimSeqStart" )
+
+	Wait( tickModel.GetSequenceDuration( tickAnim ) )
+
+	Signal( fileLevel.lootTickModel, "MassTickAnimStartDisplayLoot" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function MassLootCeremony_RandomFlashFX_Thread( entity tickModel )
+{
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyExit" )
+	EndSignal( fileLevel.signalDummy, "MassLootCeremonyAnimSeqStart" )
+	EndSignal( fileLevel.lootTickModel, "MassTickAnimStartDeployment" )
+
+	if ( fileLevel.tickRandomFlashFXStarted )
+		return
+
+	fileLevel.tickRandomFlashFXStarted = true
+
+	OnThreadEnd(
+		function() : ()
+		{
+			fileLevel.tickRandomFlashFXStarted = false
+		}
+	)
+
+	int attachID = tickModel.LookupAttachment( "FX_C_EYE" )
+
+	while( true )
+	{
+		int rarity  = 0
+		int randInt = RandomInt( 1000 )
+
+		if ( randInt > 995 )
+			rarity = 4
+		if ( randInt > 970 )
+			rarity = 3
+		else if ( randInt > 900 )
+			rarity = 2
+		else if ( randInt > 600 )
+			rarity = 1
+
+		vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+
+		int fxIndex = StartParticleEffectOnEntity( tickModel, GetParticleSystemIndex( TICK_FX_RARITY_IDLE ), FX_PATTACH_POINT_FOLLOW, attachID )
+		EffectSetControlPointVector( fxIndex, 1, rarityColor )
+
+		
+
+		Wait( RandomFloatRange( 0.2, 0.4 ) )
+	}
+}
+
+
+
+void function MassLootCeremony_RarityBeamFX( entity tickModel, string fxAttachment )
+{
+	int rarity
+	switch ( fxAttachment )
+	{
+		case ATTACHNAME_LEFT:
+			rarity = fileLevel.highestsRarities[0]
+			break
+		case ATTACHNAME_CENTER :
+			rarity = fileLevel.highestsRarities[1]
+			break
+		case ATTACHNAME_RIGHT:
+			rarity = fileLevel.highestsRarities[2]
+			break
+	}
+
+	vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+	Chroma_LootCeremonyBeam( rarity )
+	int attachID = tickModel.LookupAttachment( fxAttachment )
+	int fxIndex = StartParticleEffectOnEntity( tickModel, GetParticleSystemIndex( TICK_FX_RARITY_BEAM ), FX_PATTACH_POINT_FOLLOW, attachID )
+
+	EffectSetControlPointVector( fxIndex, 1, rarityColor )
+
+	fileLevel.rarityBeamFXHandles.append( fxIndex )
+}
+
+
+
+void function MassLootCeremony_RarityBeamSFX( entity tickModel, string fxAttachment )
+{
+	int rarity
+	switch ( fxAttachment )
+	{
+		case TICK_LOOT_ATTACHMENTS[0]:
+			rarity = fileLevel.highestsRarities[0]
+			break
+		case TICK_LOOT_ATTACHMENTS[1]:
+			rarity = fileLevel.highestsRarities[1]
+			break
+		case TICK_LOOT_ATTACHMENTS[2]:
+			rarity = fileLevel.highestsRarities[2]
+			break
+	}
+
+	vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+
+	if ( rarity in MassLootCeremonyRarityToBeamSFX )
+		RunUIScript( "ClientToUI_PlayLootCeremonySound", MassLootCeremonyRarityToBeamSFX[rarity] )
+}
+
+
+
+void function MassLootCeremony_RarityBeamFX_Stop( bool stopImmediately = false )
+{
+	foreach ( int fxID in fileLevel.rarityBeamFXHandles )
+	{
+		if ( EffectDoesExist( fxID ) )
+		{
+			if ( stopImmediately )
+				EffectStop( fxID, true, false )
+			else
+				EffectStop( fxID, false, true )
+		}
+	}
+
+	fileLevel.rarityBeamFXHandles.clear()
+}
+
+
+
+void function MassLootCeremony_PlayLootTickSound( entity tickModel, string soundKindRef )
+{
+	string soundAlias = GRXPack_GetTickSoundAlias( fileLevel.currentPackFlav, eGRXPackTickSoundKind[soundKindRef] )
+	if ( soundAlias != "" )
+		EmitSoundOnEntity( tickModel, soundAlias )
+}
+
+
+
+void function MassLootCeremony_RarityFlashFX( entity tickModel, string attachmentHead, string attachmentEye )
+{
+	int rarity         = fileLevel.highestRarityItem
+	vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+
+	int attachID  = tickModel.LookupAttachment( attachmentHead )
+	vector origin = tickModel.GetAttachmentOrigin( attachID )
+	vector angles = tickModel.GetAttachmentAngles( attachID )
+
+	Chroma_LootCeremonyFlash( rarity )
+
+	int fxIndex = LootCeremony_GetRarityFlashFXIndex( rarity, origin, angles )
+	EffectSetControlPointVector( fxIndex, 1, rarityColor )
+}
+
+
+
+void function MassLootCeremony_FireworkFX( entity tickModel, string fxAttachment )
+{
+	int highestRarity = fileLevel.highestsRarities[0]
+	array<int> highestRaritiesReversed = clone(fileLevel.highestsRarities)
+	highestRaritiesReversed.reverse()
+
+	int rarity = eRarityTier.COMMON
+	if ( highestRarity == eRarityTier.MYTHIC )
+		rarity = eRarityTier.MYTHIC
+	else
+		rarity = highestRaritiesReversed[fileLevel.vfxFireworksPlayedCounter]
+
+	vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+
+	int attachID = tickModel.LookupAttachment( fxAttachment )
+	if ( rarity in MassLootCeremonyRarityToFireworkFX )
+	{
+		int fxIndex = StartParticleEffectOnEntity( tickModel, GetParticleSystemIndex( MassLootCeremonyRarityToFireworkFX[rarity] ), FX_PATTACH_POINT_FOLLOW, attachID )
+		EffectSetControlPointVector( fxIndex, 1, rarityColor )
+	}
+
+	if ( rarity in MassLootCeremonyRarityToFireworkSFX )
+		RunUIScript( "ClientToUI_PlayLootCeremonySound", MassLootCeremonyRarityToFireworkSFX[rarity] )
+
+	fileLevel.vfxFireworksPlayedCounter++
+}
+
+
+
+void function MassLootCeremony_TrailFX( entity tickModel, string fxAttachment )
+{
+	int highestRarity = fileLevel.highestsRarities[0]
+	array<int> highestRaritiesReversed = clone(fileLevel.highestsRarities)
+	highestRaritiesReversed.reverse()
+
+	int rarity = eRarityTier.COMMON
+	if ( highestRarity == eRarityTier.MYTHIC )
+		rarity = eRarityTier.MYTHIC
+	else
+		rarity = highestRaritiesReversed[fileLevel.vfxTrailsPlayedCounter]
+
+	vector rarityColor = GetFXRarityColorForUnlockable( rarity )
+
+	int attachID = tickModel.LookupAttachment( fxAttachment )
+	int fxIndex = StartParticleEffectOnEntity( tickModel, GetParticleSystemIndex( TICK_FX_TRAIL ), FX_PATTACH_POINT_FOLLOW, attachID )
+
+	EffectSetControlPointVector( fxIndex, 1, rarityColor )
+	fileLevel.vfxTrailsPlayedCounter++
+}
+
+ 

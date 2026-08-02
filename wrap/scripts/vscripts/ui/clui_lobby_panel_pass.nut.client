@@ -1,0 +1,3809 @@
+
+global function UIToClient_StopBattlePassScene
+global function UIToClient_ItemPresentation
+global function InitBattlePassLights
+global function BattlePassLightsOn
+global function BattlePassLightsOff
+global function ClearBattlePassItem
+global function MoveLightsToSceneRef
+
+#if DEV
+global function DEV_TweakMover
+global function DEV_ShowFeatureUnlockAnimation
+global function DEV_testTest
+global function DEV_DestroyFeatureUnlockAnimation
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Season_GetLongName
+global function Season_GetShortName
+global function Season_GetTimeRemainingText
+global function Season_GetSmallLogo
+global function Season_GetSmallLogoBg
+global function Season_GetLobbyBannerLeftImage
+global function Season_GetLobbyBannerLeftImageCapstone
+global function Season_GetLobbyBannerRightImage
+global function Season_GetLobbyBannerRightImageCapstone
+
+global function Season_GetLobbyLogoCaptsoneOffset
+global function Season_GetLobbyLogoCaptsoneScale
+
+global function Season_GetTitleTextColor
+global function Season_GetHeaderTextColor
+global function Season_GetTimeRemainingTextColor
+global function Season_GetNewColor
+global function Season_GetColor
+
+global function Season_GetTabBarFocusedCol
+global function Season_GetTabBarSelectedCol
+global function Season_GetTabBGFocusedCol
+global function Season_GetTabBGSelectedCol
+global function Season_GetTabTextDefaultCol
+global function Season_GetTabTextFocusedCol
+global function Season_GetTabTextSelectedCol
+global function Season_GetTabGlowFocusedCol
+
+global function Season_GetSubTabBarFocusedCol
+global function Season_GetSubTabBarSelectedCol
+global function Season_GetSubTabBGFocusedCol
+global function Season_GetSubTabBGSelectedCol
+global function Season_GetSubTabTextDefaultCol
+global function Season_GetSubTabTextFocusedCol
+global function Season_GetSubTabTextSelectedCol
+global function Season_GetSubTabGlowFocusedCol
+
+
+
+
+
+
+
+struct BattlePassPageData
+{
+	int startLevel
+	int endLevel
+}
+
+struct ItemPresentationItemPositionData
+{
+	vector offset = < 0,0,0 >
+	float scale = 1.0
+	bool showEmoteBase = true
+	bool showAnimationOnly = false
+}
+
+
+
+global const float BATTLEPASS_MODEL_ROTATE_SPEED = 15.0
+
+global const string FEATURE_EVENT_BOOSTED_TUTORIAL = "eventboosted"
+
+struct FileStruct_LifetimeLevel
+{
+
+		bool                         isTempBattlePassPresentationBackgroundThreadActive = false
+		float                        rotateSpeed = BATTLEPASS_MODEL_ROTATE_SPEED
+		string						 sceneRefName
+		vector                       sceneRefOrigin
+		vector                       sceneRefAngles
+		entity                       mover
+		array<entity>                models
+		array<int>                	 fxs
+		NestedGladiatorCardHandle&   bannerHandle
+		var                          topo
+		var                          rui
+		array<entity>                stationaryLights
+		table<entity, vector>        stationaryLightOffsets
+		
+		
+		string                       playingPreviewAlias
+		bool						 didDisableBPLights = false
+
+		var loadscreenPreviewBox = null
+
+
+
+
+
+
+
+	table signalDummy
+	int   videoChannel = -1
+}
+FileStruct_LifetimeLevel& fileLevel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct
+{
+
+
+
+
+} file
+
+
+
+
+
+
+const vector BATTLEPASS_WEAPON_SKIN_LOCAL_ANGLES = <5, -45, 0>
+const vector BATTLEPASS_WEAPON_OFFSET = <0, 0, 29.0>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function UIToClient_StopBattlePassScene()
+{
+	ClearBattlePassItem()
+}
+
+
+
+
+void function OnMouseWheelDown( entity unused )
+{
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function UIToClient_ItemPresentation( SettingsAssetGUID itemFlavorGUID, int level, float scale, bool showLow, var loadscreenPreviewBox, bool shouldPlayAudioPreview, string sceneRefName, bool isCompactUI = false, bool isMilestoneEvent = false, bool isBattlepassMilestone = false, bool useMenuZoomOffset = true, vector offset = <0, 0, 0>, bool showAnimationOnly = false )
+{
+	ItemFlavor flav = GetItemFlavorByGUID( itemFlavorGUID )
+	int itemType = ItemFlavor_GetType( flav )
+	entity sceneRef = GetEntByScriptName( sceneRefName )
+
+	fileLevel.sceneRefName = sceneRefName
+	fileLevel.sceneRefOrigin = sceneRef.GetOrigin() + offset
+	ItemPresentationItemPositionData data
+	ItemPresentationItemPositionData MilestoneEventData
+	ItemPresentationItemPositionData battlepassMilestoneData
+
+	
+	
+	
+	if( sceneRefName == "battlepass_center_ref" && ( itemType == eItemType.weapon_skin || itemType == eItemType.weapon_charm ) )
+		showLow = false
+
+	if( isMilestoneEvent ) 
+	{
+		MilestoneEventData = ItemPresentation_GetMilestone_PositionData( flav, itemType, showLow, isCompactUI )
+		fileLevel.sceneRefOrigin += MilestoneEventData.offset
+	}
+	else if( isBattlepassMilestone ) 
+	{
+		battlepassMilestoneData = ItemPresentation_GetBattlepassMilestone_PositionData( flav, itemType, showLow )
+		fileLevel.sceneRefOrigin += battlepassMilestoneData.offset
+	}
+
+	switch ( sceneRefName )
+	{
+		case "battlepass_right_ref":
+			data = ItemPresentation_GetBattlePassRight_PositionData( flav, itemType, showLow )
+			break
+		case "battlepass_center_ref":
+			data = ItemPresentation_GetBattlePassCenter_PositionData( flav, itemType, showLow )
+			break
+		case "collection_event_ref":
+			data = ItemPresentation_GetCollectionEvent_PositionData( flav, itemType, showLow )
+			
+			if ( isMilestoneEvent && ItemFlavor_GetType( flav ) == eItemType.reward_set_tracker && RewardSetTracker_GetDisplayType( flav ) == "2DImage" )
+			{
+				data.offset += <STICKER_ORIGIN_OFFSET, 0, 0>
+			}
+			break
+		case "customize_character_emote_quip_ref":
+			data = ItemPresentation_GetCharacterEmoteQuip_PositionData( flav, itemType, showLow )
+			break
+		case "customize_character_emotes_ref":
+			data = ItemPresentation_GetCharacterEmotes_PositionData( flav, itemType, showLow, isCompactUI )
+			break
+		default:
+			break
+	}
+
+	
+	ItemPresentationItemPositionData genericData = ItemPresentation_GetGeneric_PositionData( flav, itemType, showLow, isCompactUI, sceneRefName )
+	data.offset += genericData.offset
+	data.scale *= ( genericData.scale * MilestoneEventData.scale * battlepassMilestoneData.scale )
+	data.showEmoteBase = genericData.showEmoteBase && data.showEmoteBase && MilestoneEventData.showEmoteBase && battlepassMilestoneData.showEmoteBase
+	data.showAnimationOnly = showAnimationOnly
+
+	if ( sceneRefName == "battlepass_right_ref" || sceneRefName == "battlepass_center_ref" )
+	{
+		MoveLightsToSceneRef( sceneRef )
+	}
+
+	fileLevel.sceneRefOrigin += data.offset
+	data.scale *= scale
+	fileLevel.sceneRefAngles = sceneRef.GetAngles()
+
+	ShowBattlepassItem( flav, data, level, loadscreenPreviewBox, shouldPlayAudioPreview, showLow, useMenuZoomOffset )
+}
+
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetBattlePassRight_PositionData( ItemFlavor flav, int itemType, bool showLow )
+{
+	ItemPresentationItemPositionData data
+
+	if ( fabs( float( GetScreenSize().width ) / float( GetScreenSize().height ) - (16.0 / 10.0) ) < 0.07 )
+		data.offset += <0, 25, 0>
+
+	switch( itemType )
+	{
+		case eItemType.character_emote:
+			data.scale *= 0.7
+			break
+
+		case eItemType.emote_icon:
+			if ( GetNearestAspectRatio( GetScreenSize().width, GetScreenSize().height ) == 1.6 )
+			{
+				data.offset += <10, 60, 0>
+			}
+			else
+			{
+				data.offset += <12, 60, 0>
+			}
+
+			break
+
+		case eItemType.weapon_skin:
+			ItemFlavor weaponFlavor = WeaponSkin_GetWeaponFlavor( flav )
+			vector itemPosition = fileLevel.sceneRefOrigin + BATTLEPASS_WEAPON_OFFSET
+			vector baseOffset = GetWeaponOffsetFromCameraToOrigin( Menu_GetCameraTarget(), < 0, 0, 0 >, itemPosition, <0,0,0> )
+			data.offset = baseOffset * WeaponItemFlavor_GetItemPresentationTallVectorScale( weaponFlavor ) * 0.9
+			break
+	}
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetBattlePassCenter_PositionData( ItemFlavor flav, int itemType, bool showLow )
+{
+	ItemPresentationItemPositionData data
+
+	switch( itemType )
+	{
+		case eItemType.emote_icon:
+			data.offset += <5, 50, 21>
+			break
+
+		case eItemType.character_emote:
+			data.scale *= 0.7
+			break
+
+		case eItemType.artifact_component_activation_emote:
+			data.offset += <0, 0, 10>
+			data.scale *= 1.8
+			break
+		case eItemType.character_skin:
+		case eItemType.character:
+			data.offset += <0, 0, -10>
+			data.scale *= 1.25
+			break
+
+		case eItemType.weapon_skin:
+			asset video = WeaponSkin_GetVideo( flav )
+			if ( video == $"" )
+			{
+					ItemFlavor weaponFlavor = WeaponSkin_GetWeaponFlavor( flav )
+					vector itemPosition = fileLevel.sceneRefOrigin + BATTLEPASS_WEAPON_OFFSET
+					vector baseOffset = GetWeaponOffsetFromCameraToOrigin( Menu_GetCameraTarget(), < 0, 0.0, 0 >, itemPosition, <0,0,0> )
+					data.offset = baseOffset * WeaponItemFlavor_GetItemPresentationWideVectorScale( weaponFlavor ) * 0.9
+			}
+			else
+			{
+				data.scale *= 1.5 
+				data.offset += <0, 0, -2.5>
+			}
+			break
+
+		case eItemType.skydive_emote:
+			data.scale *= 1.5 
+			data.offset += <0, 0, -2.5>
+			break
+
+		case eItemType.artifact_component_deathbox:
+			data.offset += <0, 60, 5>
+			break
+
+		case eItemType.gladiator_card_frame:
+			data.offset += <0, 200, 5>
+			data.scale *= 0.9
+			break
+	}
+
+	if ( showLow )
+		data.offset += <0, 0, -10.5>
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetCollectionEvent_PositionData( ItemFlavor flav, int itemType, bool showLow )
+{
+	ItemPresentationItemPositionData data
+
+	switch( itemType )
+	{
+		case eItemType.emote_icon:
+
+
+
+#if SUPPORTS_COMPACT_UI
+                        data.offset += IsUsingCompactUILayout() ? <4, 105, 6> : <0, 105, 16>
+#else
+						data.offset += <0, 105, 16> 
+#endif
+
+			break
+
+		case eItemType.weapon_charm:
+			data.offset += <0, 0, -10>
+			break
+
+		case eItemType.account_currency:
+			data.offset += <0, 0, -10>
+			break
+
+		case eItemType.account_pack:
+			data.offset += <0, 0, -10>
+			break
+
+		case eItemType.voucher:
+			data.offset += <0, 0, -10>
+			break
+
+		case eItemType.character_execution:
+			data.offset += <0, 0, -20>
+			data.scale *= 0.8
+			break
+
+		case eItemType.character_skin:
+			data.offset +=  <0, 0, -10>
+			break
+
+		case eItemType.gladiator_card_stance:
+		case eItemType.gladiator_card_frame:
+			data.offset += <0, 0, 1>
+			data.scale *= 0.8
+			break
+
+		case eItemType.character_emote:
+			data.scale *= 0.58
+			data.showEmoteBase = false
+			break
+
+		case eItemType.weapon_skin:
+				ItemFlavor weaponFlavor = WeaponSkin_GetWeaponFlavor( flav )
+				vector itemPosition = fileLevel.sceneRefOrigin + BATTLEPASS_WEAPON_OFFSET
+				vector baseOffset = GetWeaponOffsetFromCameraToOrigin( Menu_GetCameraTarget(), < 0, 0, 0 >, itemPosition, <0,0,0> )
+				data.offset = baseOffset * WeaponItemFlavor_GetItemPresentationTallVectorScale( weaponFlavor ) * 0.9
+			break
+
+		case eItemType.melee_skin:
+			data.scale *= 0.45
+			break
+
+		case eItemType.artifact_component_deathbox:
+			data.offset += <-25, 160, 0>
+			break
+	}
+
+	if ( showLow )
+		data.offset += <0, 0, -10.5>
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetCharacterEmoteQuip_PositionData( ItemFlavor flav, int itemType, bool showLow )
+{
+	ItemPresentationItemPositionData data
+
+#if SUPPORTS_COMPACT_UI
+
+        if ( IsUsingCompactUILayout() )
+
+			data.offset += <10, 0, 0>       
+#endif
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetCharacterEmotes_PositionData( ItemFlavor flav, int itemType, bool showLow, bool isCompactUI )
+{
+	ItemPresentationItemPositionData data
+
+#if SUPPORTS_COMPACT_UI
+		if ( !isCompactUI )
+		{
+			
+			data.offset += <0, 60, 20>
+		}
+		else
+		{
+			data.offset += <-5, 30, 0>
+		}
+#endif
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetMilestone_PositionData( ItemFlavor flav, int itemType, bool showLow, bool isCompactUI )
+{
+	ItemPresentationItemPositionData data
+
+	data.offset += <-45, 0, 0>
+
+	switch( itemType )
+	{
+		case eItemType.gladiator_card_stat_tracker:
+			data.offset += <0, 0, 0>
+			break
+
+		case eItemType.gladiator_card_stance:
+			data.offset += <0, 0, 0>
+			break
+
+		case eItemType.gladiator_card_frame:
+			data.offset += <0, 0, 0>
+			break
+
+		case eItemType.emote_icon:
+#if SUPPORTS_COMPACT_UI
+				data.offset += <0, -50, 35>
+				if ( isCompactUI )
+					data.offset += <5, -50, -35>
+				else
+					data.offset += <-2, 50, -36>
+#else
+				data.offset += <0, -50, 20>
+#endif
+			break
+
+		case eItemType.character_emote:
+			data.offset += <0, 0, -25>
+			data.scale *= 1.25
+			break
+
+		case eItemType.weapon_skin:
+			data.offset += <-10, 0, -3>
+			data.scale *= 1.25
+			break
+
+		case eItemType.character_skin:
+			data.offset += <0, 0, 0>
+			break
+
+		case eItemType.melee_skin:
+			data.offset += MeleeWeapon_GetMilestoneEventOffset( Melee_GetWeaponForSkin( flav ) )
+			data.scale *= 1.5
+			break
+	}
+
+	if ( !showLow )
+		data.offset += <0, 0, 5>
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetBattlepassMilestone_PositionData( ItemFlavor flav, int itemType, bool showLow )
+{
+	ItemPresentationItemPositionData data
+
+	data.offset += <-14, 0, 2.5> 
+
+	switch( itemType )
+	{
+		case eItemType.character_skin:
+			data.scale *= 1.05
+			break
+
+		case eItemType.gladiator_card_frame:
+			data.offset += <0, 0, 0>
+			data.scale *= 0.90
+			break
+
+		case eItemType.character_emote:
+			data.offset += <0, 0, 2.5>
+			break
+
+		case eItemType.skydive_emote:
+		case eItemType.weapon_skin:
+			data.offset += <1, 0, 0.5>
+			data.scale *= 1.5
+			break
+	}
+
+	return data
+}
+
+
+
+ItemPresentationItemPositionData function ItemPresentation_GetGeneric_PositionData( ItemFlavor flav, int itemType, bool showLow, bool isCompactUI, string sceneRefName )
+{
+	ItemPresentationItemPositionData data
+
+	if( sceneRefName != "battlepass_right_ref" && sceneRefName != "battlepass_center_ref")
+	{
+		data.offset += <0, 0, -2>
+	}
+
+	return data
+}
+
+
+
+
+void function MoveLightsToSceneRef( entity sceneRef)
+{
+	foreach ( light in fileLevel.stationaryLights )
+	{
+		light.SetOrigin( sceneRef.GetOrigin() + fileLevel.stationaryLightOffsets[ light ]  )
+		light.SetTweakLightOrigin( sceneRef.GetOrigin() + fileLevel.stationaryLightOffsets[ light ]  )
+	}
+}
+
+void function ShowBattlepassItem( ItemFlavor item, ItemPresentationItemPositionData data, int level, var loadscreenPreviewBox, bool shouldPlayAudioPreview, bool showLow = false, bool useMenuZoomOffset = true )
+{
+	fileLevel.loadscreenPreviewBox = loadscreenPreviewBox 
+
+	ClearBattlePassItem()
+	if ( fileLevel.didDisableBPLights )
+	{
+		BattlePassLightsOn()
+		fileLevel.didDisableBPLights = false
+	}
+
+	fileLevel.loadscreenPreviewBox = loadscreenPreviewBox
+
+	int itemType = ItemFlavor_GetType( item )
+
+	switch ( itemType )
+	{
+		case eItemType.account_currency:
+		case eItemType.account_currency_bundle:
+			ShowBattlePassItem_Currency( item, data.scale )
+			break
+
+		case eItemType.account_pack:
+			ShowBattlePassItem_ApexPack( item, data.scale )
+			break
+
+		case eItemType.character_skin:
+			ShowBattlePassItem_CharacterSkin( item, data.scale )
+			break
+
+		case eItemType.character_execution:
+			ShowBattlePassItem_Execution( item, data.scale )
+			break
+
+		case eItemType.weapon_skin:
+			asset video = WeaponSkin_GetVideo( item )
+			if ( video != $"" )
+				ShowBattlePassItem_WeaponSkinVideo( item, data.scale, video )
+			else
+				ShowBattlePassItem_WeaponSkin( item, data.scale )
+			break
+
+		case eItemType.weapon_charm:
+			ShowBattlePassItem_WeaponCharm( item, data.scale )
+			break
+
+		case eItemType.artifact_component_blade:
+		case eItemType.artifact_component_power_source:
+		case eItemType.artifact_component_theme:
+		case eItemType.melee_skin:
+			ShowBattlePassItem_MeleeSkin( item, data.scale )
+			break
+
+		case eItemType.gladiator_card_stance:
+		case eItemType.gladiator_card_frame:
+			BattlePassLightsOff() 
+			fileLevel.didDisableBPLights = true
+			ShowBattlePassItem_Banner( item, data.scale )
+			break
+
+		case eItemType.gladiator_card_intro_quip:
+		case eItemType.gladiator_card_kill_quip:
+			ShowBattlePassItem_Quip( item, data.scale, shouldPlayAudioPreview )
+			break
+
+		case eItemType.gladiator_card_stat_tracker:
+			ShowBattlePassItem_StatTracker( item, data.scale )
+			break
+
+		case eItemType.voucher:
+			ShowBattlePassItem_Voucher( item, data.scale )
+			break
+		case eItemType.gladiator_card_badge:
+			ShowBattlePassItem_Badge( item, data.scale, level )
+			break
+
+		case eItemType.account_flag:
+			ShowBattlePassItem_AccountFlag( item )
+			break
+
+		case eItemType.battlepass:
+		case eItemType.image_2d:
+		case eItemType.reward_set_tracker:
+			ShowBattlePassItem_RewardSetTracker( item, data )
+			break
+
+		case eItemType.feature_unlock_token:
+			if ( data.showAnimationOnly )
+			{
+				ShowBattlePassItem_FeatureUnlockToken( item )
+			}
+			else
+			{
+				ShowBattlePassItem_Image2D( item, data )
+			}
+			break
+
+		case eItemType.music_pack:
+			ShowBattlePassItem_MusicPack( item, data.scale, shouldPlayAudioPreview )
+			break
+
+		case eItemType.loadscreen:
+			ShowBattlePassItem_Loadscreen( item, data.scale )
+			break
+
+		case eItemType.radio_play:
+			ShowBattlePassItem_RadioPlay( item, data.scale )
+			break
+
+		case eItemType.skydive_emote:
+			ShowBattlePassItem_SkydiveEmote( item, data.scale )
+			break
+
+		case eItemType.skydive_trail:
+			ShowBattlePassItem_SkydiveEmote( item, data.scale, false )
+			break
+
+		case eItemType.emote_icon:
+			ShowBattlePassItem_EmoteIcon( item, data.scale, showLow )
+			break
+
+		case eItemType.character_emote:
+			ShowBattlePassItem_Emote( item, data.scale, data.showEmoteBase, useMenuZoomOffset )
+			break
+
+		case eItemType.character_select:
+			ShowBattlePassItem_CharacterSelect( item, data.scale )
+			break
+
+		case eItemType.quest_mission:
+			ShowBattlePassItem_QuestMission( item, data.scale )
+			break
+
+		case eItemType.quest_comic:
+			ShowBattlePassItem_QuestComicPage( item, data.scale )
+			break
+
+		case eItemType.battlepass_purchased_xp:
+			thread ShowBattlePassItem_Level( item, data.scale )
+			break
+
+		case eItemType.character:
+			thread ShowBattlePassItem_Character( item, data.scale )
+			break
+
+		case eItemType.sticker:
+			ShowBattlePassItem_Sticker( item )
+			break
+
+
+
+
+
+
+		case eItemType.artifact_component_activation_emote:
+			ShowBattlePassItem_ArtifactBink( item, data.scale )
+			break
+
+		case eItemType.artifact_component_deathbox:
+			ShowBattlePassItem_Deathbox( item, data.offset )
+			break
+
+		case eItemType.digital_garment:
+			ShowBattlePassItem_DigitalGarment( item, data.scale )
+			break
+
+		default:
+			Warning( "Battle Pass reward item type not supported: " + DEV_GetEnumStringSafe( "eItemType", itemType ) )
+			ShowBattlePassItem_Unknown( item, data.scale )
+			break
+	}
+}
+
+
+
+void function ClearBattlePassItem()
+{
+	foreach ( model in fileLevel.models )
+	{
+		if ( IsValid( model ) )
+		{
+			MenuWeaponModel_ClearReactiveEffects( model )
+
+			foreach ( entity ent in GetEntityAndAllChildren( model ) )
+			{
+				if ( IsValid( ent ) )
+					ent.Destroy()
+			}
+		}
+	}
+	fileLevel.models.clear()
+
+	foreach ( fx in fileLevel.fxs )
+	{
+		if ( EffectDoesExist( fx ) )
+		{
+			EffectStop( fx, true, true )
+		}
+	}
+	fileLevel.fxs.clear()
+
+	if ( IsValid( fileLevel.mover ) )
+		fileLevel.mover.Destroy()
+
+	CleanupNestedGladiatorCard( fileLevel.bannerHandle )
+
+	if ( fileLevel.rui != null )
+		RuiDestroyIfAlive( fileLevel.rui )
+
+	if ( fileLevel.topo != null )
+	{
+		RuiTopology_Destroy( fileLevel.topo )
+		fileLevel.topo = null
+	}
+
+	if ( fileLevel.videoChannel != -1 )
+	{
+		ReleaseVideoChannel( fileLevel.videoChannel )
+		fileLevel.videoChannel = -1
+	}
+
+	if ( fileLevel.playingPreviewAlias != "" )
+		StopSoundOnEntity( GetLocalClientPlayer(), fileLevel.playingPreviewAlias )
+
+	if ( fileLevel.loadscreenPreviewBox != null && IsValid( fileLevel.loadscreenPreviewBox ) )
+	{
+		UpdateLoadscreenPreviewMaterial( fileLevel.loadscreenPreviewBox, null, 0 )
+		fileLevel.loadscreenPreviewBox = null
+	}
+}
+
+void function ShowBattlePassItem_ApexPack( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 10.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	asset ornull tickAsset = GRXPack_GetTickModel( item )
+	string tickSkin = GRXPack_GetTickModelSkin( item )
+
+	if ( tickAsset == null || tickSkin == "" )
+		return
+
+	expect asset( tickAsset )
+
+	entity model    = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <0, 135, 0> ), tickAsset )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * 0.60 )
+	model.SetParent( mover )
+	model.SetSkin( model.GetSkinIndexByName( tickSkin ) )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+
+void function ShowBattlePassItem_CharacterSkin( ItemFlavor item, float scale )
+{
+	
+	vector season22BattlePassOffset = fileLevel.sceneRefName == "battlepass_center_ref" ? <-1.0, 60.0, 0.0> : <0.0, 0.0, 0.0>
+
+	ItemFlavor char = CharacterSkin_GetCharacterFlavor( item )
+	vector origin   = fileLevel.sceneRefOrigin + season22BattlePassOffset + <0, 0, 4.0> - 0.6 * CharacterClass_GetMenuZoomOffset( char )
+	vector angles   = fileLevel.sceneRefAngles
+
+	vector previewVerticalOffset = GetGlobalSettingsVector( ItemFlavor_GetAsset( item ), "previewOffset" )
+	origin += previewVerticalOffset
+
+	vector previewAnglesOffset = GetGlobalSettingsVector( ItemFlavor_GetAsset( item ), "previewRotation" )
+	angles += previewAnglesOffset
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, angles, $"mdl/dev/empty_model.rmdl" )
+
+
+	
+	if ( fileLevel.sceneRefName == "battlepass_center_ref" )
+		model.SetLightingOrigin( <11328, 2612, 28> ) 
+
+
+	CharacterSkin_Apply( model, item )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * 0.75 )
+	model.SetParent( mover )
+	
+	thread MoverPendulum( mover )
+
+	thread PlayAnim( model, "ACT_MP_MENU_LOOT_CEREMONY_IDLE", mover )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function MoverPendulum( entity mover )
+{
+	vector baseAngles = mover.GetAngles()
+	bool firstTime    = false
+	float dir         = 1
+	float delta       = 30.0
+	const float MOVE_TIME = 10.0
+
+	while ( IsValid( mover ) )
+	{
+		float scalar   = firstTime ? 0.5 : 1.0
+		float moveTime = MOVE_TIME * scalar
+		mover.NonPhysicsRotateTo( baseAngles - (dir * <0, delta, 0>), moveTime, 0.5 * scalar, 0.5 * scalar )
+		firstTime = false
+		dir *= -1
+		wait moveTime
+	}
+}
+
+void function ShowBattlePassItem_Execution( ItemFlavor item, float scale )
+{
+	const float BATTLEPASS_EXECUTION_Z_OFFSET = 12.0
+	const vector BATTLEPASS_EXECUTION_LOCAL_ANGLES = <0, 15, 0>
+	const float BATTLEPASS_EXECUTION_SCALE = 0.8
+
+	
+	ItemFlavor attackerCharacter = CharacterExecution_GetCharacterFlavor( item )
+	ItemFlavor characterSkin     = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_CharacterSkin( attackerCharacter ) )
+
+	asset attackerAnimSeq = CharacterExecution_GetAttackerPreviewAnimSeq( item )
+	asset victimAnimSeq   = CharacterExecution_GetVictimPreviewAnimSeq( item )
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_EXECUTION_Z_OFFSET>
+	vector angles = AnglesCompose( fileLevel.sceneRefAngles, BATTLEPASS_EXECUTION_LOCAL_ANGLES )
+
+	entity mover         = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	entity attackerModel = CreateClientSidePropDynamic( origin, angles, $"mdl/dev/empty_model.rmdl" )
+	entity victimModel   = CreateClientSidePropDynamic( origin, angles, $"mdl/dev/empty_model.rmdl" )
+
+	CharacterSkin_Apply( attackerModel, characterSkin )
+	victimModel.SetModel( $"mdl/humans/class/medium/dummy_v20_base_w.rmdl" )
+
+	
+	bool attackerHasSequence = attackerModel.Anim_HasSequence( attackerAnimSeq )
+	bool victimHasSequence   = victimModel.Anim_HasSequence( victimAnimSeq )
+
+	if ( !attackerHasSequence || !victimHasSequence )
+	{
+		asset attackerPlayerSettings = CharacterClass_GetSetFile( attackerCharacter )
+		string attackerRigWeight     = GetGlobalSettingsString( attackerPlayerSettings, "bodyModelRigWeight" )
+		string attackerAnim          = "mp_pt_execution_" + attackerRigWeight + "_attacker_loot"
+
+		attackerModel.Anim_Play( attackerAnim )
+		victimModel.Anim_Play( "mp_pt_execution_default_victim_loot" )
+		Warning( "Couldn't find menu idles for execution reward: " + DEV_DescItemFlavor( item ) + ". Using fallback anims." )
+		if ( !attackerHasSequence )
+			Warning( "ATTACKER could not find sequence: " + attackerAnimSeq )
+		if ( !victimHasSequence )
+			Warning( "VICTIM could not find sequence: " + victimAnimSeq )
+	}
+	else
+	{
+		attackerModel.Anim_Play( attackerAnimSeq )
+		victimModel.Anim_Play( victimAnimSeq )
+	}
+
+	mover.MakeSafeForUIScriptHack()
+
+	attackerModel.MakeSafeForUIScriptHack()
+	attackerModel.SetParent( mover )
+
+	victimModel.MakeSafeForUIScriptHack()
+	victimModel.SetParent( mover )
+
+	
+	attackerModel.SetModelScale( scale * BATTLEPASS_EXECUTION_SCALE )
+	victimModel.SetModelScale( scale * BATTLEPASS_EXECUTION_SCALE )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( attackerModel, eMenuModelFlashType.BATTLEPASS, flashColor )
+	thread FlashMenuModel( victimModel, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( attackerModel )
+	fileLevel.models.append( victimModel )
+}
+
+
+void function ShowBattlePassItem_WeaponSkin( ItemFlavor item, float scale )
+{
+	ItemFlavor weaponFlavor = WeaponSkin_GetWeaponFlavor( item )
+	vector origin = fileLevel.sceneRefOrigin + BATTLEPASS_WEAPON_OFFSET
+	vector angles = fileLevel.sceneRefAngles
+
+	
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity weaponModel    = CreateClientSidePropDynamic( origin, AnglesCompose( angles, BATTLEPASS_WEAPON_SKIN_LOCAL_ANGLES ), $"mdl/dev/empty_model.rmdl" )
+	WeaponCosmetics_Apply( weaponModel, item, null )
+
+	weaponModel.MakeSafeForUIScriptHack()
+	weaponModel.SetVisibleForLocalPlayer( 0 )
+	weaponModel.Anim_SetPaused( true )
+
+	weaponModel.SetParent( mover )
+
+	
+	weaponModel.SetLocalOrigin( GetAttachmentOriginOffset( weaponModel, "MENU_ROTATE", BATTLEPASS_WEAPON_SKIN_LOCAL_ANGLES ) )
+	weaponModel.SetLocalAngles( BATTLEPASS_WEAPON_SKIN_LOCAL_ANGLES )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( weaponModel, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	UpdateWeaponLights( weaponModel, WEAPON_LIGHT_RIG_OFFSET, item )
+	UpdateReactiveWeaponModel( item, weaponFlavor, weaponModel )
+
+	if ( ItemFlavor_GetQuality( item ) == eRarityTier.MYTHIC )
+		weaponModel.SetPoseParameter( MYTHIC_301_LOBBY_POSE_PARAM, 1.0 )
+
+	asset animSeq = WeaponSkin_GetMenuAnimSeq( item )
+	if ( animSeq != $"" )
+		weaponModel.Anim_Play( animSeq )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( weaponModel )
+
+#if DEV
+	DEV_PositionContext ctx
+	ctx.screenName = "Battle Pass (Gun)"
+	ctx.weaponName = Localize( ItemFlavor_GetShortName( weaponFlavor ) )
+	ctx.mover = mover
+	ctx.model = weaponModel
+	ctx.cameraEnt = Menu_GetCameraTarget()
+	ctx.useCameraEntity = true
+	ctx.baseOrigin = origin
+	ctx.baseAngles = BATTLEPASS_WEAPON_SKIN_LOCAL_ANGLES
+
+	DEV_RegisterPositionContext( ctx )
+#endif
+}
+
+void function ShowBattlePassItem_Deathbox( ItemFlavor item, vector offset )
+{
+	vector origin = fileLevel.sceneRefOrigin + offset
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <10, -45, -8> ), Artifacts_GetDeathboxModel( item ) )
+	model.MakeSafeForUIScriptHack()
+	model.SetVisibleForLocalPlayer( 0 )
+	model.SetModelScale( 1.0 )
+	model.SetParent( mover )
+
+	string skinName = Deathbox_GetSkinName( item )
+	if ( skinName != "" )
+	{
+		int skinIndex = model.GetSkinIndexByName( skinName )
+		if ( skinIndex != -1 )
+			model.SetSkin( skinIndex )
+	}
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	MenuModel_Start3PDeathboxEffects( model, item )
+	MenuModel_UpdateDeathboxLights( model, origin, item )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_WeaponCharm( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 42>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamicCharm( origin, AnglesCompose( angles, <0, 270, 0> ), WeaponCharm_GetCharmModel( item ) )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * 18 )
+	model.SetParent( mover )
+	thread MoverPendulum( mover )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+
+void function ShowBattlePassItem_MeleeSkin( ItemFlavor item, float scale )
+{
+	
+
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 29.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	bool isArtifact = false
+	int setIndex = -1
+	array< ItemFlavor > setItems = []
+	array< ItemFlavor > emptySetItems = Artifacts_GetSetItems( eArtifactSetIndex._EMPTY )
+	bool isBlade = ItemFlavor_GetType( item ) == eItemType.artifact_component_blade
+	bool isPowerSource = ItemFlavor_GetType( item ) == eItemType.artifact_component_power_source
+	bool isTheme = ItemFlavor_GetType( item ) == eItemType.artifact_component_theme
+	if ( isBlade || isPowerSource || isTheme )
+	{
+		setIndex = Artifacts_GetSetIndex( item )
+		setItems = Artifacts_GetSetItems( setIndex )
+		item = GetItemFlavorByGUID( ARTIFACT_CONFIGURATION_PTR_0_GUID )
+		isArtifact = true
+	}
+
+	ItemFlavor meleeWeapon = Melee_GetWeaponForSkin( item )
+
+	vector extraRotation = MeleeWeapon_GetMenuModelRotation( meleeWeapon )
+	entity model         = CreateClientSidePropDynamic( origin, AnglesCompose( angles, extraRotation ), MeleeSkin_GetMenuModel( item ) )
+	model.MakeSafeForUIScriptHack()
+	model.SetVisibleForLocalPlayer( 0 )
+
+	if ( isArtifact )
+	{
+		
+		
+		
+
+		ItemFlavor bladeComponent = setItems[ eArtifactComponentType.BLADE ] 
+		ItemFlavor themeComponent = isBlade ? emptySetItems[ eArtifactComponentType.THEME ] : setItems[ eArtifactComponentType.THEME ] 
+		ItemFlavor powerSourceComponent = isPowerSource ? setItems[ eArtifactComponentType.POWER_SOURCE ] : emptySetItems[ eArtifactComponentType.POWER_SOURCE ] 
+
+		Artifacts_Loadouts_ApplyModelForSet( model, setIndex )
+		Artifacts_Loadouts_PreviewBladeAndPowerSource( model, bladeComponent, powerSourceComponent )
+		Artifacts_Loadouts_PreviewTheme( model, themeComponent )
+	}
+
+	asset animSeq = MeleeSkin_GetMenuAnimSeq( item )
+	if ( animSeq != $"" )
+		model.Anim_Play( animSeq )
+	model.Anim_Stop()
+
+	float modelScale = 1.0
+	vector modelOffset = <0, 0, 0>
+	float battlePassVectorScale = MeleeWeapon_GetBattlePassVectorScale( meleeWeapon )
+	if ( battlePassVectorScale != 0.0 )
+	{
+		entity cameraTarget = Menu_GetCameraTarget()
+		vector baseOffset = GetWeaponOffsetFromCameraToOrigin( cameraTarget, <0, 0, 0>, origin, <0, 0, 0> )
+		modelOffset = baseOffset * battlePassVectorScale
+	}
+	else
+	{
+		modelScale = scale * MeleeWeapon_GetBattlePassScale( meleeWeapon )
+	}
+
+	model.SetModelScale( modelScale )
+	model.SetParent( mover )
+	mover.SetOrigin( origin + modelOffset )
+
+	model.SetLocalOrigin( GetAttachmentOriginOffset( model, "MENU_ROTATE", extraRotation ) )
+	model.SetLocalAngles( extraRotation )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	string skinName = MeleeSkin_GetSkinName( item )
+	if ( skinName != "" )
+	{
+		int skinIdx = model.GetSkinIndexByName( skinName )
+		if ( skinIdx != -1 )
+			model.SetSkin( skinIdx )
+	}
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+
+	if ( battlePassVectorScale != 0.0 )
+		UpdateWeaponLights( model, WEAPON_LIGHT_RIG_OFFSET, meleeWeapon )
+
+#if DEV
+	
+	
+	
+	
+	
+	
+	
+	vector milestoneOffset = MeleeWeapon_GetMilestoneEventOffset( meleeWeapon )
+
+	DEV_PositionContext ctx
+	ctx.screenName = "Battle Pass (Melee)"
+	ctx.weaponName = Localize( ItemFlavor_GetLongName( item ) )
+	ctx.isMelee = true
+	ctx.isVectorPath = battlePassVectorScale != 0.0
+	ctx.screenSupportsVector = true
+	ctx.mover = mover
+	ctx.model = model
+	ctx.cameraEnt = Menu_GetCameraTarget()
+	ctx.useCameraEntity = true
+	ctx.baseOrigin = origin - milestoneOffset
+	ctx.baseAngles = extraRotation
+	ctx.bakedVectorScale = battlePassVectorScale
+	ctx.bakedLegacyScale = scale * MeleeWeapon_GetBattlePassScale( meleeWeapon )
+	ctx.bakedPositionOffset = milestoneOffset
+
+	DEV_RegisterPositionContext( ctx )
+#endif
+}
+
+
+void function ShowBattlePassItem_Banner( ItemFlavor item, float scale )
+{
+	int itemType = ItemFlavor_GetType( item )
+	Assert( itemType == eItemType.gladiator_card_frame || itemType == eItemType.gladiator_card_stance )
+
+	const float BATTLEPASS_BANNER_WIDTH = 528.0
+	const float BATTLEPASS_BANNER_HEIGHT = 912.0
+	const float BATTLEPASS_BANNER_SCALE = 0.08
+	const float BATTLEPASS_BANNER_Z_OFFSET = -4.0
+
+	entity player = GetLocalClientPlayer()
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_BANNER_Z_OFFSET>
+	vector angles = AnglesCompose( fileLevel.sceneRefAngles, <0, 180, 0> )
+
+	float width  = scale * BATTLEPASS_BANNER_WIDTH * BATTLEPASS_BANNER_SCALE
+	float height = scale * BATTLEPASS_BANNER_HEIGHT * BATTLEPASS_BANNER_SCALE
+
+	var topo = CreateRUITopology_Worldspace( origin + <0, 0, height * 0.5>, angles, width, height )
+	var rui  = RuiCreate( $"ui/loot_ceremony_glad_card.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	int gcardPresentation
+	if ( itemType == eItemType.gladiator_card_frame )
+		gcardPresentation = eGladCardPresentation.FRONT_CLEAN
+	else
+		gcardPresentation = eGladCardPresentation.FRONT_STANCE_ONLY
+
+	NestedGladiatorCardHandle nestedGCHandleFront = CreateNestedGladiatorCard( rui, "card", eGladCardDisplaySituation.MENU_LOOT_CEREMONY_ANIMATED, gcardPresentation )
+	ChangeNestedGladiatorCardOwner( nestedGCHandleFront, ToEHI( player ) )
+
+	if ( itemType == eItemType.gladiator_card_frame )
+	{
+		ItemFlavor ornull character = GladiatorCardFrame_GetCharacterFlavor( item )
+		if ( character == null )
+			character = GetRandomGoodItemFlavorForLoadoutSlot( ToEHI( player ), Loadout_Character() )
+
+		expect ItemFlavor( character )
+		SetNestedGladiatorCardOverrideCharacter( nestedGCHandleFront, character )
+		SetNestedGladiatorCardOverrideFrame( nestedGCHandleFront, item )
+	}
+	else
+	{
+		ItemFlavor character = GladiatorCardStance_GetCharacterFlavor( item )
+		SetNestedGladiatorCardOverrideCharacter( nestedGCHandleFront, character )
+		SetNestedGladiatorCardOverrideStance( nestedGCHandleFront, item )
+
+		ItemFlavor characterDefaultFrame = GetDefaultItemFlavorForLoadoutSlot( Loadout_GladiatorCardFrame( character ) )
+		SetNestedGladiatorCardOverrideFrame( nestedGCHandleFront, characterDefaultFrame ) 
+	}
+
+	RuiSetBool( rui, "battlepass", true )
+	RuiSetInt( rui, "rarity", ItemFlavor_GetQuality( item ) )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+	fileLevel.bannerHandle = nestedGCHandleFront
+}
+
+void function ShowBattlePassItem_EmoteIcon( ItemFlavor item, float scale, bool showLow )
+{
+
+	asset EMOTE_ICON_BASE_MODEL = HOLO_SPRAY_BASE 
+
+	vector angles = fileLevel.sceneRefAngles
+    vector origin = <0, 0, 0>
+
+#if SUPPORTS_COMPACT_UI
+        if ( IsUsingCompactUILayout() )
+        {
+            origin += fileLevel.sceneRefOrigin - (AnglesToForward( angles ) * ( (1.0 - scale) ) ) + (AnglesToRight( angles ) * ((1.0 - scale)) * -12)
+        }
+        else
+#endif
+        {
+            origin += fileLevel.sceneRefOrigin - (AnglesToForward( angles ) * ( (1.0 - scale) * 100) ) + (AnglesToRight( angles ) * ((1.0 - scale) * -12))
+        }
+
+	if ( showLow )
+		origin -= <0, 0, 50>
+
+	entity model = CreateClientSidePropDynamic( origin, angles, EMOTE_ICON_BASE_MODEL )
+
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale )
+	model.SetDoDestroyCallback( true )
+
+	thread CreateClientSideEmoteIcon( model, ItemFlavor_GetGUID( item ), Time(), true )
+
+	vector fwd = AnglesToForward( angles )
+	vector backerOrg = origin + <0,0,64>
+
+	entity backer = CreateClientsideScriptMover( $"mdl/levels_terrain/mp_lobby/holospray_backdrop_godray_01.rmdl", backerOrg - (fwd*5), angles + <180,0,0> )
+	backer.MakeSafeForUIScriptHack()
+	backer.SetModelScale( 4.0 )
+	backer.SetParent( model )
+
+	fileLevel.models.append( model )
+}
+
+
+void function ShowBattlePassItem_Emote( ItemFlavor item, float scale, bool showBase = true, bool useMenuZoomOffset = true )
+{
+	ItemFlavor ornull char = CharacterQuip_GetCharacterFlavor( item )
+
+	if ( char == null )
+		char = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_Character() )
+
+	expect ItemFlavor( char )
+
+	ItemFlavor skin = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_CharacterSkin( char ) )
+
+	vector angles = fileLevel.sceneRefAngles
+	vector origin = fileLevel.sceneRefOrigin
+
+	if ( useMenuZoomOffset )
+		origin = origin - CharacterClass_GetMenuZoomOffset( char )
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, angles, $"mdl/dev/empty_model.rmdl" )
+	CharacterSkin_Apply( model, skin )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale )
+	model.SetParent( mover )
+
+	int fx
+	if ( showBase )
+	{
+		fx = StartParticleEffectInWorldWithHandle( GetParticleSystemIndex( CHARACTER_BASE_EFFECT ), mover.GetOrigin() + <0.0, 0.0, -1.2>, <0.0, 0.0, 0.0> )
+		EffectSetControlPointVector( fx, 1, ItemFlavor_GetQualityColor( item ) )
+	}
+
+	thread ModelPerformEmote( model, item, mover, false )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+	if ( showBase )
+		fileLevel.fxs.append( fx )
+}
+
+
+const float RUI_CHARACTER_SELECT_WIDTH = 800.0
+const float RUI_CHARACTER_SELECT_HEIGHT = 450.0
+const float RUI_CHARACTER_SELECT_OFFSET = 34.0
+
+void function ShowBattlePassItem_CharacterSelect( ItemFlavor item, float scale )
+{
+
+
+	Assert( ItemFlavor_GetType( item ) == eItemType.character_select )
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <1.2, 0.0, RUI_CHARACTER_SELECT_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = RUI_CHARACTER_SELECT_WIDTH / 10.0
+	float height = RUI_CHARACTER_SELECT_HEIGHT / 10.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/finisher_video.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	fileLevel.videoChannel = ReserveVideoChannel( BattlePassVideoOnFinished )
+	RuiSetInt( rui, "channel", fileLevel.videoChannel )
+	StartVideoOnChannel( fileLevel.videoChannel, CharacterSelect_GetPreviewVideo( item ) , true, 0.0 )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function ShowBattlePassItem_Quip( ItemFlavor item, float scale, bool shouldPlayAudioPreview )
+{
+	int itemType = ItemFlavor_GetType( item )
+	Assert( itemType == eItemType.gladiator_card_intro_quip || itemType == eItemType.gladiator_card_kill_quip )
+
+	const float BATTLEPASS_QUIP_WIDTH = 390.0
+	const float BATTLEPASS_QUIP_HEIGHT = 208.0
+	const float BATTLEPASS_QUIP_SCALE_COMPACT_UI = 0.11
+	const float BATTLEPASS_QUIP_SCALE = 0.091
+	const float BATTLEPASS_QUIP_Z_OFFSET = 20.5
+	const asset BATTLEPASS_QUIP_BG_MODEL = $"mdl/menu/loot_ceremony_quip_bg.rmdl"
+
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_QUIP_Z_OFFSET>
+
+	vector angles        = fileLevel.sceneRefAngles
+	vector placardAngles = VectorToAngles( AnglesToForward( angles ) * -1 )
+
+    float width = 0.0
+    float height = 0.0
+
+	
+#if SUPPORTS_COMPACT_UI
+
+
+
+        bool useCompactUILayout = IsUsingCompactUILayout()
+
+
+        if ( useCompactUILayout )
+        {
+            width  = scale * BATTLEPASS_QUIP_WIDTH * BATTLEPASS_QUIP_SCALE_COMPACT_UI
+            height = scale * BATTLEPASS_QUIP_HEIGHT * BATTLEPASS_QUIP_SCALE_COMPACT_UI
+        }
+        else
+#endif
+        {
+            width  = scale * BATTLEPASS_QUIP_WIDTH * BATTLEPASS_QUIP_SCALE
+            height = scale * BATTLEPASS_QUIP_HEIGHT * BATTLEPASS_QUIP_SCALE
+        }
+
+	entity model = CreateClientSidePropDynamic( origin, angles, BATTLEPASS_QUIP_BG_MODEL )
+	model.MakeSafeForUIScriptHack()
+
+
+
+
+#if SUPPORTS_COMPACT_UI
+		model.SetModelScale( scale * ( IsUsingCompactUILayout() ? BATTLEPASS_QUIP_SCALE_COMPACT_UI : BATTLEPASS_QUIP_SCALE ) )
+#else
+		model.SetModelScale( scale * BATTLEPASS_QUIP_SCALE )
+#endif
+
+
+	var topo         = CreateRUITopology_Worldspace( origin + <0, 0, (height * 0.5)>, placardAngles, width, height )
+	var rui
+	ItemFlavor quipCharacter
+	string labelText
+	string quipAlias = ""
+
+	if ( itemType == eItemType.gladiator_card_intro_quip )
+	{
+		
+		rui = RuiCreate( $"ui/loot_reward_intro_quip.rpak", topo, RUI_DRAW_WORLD, 0 )
+		quipCharacter = CharacterIntroQuip_GetCharacterFlavor( item )
+		labelText = "#LOOT_QUIP_INTRO"
+		quipAlias = CharacterIntroQuip_GetVoiceSoundEvent( item )
+	}
+	else
+	{
+		
+		rui = RuiCreate( $"ui/loot_reward_kill_quip.rpak", topo, RUI_DRAW_WORLD, 0 )
+		quipCharacter = CharacterKillQuip_GetCharacterFlavor( item )
+		labelText = "#LOOT_QUIP_KILL"
+		quipAlias = CharacterKillQuip_GetVictimVoiceSoundEvent( item )
+	}
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "battlepass", true )
+	RuiSetInt( rui, "rarity", ItemFlavor_GetQuality( item ) )
+	RuiSetImage( rui, "portraitImage", CharacterClass_GetGalleryPortrait( quipCharacter ) )
+	RuiSetString( rui, "quipTypeText", labelText )
+	RuiTrackFloat( rui, "level", null, RUI_TRACK_SOUND_METER, 0 )
+
+	fileLevel.models.append( model )
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+
+	
+	if ( quipAlias != "" && shouldPlayAudioPreview )
+	{
+		fileLevel.playingPreviewAlias = quipAlias
+		EmitSoundOnEntity( GetLocalClientPlayer(), quipAlias )
+	}
+}
+
+
+void function ShowBattlePassItem_StatTracker( ItemFlavor item, float scale )
+{
+	const float BATTLEPASS_STAT_TRACKER_WIDTH = 594.0
+	const float BATTLEPASS_STAT_TRACKER_HEIGHT = 230.0
+	const float BATTLEPASS_STAT_TRACKER_SCALE = 0.06
+	const asset BATTLEPASS_STAT_TRACKER_BG_MODEL = $"mdl/menu/loot_ceremony_stat_tracker_bg.rmdl"
+
+	vector origin        = fileLevel.sceneRefOrigin + <0, 0, 23>
+	vector angles        = fileLevel.sceneRefAngles
+	vector placardAngles = VectorToAngles( AnglesToForward( angles ) * -1 )
+
+	
+	float width = BATTLEPASS_STAT_TRACKER_WIDTH
+	width *= scale
+	width *= BATTLEPASS_STAT_TRACKER_SCALE
+	float height = BATTLEPASS_STAT_TRACKER_HEIGHT
+	height *= scale
+	height *= BATTLEPASS_STAT_TRACKER_SCALE
+
+	var topo = CreateRUITopology_Worldspace( origin + <0, 0, (height * 0.5)>, placardAngles, width, height )
+	var rui  = RuiCreate( $"ui/loot_ceremony_stat_tracker.rpak", topo, RUI_DRAW_WORLD, 0 )
+
+	entity model = CreateClientSidePropDynamic( origin, angles, BATTLEPASS_STAT_TRACKER_BG_MODEL )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * BATTLEPASS_STAT_TRACKER_SCALE )
+
+	ItemFlavor ornull character = GladiatorCardStatTracker_GetCharacterFlavor( item )
+	if ( character == null ) 
+		character = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_Character() )
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "battlepass", true )
+	UpdateRuiWithStatTrackerData( rui, "tracker", LocalClientEHI(), character, -1, item, null, true )
+	RuiSetColorAlpha( rui, "trackerColor0", GladiatorCardStatTracker_GetColor0( item ), 1.0 )
+	RuiSetInt( rui, "rarity", ItemFlavor_GetQuality( item ) )
+
+	fileLevel.models.append( model )
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function ShowBattlePassItem_Badge( ItemFlavor item, float scale, int level )
+{
+	const float BATTLEPASS_BADGE_WIDTH = 670.0
+	const float BATTLEPASS_BADGE_HEIGHT = 670.0
+	const float BATTLEPASS_BADGE_SCALE = 0.06
+
+	vector origin        = fileLevel.sceneRefOrigin + <0, 0, 30>
+	vector angles        = fileLevel.sceneRefAngles
+	vector placardAngles = VectorToAngles( AnglesToForward( angles ) * -1 )
+
+	float width  = scale * BATTLEPASS_BADGE_WIDTH * BATTLEPASS_BADGE_SCALE
+	float height = scale * BATTLEPASS_BADGE_HEIGHT * BATTLEPASS_BADGE_SCALE
+
+	var topo = CreateRUITopology_Worldspace( origin, placardAngles, width, height )
+	var rui  = RuiCreate( $"ui/world_space_badge.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+	ItemFlavor dummy
+	CreateNestedGladiatorCardBadge( rui, "badge", LocalClientEHI(), item, 0, dummy, level == -1 ? 0 : level )
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "introComplete", true )
+	RuiSetFloat( rui, "bloomScale", 0.0 )
+	RuiSetBool( rui, "battlepass", false )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+void function ShowBattlePassItem_AccountFlag( ItemFlavor item ) 
+{
+	int type = ItemFlavor_GetType( item )
+	UISize screenSize = GetScreenSize()
+
+	
+	float heightOffset = 100.0 / 1080.0
+	
+	vector origin = <140, screenSize.height * heightOffset * -1, 0>
+
+	const asset ruiAsset = $"ui/world_space_image2d.rpak"
+
+	var topo = RuiTopology_CreatePlane( origin, <screenSize.width, 0, 0>, <0, screenSize.height, 0>, true )
+	var rui = RuiCreate( ruiAsset, topo, RUI_DRAW_POSTEFFECTS, 0 )
+
+	RuiSetImage( rui, "image2d", $"" )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+
+	
+	float baseImageScale = 0.7
+	float baseImageWidth = 740.0
+	float baseImageHeight = 740.0
+	bool disableLoadIcon = false
+
+	asset image2d = AccountFlag_GetRewardIcon( item )
+	RuiSetImage( rui, "image2d", image2d )
+	RuiSetFloat( rui, "imageWidth", baseImageWidth )
+	RuiSetFloat( rui, "imageHeight", baseImageHeight )
+	RuiSetFloat( rui, "imageScale", baseImageScale )
+	RuiSetBool( rui, "disableLoadIcon", disableLoadIcon )
+}
+
+void function ShowBattlePassItem_RewardSetTracker( ItemFlavor tracker, ItemPresentationItemPositionData data )
+{
+	string displayType = "2DImage"
+	if ( ItemFlavor_GetType( tracker ) == eItemType.reward_set_tracker ) 
+		displayType = RewardSetTracker_GetDisplayType( tracker )
+
+	switch ( displayType )
+	{
+		case "2DImage":
+		{
+			thread ShowBattlePassItem_Image2D( tracker, data )
+			break
+		}
+		case "3DModel":
+		{
+			ItemFlavor displayFlav = RewardSetTracker_Get3DModelDisplayFlav( tracker )
+			int displayFlavType = ItemFlavor_GetType( displayFlav )
+			switch( displayFlavType )
+			{
+				case eItemType.account_currency:
+				{
+					thread ShowBattlePassItem_Currency( displayFlav, data.scale )
+					break
+				}
+				case eItemType.melee_skin:
+				{
+					thread ShowBattlePassItem_MeleeSkin( displayFlav, data.scale )
+					break
+				}
+				case eItemType.weapon_skin:
+				{
+					thread ShowBattlePassItem_WeaponSkin( displayFlav, data.scale )
+					break
+				}
+				case eItemType.character_skin:
+				{
+					thread ShowBattlePassItem_CharacterSkin( displayFlav, data.scale )
+					break
+				}
+				default:
+				{
+					Assert( false, format( "Reward set tracker 3D model display isn't supported for item type %d", displayFlavType ) )
+					return
+				}
+			}
+			break
+		}
+		default:
+			Assert( false, format( "Invalid reward set tracker display type %s", displayType ) )
+	}
+}
+
+
+const float RUI_IMAGE_2D_SCALE = 0.7
+const float RUI_IMAGE_2D_WIDTH = 1570.0
+const float RUI_IMAGE_2D_HEIGHT = 740.0
+const float ORIGIN_IMAGE_2D_YOFFSET = 100.0
+const float RUI_BP_IMAGE_WIDTH = 1177.6
+const float RUI_BP_IMAGE_HEIGHT = 555.0
+const float ORIGIN_BP_IMAGE_XOFFSET = 480.0
+const float ORIGIN_BP_IMAGE_YOFFSET = 0.0
+const float RUI_STICKER_IMAGE_WIDTH = 640.0
+const float RUI_TOKEN_IMAGE_WIDTH = 896.0
+const float RUI_TOKEN_IMAGE_HEIGHT = 896.0
+const float TOKEN_ORIGIN_OFFSET_FACTOR = 4.0
+const float STICKER_ORIGIN_OFFSET = -360.56
+
+const float RUI_LEGEND_PASS_HEIGHT = 640.8
+const float RUI_LEGEND_PASS_WIDTH = 460.8
+const float RUI_LEGEND_PASS_ICON_SCALE = 0.45
+
+void function ShowBattlePassItem_Image2D( ItemFlavor item, ItemPresentationItemPositionData data )
+{
+	int type = ItemFlavor_GetType( item )
+	UISize screenSize = GetScreenSize()
+
+	
+	float yOffset = type == eItemType.image_2d ? ORIGIN_IMAGE_2D_YOFFSET : ORIGIN_BP_IMAGE_YOFFSET
+	float heightOffset = yOffset / 1080.0
+	
+	float xPos = 0.0
+	if ( type == eItemType.battlepass && fileLevel.sceneRefName == "battlepass_right_ref" )
+		xPos += ORIGIN_BP_IMAGE_XOFFSET * screenSize.width / 1920.0
+
+	asset ruiAsset = $"ui/world_space_image2d.rpak"
+	vector origin = <xPos, screenSize.height * heightOffset * -1, 0.0>
+
+	asset image2d
+	float baseImageWidth
+	float baseImageHeight
+	float baseImageScale
+
+
+		bool isLegendPass = false
+		ItemFlavor parentItem
+
+
+	if ( type == eItemType.image_2d )
+	{
+		image2d = GetImage2DAssetFromItemFlav( item )
+		baseImageWidth = RUI_IMAGE_2D_WIDTH
+		baseImageHeight = RUI_IMAGE_2D_HEIGHT
+		baseImageScale = RUI_IMAGE_2D_SCALE
+	}
+	else if ( type == eItemType.battlepass )
+	{
+		int bpType = BattlePass_GetType( item )
+
+		if ( bpType == ePassType.SEASONAL )
+		{
+			image2d = BattlePass_GetStoreBundleContentsImage( item )
+			baseImageWidth  = RUI_BP_IMAGE_WIDTH
+			baseImageHeight = RUI_BP_IMAGE_HEIGHT
+			baseImageScale  = RUI_IMAGE_2D_SCALE
+		}
+
+		else if ( bpType == ePassType.LEGEND )
+		{
+			parentItem = expect ItemFlavor( ItemFlavor_GetParentFlavor( item ) )
+			ruiAsset = $"ui/world_space_image2d_pass.rpak"
+			image2d = $"rui/menu/battlepass/legendpass/legendpass_card_bg"
+			isLegendPass = true
+			baseImageWidth  = RUI_LEGEND_PASS_WIDTH
+			baseImageHeight = RUI_LEGEND_PASS_HEIGHT
+			baseImageScale  = RUI_IMAGE_2D_SCALE
+		}
+
+	}
+	else if ( type == eItemType.reward_set_tracker )
+	{
+		
+		image2d = RewardSetTracker_GetDisplayImageAsset( item )
+		vector imageSize = GetImageSize( image2d )
+		baseImageWidth = RUI_STICKER_IMAGE_WIDTH
+		baseImageHeight = RUI_STICKER_IMAGE_WIDTH * ( imageSize.y / imageSize.x )
+		origin += < data.offset.x * GetScreenScaleFrac(), data.offset.y * GetScreenScaleFrac(), 0 >
+		baseImageScale = RUI_IMAGE_2D_SCALE
+	}
+	else if ( type == eItemType.feature_unlock_token )
+	{
+		image2d = FeatureUnlockToken_GetRewardAssetFromItemFlav( item )
+		baseImageWidth = RUI_TOKEN_IMAGE_WIDTH
+		baseImageHeight = RUI_TOKEN_IMAGE_HEIGHT
+		origin += < screenSize.width / TOKEN_ORIGIN_OFFSET_FACTOR, 0, 0 >
+		baseImageScale = RUI_IMAGE_2D_SCALE
+	}
+	else
+	{
+		Assert( false )
+		return
+	}
+
+	var topo = RuiTopology_CreatePlane( origin, <screenSize.width, 0, 0>, <0, screenSize.height, 0>, true )
+	var rui = RuiCreate( ruiAsset, topo, RUI_DRAW_POSTEFFECTS, 0 )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+
+	RuiSetImage( rui, "image2d", $"" )
+
+	RuiSetImage( rui, "image2d", image2d )
+	RuiSetFloat( rui, "imageWidth", baseImageWidth )
+	RuiSetFloat( rui, "imageHeight", baseImageHeight )
+	RuiSetFloat( rui, "imageScale", baseImageScale )
+
+
+		if ( isLegendPass )
+		{
+			RuiSetImage( rui, "icon", ItemFlavor_GetIcon( parentItem ) )
+			RuiSetFloat( rui, "iconScale", RUI_LEGEND_PASS_ICON_SCALE )
+			RuiSetString( rui, "headerText", Localize( "#LEGENDPASS" ).toupper() )
+			RuiSetString( rui, "descText", Localize( ItemFlavor_GetShortName( parentItem ) ).toupper() )
+		}
+
+
+	
+	RuiSetBool( rui, "disableLoadIcon", ( type == eItemType.reward_set_tracker || type == eItemType.feature_unlock_token ) ? true : false )
+}
+
+void function ShowBattlePassItem_FeatureUnlockToken( ItemFlavor item )
+{
+	int type = ItemFlavor_GetType( item )
+	UISize screenSize = GetScreenSize()
+
+	
+	float yOffset = ORIGIN_BP_IMAGE_YOFFSET
+	float heightOffset = yOffset / 1080.0
+	
+	float xPos = 0.0
+
+	asset ruiAsset = FeatureUnlockToken_GetAnimationAssetFromItemFlav( item )
+	vector origin = <xPos, screenSize.height * heightOffset * -1, 0.0>
+
+	var topo = RuiTopology_CreatePlane( origin, <screenSize.width, 0, 0>, <0, screenSize.height, 0>, true )
+	var rui = RuiCreate( ruiAsset, topo, RUI_DRAW_POSTEFFECTS, 0 )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+void function ShowBattlePassItem_Currency( ItemFlavor item, float scale )
+{
+	int itemType = ItemFlavor_GetType( item )
+	Assert( itemType == eItemType.account_currency || itemType == eItemType.account_currency_bundle )
+
+	asset modelAsset = $"mdl/dev/empty_model.rmdl"
+	float modelScale = 1.0
+	int rarity       = 0
+	if ( ItemFlavor_HasQuality( item ) )
+		rarity = ItemFlavor_GetQuality( item )
+
+	if ( ItemFlavor_GetType( item ) == eItemType.account_currency )
+	{
+		if ( item == GRX_CURRENCIES[GRX_CURRENCY_CRAFTING] )
+		{
+			modelAsset = BATTLEPASS_MODEL_CRAFTING_METALS
+			modelScale = 1.5
+		}
+		else
+		{
+			modelAsset = GRXCurrency_GetPreviewModel( item )
+		}
+	}
+	else
+	{
+		asset itemAsset = ItemFlavor_GetAsset( item )
+		Assert( itemAsset == $"settings/itemflav/currency_bundle/crafting_common.rpak" ||
+		itemAsset == $"settings/itemflav/currency_bundle/crafting_rare.rpak" ||
+		itemAsset == $"settings/itemflav/currency_bundle/crafting_epic.rpak" ||
+		itemAsset == $"settings/itemflav/currency_bundle/crafting_legendary.rpak" ||
+		itemAsset == $"settings/itemflav/grx_currency/exotic.rpak" ||
+		itemAsset == $"settings/itemflav/currency_bundle/heirloom.rpak" )
+
+		switch ( rarity )
+		{
+			case eRarityTier.COMMON:
+				modelAsset = CURRENCY_MODEL_COMMON
+				break
+
+			case eRarityTier.RARE:
+				modelAsset = CURRENCY_MODEL_RARE
+				break
+
+			case eRarityTier.EPIC:
+				modelAsset = CURRENCY_MODEL_EPIC
+				break
+
+			case eRarityTier.LEGENDARY:
+				string alias = ItemFlavor_GetGRXAlias( item )
+				if ( alias == "exotic" || alias == "currency_bundle_exotic" )
+					modelAsset = CURRENCY_MODEL_EXOTIC
+				else
+					modelAsset = CURRENCY_MODEL_LEGENDARY
+				break
+
+			case eRarityTier.MYTHIC:
+				ItemFlavor currencyFlav = GRXCurrencyBundle_GetCurrencyFlav( item )
+				modelAsset = GRXCurrency_GetPreviewModel( currencyFlav )
+				break
+
+			default: Assert( false )
+		}
+
+		modelScale = 1.5
+	}
+
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 29>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <0, 32, 0> ), modelAsset )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * modelScale )
+	model.SetParent( mover )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_XPBoost( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 28.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	asset voucherAsset = Voucher_GetModel( item )
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <0, 32, 0> ), voucherAsset != $"" ? voucherAsset : BATTLEPASS_MODEL_BOOST )
+	model.MakeSafeForUIScriptHack()
+	model.SetParent( mover )
+	model.SetModelScale( scale * 0.85 )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_QuestClue( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, -260, 28.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <20, 32, 0> ), $"mdl/weapons_r5/misc_pve/s5_treasure_box/w_s5_treasure_box.rmdl" )
+	model.MakeSafeForUIScriptHack()
+	model.SetParent( mover )
+	model.SetModelScale( scale * 0.85 )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_CPReward( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 28.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <90, 32, 0> ), CHALLENGE_REWARD_MODEL )
+	model.MakeSafeForUIScriptHack()
+	model.SetParent( mover )
+	model.SetModelScale( scale * 0.35 )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	if ( ItemFlavor_HasQuality( item ) )
+	{
+		vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+		thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+	}
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_StarReward( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 28.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <90, 32, 0> ), BATTLEPASS_STAR_REWARD_MODEL )
+	model.MakeSafeForUIScriptHack()
+	model.SetParent( mover )
+	model.SetModelScale( scale * 0.35 )
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	if ( ItemFlavor_HasQuality( item ) )
+	{
+		vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+		thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+	}
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_Voucher( ItemFlavor item, float scale )
+{
+	bool givesBattlepassLevels = Voucher_GetEffectBattlepassLevels( item ) > 0
+	bool givesBattlepassStars = Voucher_GetEffectBattlepassStars( item ) > 0
+
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 28.0>
+	vector angles = fileLevel.sceneRefAngles
+
+	asset voucherAsset = Voucher_GetModel( item )
+	if ( voucherAsset == $"" )
+	{
+		if ( givesBattlepassLevels )
+		{
+			voucherAsset = BATTLEPASS_MODEL_BOOST
+		}
+		else if ( givesBattlepassStars )
+		{
+			voucherAsset = BATTLEPASS_STAR_REWARD_MODEL
+		}
+		else
+		{
+			return 
+		}
+	}
+
+	vector angles2 = givesBattlepassStars ? <90, 32, 0> : <0, 32, 0>
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, angles2 ), voucherAsset )
+	model.MakeSafeForUIScriptHack()
+	model.SetParent( mover )
+
+	if ( givesBattlepassStars )
+	{
+		model.SetModelScale( scale * 0.35 )
+	}
+	else
+	{
+		model.SetModelScale( scale * 0.85 )
+	}
+
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	if ( ItemFlavor_HasQuality( item ) )
+	{
+		vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+		thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+	}
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+const float BATTLEPASS_VIDEO_WIDTH = 600.0
+const float BATTLEPASS_VIDEO_HEIGHT = 338.0
+
+void function ShowBattlePassItem_WeaponSkinVideo( ItemFlavor item, float scale, asset video )
+{
+	const float BATTLEPASS_UNKNOWN_Z_OFFSET = 28
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_UNKNOWN_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_VIDEO_WIDTH / 14.0
+	float height = scale * BATTLEPASS_VIDEO_HEIGHT / 14.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/finisher_video.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	fileLevel.videoChannel = ReserveVideoChannel( BattlePassVideoOnFinished )
+	RuiSetInt( rui, "channel", fileLevel.videoChannel )
+	StartVideoOnChannel( fileLevel.videoChannel, video, true, 0.0 )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function ShowBattlePassItem_MusicPack( ItemFlavor item, float scale, bool shouldPlayAudioPreview )
+{
+	int itemType = ItemFlavor_GetType( item )
+	Assert( itemType == eItemType.music_pack )
+
+	const float BATTLEPASS_QUIP_WIDTH = 390.0
+	const float BATTLEPASS_QUIP_HEIGHT = 208.0
+	const float BATTLEPASS_QUIP_SCALE = 0.091
+	const float BATTLEPASS_QUIP_Z_OFFSET = 20.5
+	const asset BATTLEPASS_QUIP_BG_MODEL = $"mdl/menu/loot_ceremony_quip_bg.rmdl"
+
+	vector origin        = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_QUIP_Z_OFFSET>
+	vector angles        = fileLevel.sceneRefAngles
+	vector placardAngles = VectorToAngles( AnglesToForward( angles ) * -1 )
+
+	
+	float width  = scale * BATTLEPASS_QUIP_WIDTH * BATTLEPASS_QUIP_SCALE
+	float height = scale * BATTLEPASS_QUIP_HEIGHT * BATTLEPASS_QUIP_SCALE
+
+	entity model = CreateClientSidePropDynamic( origin, angles, BATTLEPASS_QUIP_BG_MODEL )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * BATTLEPASS_QUIP_SCALE )
+
+	var topo = CreateRUITopology_Worldspace( origin + <0, 0, (height * 0.5)>, placardAngles, width, height )
+	var rui  = RuiCreate( $"ui/loot_reward_intro_quip.rpak", topo, RUI_DRAW_WORLD, 0 )
+
+	string previewAlias = MusicPack_GetPreviewMusic( item )
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "battlepass", true )
+	RuiSetInt( rui, "rarity", ItemFlavor_GetQuality( item ) )
+	RuiSetImage( rui, "portraitImage", MusicPack_GetPortraitImage( item ) )
+	RuiSetFloat( rui, "portraitBlend", MusicPack_GetPortraitBlend( item ) )
+	RuiSetString( rui, "quipTypeText", "#MUSIC_PACK" )
+	RuiTrackFloat( rui, "level", null, RUI_TRACK_SOUND_METER, 0 )
+
+	fileLevel.models.append( model )
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+
+	
+	if ( previewAlias != "" && shouldPlayAudioPreview )
+	{
+		fileLevel.playingPreviewAlias = previewAlias
+		EmitSoundOnEntity( GetLocalClientPlayer(), previewAlias )
+	}
+}
+
+
+void function ShowBattlePassItem_Loadscreen( ItemFlavor item, float scale )
+{
+	if ( fileLevel.loadscreenPreviewBox != null && IsValid( fileLevel.loadscreenPreviewBox ) )
+	{
+		UpdateLoadscreenPreviewMaterial( fileLevel.loadscreenPreviewBox, null, ItemFlavor_GetGUID( item ) )
+	}
+}
+
+void function ShowBattlePassItem_RadioPlay( ItemFlavor item, float scale )
+{
+	const float BATTLEPASS_RADIO_PLAY_WIDTH = 440
+	const float BATTLEPASS_RADIO_PLAY_HEIGHT = 248
+	const float BATTLEPASS_RADIO_PLAY_Z_OFFSET = 30
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_RADIO_PLAY_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_RADIO_PLAY_WIDTH
+	float height = scale * BATTLEPASS_RADIO_PLAY_HEIGHT
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/world_space_radio_play.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	RuiSetImage( rui, "radioPlayImage", ItemFlavor_GetIcon( item ) )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ShowBattlePassItem_SkydiveEmote( ItemFlavor item, float scale, bool isEmote = true )
+{
+	const float BATTLEPASS_UNKNOWN_Z_OFFSET = 28
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_UNKNOWN_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_VIDEO_WIDTH / 14.0
+	float height = scale * BATTLEPASS_VIDEO_HEIGHT / 14.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/finisher_video.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	fileLevel.videoChannel = ReserveVideoChannel( BattlePassVideoOnFinished )
+	RuiSetInt( rui, "channel", fileLevel.videoChannel )
+	StartVideoOnChannel( fileLevel.videoChannel, isEmote ? SkydiveEmote_GetVideo( item ) : SkydiveTrail_GetVideo( item ), true, 0.0 )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function ShowBattlePassItem_QuestComicPage( ItemFlavor item, float scale )
+{
+	Assert( ItemFlavor_GetType( item ) == eItemType.quest_comic )
+
+	const float BATTLEPASS_UNKNOWN_Z_OFFSET = 25
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_UNKNOWN_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_VIDEO_WIDTH / 16.0
+	float height = scale * BATTLEPASS_VIDEO_HEIGHT / 16.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/quest_reward_mission.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	var settingsBlock      = ItemFlavor_GetSettingsBlock( item )
+	string comicPageName   = ItemFlavor_GetShortName( item )
+	string comicPageDesc   = ItemFlavor_GetShortDescription( item )
+	asset comicRewardImage = Comic_GetPreviewImage( item )
+
+	RuiSetString( rui, "missionName", comicPageName )
+	RuiSetString( rui, "missionDesc", comicPageDesc )
+	RuiSetImage( rui, "missionImage", comicRewardImage )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function ShowBattlePassItem_QuestMission( ItemFlavor item, float scale )
+{
+	Assert( ItemFlavor_GetType( item ) == eItemType.quest_mission )
+
+	const float BATTLEPASS_UNKNOWN_Z_OFFSET = 25
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_UNKNOWN_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_VIDEO_WIDTH / 16.0
+	float height = scale * BATTLEPASS_VIDEO_HEIGHT / 16.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/quest_reward_mission.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	var settingsBlock   = ItemFlavor_GetSettingsBlock( item )
+	string playlistName = GetSettingsBlockString( settingsBlock, "playlistName" )
+	string missionName  = GetPlaylistVarString( playlistName, "name", "#PLAYLIST_UNAVAILABLE" )
+	string missionDesc  = GetPlaylistVarString( playlistName, "description", "#HUD_UNKNOWN" )
+	string imageKey     = GetPlaylistVarString( playlistName, "image", "" )
+	asset missionImage  = GetImageFromImageMap( imageKey )
+
+	RuiSetString( rui, "missionName", missionName )
+	RuiSetString( rui, "missionDesc", missionDesc )
+	RuiSetImage( rui, "missionImage", missionImage )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function ShowBattlePassItem_Level( ItemFlavor item, float scale )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 28.0>
+	vector angles = fileLevel.sceneRefAngles
+	const asset BATTLEPASS_LEVEL_MODEL = $"mdl/menu/bp_badge.rmdl"
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, AnglesCompose( angles, <0, 32, 0> ), BATTLEPASS_LEVEL_MODEL )
+	model.MakeSafeForUIScriptHack()
+	model.SetParent( mover )
+	model.SetModelScale( scale * 0.85 )
+	mover.NonPhysicsRotate( <0, 0, -1>, fileLevel.rotateSpeed )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+
+void function ShowBattlePassItem_Character( ItemFlavor item, float scale )
+{
+	ItemFlavor char = item
+	ItemFlavor characterSkin = CharacterClass_GetDefaultSkin( char )
+	vector origin   = fileLevel.sceneRefOrigin + <0, 0, 4.0> - 0.6 * CharacterClass_GetMenuZoomOffset( char )
+	vector angles   = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, angles, $"mdl/dev/empty_model.rmdl" )
+
+	
+	if ( fileLevel.sceneRefName == "battlepass_center_ref" )
+		model.SetLightingOrigin( <11328, 2612, 28> ) 
+
+	CharacterSkin_Apply( model, characterSkin )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * 0.75 )
+	model.SetParent( mover )
+	
+	thread MoverPendulum( mover )
+
+	thread PlayAnim( model, "ACT_MP_MENU_LOOT_CEREMONY_IDLE", mover )
+
+	vector flashColor = ItemFlavor_GetQualityColor( characterSkin ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_DigitalGarment( ItemFlavor item, float scale )
+{
+	ItemFlavor char = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_Character() )
+	ItemFlavor characterSkin = CharacterClass_GetDefaultSkin( char )
+	vector origin   = fileLevel.sceneRefOrigin + <0, 0, 4.0> - 0.6 * CharacterClass_GetMenuZoomOffset( char )
+	vector angles   = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, angles, $"mdl/dev/empty_model.rmdl" )
+
+	
+	if ( fileLevel.sceneRefName == "battlepass_center_ref" )
+		model.SetLightingOrigin( <11328, 2612, 28> ) 
+
+	CharacterSkin_Apply( model, characterSkin )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( scale * 0.75 )
+	model.SetParent( mover )
+	
+	thread MoverPendulum( mover )
+
+	thread PlayAnim( model, "ACT_MP_MENU_LOOT_CEREMONY_IDLE", mover )
+
+	vector flashColor = ItemFlavor_GetQualityColor( characterSkin ) / 255
+	thread FlashMenuModel( model, eMenuModelFlashType.BATTLEPASS, flashColor )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+
+	DigitalGarments_StartMenuGarmentWithFlav( model, item , eDigitalGarmentContext.MENU )
+}
+
+void function ShowBattlePassItem_Sticker( ItemFlavor item )
+{
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, 28>
+	vector angles = fileLevel.sceneRefAngles
+
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", origin, angles )
+	mover.MakeSafeForUIScriptHack()
+
+	entity model = CreateClientSidePropDynamic( origin, angles, UNAPPLIED_STICKER_MODEL )
+	model.MakeSafeForUIScriptHack()
+	model.SetModelScale( 1.5 )
+	model.SetParent( mover )
+
+	asset stickerMat = Sticker_GetReplacementMaterialAsset( item )
+	int stickerInstance = Sticker_SetMaterialModForLocalPlayer( model, stickerMat )
+
+	vector flashColor = ItemFlavor_GetQualityColor( item ) / 255
+	Sticker_CreateFlashData( stickerInstance, model, eMenuModelFlashType.BATTLEPASS, flashColor )
+	Sticker_OnPlaced( stickerInstance, Sticker_FlashOnLoadComplete )
+
+	fileLevel.mover = mover
+	fileLevel.models.append( model )
+}
+
+void function ShowBattlePassItem_ArtifactBink( ItemFlavor item, float scale )
+{
+	const float BATTLEPASS_UNKNOWN_Z_OFFSET = 28
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_UNKNOWN_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_VIDEO_WIDTH / 14.0
+	float height = scale * BATTLEPASS_VIDEO_HEIGHT / 14.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/finisher_video.rpak", topo, RUI_DRAW_VIEW_MODEL, 0 )
+
+	fileLevel.videoChannel = ReserveVideoChannel( BattlePassVideoOnFinished )
+	RuiSetInt( rui, "channel", fileLevel.videoChannel )
+
+	asset video
+	switch( ItemFlavor_GetType( item ) )
+	{
+		case eItemType.artifact_component_deathbox:
+			video = Deathbox_GetVideo( item )
+			break
+
+		case eItemType.artifact_component_activation_emote:
+			video = Artifacts_ActivationEmote_GetVideo( item )
+			break
+
+		default:
+			Assert( false )
+			return
+	}
+
+	StartVideoOnChannel( fileLevel.videoChannel, video, true, 0.0 )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function ShowBattlePassItem_Unknown( ItemFlavor item, float scale )
+{
+	const float BATTLEPASS_UNKNOWN_Z_OFFSET = 25
+
+	
+	vector origin = fileLevel.sceneRefOrigin + <0, 0, BATTLEPASS_UNKNOWN_Z_OFFSET>
+	vector angles = VectorToAngles( AnglesToForward( fileLevel.sceneRefAngles ) * -1 )
+
+	float width  = scale * BATTLEPASS_VIDEO_WIDTH / 16.0
+	float height = scale * BATTLEPASS_VIDEO_HEIGHT / 16.0
+
+	var topo = CreateRUITopology_Worldspace( origin, angles, width, height )
+	var rui  = RuiCreate( $"ui/loot_reward_temp.rpak", topo, RUI_DRAW_WORLD, 0 )
+
+	RuiSetString( rui, "bodyText", Localize( ItemFlavor_GetLongName( item ) ) )
+
+	fileLevel.topo = topo
+	fileLevel.rui = rui
+}
+
+
+void function BattlePassVideoOnFinished( int channel )
+{
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function InitBattlePassLights()
+{
+	fileLevel.stationaryLights = GetEntArrayByScriptName( "battlepass_stationary_light" )
+	fileLevel.stationaryLightOffsets.clear()
+
+	entity ref = GetEntByScriptName( "battlepass_right_ref" )
+
+	foreach ( light in fileLevel.stationaryLights )
+	{
+		fileLevel.stationaryLightOffsets[ light ] <- light.GetOrigin() - ref.GetOrigin()
+	}
+
+	
+	
+
+
+
+
+
+}
+
+
+void function BattlePassLightsOn()
+{
+	foreach ( light in fileLevel.stationaryLights )
+		light.SetTweakLightUpdateShadowsEveryFrame( true )
+
+	
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function BattlePassLightsOff()
+{
+	foreach ( light in fileLevel.stationaryLights )
+		light.SetTweakLightUpdateShadowsEveryFrame( false )
+
+	
+
+	
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function BattlePass_PopulateAboutTitle()
+{
+	return "#BATTLEPASS_BREAKOUT_TITLE"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function Season_GetLongName( ItemFlavor season )
+{
+	return ItemFlavor_GetLongName( season )
+}
+
+
+string function Season_GetShortName( ItemFlavor season )
+{
+	return Localize( ItemFlavor_GetShortName( season ) )
+}
+
+
+string function Season_GetTimeRemainingText( ItemFlavor season )
+{
+	int seasonEndUnixTime   = CalEvent_GetFinishUnixTime( season )
+	int remainingSeasonTime = seasonEndUnixTime - GetUnixTimestamp()
+
+	if ( remainingSeasonTime <= 0 )
+		return Localize( "#BATTLE_PASS_SEASON_ENDED" )
+
+	DisplayTime dt = SecondsToDHMS( remainingSeasonTime )
+
+	return Localize( "#SEASON_ENDS_IN_DAYS", string( dt.days ) )
+}
+
+asset function Season_GetSmallLogo( ItemFlavor season )
+{
+	ItemFlavor ornull pass = Season_GetCurrentOrFinalBattlePass( season )
+	if ( pass != null )
+	{
+		expect ItemFlavor( pass )
+		return GetGlobalSettingsAsset( ItemFlavor_GetAsset( pass ), "smallLogo" )
+	}
+
+	return $""
+}
+
+asset function Season_GetLobbyBannerLeftImage( ItemFlavor season )
+{
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( season ), "lobbyButtonImage" )
+}
+
+asset function Season_GetLobbyBannerLeftImageCapstone( ItemFlavor season )
+{
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( season ), "lobbyButtonImageCapstone" )
+}
+
+asset function Season_GetLobbyBannerRightImage( ItemFlavor season )
+{
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( season ), "lobbyBgRightImage" )
+}
+
+asset function Season_GetLobbyBannerRightImageCapstone( ItemFlavor season )
+{
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( season ), "lobbyBgRightImageCapstone" )
+}
+
+
+asset function Season_GetSmallLogoBg( ItemFlavor season )
+{
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( season ), "lobbyDiamondImage" )
+}
+
+vector function Season_GetLobbyLogoCaptsoneOffset( ItemFlavor season )
+{
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( season ), "lobbyLogoCapstoneOffset" )
+}
+
+float function Season_GetLobbyLogoCaptsoneScale( ItemFlavor season )
+{
+	return GetGlobalSettingsFloat( ItemFlavor_GetAsset( season ), "lobbyLogoCapstoneScale" )
+}
+
+
+vector function Season_GetTitleTextColor( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "seasonTitleColor" )
+}
+
+
+vector function Season_GetHeaderTextColor( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "seasonHeaderColor" )
+}
+
+
+vector function Season_GetTimeRemainingTextColor( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "seasonTimeRemainingColor" )
+}
+
+vector function Season_GetNewColor( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "seasonNewColor" )
+}
+
+vector function Season_GetColor( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "seasonCol" )
+}
+
+
+vector function Season_GetTabBGFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabBGFocusedCol" )
+}
+
+vector function Season_GetTabBarFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabBarFocusedCol" )
+}
+
+vector function Season_GetTabBGSelectedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabBGSelectedCol" )
+}
+
+vector function Season_GetTabBarSelectedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabBarSelectedCol" )
+}
+
+vector function Season_GetTabTextDefaultCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabTextDefaultCol" )
+}
+
+vector function Season_GetTabTextFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabTextFocusedCol" )
+}
+
+vector function Season_GetTabTextSelectedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabTextSelectedCol" )
+}
+
+vector function Season_GetTabGlowFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "tabGlowFocusedCol" )
+}
+
+
+vector function Season_GetSubTabBGFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabBGFocusedCol" )
+}
+
+vector function Season_GetSubTabBarFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabBarFocusedCol" )
+}
+
+vector function Season_GetSubTabBGSelectedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabBGSelectedCol" )
+}
+
+vector function Season_GetSubTabBarSelectedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabBarSelectedCol" )
+}
+
+vector function Season_GetSubTabTextDefaultCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabTextDefaultCol" )
+}
+
+vector function Season_GetSubTabTextFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabTextFocusedCol" )
+}
+
+vector function Season_GetSubTabTextSelectedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabTextSelectedCol" )
+}
+
+vector function Season_GetSubTabGlowFocusedCol( ItemFlavor event )
+{
+	Assert( ItemFlavor_GetType( event ) == eItemType.calevent_season )
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( event ), "subtabGlowFocusedCol" )
+}
+
+
+#if DEV
+void function DEV_TweakMover( vector origin )
+{
+	fileLevel.mover.SetOrigin( origin )
+}
+
+void function DEV_ShowFeatureUnlockAnimation( string guidString )
+{
+	SettingsAssetGUID guid = ConvertItemFlavorGUIDStringToGUID( guidString )
+	ItemFlavor item = GetItemFlavorByGUID( guid )
+	ShowBattlePassItem_FeatureUnlockToken( item )
+}
+
+void function DEV_testTest()
+{
+	printf("Hi hi")
+}
+
+void function DEV_DestroyFeatureUnlockAnimation()
+{
+	RuiDestroyIfAlive( fileLevel.rui )
+}
+#endif
+ 

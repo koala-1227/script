@@ -1,0 +1,1988 @@
+global function TutorialModal_Init
+global function IsTutorialPlaylistEnabled
+
+
+global function OnUseTutorialPopupThread
+global function CustomTutorialPopup
+global function TutorialModalSettingUpdated
+global function ServerCallback_CustomModal
+global function ServerToClient_OnLootBinOpen_ShowModal
+global function TutorialModal_SetVerticalOffset
+global function ServerToClient_OnFreefallEnded_Modals
+
+#if DEV
+global function DEV_TestTutorialPopup
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+enum eTutorialAction
+{
+	PICK_UP = 0,
+	INTERACT,
+	STATE,
+	MARK_ON_MAP,
+	CUSTOM
+}
+
+enum ePlayerStatusEnum
+{
+	LOW_HEALTH 			= (1 << 0),
+	LOW_SHIELDS 		= (1 << 1),
+	IN_COMBAT 			= (1 << 2),
+	TACTICAL_RECHARGED 	= (1 << 3),
+	ULTIMATE_RECHARGED 	= (1 << 4),
+	LOW_PRIMARY 	   	= (1 << 5),
+	LOW_SECONDARY	   	= (1 << 6),
+	LOW_LIGHT_AMMO	   	= (1 << 7),
+	LOW_HEAVY_AMMO	   	= (1 << 8),
+	LOW_SNIPER_AMMO	   	= (1 << 9),
+	LOW_SHOTGUN_AMMO   	= (1 << 10),
+	LOW_ENERGY_AMMO   	= (1 << 11),
+	TAKING_DAMAGE		= (1 << 12),
+	IN_ADS				= (1 << 13),
+	ORDINANCE_EQUIPPED	= (1 << 14),
+	RUNNING				= (1 << 15),
+	IN_AIR				= (1 << 16)
+	SKY_DIVING			= (1 << 17),
+	WEAPONS_HOLSTERED	= (1 << 18),
+	TEAMMATE_DOWNED		= (1 << 19),
+	OUT_OF_RING			= (1 << 20),
+	IN_DROPSHIP			= (1 << 21),
+	WEAPON_EQUIPPED     = (1 << 22),
+	PLAYER_DOWNED		= (1 << 23),
+
+}
+
+enum eInventoryCheckTypeEnum
+{
+	NONE = 0,
+	HAS_ITEMREF,
+	HAS_LOOTGROUP,
+	NOT_HAVE_ITEMREF,
+	NOT_HAVE_LOOTGROUP,
+	HAS_GADGET,
+	NOT_HAVE_GADGET
+}
+
+enum eHudElementHighlightEnum
+{
+	NONE = 0,
+	HUD_ULT_ABILITY,
+	HUD_TAC_ABILITY,
+	HUD_HEALTH_SHIELD
+}
+
+enum eTutorialPlayerSettings
+{
+	OFF = 0,
+	AUTO,
+	ON
+}
+
+global struct TutorialModalData
+{
+	string modalString
+	int priority
+	float displayTime
+	int state
+	int stateMask
+	int id
+	int maxPerMatchCount
+	int maxPerAccount
+	float cooldownTime
+	string inventoryCheckStr
+	int inventoryCheckType
+	string uniqueId
+	string itemRef
+	int hudElementHighlight
+	bool isCritical
+
+	string titleString
+	string numberString
+	asset iconImage = $"rui/hud/ftue/IconTip_Tutorial"
+	asset characterImage
+}
+
+struct MarkOnMapData
+{
+	string itemRef
+	string promptStr
+	int priority
+	float displayTime
+	int state
+	int stateMask
+	int id
+	int maxPerMatchCount
+	int maxPerAccount
+	float cooldownTime
+	string inventoryCheckStr
+	int inventoryCheckType
+	string uniqueId
+}
+
+const float 	DAMAGE_THRESHOLD = 75
+const float		DAMAGE_TIME_WINDOW = 5
+
+struct
+{
+	table<string, TutorialModalData> pickUpInteractModalDataTable
+	table<int, string> customModalIdtoRefTable
+	array< TutorialModalData > tutorialStateModalArray
+	array< MarkOnMapData > markOnMapStateArray
+
+	
+	table< string, array< TutorialModalData > > tutorialStateModalArrayByCharacter
+	table< string, table< string, TutorialModalData > > pickUpInteractModalDataTableByCharacter
+	array< string > characterRefArray
+
+	float markOnMapRange1
+	float markOnMapRange2
+	float markOnMapRange3
+	int	  modalQueueSize
+
+
+
+
+
+
+	var modalRui = null
+	int currentModalPriority = -1
+	int playerStatusFlags = 0
+
+	array< TutorialModalData > tutorialModalsQueue
+	table< int, float > tutorialCooldownTable
+	array< int > modalDisplayTimesThisMatch
+	string                     characterRef = ""
+	entity                     wp
+	bool                       isPromptActive = false
+	float staleModalTimeLimit
+	int maxPlayerLevelToViewModals
+	string					   activeUniqueId = ""
+	string					   activeItemRef = ""
+	table < int, float > tutorialTimeAddedToQueue
+
+	int 	tutorialPlayerSettings
+	bool 	tutorialEnabled
+
+	float offsetPercent = 0
+
+	bool 	playerPinged = false
+	float	timeSinceDamageStarted = -1
+	float	totalDamageTakenInWindow = 0
+	bool	hasTouchedGrass = false
+
+
+} file
+
+void function TutorialModal_Init()
+{
+	if ( !IsTutorialPlaylistEnabled() )
+		return
+
+	RegisterTutorialHintDataTable()
+
+
+	AddCallback_ClientOnPlayerConnectionStateChanged( OnPlayerConnectionStateChanged )
+	AddCallback_LocalPlayerPickedUpLoot( OnPlayerPickedUpItem )
+	AddCallback_OnPingCreatedByAnyPlayer( OnPingCreated )
+	AddCallback_PlayerClassChanged( OnPlayerClassChanged )
+	AddCallback_GameStateEnter( eGameState.Playing, GameStateEnter_OnPlaying )
+	AddCallback_GameStateEnter( eGameState.WinnerDetermined, GameStateEnter_OnWinnerDetermined )
+	AddLocalPlayerTookDamageCallback( OnPlayerTookDamageCoverReminder )
+	AddCreateCallback( "prop_death_box", OnDeathBoxCreated )
+	
+	file.staleModalTimeLimit = GetCurrentPlaylistVarFloat( "tm_stale_modal_time_limit", 30 )
+	file.maxPlayerLevelToViewModals = GetCurrentPlaylistVarInt( "tm_max_player_level_to_viewmodals", 20 )
+	file.modalQueueSize = GetCurrentPlaylistVarInt( "tm_modal_queue_size", 2 )
+
+	AddCallback_OnPlayerLifeStateChanged( OnPlayerLifeStateChanged )
+	AddCallback_LocalClientPlayerSpawned( LocalClientPlayerSpawned )
+
+
+
+
+
+
+
+
+
+	file.markOnMapRange1 = GetCurrentPlaylistVarFloat( "tm_mark_on_ma_prange1", 2000 )
+	file.markOnMapRange2 = GetCurrentPlaylistVarFloat( "tm_mark_on_ma_prange2", 5000 )
+	file.markOnMapRange3 = GetCurrentPlaylistVarFloat( "tm_mark_on_ma_prange3", 10000 )
+
+	Remote_RegisterServerFunction( "IncrementTutorialRunCountOnServer", "int" , 0 , INT_MAX )
+	Remote_RegisterServerFunction( "ClientCallback_PingRequiredLootItem", "int", 0, INT_MAX )
+	Remote_RegisterClientFunction( "ServerCallback_CustomModal", "int", 0, INT_MAX )
+	Remote_RegisterClientFunction( "ServerToClient_OnLootBinOpen_ShowModal" , "entity" , "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_OnFreefallEnded_Modals" , "entity" )
+
+	RegisterSignal( "KillTutorialModal" )
+	RegisterSignal( "EndTutorialThreads" )
+	RegisterSignal( "PingReminderEndSignal" )
+}
+
+bool function IsTutorialPlaylistEnabled()
+{
+	return GetCurrentPlaylistVarBool( "tutorial_modals_enabled", false )
+}
+
+void function GetAllCharacterRefs()
+{
+	array<ItemFlavor> characters = GetAllCharacters()
+	foreach( character in characters )
+	{
+		if ( CharacterClass_GetIsShippingCharacter( character ) )
+		{
+			string flavorStr = ItemFlavor_GetCharacterRef( character )
+			file.characterRefArray.append( flavorStr )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnPlayerPickedUpItem( entity player, LootData data, int lootAction )
+{
+	if ( !file.tutorialEnabled )
+		return
+
+	string ref = data.ref
+	if ( IsValid( player ) )
+	{
+		if ( file.characterRef != "" && ( file.characterRef in file.pickUpInteractModalDataTableByCharacter ) )
+		{
+			if ( ref in file.pickUpInteractModalDataTableByCharacter[ file.characterRef ] )
+			{
+				TutorialModalData modalData = file.pickUpInteractModalDataTableByCharacter[ file.characterRef ][ ref ]
+				AddToTutorialModalQueue( modalData )
+			}
+		}
+
+		if ( ref in file.pickUpInteractModalDataTable )
+		{
+			TutorialModalData modalData = file.pickUpInteractModalDataTable[ ref ]
+			AddToTutorialModalQueue( modalData )
+		}
+	}
+}
+
+void function OnUseTutorialPopupThread( entity ent )
+{
+	if ( !file.tutorialEnabled )
+		return
+
+	string ref = ent.GetScriptName()
+
+	if ( ref == "" )
+		ref = expect string ( ent.GetNetworkedClassName() )
+
+	if ( file.characterRef != "" && ( file.characterRef in file.pickUpInteractModalDataTableByCharacter ) )
+	{
+		if ( ref in file.pickUpInteractModalDataTableByCharacter[ file.characterRef ] )
+		{
+			TutorialModalData modalData = file.pickUpInteractModalDataTableByCharacter[ file.characterRef ][ ref ]
+			AddToTutorialModalQueue( modalData )
+		}
+	}
+
+	if ( ref in file.pickUpInteractModalDataTable )
+	{
+		TutorialModalData modalData = file.pickUpInteractModalDataTable[ ref ]
+		AddToTutorialModalQueue( modalData )
+	}
+
+}
+
+void function ServerCallback_CustomModal( int modalId )
+{
+	if ( modalId in file.customModalIdtoRefTable )
+	{
+		string ref = file.customModalIdtoRefTable[ modalId ]
+		CustomTutorialPopup( ref )
+	}
+}
+
+void function CustomTutorialPopup( string ref, bool isUrgent = false )
+{
+	if ( !file.tutorialEnabled )
+		return
+
+	if ( file.characterRef != "" && ( file.characterRef in file.pickUpInteractModalDataTableByCharacter ) )
+	{
+		if ( ref in file.pickUpInteractModalDataTableByCharacter[ file.characterRef ] )
+		{
+			TutorialModalData modalData = file.pickUpInteractModalDataTableByCharacter[ file.characterRef ][ ref ]
+			AddToTutorialModalQueue( modalData, isUrgent )
+		}
+	}
+
+	if ( ref in file.pickUpInteractModalDataTable )
+	{
+		TutorialModalData modalData = file.pickUpInteractModalDataTable[ ref ]
+		AddToTutorialModalQueue( modalData, isUrgent )
+	}
+}
+
+void function TutorialModalSettingUpdated( int index )
+{
+	if ( !IsTutorialPlaylistEnabled() )
+		return
+
+	int oldPlayerSetting = file.tutorialPlayerSettings
+	file.tutorialPlayerSettings = index
+
+	switch ( file.tutorialPlayerSettings )
+	{
+		case eTutorialPlayerSettings.OFF:
+			if ( file.tutorialEnabled )
+				EnableTutorialThreads( false )
+			break
+		case eTutorialPlayerSettings.AUTO:
+			if ( oldPlayerSetting == eTutorialPlayerSettings.OFF && !IsTutorialAccountLevelDisabled() )
+			{
+				if ( GetCurrentPlaylistVarBool( "tutorial_modals_enabled_new_player_only", false ) )
+				{
+					if ( NewPlayerMatchMaking_IsInMatchMakingFlow( GetLocalClientPlayer() ) )
+					{
+						
+						EnableTutorialThreads( true )
+					}
+				}
+				else
+				{
+					
+					EnableTutorialThreads( true )
+				}
+			}
+			else if ( oldPlayerSetting == eTutorialPlayerSettings.ON && IsTutorialAccountLevelDisabled() )
+			{
+				
+				EnableTutorialThreads( false )
+			}
+			break
+		case eTutorialPlayerSettings.ON:
+			if ( !file.tutorialEnabled )
+			{
+				if ( GetCurrentPlaylistVarBool( "tutorial_modals_enabled_new_player_only", false ) )
+				{
+					if ( NewPlayerMatchMaking_IsInMatchMakingFlow( GetLocalClientPlayer() ) )
+					{
+						EnableTutorialThreads( true )
+					}
+				}
+				else
+				{
+					EnableTutorialThreads( true )
+				}
+			}
+			break
+	}
+}
+
+void function OnPlayerClassChanged( entity player )
+{
+	if ( player != GetLocalClientPlayer() )
+		return
+
+	SetPlayerCharacter( player )
+}
+
+void function SlingWeaponReminderThread()
+{
+	entity player = GetLocalClientPlayer()
+
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	TutorialModalData data = file.pickUpInteractModalDataTable[ "passive_ballistic" ]
+	while ( true )
+	{
+		wait 120
+
+		if ( file.modalDisplayTimesThisMatch[ data.id ] >= data.maxPerMatchCount )
+			return
+
+		if ( IsPlayerWeaponSlingEmpty( player ) )
+		{
+			CustomTutorialPopup( "passive_ballistic" )
+		}
+		else
+		{
+			return
+		}
+	}
+}
+
+void function OnPlayerMantle( entity player )
+{
+	if ( file.characterRef == "character_horizon" )
+	{
+		entity tac = player.GetOffhandWeapon( eOffhandInv.TACTICAL )
+		if ( tac.GetWeaponPrimaryClipCount() == tac.GetWeaponPrimaryClipCountMax() )
+		{
+			TutorialModalData data = file.pickUpInteractModalDataTable[ "tactical_horizon" ]
+			if ( file.modalDisplayTimesThisMatch[ data.id ] >= data.maxPerMatchCount )
+			{
+				RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.MANTLE, OnPlayerMantle )
+				return
+			}
+
+			CustomTutorialPopup( "tactical_horizon" )
+		}
+	}
+	else if ( file.characterRef == "character_revenant" )
+	{
+		TutorialModalData data = file.pickUpInteractModalDataTable[ "passive_revenant_2" ]
+		if ( file.modalDisplayTimesThisMatch[ data.id ] >= data.maxPerMatchCount )
+		{
+			RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.MANTLE, OnPlayerMantle )
+			return
+		}
+
+		CustomTutorialPopup( "passive_revenant_2" )
+	}
+}
+
+void function OnPingCreated( entity pingingPlayer, int pingType, entity focusEnt, vector pingLoc, entity wayPoint )
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( pingingPlayer != player )
+		return
+
+	if ( pingType != ePingType.LOOT_TRAINING )
+	{
+		file.playerPinged = true
+		player.Signal( "PingReminderEndSignal" )
+		return
+	}
+	PIN_MarkOnMap ("mark_on_map_player_activiation ", file.activeUniqueId, file.activeItemRef, pingLoc)
+	thread function() : (wayPoint, pingLoc)
+	{
+		EndSignal( wayPoint, "OnDestroy")
+
+		OnThreadEnd( function() : ( pingLoc ) {
+			file.isPromptActive = false
+			PIN_MarkOnMap ("mark_on_map_destruction", file.activeUniqueId, file.activeItemRef, pingLoc )
+			file.activeUniqueId = ""
+			file.activeItemRef = ""
+		} )
+
+		WaitForever()
+	}()
+}
+
+
+
+void function SetPlayerCharacter( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	ItemFlavor character = LoadoutSlot_GetItemFlavor( ToEHI( player ), Loadout_Character() )
+	file.characterRef  = ItemFlavor_GetCharacterRef( character ).tolower()
+
+	if ( ( file.characterRef == "character_horizon" || file.characterRef == "character_revenant") &&
+			!HasPlayerMovementEventCallback( player, ePlayerMovementEvents.MANTLE, OnPlayerMantle ) )
+	{
+		AddPlayerMovementEventCallback( player, ePlayerMovementEvents.MANTLE, OnPlayerMantle )
+	}
+
+	if ( file.characterRef == "character_ballistic" )
+		thread SlingWeaponReminderThread()
+}
+
+
+void function RegisterTutorialHintDataTable( bool regenPersistence = false )
+{
+	GetAllCharacterRefs()
+
+	var dataTable = GetDataTable( $"datatable/tutorial_modal.rpak" )
+
+	int columnItemRef       			= GetDataTableColumnByName( dataTable, "item_ref" )
+	int columnTitleText  			    = GetDataTableColumnByName( dataTable, "title" )
+	int columnTutorialText  			= GetDataTableColumnByName( dataTable, "tutorialText" )
+	int columnPriority      			= GetDataTableColumnByName( dataTable, "priority" )
+	int columnDisplayTime   			= GetDataTableColumnByName( dataTable, "displayTime" )
+	int columnLegends       			= GetDataTableColumnByName( dataTable, "legends" )
+	int columnStates        			= GetDataTableColumnByName( dataTable, "states" )
+	int columnInventoryCheck			= GetDataTableColumnByName( dataTable, "inventoryCheck" )
+	int columnTutorialAction 			= GetDataTableColumnByName( dataTable, "tutorialAction" )
+	int columnMaxPerMatchCount			= GetDataTableColumnByName( dataTable, "maxPerMatchCount" )
+	int columnMaxPerAccount				= GetDataTableColumnByName( dataTable, "maxPerAccount" )
+	int columnCooldownTime				= GetDataTableColumnByName( dataTable, "cooldownTime" )
+    int columnInventoryCheckType 		= GetDataTableColumnByName( dataTable, "inventoryCheckType" )
+	int columnUniqueId					= GetDataTableColumnByName( dataTable, "uniqueId" )
+	int columnHudElementHighlight		= GetDataTableColumnByName( dataTable, "hudElementHighlight" )
+	int columnLegendPortrait			= GetDataTableColumnByName( dataTable, "legendPortrait" )
+	int columnIsDisabled			    = GetDataTableColumnByName( dataTable, "isDisabled" )
+	int columnIsCritical				= GetDataTableColumnByName( dataTable, "isCritical" )
+
+	int numRows = GetDataTableRowCount( dataTable )
+	int currentId = 0
+	array<string> uniqueIdArray
+	for ( int rowIdx = 0; rowIdx < numRows; rowIdx++, currentId++ )
+	{
+		string itemRef 					= GetDataTableString( dataTable, rowIdx, columnItemRef )
+		float displayTime 				= GetDataTableFloat( dataTable, rowIdx, columnDisplayTime )
+		int priority 					= GetDataTableInt( dataTable, rowIdx, columnPriority )
+		string tutorialText 			= GetDataTableString( dataTable, rowIdx, columnTutorialText )
+		string states 					= GetDataTableString( dataTable, rowIdx, columnStates )
+		string inventoryCheck 			= GetDataTableString( dataTable, rowIdx, columnInventoryCheck )
+		int tutorialAction 				= GetDataTableInt( dataTable, rowIdx, columnTutorialAction )
+		string legends 					= GetDataTableString( dataTable, rowIdx, columnLegends )
+		int maxPerMatchCount 			= GetDataTableInt( dataTable, rowIdx, columnMaxPerMatchCount )
+		int maxPerAccount 				= GetDataTableInt( dataTable, rowIdx, columnMaxPerAccount )
+		float cooldownTime 				= GetDataTableFloat( dataTable, rowIdx, columnCooldownTime )
+		int inventoryCheckType          = GetDataTableInt( dataTable, rowIdx, columnInventoryCheckType )
+		string uniqueId					= GetDataTableString( dataTable, rowIdx, columnUniqueId )
+		string title 					= GetDataTableString( dataTable, rowIdx, columnTitleText )
+		int hudElementHighlight			= GetDataTableInt( dataTable, rowIdx, columnHudElementHighlight )
+		string legendPortrait			= GetDataTableString( dataTable, rowIdx, columnLegendPortrait )
+		bool isDisabled 				= GetDataTableBool( dataTable, rowIdx, columnIsDisabled )
+		bool isCritical					= GetDataTableBool ( dataTable, rowIdx, columnIsCritical )
+
+
+		itemRef = GetCurrentPlaylistVarString ( uniqueId + "_item_ref", itemRef )
+		displayTime = GetCurrentPlaylistVarFloat ( uniqueId + "_displaytime", displayTime )
+		priority = GetCurrentPlaylistVarInt ( uniqueId + "_priority", priority )
+		tutorialText = GetCurrentPlaylistVarString ( uniqueId + "_tutorialtext", tutorialText )
+		states = GetCurrentPlaylistVarString ( uniqueId + "_states", states )
+		inventoryCheck = GetCurrentPlaylistVarString ( uniqueId + "_inventorycheck", inventoryCheck )
+		tutorialAction = GetCurrentPlaylistVarInt ( uniqueId + "_tutorialaction", tutorialAction )
+		legends = GetCurrentPlaylistVarString ( uniqueId + "_legends", legends )
+		maxPerMatchCount = GetCurrentPlaylistVarInt ( uniqueId + "_maxpermatchcount", maxPerMatchCount )
+		maxPerAccount = GetCurrentPlaylistVarInt ( uniqueId + "_maxperaccount", maxPerAccount )
+		cooldownTime  = GetCurrentPlaylistVarFloat ( uniqueId + "_cooldowntime", cooldownTime )
+		inventoryCheckType = GetCurrentPlaylistVarInt ( uniqueId + "_inventorychecktype", inventoryCheckType )
+		title = GetCurrentPlaylistVarString ( uniqueId + "_title", title )
+		hudElementHighlight = GetCurrentPlaylistVarInt ( uniqueId + "_highlight", hudElementHighlight )
+		legendPortrait = GetCurrentPlaylistVarString ( uniqueId + "_legendPotrait", legendPortrait )
+		isDisabled = GetCurrentPlaylistVarBool( uniqueId + "_isDisabled", isDisabled )
+		isCritical = GetCurrentPlaylistVarBool( uniqueId + "_isCritical", isCritical )
+
+		
+		Assert( displayTime >= 1, "ERROR: RegisterTutorialHintDatable: Display time needs to be above 1.")
+		Assert( priority >= 0, "ERROR: RegisterTutorialHintDatable: Priority needs to be 0 and above." )
+		Assert( tutorialText != "", "ERROR: RegisterTutorialHintDatable: Tutorial text can't be empty." )
+		Assert( maxPerMatchCount >= 1, "ERROR: RegisterTutorialHintDatable: Max Per Match Count has to be 1 or above." )
+		Assert( maxPerAccount >= 1, "ERROR: RegisterTutorialHintDatable: Max Per Account has to be 1 or above." )
+		Assert( maxPerMatchCount <= maxPerAccount, "ERROR: RegisterTutorialHintDatable: Max Per Account must be equal to or higher than Max Per Match Count." )
+		Assert( cooldownTime >= 0, "ERROR: RegisterTutorialHintDatable: Cooldown Time needs to be 0 and above." )
+		Assert( uniqueIdArray.find(uniqueId) == -1, "Error: Unique ID (" + uniqueId + ") name must be unique." )
+
+		uniqueIdArray.append(uniqueId)
+
+		TutorialModalData data
+		data.modalString = tutorialText
+		data.priority = priority
+		data.displayTime = displayTime
+		data.id = currentId
+		data.maxPerMatchCount = maxPerMatchCount
+		data.maxPerAccount = maxPerAccount
+		data.cooldownTime = cooldownTime
+		data.titleString = title
+		data.uniqueId = uniqueId
+		data.itemRef = itemRef
+		data.hudElementHighlight = hudElementHighlight
+		data.characterImage = GetPotraitForModal( legendPortrait )
+		data.isCritical = isCritical
+
+		array<string> tokens = split( states, ";" )
+		foreach ( token in tokens )
+		{
+			int stateEnum
+			if ( token.find( "!" ) != 0 )
+			{
+				stateEnum = ConvertStateStringToEnum( token )
+				data.state = SetBitFlag( data.state, stateEnum )
+			}
+			else
+			{
+				string tempToken = token.slice(1)
+				stateEnum = ConvertStateStringToEnum( tempToken )
+			}
+
+			data.stateMask = SetBitFlag( data.stateMask, stateEnum )
+		}
+
+		array<string> legendsArray = split( legends, ";" )
+		array<string> legendsModalText
+
+		if ( data.modalString.find( "%legend%" ) >= 0 )
+		{
+			if ( legendsArray.len() == 0 )
+			{
+				foreach ( characterRef in file.characterRefArray )
+					legendsArray.append( characterRef )
+			}
+
+			foreach ( string legendRef in legendsArray )
+			{
+				string characterSpecificModalStr = replace( data.modalString, "%legend%", legendRef )
+				legendsModalText.append( characterSpecificModalStr )
+			}
+		}
+
+		if ( isDisabled )
+		{
+			if ( legendsArray.len() != 0 )
+			{
+				currentId += legendsArray.len()
+			}
+
+			continue
+		}
+
+
+		if ( ( itemRef != "" ) && ( tutorialAction == eTutorialAction.PICK_UP ) && data.titleString.find( "%pickUpString%" ) >= 0 )
+		{
+			LootData lootData = SURVIVAL_Loot_GetLootDataByRef( itemRef )
+			data.titleString = lootData.pickupString
+		}
+
+		if ( inventoryCheck != "" )
+		{
+			switch( inventoryCheckType )
+			{
+				case eInventoryCheckTypeEnum.HAS_ITEMREF:
+				case eInventoryCheckTypeEnum.HAS_LOOTGROUP:
+				case eInventoryCheckTypeEnum.NOT_HAVE_ITEMREF:
+				case eInventoryCheckTypeEnum.NOT_HAVE_LOOTGROUP:
+				case eInventoryCheckTypeEnum.HAS_GADGET:
+				case eInventoryCheckTypeEnum.NOT_HAVE_GADGET:
+					data.inventoryCheckStr = inventoryCheck
+					data.inventoryCheckType = inventoryCheckType
+					break
+				case eInventoryCheckTypeEnum.NONE:
+				default:
+					break
+			}
+		}
+		switch ( tutorialAction )
+		{
+			case eTutorialAction.PICK_UP:
+			case eTutorialAction.INTERACT:
+			{
+				if ( itemRef == "" )
+					break
+
+				if ( legendsArray.len() != 0 )
+				{
+					
+					for ( int i = 0; i < legendsArray.len(); ++i, ++currentId )
+					{
+						string legend = legendsArray[ i ]
+						if ( !(legend in file.pickUpInteractModalDataTableByCharacter) )
+						{
+							table<string, TutorialModalData> tutorialModalDataTable
+							file.pickUpInteractModalDataTableByCharacter[ legend ] <- tutorialModalDataTable
+						}
+
+						TutorialModalData legend_data
+						legend_data.priority = data.priority
+						legend_data.state = data.state
+						legend_data.stateMask = data.stateMask
+						legend_data.displayTime = displayTime
+						legend_data.id = currentId
+						legend_data.maxPerMatchCount = maxPerMatchCount
+						legend_data.maxPerAccount = maxPerAccount
+						legend_data.cooldownTime = cooldownTime
+						legend_data.inventoryCheckStr = inventoryCheck
+						legend_data.inventoryCheckType = inventoryCheckType
+						legend_data.titleString = data.titleString
+						legend_data.uniqueId = uniqueId + "_" + legend
+						legend_data.hudElementHighlight = hudElementHighlight
+						legend_data.characterImage = GetPotraitForModal( legendPortrait )
+						legend_data.isCritical = isCritical
+						if ( legendsModalText.len() != 0 )
+						{
+							legend_data.modalString = legendsModalText[ i ]
+						}
+						else
+						{
+							legend_data.modalString = data.modalString
+						}
+
+						file.pickUpInteractModalDataTableByCharacter[ legend ][itemRef] <- legend_data
+					}
+				}
+				else
+				{
+					file.pickUpInteractModalDataTable[ itemRef ] <- data
+				}
+
+				break
+			}
+			case eTutorialAction.STATE:
+			{
+				if ( states == "" )
+					break
+
+				if ( legendsArray.len() != 0 )
+				{
+
+					
+					for ( int i = 0; i < legendsArray.len(); ++i, ++currentId )
+					{
+						string legend = legendsArray[ i ]
+						if ( !(legend in file.tutorialStateModalArrayByCharacter) )
+						{
+							array<TutorialModalData> dataArray
+							file.tutorialStateModalArrayByCharacter[ legend ] <- dataArray
+						}
+
+						TutorialModalData legend_data
+						legend_data.priority = data.priority
+						legend_data.state = data.state
+						legend_data.stateMask = data.stateMask
+						legend_data.displayTime = displayTime
+						legend_data.id = currentId
+						legend_data.maxPerMatchCount = maxPerMatchCount
+						legend_data.maxPerAccount = maxPerAccount
+						legend_data.cooldownTime = cooldownTime
+						legend_data.inventoryCheckStr = inventoryCheck
+						legend_data.inventoryCheckType = inventoryCheckType
+						legend_data.titleString = data.titleString
+						legend_data.uniqueId = uniqueId + "_" + legend
+						legend_data.hudElementHighlight = hudElementHighlight
+						legend_data.characterImage = GetPotraitForModal( legendPortrait )
+						legend_data.isCritical = isCritical
+						if ( legendsModalText.len() != 0 )
+						{
+							legend_data.modalString = legendsModalText[ i ]
+						}
+						else
+						{
+							legend_data.modalString = data.modalString
+						}
+
+						file.tutorialStateModalArrayByCharacter[ legend ].append( legend_data )
+					}
+				}
+				else
+				{
+					file.tutorialStateModalArray.append( data )
+				}
+
+				break
+			}
+			case eTutorialAction.MARK_ON_MAP:
+			{
+				if ( states == "" )
+					break
+
+				MarkOnMapData markOnMapData
+				markOnMapData.priority = data.priority
+				markOnMapData.state = data.state
+				markOnMapData.stateMask = data.stateMask
+				markOnMapData.displayTime = displayTime
+				markOnMapData.id = currentId
+				markOnMapData.promptStr = data.modalString
+				markOnMapData.itemRef = itemRef
+				markOnMapData.inventoryCheckStr = inventoryCheck
+				markOnMapData.inventoryCheckType = inventoryCheckType
+				markOnMapData.maxPerMatchCount = maxPerMatchCount
+				markOnMapData.maxPerAccount = maxPerAccount
+				markOnMapData.cooldownTime = cooldownTime
+				markOnMapData.uniqueId = uniqueId
+				file.markOnMapStateArray.append( markOnMapData )
+				break
+			}
+			case eTutorialAction.CUSTOM:
+				file.pickUpInteractModalDataTable[ itemRef ] <- data
+				file.customModalIdtoRefTable[ currentId ] <- itemRef
+			default:
+				break
+
+		}
+	}
+
+
+
+
+
+		file.modalDisplayTimesThisMatch.resize(currentId, 0 )
+
+
+#if DEV
+		if( !regenPersistence )
+			Assert( PersistenceGetArrayCount( "tutorialCountById" ) > currentId, "ERROR: RegisterTutorialHintDatable: tutorialCountById persistence count(" + PersistenceGetArrayCount( "tutorialCountById" )+ ") does not match number of tutorials("  + currentId + "). Increase the size of the tutorialCountById array in pdef." )
+#endif
+}
+
+asset function GetPotraitForModal( string legendPotrait )
+{
+	switch ( legendPotrait )
+	{
+		case "legend_valkyrie":
+			return $"rui/menu/buttons/lobby_character_select/valk"
+			break
+		case "legend_pathfinder":
+			return $"rui/menu/buttons/lobby_character_select/pathfinder"
+			break
+		case "legend_bangalore":
+			return $"rui/menu/buttons/lobby_character_select/bangalore"
+			break
+		case "legend_conduit":
+			return $"rui/menu/buttons/lobby_character_select/conduit"
+			break
+		default:
+			return $""
+			break
+	}
+
+	unreachable
+}
+
+
+void function AddToTutorialModalQueue( TutorialModalData data, bool isUrgent = false )
+{
+	if ( data.id in file.tutorialCooldownTable )
+	{
+		float coolDownTime = file.tutorialCooldownTable[ data.id ]
+		if ( Time() < coolDownTime )
+			return
+	}
+
+	if ( file.tutorialModalsQueue.find( data ) != -1 )
+		return
+
+	if ( IsTutorialRunCountGreaterThanMaxPerAccount( data.id, data.maxPerAccount ) )
+		return
+
+	if ( file.modalDisplayTimesThisMatch[data.id] >= data.maxPerMatchCount )
+		return
+
+	if ( isUrgent ) 
+	{
+		file.tutorialModalsQueue.insert( 0, data )
+	}
+	else
+	{
+		file.tutorialModalsQueue.append( data )
+	}
+
+	file.tutorialTimeAddedToQueue[data.id] <- Time()
+
+}
+
+
+
+int function SortTutorialModalByPriority( TutorialModalData a, TutorialModalData b )
+{
+	
+	if ( a.priority < b.priority )
+		return 1
+	else if ( a.priority > b.priority )
+		return -1
+	return 0
+}
+
+
+
+bool function IsTutorialAccountLevelDisabled()
+{
+	entity player = GetLocalClientPlayer()
+	int playerLevel = GetPlayerAccountLevel( player )
+	if ( playerLevel >= file.maxPlayerLevelToViewModals )
+	{
+		return true
+	}
+
+	return false
+}
+
+bool function IsTutorialRunCountGreaterThanMaxPerAccount( int id, int maxPerAccount )
+{
+	
+	if ( file.tutorialPlayerSettings == eTutorialPlayerSettings.ON )
+		return false
+
+	entity player = GetLocalClientPlayer()
+	int numberOfTimesTutorialHasBeenRun = player.GetPersistentVarAsInt( "tutorialCountById[" + id + "]" )
+	return ( numberOfTimesTutorialHasBeenRun >= maxPerAccount )
+}
+
+
+
+void function TutorialModalProcessQueueThread()
+{
+	EndSignal( GetLocalClientPlayer(), "EndTutorialThreads" )
+
+	while ( GetGameState() < eGameState.Playing )
+	{
+		WaitFrame()
+	}
+
+	
+	wait 2
+
+	while ( true )
+	{
+		CullStaleModalsFromQueue()
+		if ( file.tutorialModalsQueue.len() > 0 )
+		{
+			file.tutorialModalsQueue.sort ( SortTutorialModalByPriority )
+			while ( file.tutorialModalsQueue.len() > file.modalQueueSize )
+				file.tutorialModalsQueue.pop()
+
+			TutorialModalData data = file.tutorialModalsQueue[0]
+			file.tutorialModalsQueue.remove( 0 )
+
+			waitthread TutorialModalThread( data )
+		}
+
+		WaitFrame()
+	}
+
+}
+
+
+
+void function CullStaleModalsFromQueue()
+{
+	for ( int i = file.tutorialModalsQueue.len() - 1 ; i >= 0 ; i-- )
+	{
+		int currentDataId = file.tutorialModalsQueue[i].id
+		if ( Time() > file.tutorialTimeAddedToQueue[currentDataId] + file.staleModalTimeLimit )
+		{
+			file.tutorialModalsQueue.remove( i )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function TutorialModal_SetVerticalOffset( float offsetPercent )
+{
+	file.offsetPercent = offsetPercent
+	if ( file.modalRui != null && RuiIsAlive( file.modalRui ) )
+	{
+		RuiSetFloat( file.modalRui, "offsetPercent", offsetPercent )
+	}
+}
+
+
+
+void function TutorialModalThread( TutorialModalData data )
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	if ( file.modalRui != null )
+	{
+		if ( file.currentModalPriority <= data.priority )
+			return
+		else
+			Signal( player, "KillTutorialModal" )
+	}
+
+	Remote_ServerCallFunction( "IncrementTutorialRunCountOnServer", data.id )
+	file.tutorialCooldownTable[ data.id ] <- Time() + data.cooldownTime
+
+	file.modalDisplayTimesThisMatch[data.id] = file.modalDisplayTimesThisMatch[data.id] + 1
+
+	EmitUISound( "UI_InGame_Tutorial_Popup" )
+	file.modalRui = CreateTrainingModal( data )
+
+	switch ( data.hudElementHighlight )
+	{
+		case eHudElementHighlightEnum.HUD_ULT_ABILITY:
+			Highlight_HUD( eHighlight.ABILITY, data.displayTime )
+			break
+		case eHudElementHighlightEnum.HUD_TAC_ABILITY:
+			Highlight_HUD( eHighlight.TACTICAL, data.displayTime )
+			break
+		case eHudElementHighlightEnum.HUD_HEALTH_SHIELD:
+			Highlight_HUD( eHighlight.HEALTH_KIT, data.displayTime )
+			break
+		case eHudElementHighlightEnum.NONE:
+		default:
+			break
+	}
+
+	PIN_PageView_TutorialModal( "tutorial_modal",data.uniqueId )
+
+	EndSignal( player, "KillTutorialModal" )
+
+
+	OnThreadEnd( function() : ( ) {
+		if ( file.modalRui != null )
+			RuiDestroyIfAlive( file.modalRui )
+
+		file.currentModalPriority = -1
+		file.modalRui = null
+	} )
+
+	file.currentModalPriority =  data.priority
+	wait  data.displayTime + 1.0
+}
+
+
+#if DEV
+
+void function DEV_TestTutorialPopup()
+{
+	var rui = RuiCreate( $"ui/ingame_hint_popup.rpak", clGlobal.topoFullscreenHud, RUI_DRAW_HUD, 500 )
+
+	entity player = GetLocalClientPlayer()
+	if ( IsValid( player ) )
+		EmitSoundOnEntity( player, "SQ_UI_InGame_CommChime" )
+
+	RuiSetString( rui, "displayText", "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut condimentum eleifend semper. Sed faucibus iaculis interdum. Nulla iaculis nisl vel nulla venenatis placerat. Sed porta venenatis quam, ac laoreet diam dictum sed. Nam rutrum mi at viverra laoreet. Fusce condimentum consectetur tellus a pulvinar. Suspendisse in urna sed lectus consectetur euismod." )
+	RuiSetFloat( rui, "soundDuration", 10 )
+	RuiSetResolutionToScreenSize( rui )
+
+	wait 10
+
+	if ( rui != null )
+		RuiDestroyIfAlive( rui )
+}
+
+#endif
+
+
+void function EnableTutorialThreads( bool enable )
+{
+	if ( enable )
+	{
+		thread Client_PlayerStateThread()
+		thread TutorialModalProcessQueueThread()
+		file.tutorialEnabled = true
+	}
+	else
+	{
+		entity player = GetLocalClientPlayer()
+		if ( IsValid( player ) )
+			Signal( player, "EndTutorialThreads" )
+		file.tutorialEnabled = false
+		file.tutorialModalsQueue.clear()
+	}
+}
+
+void function OnPlayerConnectionStateChanged( entity player )
+{
+	if ( IsValid( player ) && player == GetLocalClientPlayer() )
+	{
+		
+		if ( player.IsConnectionActive() )
+		{
+			
+			file.tutorialPlayerSettings = GetConVarInt( "player_setting_tutorialization" )
+			if ( file.tutorialPlayerSettings == eTutorialPlayerSettings.ON || ( file.tutorialPlayerSettings == eTutorialPlayerSettings.AUTO  && !IsTutorialAccountLevelDisabled() ) )
+			{
+				if ( GetCurrentPlaylistVarBool( "tutorial_modals_enabled_new_player_only", false ) )
+				{
+					if ( NewPlayerMatchMaking_IsInMatchMakingFlow( GetLocalClientPlayer() ) )
+					{
+						EnableTutorialThreads( true )
+					}
+				}
+				else
+				{
+					EnableTutorialThreads( true )
+				}
+			}
+			else
+			{
+				EnableTutorialThreads( false )
+			}
+		}
+	}
+}
+
+
+int function ConvertStateStringToEnum( string state )
+{
+	switch ( state )
+	{
+		case "low_primary" :
+			return ePlayerStatusEnum.LOW_PRIMARY
+			break
+		case "low_seconary" :
+			return ePlayerStatusEnum.LOW_SECONDARY
+			break
+		case "low_light_ammo" :
+			return ePlayerStatusEnum.LOW_LIGHT_AMMO
+			break
+		case "low_heavy_ammo" :
+			return ePlayerStatusEnum.LOW_HEAVY_AMMO
+			break
+		case "low_energy_ammo" :
+			return ePlayerStatusEnum.LOW_ENERGY_AMMO
+			break
+		case "low_sniper_ammo" :
+			return ePlayerStatusEnum.LOW_SNIPER_AMMO
+			break
+		case "low_shotgun_ammo" :
+			return ePlayerStatusEnum.LOW_SHOTGUN_AMMO
+			break
+		case "low_health" :
+			return ePlayerStatusEnum.LOW_HEALTH
+			break
+		case "low_shields" :
+			return ePlayerStatusEnum.LOW_SHIELDS
+			break
+		case "in_combat" :
+			return ePlayerStatusEnum.IN_COMBAT
+			break
+		case "tac_charged" :
+			return ePlayerStatusEnum.TACTICAL_RECHARGED
+			break
+		case "ult_charged" :
+			return ePlayerStatusEnum.ULTIMATE_RECHARGED
+			break
+		case "taking_damage" :
+			return ePlayerStatusEnum.TAKING_DAMAGE
+			break
+		case "in_ads" :
+			return ePlayerStatusEnum.IN_ADS
+			break
+		case "ordinance_equipped" :
+			return ePlayerStatusEnum.ORDINANCE_EQUIPPED
+			break
+		case "in_air" :
+			return ePlayerStatusEnum.IN_AIR
+			break
+		case "running" :
+			return ePlayerStatusEnum.RUNNING
+			break
+		case "sky_diving" :
+			return ePlayerStatusEnum.SKY_DIVING
+			break
+		case "weapons_holstered" :
+			return ePlayerStatusEnum.WEAPONS_HOLSTERED
+			break
+		case "teammate_downed" :
+			return ePlayerStatusEnum.TEAMMATE_DOWNED
+			break
+		case "out_of_ring" :
+			return ePlayerStatusEnum.OUT_OF_RING
+			break
+		case "in_dropship" :
+			return ePlayerStatusEnum.IN_DROPSHIP
+			break
+		case "weapon_equipped" :
+			return ePlayerStatusEnum.WEAPON_EQUIPPED
+			break
+		case "player_downed" :
+			return ePlayerStatusEnum.PLAYER_DOWNED
+			break
+		default:
+			Assert( false, "[ConvertStateStringToEnum] Invalid state string passed: " + state )
+			return -INT_MAX
+	}
+
+	unreachable
+}
+
+
+void function Client_PlayerStateThread()
+{
+	entity player = GetLocalClientPlayer()
+	EndSignal( player,  "OnDestroy", "EndTutorialThreads" )
+	int previousFrameHealthTotal = 0
+
+	while ( !player.GetPlayerNetBool( "playerInPlane" ) && !file.hasTouchedGrass )
+		WaitFrame()
+
+	while ( true )
+	{
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_LIGHT_AMMO )
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_HEAVY_AMMO )
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_ENERGY_AMMO )
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SNIPER_AMMO )
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SHOTGUN_AMMO )
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SECONDARY )
+		file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_PRIMARY )
+
+
+		entity weaponInSlot0 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+		entity weaponInSlot1 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 )
+		entity mainHandWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+		int weaponAmmoSlot0Flag = ePlayerStatusEnum.LOW_SECONDARY
+		int weaponAmmoSlot1Flag = ePlayerStatusEnum.LOW_SECONDARY
+		if ( IsValid (mainHandWeapon) && IsValid ( weaponInSlot0 ) && mainHandWeapon == weaponInSlot0 )
+		{
+			weaponAmmoSlot0Flag = ePlayerStatusEnum.LOW_PRIMARY
+		}
+		else if ( IsValid (mainHandWeapon) && IsValid ( weaponAmmoSlot1Flag ) && mainHandWeapon == weaponInSlot1  )
+		{
+			weaponAmmoSlot1Flag = ePlayerStatusEnum.LOW_PRIMARY
+		}
+
+		if ( IsValid ( weaponInSlot0 ) )
+		{
+			LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weaponInSlot0 )
+			string weaponRef = weaponData.baseWeapon
+			if ( weaponRef != "" && bool ( GetWeaponInfoFileKeyField_Global( weaponRef, "uses_ammo_pool" ) ) )
+			{
+				if ( SURVIVAL_Loot_IsRefValid( weaponData.ammoType ) && SURVIVAL_CountItemsInInventory( player, weaponData.ammoType ) == 0 )
+				{
+					file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, weaponAmmoSlot0Flag )
+					switch ( weaponData.ammoType )
+					{
+						case BULLET_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_LIGHT_AMMO )
+							break
+						case HIGHCAL_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_HEAVY_AMMO )
+							break
+						case SHOTGUN_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SHOTGUN_AMMO )
+							break
+						case SPECIAL_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_ENERGY_AMMO )
+							break
+						case SNIPER_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SNIPER_AMMO )
+							break
+						default:
+							break
+					}
+				}
+			}
+		}
+
+		if ( IsValid ( weaponInSlot1 ) )
+		{
+			LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weaponInSlot1 )
+			string weaponRef = weaponData.baseWeapon
+			if ( weaponRef != "" && bool ( GetWeaponInfoFileKeyField_Global( weaponRef, "uses_ammo_pool" ) ) )
+			{
+				if ( SURVIVAL_CountItemsInInventory( player, weaponData.ammoType ) == 0 )
+				{
+					file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, weaponAmmoSlot1Flag )
+					switch ( weaponData.ammoType )
+					{
+						case BULLET_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_LIGHT_AMMO )
+							break
+						case HIGHCAL_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_HEAVY_AMMO )
+							break
+						case SHOTGUN_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SHOTGUN_AMMO )
+							break
+						case SPECIAL_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_ENERGY_AMMO )
+							break
+						case SNIPER_AMMO:
+							file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SNIPER_AMMO )
+							break
+						default:
+							break
+					}
+				}
+			}
+		}
+
+		if ( player.GetHealth() <  ( 0.60 * player.GetMaxHealth() ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_HEALTH )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_HEALTH )
+		}
+
+		int armorTier = UpgradeCore_GetPlayerArmorTier( player )
+		int shieldMaxHealthForTier = EvolvingArmor_GetCharacterShieldHealthMaxForArmorTier( player, armorTier )
+		float regenAmt = ceil( StatusEffect_GetTotalSeverity( player, eStatusEffect.target_shields ) * float(player.GetShieldHealthMax()) )
+		if ( player.GetShieldHealth() + regenAmt < shieldMaxHealthForTier && player.GetShieldHealthMax() > 0 )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SHIELDS )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.LOW_SHIELDS )
+		}
+
+		if ( PlayerIsInCombat( player ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_COMBAT )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_COMBAT )
+		}
+
+		entity ult = player.GetOffhandWeapon( eOffhandInv.ULTIMATE )
+
+		if ( IsValid( ult ) )
+		{
+			int ammo = ult.GetWeaponPrimaryClipCount()
+			int maxAmmo =ult.GetWeaponPrimaryClipCountMax()
+			float frac = clamp( (float( ammo ) / float( maxAmmo )), 0.0, 1.0 )
+			int burstCount = maxint( ult.GetWeaponSettingInt( eWeaponVar.burst_fire_count ), 1 )
+			int minReq = ult.GetWeaponSettingInt( eWeaponVar.ammo_min_to_fire ) * burstCount
+
+			if ( ammo >= minReq )
+			{
+				file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.ULTIMATE_RECHARGED )
+			}
+			else
+			{
+				file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.ULTIMATE_RECHARGED )
+			}
+		}
+
+		if ( player.Player_IsSkydiving() )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.SKY_DIVING )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.SKY_DIVING )
+		}
+
+		if ( HasHolsteredWeapons( player ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.WEAPONS_HOLSTERED )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.WEAPONS_HOLSTERED )
+		}
+
+		if ( Bleedout_IsBleedingOut ( player ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.PLAYER_DOWNED )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.PLAYER_DOWNED )
+		}
+
+		array<entity> teammates = GetPlayerArrayOfTeam( player.GetTeam() )
+		bool isTeammateDowned = false
+		foreach ( teammate in teammates )
+		{
+			if ( !IsValid( teammate ) )
+				continue
+
+			if ( teammate == player )
+				continue
+
+			if ( Bleedout_IsBleedingOut( teammate ) )
+			{
+				isTeammateDowned = true
+				break
+			}
+		}
+
+		if ( isTeammateDowned )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.TEAMMATE_DOWNED )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.TEAMMATE_DOWNED )
+		}
+
+		if ( !DeathField_IsPointInsideRing( player.GetOrigin(), player.DeathFieldIndex() ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.OUT_OF_RING )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag(file.playerStatusFlags, ePlayerStatusEnum.OUT_OF_RING)
+		}
+
+		entity tac = player.GetOffhandWeapon( eOffhandInv.TACTICAL )
+
+		if ( IsValid( tac ) )
+		{
+			if ( tac.GetWeaponPrimaryClipCount() == tac.GetWeaponPrimaryClipCountMax() )
+			{
+				file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.TACTICAL_RECHARGED )
+			}
+			else
+			{
+				file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.TACTICAL_RECHARGED )
+			}
+		}
+
+		int currentHealth = player.GetHealth() + player.GetShieldHealth()
+		if ( currentHealth < previousFrameHealthTotal )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.TAKING_DAMAGE )
+			previousFrameHealthTotal = currentHealth
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.TAKING_DAMAGE )
+			previousFrameHealthTotal = currentHealth
+		}
+
+		if ( PlayerIsInADS( player, false ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_ADS )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_ADS )
+		}
+
+		entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+		entity heldOrdnance = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_ANTI_TITAN )
+
+		if ( IsValid( heldOrdnance ) && IsValid ( activeWeapon ) && activeWeapon == heldOrdnance )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.ORDINANCE_EQUIPPED )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.ORDINANCE_EQUIPPED )
+		}
+
+		if ( SURVIVAL_GetPrimaryWeapons( player ).len() > 0 )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.WEAPON_EQUIPPED )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.WEAPON_EQUIPPED )
+		}
+
+		if ( player.IsSprinting() )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.RUNNING )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.RUNNING )
+		}
+
+		if ( !player.IsOnGround() )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_AIR )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_AIR )
+		}
+
+		if ( player.GetPlayerNetBool( "playerInPlane" ) )
+		{
+			file.playerStatusFlags = SetBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_DROPSHIP )
+		}
+		else
+		{
+			file.playerStatusFlags = ClearBitFlag( file.playerStatusFlags, ePlayerStatusEnum.IN_DROPSHIP )
+		}
+
+		ProcessPlayerStateModals()
+		wait 1.0
+	}
+}
+
+void function ProcessPlayerStateModals()
+{
+	foreach ( stateModal in file.tutorialStateModalArray )
+	{
+		if ( BitFieldCheck( stateModal.state, stateModal.stateMask, file.playerStatusFlags ) && DoesItemRefsCheckPass( stateModal.inventoryCheckStr, stateModal.inventoryCheckType ))
+		{
+			AddToTutorialModalQueue( stateModal )
+		}
+	}
+
+	if ( file.characterRef != "" && ( file.characterRef in file.tutorialStateModalArrayByCharacter ) )
+	{
+		array< TutorialModalData > legendModalData = file.tutorialStateModalArrayByCharacter[ file.characterRef ]
+		foreach ( stateModal in legendModalData )
+		{
+			if ( BitFieldCheck( stateModal.state, stateModal.stateMask, file.playerStatusFlags ) && DoesItemRefsCheckPass( stateModal.inventoryCheckStr, stateModal.inventoryCheckType ))
+			{
+				AddToTutorialModalQueue( stateModal )
+			}
+		}
+	}
+
+	if ( !file.isPromptActive )
+	{
+		foreach ( markOnMapData in file.markOnMapStateArray )
+		{
+			if ( BitFieldCheck( markOnMapData.state, markOnMapData.stateMask, file.playerStatusFlags ) && DoesItemRefsCheckPass( markOnMapData.inventoryCheckStr, markOnMapData.inventoryCheckType ))
+			{
+				
+				if ( MarkNeededLoot( markOnMapData ) )
+					break
+			}
+		}
+	}
+}
+
+bool function BitFieldCheck( int state, int mask, int stateCheck )
+{
+	return (state & mask) == (stateCheck & mask)
+}
+
+bool function MarkNeededLoot( MarkOnMapData data )
+{
+	
+	if ( IsTutorialRunCountGreaterThanMaxPerAccount( data.id, data.maxPerAccount ) )
+		return false
+
+	if ( file.modalDisplayTimesThisMatch[data.id] >= data.maxPerMatchCount )
+		return false
+
+	if ( data.id in file.tutorialCooldownTable )
+	{
+		float coolDownTime = file.tutorialCooldownTable[ data.id ]
+		if ( Time() < coolDownTime )
+			return false
+	}
+
+	entity player = GetLocalClientPlayer()
+	AddOnscreenPromptFunction( "quickchat", CreateLootPingFunction( player, data.itemRef, data.uniqueId ), 10.0, "%chat_wheel%" + Localize( data.promptStr ) )
+
+	Remote_ServerCallFunction( "IncrementTutorialRunCountOnServer", data.id )
+	file.tutorialCooldownTable[ data.id ] <- Time() + data.cooldownTime
+	file.modalDisplayTimesThisMatch[data.id] = file.modalDisplayTimesThisMatch[data.id] + 1
+	PIN_MarkOnMap ("mark_on_map_prompt_display", file.activeUniqueId, file.activeItemRef, <0,0,0> )
+
+	return true
+}
+
+
+void functionref(entity) function CreateLootPingFunction( entity player, string itemRef, string uniqueId )
+{
+	EmitUISound( "UI_InGame_Tutorial_Mark" )
+	file.isPromptActive = true
+	file.activeUniqueId = uniqueId
+	file.activeItemRef = itemRef
+	return void function( entity player ) : ( itemRef )
+	{
+		LootData item = SURVIVAL_Loot_GetLootDataByRef( itemRef )
+		Remote_ServerCallFunction( "ClientCallback_PingRequiredLootItem", item.index )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function DoesItemRefsCheckPass( string itemRef, int inventoryCheckType )
+{
+	entity player = GetLocalClientPlayer()
+
+	switch( inventoryCheckType )
+	{
+		case eInventoryCheckTypeEnum.HAS_LOOTGROUP:
+		case eInventoryCheckTypeEnum.NOT_HAVE_LOOTGROUP:
+		{
+			break
+		}
+		case eInventoryCheckTypeEnum.HAS_ITEMREF:
+		case eInventoryCheckTypeEnum.NOT_HAVE_ITEMREF:
+		{
+			int itemCount = SURVIVAL_CountItemsInInventory( player, itemRef )
+			if ( inventoryCheckType == eInventoryCheckTypeEnum.HAS_ITEMREF )
+			{
+				return (itemCount != 0)
+			}
+			else
+			{
+				return (itemCount == 0)
+			}
+			break
+		}
+		case eInventoryCheckTypeEnum.HAS_GADGET:
+		{
+			if ( IsItemEquipped_Gadget( player, itemRef ) && GetItemEquipped_GadgetCount ( player, itemRef ) != 0 )
+			{
+				return true
+			}
+			else
+			{
+				return false
+			}
+			break
+		}
+		case eInventoryCheckTypeEnum.NOT_HAVE_GADGET:
+		{
+			if ( IsItemEquipped_Gadget( player, itemRef ) && GetItemEquipped_GadgetCount ( player, itemRef ) == 0 )
+			{
+				return false
+			}
+			else
+			{
+				return true
+			}
+			break
+		}
+		default:
+			break
+	}
+
+	return true
+}
+
+
+
+bool function HasHolsteredWeapons( entity player )
+{
+	int meleeWeapon = WEAPON_INVENTORY_SLOT_PRIMARY_2
+	entity weapon = player.GetActiveWeapon(0)
+
+	if ( !IsValid( weapon ) )
+	{
+		return false
+	}
+
+	if (SURVIVAL_GetPrimaryWeapons( player ).len() < 1 )
+	{
+		return false
+	}
+
+	return weapon == player.GetNormalWeapon( meleeWeapon )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnDeathBoxCreated( entity ent )
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	if ( ent.GetScriptName() != DEATH_BOX_SCRIPTNAME )
+		return
+
+	entity deathBoxOwner    = ent.GetOwner()
+	if ( !IsValid( deathBoxOwner ) )
+		return
+
+	array<entity> teammates = GetPlayerArrayOfTeam( player.GetTeam() )
+	foreach ( teammate in teammates )
+	{
+		if ( !IsValid( teammate ) )
+			continue
+
+		if ( teammate == player )
+			continue
+
+		if ( deathBoxOwner == teammate )
+		{
+			CustomTutorialPopup( "teammate_dead_recover_banner" )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PingReminderThread()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	EndSignal( player, "PingReminderEndSignal" )
+	OnThreadEnd( function() : ()
+	{
+		if ( !file.playerPinged )
+		{
+			CustomTutorialPopup( "player_ping_reminder" )
+			thread PingReminderThread()
+		}
+	})
+	wait 150
+}
+
+
+
+void function GameStateEnter_OnPlaying()
+{
+	if ( file.tutorialEnabled )
+	{
+		thread PingReminderThread()
+	}
+}
+
+void function GameStateEnter_OnWinnerDetermined()
+{
+	
+	EnableTutorialThreads( false )
+}
+
+void function OnPlayerLifeStateChanged( entity player, int oldState, int newState )
+{
+	
+	if ( player == GetLocalClientPlayer() && newState == LIFE_DEAD)
+	{
+		EnableTutorialThreads( false )
+	}
+}
+
+void function LocalClientPlayerSpawned( entity player )
+{
+	if ( player == GetLocalClientPlayer() )
+	{
+		if ( file.tutorialPlayerSettings == eTutorialPlayerSettings.ON || ( file.tutorialPlayerSettings == eTutorialPlayerSettings.AUTO  && !IsTutorialAccountLevelDisabled() ) )
+		{
+			if ( GetCurrentPlaylistVarBool( "tutorial_modals_enabled_new_player_only", false ) )
+			{
+				if ( NewPlayerMatchMaking_IsInMatchMakingFlow( GetLocalClientPlayer() ) )
+				{
+					EnableTutorialThreads( true )
+				}
+			}
+			else
+			{
+				EnableTutorialThreads( true )
+			}
+		}
+	}
+}
+
+
+
+void function OnPlayerTookDamageCoverReminder( float damage, vector damageOrigin, int damageType, int damageSourceId, entity attacker )
+{
+	if ( !file.tutorialEnabled )
+		return
+
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	if ( IsValid( attacker ) )
+	{
+		if ( file.timeSinceDamageStarted == -1  || ( Time() > file.timeSinceDamageStarted + DAMAGE_TIME_WINDOW ) )
+		{
+			file.timeSinceDamageStarted = Time()
+			file.totalDamageTakenInWindow = damage
+
+			if ( file.totalDamageTakenInWindow > DAMAGE_THRESHOLD )
+			{
+				CustomTutorialPopup( "player_cover_reminder", true )
+			}
+		}
+		else
+		{
+			file.totalDamageTakenInWindow = damage + file.totalDamageTakenInWindow
+
+			if ( file.totalDamageTakenInWindow > DAMAGE_THRESHOLD )
+			{
+				CustomTutorialPopup( "player_cover_reminder", true )
+			}
+		}
+	}
+}
+
+
+
+void function ServerToClient_OnLootBinOpen_ShowModal ( entity openingPlayer , entity lootBin )
+{
+	if ( !file.tutorialEnabled )
+		return
+
+	if ( openingPlayer != GetLocalClientPlayer() )
+		return
+
+
+	if( Perk_MunitionsBox_IsEntMunitionsBox( lootBin ) )
+	{
+		CustomTutorialPopup ("modal_lootbin_assault" )
+		return
+	}
+
+	if( SupportBin_EntityIsSupportBin( lootBin ) )
+	{
+		CustomTutorialPopup ("modal_lootbin_support" )
+		return
+	}
+
+
+
+	if( LootBinReset_IsLootBin_GoldBin( lootBin ) )
+	{
+		CustomTutorialPopup ( "modal_lootbin_gold" )
+		return
+	}
+
+	if( LootBinReset_IsLootBin_Mythic( lootBin ) )
+	{
+		CustomTutorialPopup ( "modal_lootbin_mythic" )
+		return
+	}
+
+	CustomTutorialPopup ( "modal_lootbin" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_OnFreefallEnded_Modals( entity player )
+{
+	if ( !file.tutorialEnabled )
+		return
+
+	if ( !IsValid( player ) )
+		return
+
+	file.hasTouchedGrass = true
+}
+
+ 

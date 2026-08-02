@@ -1,0 +1,711 @@
+global function Augments_Init
+
+
+
+
+
+
+
+
+
+
+global function Augments_Enabled
+
+
+
+
+
+
+
+
+global function Augments_GetFlyerDeathboxAugmentChance
+global function Augments_GetHotZoneAugmentCount
+global function Augments_GetHotZoneAugmentLootGroup
+
+global function Augments_GetInfAmmoAugReworkEnabled
+
+
+global function Augments_IsValidRef
+global function Augments_GetPlayerAugmentIcon
+
+
+#if DEV
+global function DEV_ShowAmpVFX
+#endif
+
+const asset AUGMENTS_LOOT_MODEL_VFX = $"P_amps_item_base"
+const asset AUGMENTS_LOOT_MODEL_ICON = $"mdl/props/loot_wep_iso_amp/w_loot_wep_iso_amp_icon_01.rmdl"
+
+const string AUGMENTS_GOLD_BIN_AUGMENT_GROUP = "augments_gold_bin"
+const string AUGMENTS_SUPPORT_GROUP = "augments_support"
+const string AUGMENTS_SUPPORT_GROUP_POST_RESET = "augments_support_post_reset"
+const string AUGMENTS_ASSAULT_GROUP = "augments_assault"
+const string AUGMENTS_ASSAULT_GROUP_POST_RESET = "augments_assault_post_reset"
+
+global const string AUGMENT_SLOT_REF = "augment"
+
+
+const table AUGMENTS_TO_SKIN_REF_MAP =
+{
+	["augment_infinite_ammo"] = "Infinite_Ammo",
+	["augment_battery_printer"] = "Bottomless_Batteries",
+	["augment_heal_overflow"] = "Overflow_Healer",
+	["augment_legend_expert"] = "Power_Booster",
+	["augment_armor_overflow"] = "Over_Armor",
+
+
+
+}
+
+
+
+const table AUGMENTS_TO_CP1_COLOR =
+{
+	["augment_infinite_ammo"] = COLOR_PURPLE,
+	["augment_battery_printer"] = COLOR_PURPLE,
+	["augment_heal_overflow"] = COLOR_PURPLE,
+	["augment_legend_expert"] =  COLOR_PURPLE,
+	["augment_armor_overflow"] = COLOR_PURPLE,
+
+
+
+}
+
+
+const table AUGMENTS_TO_CP2_COLOR =
+{
+	["augment_infinite_ammo"] = COLOR_PURPLE,
+	["augment_battery_printer"] = COLOR_PURPLE,
+	["augment_heal_overflow"] = COLOR_PURPLE,
+	["augment_legend_expert"] =  COLOR_PURPLE,
+	["augment_armor_overflow"] = COLOR_PURPLE,
+
+
+
+}
+
+struct AugmentIconInfo
+{
+	entity iconModel
+	int effectID
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+	string mythicBinAugment = ""
+	bool mythicBinHasRandomTeamBasedAugment = true
+	bool mythicBinHasRandomAugment = true
+	int mythicBinMaxAugmentsPerTeam = 1
+	float goldBinAugmentSpawnChance = 1.0
+	float supportAugmentSpawnChance = 0.114
+	float assaultAugmentSpawnChance = 0.2
+	float supportAugmentSpawnChance_PostReset = 1
+	float assaultAugmentSpawnChance_PostReset = 1
+	float augmentBinAssistChance = 0.2
+	bool augmentsBinAssistOnlyAfterReset = true
+	float flyerDeathboxAugmentSpawnChance = 0.1
+	int augmentsInHotZoneCount = 1
+	string hotZoneAugmentGroup = "augments"
+
+	bool infiniteAmmoAugReworkEnabled = true
+
+
+
+} tuning
+
+struct
+{
+	int augmentsEnabled = eCachedBool.NOT_CACHED
+
+
+
+
+
+
+		table < EHI, AugmentIconInfo > groundAugments
+		bool runningIconAngleUpdate = false
+
+} file
+
+
+void function Augments_Init()
+{
+	if ( !Augments_Enabled() )
+		return
+
+	RegisterTuningStruct( "tuning", "augments_" )
+
+
+		AddCreateCallback( "prop_survival", Augments_OnLootCreated )
+
+		AddCallback_OnEquipSlotTrackingIntChanged( AUGMENT_SLOT_REF, Augments_OnEquipSlotChanged )
+
+
+
+
+			if ( tuning.infiniteAmmoAugReworkEnabled  )
+			{
+				InfAmmoAugRework_Init()
+			}
+			else
+
+			{
+				ShPassiveAugmentInfiniteAmmo_Init()
+			}
+
+		ShPassiveAugmentBatteryPrinter_Init()
+		ShPassiveAugmentHealOverflow_Init()
+		ShPassiveAugmentLegendExpert_Init()
+		ShPassiveAugmentArmorOverflow_Init()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		PrecacheParticleSystem( AUGMENTS_LOOT_MODEL_VFX )
+		PrecacheModel( AUGMENTS_LOOT_MODEL_ICON )
+
+
+	
+	
+}
+
+
+bool function Augments_IsValidRef( string lootRef )
+{
+	if ( lootRef.find( "augment" ) != -1 )
+		return true
+
+	return false
+}
+
+asset function Augments_GetPlayerAugmentIcon( entity player )
+{
+	if ( !IsValid( player ) )
+		return $""
+
+	string augmentRef = EquipmentSlot_GetEquippedLootDataForSlot( player, AUGMENT_SLOT_REF ).ref
+	if ( !SURVIVAL_Loot_IsRefValid( augmentRef ) )
+		return $""
+
+	LootData augmentData = SURVIVAL_Loot_GetLootDataByRef( augmentRef )
+	return augmentData.hudIcon
+}
+
+
+
+void function Augments_OnLootCreated( entity prop )
+{
+	int index = prop.GetSurvivalInt()
+
+	if ( !SURVIVAL_Loot_IsLootIndexValid( index ) )
+		return
+
+	entity parentEnt = prop.GetParent()
+	if ( IsValid( parentEnt ) && parentEnt.GetNetworkedClassName() == "prop_death_box" )
+		return
+
+	LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( index )
+	if ( lootData.lootType != eLootType.AUGMENT )
+		return
+
+	if ( !(lootData.ref in AUGMENTS_TO_SKIN_REF_MAP) )
+		return
+
+	float height = 0
+	vector origin = prop.GetOrigin() + UP_VECTOR * height
+
+	vector color1 = AUGMENTS_TO_CP1_COLOR[lootData.ref]
+	vector color2 = AUGMENTS_TO_CP2_COLOR[lootData.ref]
+	int particleSystemIdx = GetParticleSystemIndex( AUGMENTS_LOOT_MODEL_VFX )
+	int effectID = StartParticleEffectOnEntity( prop, particleSystemIdx, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetControlPointVector( effectID, 3, color1 )
+	EffectSetControlPointVector( effectID, 4, color2 )
+
+	AugmentIconInfo iconInfo
+	bool createIconModel = true
+	if ( ToEHI( prop ) in file.groundAugments )
+	{
+		iconInfo = file.groundAugments[ToEHI( prop )]
+		iconInfo.effectID = effectID
+		
+		if ( IsValid( iconInfo.iconModel ) )
+		{
+			createIconModel = false
+			iconInfo.iconModel.SetParent( prop )
+		}
+		else
+		{
+			Assert( false, "The icon model became invalid but it was not removed in file.groundAugments." + prop )
+		}
+	}
+
+	if ( createIconModel )
+	{
+		entity iconModel = CreateClientSidePropDynamic( origin, prop.GetAngles(), AUGMENTS_LOOT_MODEL_ICON )
+		string skinRef = AUGMENTS_TO_SKIN_REF_MAP[lootData.ref]
+		iconModel.SetSkin( iconModel.GetSkinIndexByName( skinRef ) )
+		iconModel.SetParent( prop )
+
+		iconInfo.effectID = effectID
+		iconInfo.iconModel = iconModel
+
+		file.groundAugments[ToEHI( prop )] <- iconInfo 
+	}
+
+	if ( !file.runningIconAngleUpdate )
+	{
+		thread Augments_UpdateGroundAugmentIconAngles_Thread()
+	}
+
+	thread DestroyIconWhenItemDestroyed_Thread( prop, iconInfo )
+}
+
+void function Augments_OnEquipSlotChanged( entity player, string equipSlot, int newItemLootIdx )
+{
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	if ( !SURVIVAL_Loot_IsLootIndexValid( newItemLootIdx ) )
+		return
+
+	LootData augmentData = SURVIVAL_Loot_GetLootDataByIndex( newItemLootIdx )
+	if ( !Augments_IsValidRef( augmentData.ref ) )
+		return
+
+	LootFeedItem ampMessage = LootFeed_CreateItem( player, augmentData )
+	ampMessage.itemNameText = augmentData.desc
+	LootFeed_QueueItem( ampMessage )
+}
+
+const float ALL_AUGMENTS_UPDATE_STEP = 5.0
+const float NEARBY_AUGMENT_DIST = 1000
+const float NEARBY_AUGMENT_DIST_SQR = 1000 * 1000
+void function Augments_UpdateGroundAugmentIconAngles_Thread()
+{
+	if ( !Augments_Enabled() )
+		return
+
+	file.runningIconAngleUpdate = true
+
+	OnThreadEnd(
+		function() : ()
+		{
+			file.runningIconAngleUpdate = false
+		}
+	)
+
+	float previousUpdateTime = 0
+	entity localPlayer = GetLocalViewPlayer()
+	vector previousPosition = localPlayer.GetOrigin()
+
+	table < EHI, vector > ehiToPrevLocationMap
+	while ( true )
+	{
+		WaitFrame()
+
+		if ( !IsValid( localPlayer ) && IsValid( GetLocalViewPlayer() ) )
+		{
+			localPlayer = GetLocalViewPlayer()
+		}
+		else if ( !IsValid( localPlayer ) )
+		{
+			return
+		}
+
+
+		if ( Time() > previousUpdateTime + ALL_AUGMENTS_UPDATE_STEP )
+		{
+			foreach ( ehi, iconInfo in clone file.groundAugments )
+			{
+				entity augmentModel = FromEHI( ehi )
+				if ( !IsValid( augmentModel ) )
+				{
+					if ( IsValid( file.groundAugments[ehi].iconModel ) )
+					{
+						file.groundAugments[ehi].iconModel.Destroy()
+					}
+
+					if ( ehi in ehiToPrevLocationMap )
+					{
+						delete ehiToPrevLocationMap[ehi]
+					}
+
+					delete file.groundAugments[ehi]
+					continue
+				}
+
+				
+				if ( previousPosition == localPlayer.GetOrigin() && ehi in ehiToPrevLocationMap && ehiToPrevLocationMap[ehi] == augmentModel.GetOrigin() )
+					continue
+
+				ehiToPrevLocationMap[ehi] <- augmentModel.GetOrigin()
+				RotateAugmentInfoTowardsLocalPlayer_Internal( iconInfo, true )
+			}
+
+			previousUpdateTime = Time()
+		}
+		else
+		{
+			array<entity> nearbyLoot = GetSurvivalLootNearbyPos( localPlayer.GetOrigin(), NEARBY_AUGMENT_DIST, false, true, false, localPlayer )
+			foreach ( lootEnt in nearbyLoot )
+			{
+				if ( !IsValid( lootEnt ) )
+					continue
+
+				if ( !SURVIVAL_Loot_IsLootIndexValid( lootEnt.GetSurvivalInt() ) )
+					continue
+
+				LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( lootEnt.GetSurvivalInt() )
+				if ( lootData.lootType != eLootType.AUGMENT )
+					continue
+
+				EHI lootEHI = ToEHI( lootEnt )
+				if ( !( lootEHI in file.groundAugments ) )
+					continue
+
+				
+				if ( previousPosition == localPlayer.GetOrigin() && lootEHI in ehiToPrevLocationMap && ehiToPrevLocationMap[lootEHI] == lootEnt.GetOrigin() )
+					continue
+
+				ehiToPrevLocationMap[lootEHI] <- lootEnt.GetOrigin()
+				AugmentIconInfo iconInfo = file.groundAugments[ ToEHI( lootEnt ) ]
+				RotateAugmentInfoTowardsLocalPlayer_Internal( iconInfo )
+			}
+		}
+
+		previousPosition = localPlayer.GetOrigin()
+	}
+}
+
+void function RotateAugmentInfoTowardsLocalPlayer_Internal( AugmentIconInfo iconInfo, bool lerpAngle = true )
+{
+	entity iconModel = iconInfo.iconModel
+	entity localPlayer = GetLocalViewPlayer()
+	if ( !IsValid( iconModel ) || !IsValid( localPlayer ) || !EffectDoesExist( iconInfo.effectID ) )
+		return
+
+	entity parentEnt = iconModel.GetParent()
+	if ( !IsValid( parentEnt ) )
+		return
+
+	vector iconToPlayer = Normalize( localPlayer.GetOrigin() - iconModel.GetOrigin() )
+	float dotProd = DotProduct( iconToPlayer, parentEnt.GetForwardVector() )
+	float localAngleAdjust = DotToAngle( dotProd )
+	int signFlipMultiplier = DotProduct( CrossProduct( iconToPlayer, parentEnt.GetForwardVector() ), parentEnt.GetUpVector() ) > 0 ? 1 : -1
+	iconModel.SetLocalAngles( < 0, localAngleAdjust * signFlipMultiplier, 0 > )
+
+	vector globalAngles = VectorToAngles( FlattenVec( iconToPlayer ) )
+	EffectSetControlPointAngles( iconInfo.effectID, 0, globalAngles )
+}
+
+void function DestroyIconWhenItemDestroyed_Thread( entity prop, AugmentIconInfo iconInfo )
+{
+	if ( !IsValid( prop ) )
+		return
+
+	EHI propEHI = ToEHI( prop )
+
+	prop.WaitSignal( "OnDestroy" )
+
+	if ( IsValid( FromEHI( propEHI ) ) )
+		return
+
+	if ( IsValid( iconInfo.iconModel ) )
+	{
+		iconInfo.iconModel.Destroy()
+	}
+
+	if ( propEHI in file.groundAugments )
+	{
+		delete file.groundAugments[propEHI]
+	}
+}
+
+
+
+bool function Augments_PlayerHasAnAugment( entity player )
+{
+	return EquipmentSlot_GetEquippedLootDataForSlot( player, AUGMENT_SLOT_REF ).ref != ""
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Augments_Enabled()
+{
+
+
+
+
+
+	if ( file.augmentsEnabled == eCachedBool.NOT_CACHED )
+	{
+		bool enabled = GetCurrentPlaylistVarBool( "augments_enabled", true ) && GameMode_IsActive( eGameModes.SURVIVAL ) && !GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_TRAINING )
+
+		file.augmentsEnabled = enabled ? eCachedBool.TRUE : eCachedBool.FALSE
+	}
+
+	return bool(file.augmentsEnabled)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function Augments_GetFlyerDeathboxAugmentChance()
+{
+	return tuning.flyerDeathboxAugmentSpawnChance
+}
+
+int function Augments_GetHotZoneAugmentCount()
+{
+	return tuning.augmentsInHotZoneCount
+}
+
+string function Augments_GetHotZoneAugmentLootGroup()
+{
+	return tuning.hotZoneAugmentGroup
+}
+
+bool function Augments_GetInfAmmoAugReworkEnabled()
+{
+	return tuning.infiniteAmmoAugReworkEnabled
+}
+
+#if DEV
+void function DEV_ShowAmpVFX( vector color1 = <1, 1, 1>, vector color2 = <1, 1, 1>, float displayTime = 20.0 )
+{
+	thread DEV_ShowAmpVFX_Thread( color1, color2, displayTime )
+}
+
+void function DEV_ShowAmpVFX_Thread( vector color1, vector color2, float displayTime )
+{
+	entity player = GP()
+	if ( !IsValid( player ) )
+		return
+
+	int effectId = GetParticleSystemIndex( AUGMENTS_LOOT_MODEL_VFX )
+	
+
+	vector origin = player.EyePosition() + player.GetForwardVector() * 100
+	vector effectAngles = VectorToAngles( -1 * player.GetRightVector() )
+
+	int efx = StartParticleEffectInWorldWithHandle( effectId, origin, effectAngles )
+	EffectSetControlPointVector( efx, 3, color1 )
+	EffectSetControlPointVector( efx, 4, color2 )
+}
+#endif
+
+ 

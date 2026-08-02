@@ -1,0 +1,448 @@
+global function Ability_ClockUp_DisruptingHack_Offhand_Init
+
+global function Ability_ClockUp_DisruptingHack_Offhand_OnWeaponActivate
+global function Ability_ClockUp_DisruptingHack_Offhand_OnWeaponDeactivate
+global function Ability_ClockUp_DisruptingHack_Offhand_OnWeaponPrimaryAttack
+global function Ability_ClockUp_DisruptingHack_Offhand_CanActivate
+global function Ability_ClockUp_DisruptingHack_Offhand_PhaseShift_Stop
+
+global function ServerToClient_Ability_ClockUp_DisruptingHack_Offhand_OnEMPImpact
+
+
+global function Ability_ClockUp_DisruptingHack_Offhand_CanApplyHighlight
+
+
+global const string  ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_REF										= "mp_ability_clockup_disrupting_hack_offhand"
+
+
+const string ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PVAR_PREFIX										= "ability_clockup_disrupting_hack_offhand_"
+
+
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_START								= "ability_clockup_disrupting_hack_offhand_phaseshift_start"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_STOP								= "ability_clockup_disrupting_hack_offhand_phaseshift_stop"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_SCAN_START										= "ability_clockup_disrupting_hack_offhand_scan_start"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_SCAN_STOP										= "ability_clockup_disrupting_hack_offhand_scan_stop"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_EMP_VISUAL_START								= "ability_clockup_disrupting_hack_offhand_emp_visual_start"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_EMP_VISUAL_STOP								= "ability_clockup_disrupting_hack_offhand_emp_visual_stop"
+
+
+const asset VFX_CLOCKUP_DISRUPTING_HACK_EMP_3P															= $"P_clockup_breach_emp"
+const asset VFX_CLOCKUP_DISRUPTING_HACK_EMP_IMPACT														= $"P_power_sword_lightning"
+const asset VFX_CLOCKUP_DISRUPTING_HACK_BREACH_MARK														= $"P_clockup_ar_target"
+
+
+const string SFX_CLOCKUP_DISRUPTING_HACK_IMPACT_1P														= "Clockup_Blackwall_Breach_EMP_Impact_3P_vs_1P"
+const string SFX_CLOCKUP_DISRUPTING_HACK_IMPACT_3P														= "Clockup_Blackwall_Breach_EMP_Impact_3P_vs_3P"
+const string SFX_CLOCKUP_DISRUPTING_HACK_DATAPAD_DRAW_1P												= "Clockup_Blackwall_Breach_Datapad_Draw_1P"
+const string SFX_CLOCKUP_DISRUPTING_HACK_DATAPAD_DRAW_3P												= "Clockup_Blackwall_Breach_Datapad_Draw_3P"
+
+
+struct Tuning
+{
+	float empModelRadius																= 235.0
+	float empRadiusMeters																= 18.0
+	float empBuildupTime																= 0.5
+	int empShieldDamage																	= 500
+	float phaseDuration																	= 2.5
+	float phaseSpeedBoost																= 1.3
+	float debounceTime																	= 0.2
+	float breachMarkDuration															= 5.0
+	float breachScanDuration															= 5.0
+	string empAttachPoint																= "CHESTFOCUS"
+	string breachMarkAttachPoint														= "CHESTFOCUS"
+	string breachScanAttachPoint														= "CHESTFOCUS"
+	bool canDamageDevices																= false
+}
+Tuning tuning
+
+struct
+{
+	table< entity, float > playerToPhaseShiftStopTime
+
+
+	EntitySet disruptingHackVisionPlayers
+	EntitySet playersValidForHighlight
+
+} file
+
+
+void function Ability_ClockUp_DisruptingHack_Offhand_Init()
+{
+	RegisterTuningStruct( "tuning", ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PVAR_PREFIX )
+
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_STOP )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_SCAN_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_SCAN_STOP )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_EMP_VISUAL_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_EMP_VISUAL_STOP )
+
+	PrecacheWeapon( ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_REF )
+
+	PrecacheParticleSystem( VFX_CLOCKUP_DISRUPTING_HACK_EMP_3P )
+	PrecacheParticleSystem( VFX_CLOCKUP_DISRUPTING_HACK_EMP_IMPACT )
+	PrecacheParticleSystem( VFX_CLOCKUP_DISRUPTING_HACK_BREACH_MARK )
+
+	
+	Remote_RegisterClientFunction( string( ServerToClient_Ability_ClockUp_DisruptingHack_Offhand_OnEMPImpact ), "entity" )
+
+
+	StatusEffect_RegisterEnabledCallback( eStatusEffect.clockup_disrupting_hack_phase, Ability_ClockUp_DisruptingHack_Offhand_Phase_Enabled )
+	StatusEffect_RegisterDisabledCallback( eStatusEffect.clockup_disrupting_hack_phase, Ability_ClockUp_DisruptingHack_Offhand_Phase_Disabled )
+
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_OnWeaponActivate( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid(player) )
+		return
+
+
+
+
+
+
+		if ( player == GetLocalViewPlayer() )
+		{
+			EmitSoundOnEntity( player, SFX_CLOCKUP_DISRUPTING_HACK_DATAPAD_DRAW_1P )
+		}
+
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_OnWeaponDeactivate( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+	Signal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_STOP )
+}
+
+var function Ability_ClockUp_DisruptingHack_Offhand_OnWeaponPrimaryAttack( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+
+		ClockUp_Cyberform_TriggerClockupPulse()
+		ClockUp_Cyberform_TriggerGadgetPulse()
+
+	Ability_ClockUp_DisruptingHack_Offhand_PhaseShift( player, 0.0, tuning.phaseSpeedBoost )
+}
+
+bool function Ability_ClockUp_DisruptingHack_Offhand_CanActivate( entity player )
+{
+	if ( player in file.playerToPhaseShiftStopTime )
+	{
+		float timeFromPhaseShiftStop = Time() - file.playerToPhaseShiftStopTime[player]
+		return timeFromPhaseShiftStop > tuning.debounceTime
+	}
+
+	return true
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_PhaseShift_Stop( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	Signal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_STOP )
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_PhaseShift_Melee_Pressed( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+
+
+
+
+	Ability_ClockUp_DisruptingHack_Offhand_PhaseShift_Stop( player )
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_EMP_Thread( entity player )
+{
+	AssertIsNewThread()
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function Ability_ClockUp_DisruptingHack_BreachImpact_Thread( entity attacker, entity target )
+{
+	AssertIsNewThread()
+	if ( !IsValidPlayer( attacker ) || !IsValidPlayer( target ) )
+		return
+
+	EndSignal( attacker, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_START )
+	EndSignal( target, "OnDeath", "OnDestroy", "StartPhaseShift" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		EndSignal( attacker, "OnDeath", "OnDestroy", SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_START )
+
+		vector damageOrigin = attacker.GetWorldSpaceCenter()
+		UpdateDamageIndicators( damageOrigin, attacker, eDamageSourceId.mp_ability_clockup_disrupting_hack )
+
+		int breachMarkFXHandle = StartParticleEffectOnEntity( attacker, GetParticleSystemIndex( VFX_CLOCKUP_DISRUPTING_HACK_BREACH_MARK ), FX_PATTACH_POINT_FOLLOW_NOROTATE, attacker.LookupAttachment( tuning.breachMarkAttachPoint ) )
+
+		OnThreadEnd( function() : ( breachMarkFXHandle )
+		{
+			if ( !EffectDoesExist( breachMarkFXHandle ) )
+				return
+
+			EffectStop( breachMarkFXHandle, false, true )
+		} )
+
+		wait tuning.breachMarkDuration
+
+}
+
+void function ServerToClient_Ability_ClockUp_DisruptingHack_Offhand_OnEMPImpact( entity attacker )
+{
+
+		thread Ability_ClockUp_DisruptingHack_BreachImpact_Thread( attacker, GetLocalViewPlayer() )
+
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_PhaseShift( entity player, float warmup, float speedBoost )
+{
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Ability_ClockUp_DisruptingHack_Offhand_Phase_Enabled( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( player in file.disruptingHackVisionPlayers )
+		return
+
+	thread Ability_ClockUp_DisruptingHack_Offhand_Vision_Thread( player )
+}
+
+
+
+void function Ability_ClockUp_DisruptingHack_Offhand_Phase_Disabled( entity player, int statusEffect, bool actuallyChanged )
+{
+	
+
+
+
+
+
+}
+
+
+
+bool function Ability_ClockUp_DisruptingHack_Offhand_CanApplyHighlight( entity targetPlayer )
+{
+	return (targetPlayer in file.playersValidForHighlight)
+}
+
+
+
+void function Ability_ClockUp_DisruptingHack_Offhand_Vision_Thread( entity player )
+{
+	AssertIsNewThread()
+	EndSignal( player, "OnDeath", "OnDestroy" )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_PHASESHIFT_STOP )
+
+	OnThreadEnd( function() : ( player )
+	{
+		EntitySet highlightedPlayers = clone file.playersValidForHighlight
+		file.playersValidForHighlight.clear()
+		foreach ( entity highlightedPlayer, entity entValue in highlightedPlayers )
+		{
+			ManageHighlightEntity( highlightedPlayer )
+		}
+
+		delete file.disruptingHackVisionPlayers[player]
+	} )
+
+	file.disruptingHackVisionPlayers[player] <- IN_SET
+	float highlightRange = tuning.empRadiusMeters * METERS_TO_INCHES * 1.5
+	float highlightRangeSqr = highlightRange * highlightRange
+	while ( player == GetLocalViewPlayer() && player.IsPhaseShifted() )
+	{
+		array< entity > playersToHighlight
+		array< entity > playersToNotHighlight
+		VoidVision_GetPlayersToHighlightFromPoint_WithSettings( player, player.GetOrigin(), highlightRangeSqr, playersToHighlight, playersToNotHighlight )
+
+		foreach ( entity validHighlightPlayer in playersToHighlight )
+		{
+			if ( validHighlightPlayer in file.playersValidForHighlight )
+				continue
+
+			file.playersValidForHighlight[validHighlightPlayer] <- IN_SET
+			ManageHighlightEntity( validHighlightPlayer )
+		}
+
+		foreach ( entity invalidHighlightPlayer in playersToNotHighlight )
+		{
+			if ( !(invalidHighlightPlayer in file.playersValidForHighlight) )
+				continue
+
+			delete file.playersValidForHighlight[invalidHighlightPlayer]
+
+			ManageHighlightEntity( invalidHighlightPlayer )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                         

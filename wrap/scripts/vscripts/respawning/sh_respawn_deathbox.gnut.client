@@ -1,0 +1,2463 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Respawn_FromDeathbox_Get_UsePrompts
+global function Respawn_FromDeathbox_SV2CL_RespawnDeathbox_Visuals
+global function Respawn_FromDeathbox_SV2CL_RespawnedPresentation
+global function Respawn_FromDeathbox_OnDeathboxHoloCreated
+global function Respawn_FromDeathbox_SV2CL_LockoutTimerResetHint
+global function Respawn_FromDeathbox_SV2CL_DeathboxRecoveryOnDeathHint
+global function Respawn_FromDeathbox_SV2CL_Respawned1P_FX
+
+
+
+global function Respawn_FromDeathbox_Enabled
+
+
+
+
+global function DeathboxRespawnedRecently_Check
+
+global function Respawn_FromDeathbox_Active
+
+global function Respawn_FromDeathbox_OnUse
+
+global function Respawn_FromDeathbox_Init
+
+global function Respawn_FromDeathBox_Waypt_ForDeathBox_Remove
+
+global function RespawnLockout_IsPlayerLockedOut
+global function Respawn_FromDeathbox_PlayerInUseRange
+
+global function PlayerDeathCount_Get
+
+
+
+#if DEV
+
+
+
+
+
+
+
+
+global function DEV_DBRespawn_Lockout_Enabled 
+
+global function DEV_DBRespawn_RespawnedPresentation_Enabled
+global function DEV_DBRespawn_RespawnedPresentation_Parms
+
+#endif
+
+
+
+const string FUNC_RESPAWNDEATHBOX_VISUALS = "Respawn_FromDeathbox_SV2CL_RespawnDeathbox_Visuals"
+const string FUNC_RESPAWNEDPRESENTATION = "Respawn_FromDeathbox_SV2CL_RespawnedPresentation"
+const string FUNC_LOCKOUTTIME_RESET_DRAWHINT = "Respawn_FromDeathbox_SV2CL_LockoutTimerResetHint"
+const string FUNC_ONDEATH_DRAWHINT = "Respawn_FromDeathbox_SV2CL_DeathboxRecoveryOnDeathHint"
+const string FUNC_RESPAWNEDPLAYER_1PFX = "Respawn_FromDeathbox_SV2CL_Respawned1P_FX"
+
+const string SIG_RESPAWN_ONDEATHBOX_DISABLED = "Respawn_OnDeathBox_Disabled"
+const string SIG_ONDEATHBOXRESPAWNED = "OnRespawnedDB"
+const string SIG_RESPAWNDEATHBOX_ACTIVE_VISUALS = "RespawnDeathbox_Active_Visuals"
+const string SIG_HOLO_OFF = "RespawnDeathbox_Holo_Off"
+const string SIG_LOCKOUTTIME_WAITTORESET = "RespawnDeathbox_LockoutTime_WaitToReset"
+
+const string RESPAWNDEATHBOX_HOLO_SCRIPTNAME = "RespawnDeathbox_Holo_ScriptName"
+
+
+
+struct sTunings
+{
+	bool enabled = true
+
+	
+	bool markRespawnDeathbox = true
+	bool markRespawnDeathbox_GroundMarker = true
+
+	
+	float useHoldTime		= 7.0
+	bool switchObserverTarget_ToRespawner = true
+	float useRadius 		= 3.5 * METERS_TO_INCHES
+	float useRadiusSqr		= 0.0 
+
+	
+	bool dissolveDeathBox_OnRespawnFromDeathBox	= false
+	bool respawnedPresentation_Enabled = true 
+	bool respawnedPresentation_PlayerBoxBeam_Enabled = true
+	float respawnedPresentation_Duration_Incoming = 1.5
+	float respawnedPresentation_Duration_Spawn 	= 1.0
+	float respawnedPresentation_FOVOffset_Start = 30.0
+	float respawnedPresentation_FOVOffset_End 	= -20.0
+	float respawnedPresentation_CamOffset_Y 	= -50.0
+	float respawnedPresentation_CamOffset_Z 	= 75.0
+	int respawnedPresentation_HoloAlpha_Start 	= 5
+	int respawnedPresentation_HoloAlpha_End		= 255
+	bool previewHolo_VisibleToAll = false
+
+	
+	bool 	respawnedDamagedHealth_Enabled		= true
+	int 	respawnDamagedHealth 	= 25
+
+	
+	bool 	respawnedShield_EnsureHasShieldCore 	= true
+	bool 	respawnedShield_RestoreShieldCoreLevel 	= true
+	bool 	respawnedShield_ResetEvoPoints 			= false
+	bool 	respawnedShield_Damaged_Enabled			= true
+	int  	respawnedShield_Damaged_Health 			= 20		
+	bool 	respawnedShield_Regen_Enabled 			= true
+	float 	respawnedShield_Regen_Duration 			= 10.0
+
+	
+	bool passiveBased_HealOverTime_Enabled	= true
+	float passiveBased_HealOverTime_Duration = 8.0
+
+	
+	bool respawnLockout_Enabled = true
+	float respawnLockout_Penalty_Base 		= 10.0	
+	float respawnLockout_Escalation_Period 	= 180.0 
+
+	
+	bool deactivationRound_Enabled = false
+
+	
+#if DEV
+		int deactivationRound = 2
+#else
+		int deactivationRound = 2
+#endif
+
+	
+	bool hud_ShowMessage_RecoverTeammateAtBox 	= true 	
+	bool hud_ShowMessage_LockoutTimeReset 		= true	
+
+	
+	bool fx_UseOldPulsate	= false
+
+	
+	int evoReward_Teammates = 100
+	bool evo_Give_DespiteLockout = true	
+}
+sTunings tunings
+
+
+
+struct {
+	table< EHI, entity > respawnDeathbox_Waypts
+
+
+
+
+
+
+
+
+
+
+
+		array< EHI > activeTeammateDeathBoxes_EHIs
+		string savedPlaylistName
+
+
+#if DEV
+		bool devOut = false 
+#endif
+} file
+
+
+
+
+const string WAYPOINT_RESPAWNDEATHBOX_NAME = "waypoint_respawndeathbox"
+const int WAYPT_RESPAWNDEATHBOX_ENT_IDX_DEATHBOX 	= 0 
+const int WAYPT_RESPAWNDEATHBOX_INT_IDX_USERCOUNT 	= 0 
+
+
+global const int RESPAWN_FROMDEATHBOX_INPUT = USE_INPUT_ALT
+
+const asset 	MDL_RESPAWNPREVIEW_HOLO_STUB	= $"mdl/Humans/class/medium/pilot_medium_dummie.rmdl"
+
+const asset		FX_RESPAWNDEATHBOX_GROUNDMARKER = $"P_db_respawn_hazard" 
+
+const asset 	FX_RESPAWN_PULSATE 				= $"P_pulse_db_respawn"
+const asset		FX_RESPAWN_PULSATE_OLD			= $"P_chamber_pulse_s19"
+const asset 	FX_RESPAWNINGPLAYER_INCOMING 	= $"P_db_respawn_buildUp" 
+const asset 	FX_RESPAWNEDPLAYER 				= $"P_db_respawn_SpawnIn_3p"
+
+const asset 	FX_RESPAWNEDPLAYER_BOX_TO_PLAYER_BEAM 	= $"P_db_respawn_tether"
+
+const asset 	FX_RESPAWNEDPLAYER_1PFX			= $"P_db_respawn_spawnIn_1p"
+
+const string 	SFX_INTERACT_PULSATE 			= "RespawnFromDeathbox_UI_Deathbox_Interact_3p"
+const string	SFX_RESPAWNWSPLAYER_INCOMING 	= "RespawnFromDeathbox_Player_Hologram_3p"
+const string	SFX_RESPAWNEDPLAYER_SPAWNIN_1P 	= "RespawnFromDeathbox_Player_Spawn_In_1p" 
+const string	SFX_RESPAWNEDPLAYER_SPAWNIN_3P 	= "RespawnFromDeathbox_Player_Spawn_In_3p" 
+const string	SFX_GROUNDMARKER_LOOP			= "RespawnFromDeathbox_GroundMarker_3p"
+
+const string 	SFX_DEATHBOXRESPAWN_SUCCESS		= "RespawnfromDeathbox_UI_Deathbox_Interact_Complete_3p"
+
+const string 	SFX_LOCKOUTTIME_RESET_SELF		= "RespawnFromDeathbox_UI_LockoutTimer_Reset_1p"
+const string 	SFX_LOCKOUTTIME_RESET_TEAMMATE	= "RespawnFromDeathbox_UI_LockoutTimer_Reset_1p"
+
+const asset 	ICON_DEATHBOX_RESPAWN 			= $"rui/hud/gametype_icons/survival/deathbox_respawn_active_full"
+const asset 	ICON_DEATHBOX_RESPAWN_LOCKED 	= $"rui/hud/gametype_icons/survival/deathbox_respawn_locked_full"
+const asset 	ICON_DEATHBOX_RESPAWN_MAP 		= $"rui/hud/gametype_icons/survival/deathbox_respawn_map"
+const asset		ICON_DEATHBOX_RESPAWN_NO_FRAME  = $"rui/hud/gametype_icons/survival/deathbox_respawn"
+
+
+const int 		FX_CP_RESPAWNDEATHBOX_RING_RADIUS 	= 2
+const int 		FX_CP_RESPAWNDEATHBOX_RING_COLOR	= 3
+const int 		FX_CP_RESPAWNDEATHBOX_RING_HEIGHT	= 4
+
+const string 	SFX_RESPAWN_FROMDEATHBOX_SUCCESS_CHARGING	= "Survival_RespawnEquippedBeacon_Full_Extended"
+const string 	SFX_RESPAWN_FROMDEATHBOX_SUCCESS_SPAWN		= "Canyonlands_Scr_Pilon_Energy_End_3P"
+
+
+global const string NETVAR_RESPAWN_FROMDEATHBOX_ACTIVE = "respawn_fromdeathbox_active"
+const string	NETVAR_INT_PLAYERDEATHCOUNT = "respawnFromDeathBox_PlayerDeathCount"
+const string	NETVAR_BOOL_PLAYER_WAS_DEATHBOXRESPAWNED = "Player_was_DeathboxRespawned"
+global const string NETVAR_RESPAWN_FROMDEATHBOX_LOCKOUT_ENDTIME = "respawn_fromdeathbox_lockout_endtime"
+
+
+
+void function Respawn_FromDeathbox_Init ()
+{
+
+	file.savedPlaylistName = GetCurrentPlaylistName()
+
+
+	bool isEnabled = Respawn_FromDeathbox_Enabled()
+	if( !isEnabled )
+		return
+
+	Tunings_Init()
+
+	Networking_Init()
+
+	PrecacheParticleSystem( FX_RESPAWNDEATHBOX_GROUNDMARKER )
+
+	PrecacheParticleSystem( FX_RESPAWN_PULSATE )
+	PrecacheParticleSystem( FX_RESPAWN_PULSATE_OLD )
+	PrecacheParticleSystem( FX_RESPAWNINGPLAYER_INCOMING )
+	PrecacheParticleSystem( FX_RESPAWNEDPLAYER )
+	PrecacheParticleSystem( FX_RESPAWNEDPLAYER_BOX_TO_PLAYER_BEAM )
+	PrecacheParticleSystem( FX_RESPAWNEDPLAYER_1PFX )
+
+	PrecacheModel( MDL_RESPAWNPREVIEW_HOLO_STUB ) 
+
+
+
+
+
+
+
+
+
+
+
+
+		AddCreateCallback( "player_decoy", Respawn_FromDeathbox_OnDeathboxHoloCreated )
+
+	
+	
+}
+
+void function Networking_Init()
+{
+	
+	RegisterSignal( SIG_RESPAWN_ONDEATHBOX_DISABLED )
+	RegisterSignal( SIG_ONDEATHBOXRESPAWNED )
+	RegisterSignal( SIG_RESPAWNDEATHBOX_ACTIVE_VISUALS )
+	RegisterSignal( SIG_HOLO_OFF )
+	RegisterSignal( SIG_LOCKOUTTIME_WAITTORESET )
+
+	
+	Remote_RegisterClientFunction( FUNC_RESPAWNDEATHBOX_VISUALS, "entity" )
+	Remote_RegisterClientFunction( FUNC_RESPAWNEDPRESENTATION )
+	Remote_RegisterClientFunction( FUNC_LOCKOUTTIME_RESET_DRAWHINT, "entity" )
+	Remote_RegisterClientFunction( FUNC_ONDEATH_DRAWHINT, "entity" )
+	Remote_RegisterClientFunction( FUNC_RESPAWNEDPLAYER_1PFX )
+
+	
+	RegisterNetworkedVariable( NETVAR_RESPAWN_FROMDEATHBOX_ACTIVE, SNDC_GLOBAL, SNVT_BOOL, true ) 
+	RegisterNetworkedVariable( NETVAR_INT_PLAYERDEATHCOUNT, SNDC_PLAYER_GLOBAL, SNVT_INT, 0 )
+	RegisterNetworkedVariable( NETVAR_BOOL_PLAYER_WAS_DEATHBOXRESPAWNED, SNDC_PLAYER_GLOBAL, SNVT_BOOL, false )
+	RegisterNetworkedVariable( NETVAR_RESPAWN_FROMDEATHBOX_LOCKOUT_ENDTIME, SNDC_PLAYER_GLOBAL, SNVT_TIME, 0.0 )
+
+
+		RegisterNetVarIntChangeCallback( "respawnStatus", Respawn_FromDeathbox_OnRespawnStatusChanged )
+		RegisterNetVarBoolChangeCallback( NETVAR_RESPAWN_FROMDEATHBOX_ACTIVE, CL_Respawn_FromDeathbox_Show_Deactivated )
+		RegisterNetVarTimeChangeCallback( NETVAR_RESPAWN_FROMDEATHBOX_LOCKOUT_ENDTIME, CL_Respawn_FromDeathbox_Lockout_EndTime_Changed )
+
+		Waypoints_RegisterCustomType( WAYPOINT_RESPAWNDEATHBOX_NAME, Waypt_CL_OnCreated )
+
+
+}
+
+
+void function Tunings_Init()
+{
+	
+	tunings.markRespawnDeathbox = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_markRespawnDeathbox", tunings.markRespawnDeathbox )
+	tunings.markRespawnDeathbox_GroundMarker = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_markRespawnDeathbox_GroundMarker", tunings.markRespawnDeathbox_GroundMarker )
+
+	
+	tunings.useHoldTime	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_useHoldTime", tunings.useHoldTime )
+	tunings.switchObserverTarget_ToRespawner = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_switchObserverTarget_ToRespawner", tunings.switchObserverTarget_ToRespawner )
+	tunings.useRadius	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_useRadius", tunings.useRadius )
+	tunings.useRadiusSqr = pow( tunings.useRadius, 2 )
+
+	
+	tunings.dissolveDeathBox_OnRespawnFromDeathBox 	= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_dissolvedeathbox", tunings.dissolveDeathBox_OnRespawnFromDeathBox )
+	tunings.respawnedPresentation_Enabled 			= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedPresentation_Enabled", tunings.respawnedPresentation_Enabled  )
+	tunings.respawnedPresentation_PlayerBoxBeam_Enabled = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedPresentation_PlayerBoxBeam_Enabled", tunings.respawnedPresentation_PlayerBoxBeam_Enabled )
+	tunings.respawnedPresentation_Duration_Incoming = GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedPresentation_Duration_Incoming", tunings.respawnedPresentation_Duration_Incoming )
+	tunings.respawnedPresentation_Duration_Spawn 	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedPresentation_Duration_Spawn", tunings.respawnedPresentation_Duration_Spawn )
+	tunings.respawnedPresentation_FOVOffset_Start 	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedPresentation_FOVOffset_Start", tunings.respawnedPresentation_FOVOffset_Start )
+	tunings.respawnedPresentation_FOVOffset_End 	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedPresentation_FOVOffset_End", tunings.respawnedPresentation_FOVOffset_End )
+	tunings.respawnedPresentation_CamOffset_Y		= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedPresentation_CamOffset_Y", tunings.respawnedPresentation_CamOffset_Y )
+	tunings.respawnedPresentation_CamOffset_Z		= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedPresentation_CamOffset_Z", tunings.respawnedPresentation_CamOffset_Z )
+	tunings.respawnedPresentation_HoloAlpha_Start 	= GetCurrentPlaylistVarInt( "respawn_fromdeathbox_respawnedPresentation_HoloAlpha_Start", 	tunings.respawnedPresentation_HoloAlpha_Start )
+	tunings.respawnedPresentation_HoloAlpha_End 	= GetCurrentPlaylistVarInt( "respawn_fromdeathbox_respawnedPresentation_HoloAlpha_End", 	tunings.respawnedPresentation_HoloAlpha_End )
+	tunings.previewHolo_VisibleToAll				= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_previewHolo_VisibleToAll", tunings.previewHolo_VisibleToAll )
+
+	
+	tunings.respawnedDamagedHealth_Enabled 	= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedDamagedHealth_Enabled", tunings.respawnedDamagedHealth_Enabled )
+	tunings.respawnDamagedHealth 			= GetCurrentPlaylistVarInt( "respawn_fromdeathbox_respawnDamagedHealth", tunings.respawnDamagedHealth )
+
+	
+	tunings.passiveBased_HealOverTime_Enabled 	= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_passiveBased_HealOverTime_Enabled", tunings.passiveBased_HealOverTime_Enabled )
+	tunings.passiveBased_HealOverTime_Duration 	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_passiveBased_HealOverTime_Duration", tunings.passiveBased_HealOverTime_Duration )
+
+	
+	tunings.respawnedShield_EnsureHasShieldCore = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedShield_EnsureHasShieldCore", 	tunings.respawnedShield_EnsureHasShieldCore )
+	tunings.respawnedShield_RestoreShieldCoreLevel = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedShield_RestoreShieldCoreLevel", tunings.respawnedShield_RestoreShieldCoreLevel )
+	tunings.respawnedShield_ResetEvoPoints		= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedShield_ResetEvoPoints", 		tunings.respawnedShield_ResetEvoPoints )
+	tunings.respawnedShield_Damaged_Enabled 	= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedShield_Damaged_Enabled", 	tunings.respawnedShield_Damaged_Enabled )
+	tunings.respawnedShield_Damaged_Health		= GetCurrentPlaylistVarInt( "respawn_fromdeathbox_respawnedShield_Damaged_Health", 		tunings.respawnedShield_Damaged_Health )
+	tunings.respawnedShield_Regen_Enabled 		= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_respawnedShield_Regen_Enabled", 		tunings.respawnedShield_Regen_Enabled )
+	tunings.respawnedShield_Regen_Duration		= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnedShield_Regen_Duration", 	tunings.respawnedShield_Regen_Duration )
+
+	
+	tunings.respawnLockout_Enabled 				= GetCurrentPlaylistVarBool	( "respawn_fromdeathbox_respawnLockout_Enabled", tunings.respawnLockout_Enabled )
+	tunings.respawnLockout_Escalation_Period 	= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnLockout_Escalation_Period", tunings.respawnLockout_Escalation_Period )
+	tunings.respawnLockout_Penalty_Base			= GetCurrentPlaylistVarFloat( "respawn_fromdeathbox_respawnLockout_Penalty_Base", tunings.respawnLockout_Penalty_Base )
+
+	
+	tunings.deactivationRound_Enabled	= GetCurrentPlaylistVarBool	( "respawn_fromdeathbox_deactivationRound_Enabled", tunings.deactivationRound_Enabled )
+	tunings.deactivationRound			= GetCurrentPlaylistVarInt	( "respawn_fromdeathbox_deactivationRound", tunings.deactivationRound )
+
+	
+	tunings.hud_ShowMessage_RecoverTeammateAtBox 	= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_hud_ShowMessage_RecoverTeammateAtBox", tunings.hud_ShowMessage_RecoverTeammateAtBox )
+	tunings.hud_ShowMessage_LockoutTimeReset		= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_hud_ShowMessage_LockoutTimeReset", tunings.hud_ShowMessage_LockoutTimeReset )
+
+	
+	tunings.fx_UseOldPulsate = GetCurrentPlaylistVarBool( "respawn_fromdeathbox_fx_UseOldPulsate", tunings.fx_UseOldPulsate )
+
+	
+	tunings.evo_Give_DespiteLockout	= GetCurrentPlaylistVarBool( "respawn_fromdeathbox_evo_give_despitelockout", tunings.evo_Give_DespiteLockout )
+	tunings.evoReward_Teammates = GetCurrentPlaylistVarInt( "respawn_fromdeathbox_evoreward_teammates", tunings.evoReward_Teammates )
+
+}
+
+
+
+
+bool function Respawn_FromDeathbox_Enabled()
+{
+
+	
+	string currentPlaylistName = GetCurrentPlaylistName()
+	if ( currentPlaylistName != file.savedPlaylistName )
+	{
+		
+		bool isEnabled = GetPlaylistVarBool( file.savedPlaylistName, "Respawn_FromDeathbox_Enabled", false )
+		return isEnabled
+	}
+
+	bool isEnabled = GetCurrentPlaylistVarBool( "Respawn_FromDeathbox_Enabled", false )
+	return isEnabled
+}
+
+
+
+
+bool function Respawn_FromDeathbox_Active()
+{
+	if( IsLobby() )
+		return false
+
+	if( GetGameState() != eGameState.Playing )
+		return false
+
+	if ( !Respawn_FromDeathbox_Enabled() )
+		return false
+
+	bool isActive = GetGlobalNetBool( NETVAR_RESPAWN_FROMDEATHBOX_ACTIVE )
+	return isActive
+}
+
+void function Respawn_FromDeathbox_Execute_Thread( entity reviver, entity deathBox )
+{
+	if ( !IsValid ( deathBox ) )
+		return
+
+	vector deathboxLoc = deathBox.GetOrigin()
+	vector deathboxCenter = deathBox.GetWorldSpaceCenter()
+	entity playerToSpawn = deathBox.GetOwner()
+
+	if ( !IsValid ( playerToSpawn ) )
+		return
+
+	if ( IsAlive( playerToSpawn ) )
+		return
+
+	playerToSpawn.EndSignal( "OnDestroy" )
+	OnThreadEnd(
+		function ():( reviver, playerToSpawn )
+		{
+
+
+
+		}
+	)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Respawn_FromDeathbox_OnUse( entity player, entity deathBox )
+{
+	if( !Respawn_FromDeathbox_Enabled() )
+		return
+
+	if( !Respawn_FromDeathbox_Active() )
+		return
+
+	if( !IsValid( player ) )
+		return
+
+	if( !player.IsPlayer() )
+		return
+
+	if( !IsValid( deathBox ) )
+		return
+
+	entity owner = deathBox.GetOwner()
+	if( !IsValidPlayer( owner ) )
+		return
+
+	if ( IsAlive( owner ) )
+		return
+
+	bool isFriendly = IsFriendlyTeam( player.GetTeam(), owner.GetTeam() )
+	if ( !isFriendly )
+		return
+
+	if( !Respawn_FromDeathbox_PlayerCanUseDeathBox( player ) )
+		return
+
+	if( !Respawn_FromDeathbox_PlayerInUseRange( player, deathBox ) )
+		return
+
+	if( DeathBoxRespawn_InProgress_Check( deathBox ) )
+		return
+
+	if( RespawnLockout_IsPlayerLockedOut( owner ) )
+		return
+
+
+
+
+
+
+
+		if( IsWatchingKillReplay() )
+			return
+
+
+	entity playerToRespawn = deathBox.GetOwner()
+	if( Deathbox_Latest_Get( playerToRespawn ) != deathBox )
+		return
+
+
+
+
+
+
+	ExtendedUseSettings settings
+	settings.duration = tunings.useHoldTime
+	settings.successFunc = Respawn_FromDeathbox_ExtendedUseSuccess
+	settings.failureFunc = Respawn_FromDeathbox_ExtendedUseFailure
+	settings.useInputFlag = IN_USE_ALT
+	settings.maxUseDist2 = tunings.useRadiusSqr
+
+	settings.successSound = SFX_DEATHBOXRESPAWN_SUCCESS
+	settings.movementDisable = true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		settings.loopSound = "survival_titan_linking_loop"
+		settings.hint = Localize( "#DEATHBOX_RESPAWN_INPROGRESS", owner.GetPlayerName() )
+		settings.ruiType = eExtendedUseRui.PROGRESS_BAR
+		settings.icon = ICON_DEATHBOX_RESPAWN_NO_FRAME
+		settings.isSupportClass = tunings.passiveBased_HealOverTime_Enabled && ( Perks_DoesPlayerHavePerk( player, ePerkIndex.REVIVE_EXPERT ) || Perks_DoesPlayerHavePerk( owner, ePerkIndex.REVIVE_EXPERT ) )
+		settings.supportClassColor = SrgbToLinear( GetKeyColor( COLORID_HUD_PROGRESSBAR_COLOR_REVIVE ) / 255.0 )
+		
+		
+
+
+	
+
+	thread ExtendedUse( deathBox, player, settings, true )
+}
+
+void function Respawn_FromDeathbox_ExtendedUseSuccess( entity deathBox, entity player, ExtendedUseSettings settings )
+{
+	thread Respawn_FromDeathbox_Execute_Thread ( player, deathBox )
+}
+
+void function Respawn_FromDeathbox_ExtendedUseFailure( entity deathBox, entity player, ExtendedUseSettings settings )
+{
+
+
+
+
+
+
+
+
+}
+
+bool function Respawn_FromDeathbox_PlayerCanUseDeathBox( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( player.p.isInExtendedUse )
+		return false
+
+	if( HasTeammatesRespawningFromBeacon( player.GetTeam() ) )
+		return false
+
+	return true
+}
+
+bool function Respawn_FromDeathbox_PlayerInUseRange( entity player, entity deathBox )
+{
+	if( !IsValid( player ) )
+		return false
+
+	if( !IsValid( deathBox ) )
+		return false
+
+	if( DistanceSqr( player.GetOrigin(), deathBox.GetOrigin() ) > tunings.useRadiusSqr )
+		return false
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Evo_Functions(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Respawned_Player_Presentations(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Respawn_FromDeathbox_SV2CL_RespawnedPresentation()
+{
+	
+	
+
+	
+	CL_RespawnedPresentation_CameraFOVLerp()
+}
+
+
+void function CL_RespawnedPresentation_CameraFOVLerp()
+{
+	entity player = GetLocalViewPlayer()
+	float fov = player.GetFOV()
+	float fovStart 	= fov + tunings.respawnedPresentation_FOVOffset_Start
+	float fovEnd 	= fov + tunings.respawnedPresentation_FOVOffset_End
+	float duration = tunings.respawnedPresentation_Duration_Incoming + tunings.respawnedPresentation_Duration_Spawn
+	player.SetObserverModeStaticFOVLerp( fovStart, fovEnd, duration )
+}
+
+void function CL_RespawnedPresentation_CameraMove_Thread()
+{
+	
+
+	entity player = GetLocalViewPlayer()
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	wait 1.0
+
+	EmitSoundOnEntity( player, "FiringRangeMu1_HighPoint_1P" )
+
+	entity rotator = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", player.EyePosition(), <0,0,0> )
+
+	OnThreadEnd(
+		void function() : ( player, rotator )
+		{
+			player.ClearMenuCameraEntity()
+			rotator.Destroy()
+		}
+	)
+
+	rotator.NonPhysicsSetRotateModeLocal( true )
+
+	const float HALF_ROTATE_TIME = 2.5
+	const float EASE_IN_TIME = 1.0 
+	const float EASE_OUT_TIME = 0.5
+	const float START_STAGE_TIME = HALF_ROTATE_TIME + ( EASE_IN_TIME / 2 )
+
+
+	rotator.NonPhysicsRotateTo( <0,180,0>, tunings.respawnedPresentation_Duration_Incoming, EASE_IN_TIME, EASE_OUT_TIME )
+	entity mover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", player.CameraPosition(), player.CameraAngles() )
+	mover.SetParent( rotator )
+	vector endPos = mover.GetLocalOrigin()
+	mover.NonPhysicsSetMoveModeLocal(true)
+	vector cameraForwardFlatNormalized = Normalize(FlattenVec(AnglesToForward(player.CameraAngles())))
+	mover.NonPhysicsMoveTo( (cameraForwardFlatNormalized * -300) + <0, 0, 0>, tunings.respawnedPresentation_Duration_Incoming, EASE_IN_TIME, EASE_OUT_TIME )
+	entity camera = CreateClientSidePointCamera( mover.GetOrigin(), mover.GetAngles(), player.GetFOV() )
+	camera.SetParent( mover )
+	player.SetMenuCameraEntity( camera )
+	player.SetMenuCameraUseGameExposure()
+
+	vector focusPoint = player.CameraPosition() + (AnglesToForward(player.CameraAngles()) * Distance( player.CameraPosition(), player.EyePosition() ) )
+	entity cameraFocusPoint = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", focusPoint, <0,0,0> )
+	cameraFocusPoint.NonPhysicsMoveTo( focusPoint + <0, 0, 150>, 3, 1, .5 )
+
+	float startTime = Time()
+	const float TOTAL_ROTATE_TIME = HALF_ROTATE_TIME + START_STAGE_TIME
+	float endTime = startTime + TOTAL_ROTATE_TIME
+
+	bool finshedStartStage = false
+	float startStageEndTime = Time() + START_STAGE_TIME
+
+	bool startedEndStage = false
+	const float END_STAGE_TIME = 2
+	float endStageStartTime = Time() + TOTAL_ROTATE_TIME - END_STAGE_TIME
+	while ( Time() < endTime )
+	{
+		if ( !finshedStartStage && Time() >= startStageEndTime )
+		{
+			finshedStartStage = true
+			rotator.NonPhysicsRotate( <0,0,1>, 30 )
+		}
+
+		if ( !startedEndStage && Time() >= endStageStartTime )
+		{
+			startedEndStage = true
+			cameraFocusPoint.NonPhysicsMoveTo( focusPoint, END_STAGE_TIME, 1, .5 )
+			mover.NonPhysicsMoveTo( endPos, END_STAGE_TIME, 1, .5 )
+		}
+
+		vector cameraToCameraFocus = Normalize(cameraFocusPoint.GetOrigin() - mover.GetOrigin())
+
+		camera.SetAngles( VectorToAngles(cameraToCameraFocus) )
+		WaitFrame()
+	}
+}
+
+void function Respawn_FromDeathbox_OnDeathboxHoloCreated( entity holo )
+{
+	if ( !IsValid( holo ) )
+		return
+
+	if ( holo.GetScriptName() != RESPAWNDEATHBOX_HOLO_SCRIPTNAME )
+		return
+
+	if( !tunings.previewHolo_VisibleToAll )
+	{
+		
+		entity player = GetLocalViewPlayer()
+		entity owner = holo.GetOwner()
+		if( player != owner )
+			return
+	}
+
+	holo.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	holo.Highlight_SetCurrentContext( HighlightContext_GetId( "deathbox_respawn_holograph" ) )
+	holo.Highlight_SetFadeInTime( tunings.respawnedPresentation_Duration_Incoming )
+	holo.Highlight_SetFadeOutTime( 0.5 )
+	holo.Highlight_SetLifeTime( tunings.respawnedPresentation_Duration_Incoming )
+	holo.Highlight_StartOn()
+}
+
+void function Respawn_FromDeathbox_SV2CL_LockoutTimerResetHint( entity lockoutOwner )
+{
+	if ( !IsValid( lockoutOwner ) )
+		return
+
+	if ( !tunings.hud_ShowMessage_LockoutTimeReset )
+		return
+
+	entity player = GetLocalViewPlayer()
+
+	if ( player == lockoutOwner )
+	{
+		AddPlayerHint( 5.0, 1.0, $"", "#DEATHBOXRESPAWN_HINT_LOCKOUTTIME_RESET_SELF" )
+		EmitSoundOnEntity( player, SFX_LOCKOUTTIME_RESET_SELF )
+	}
+	else
+	{
+		AddPlayerHint( 5.0, 1.0, $"", Localize( "#DEATHBOXRESPAWN_HINT_LOCKOUTTIME_RESET_TEAMMATE", lockoutOwner.GetPlayerName() ) )
+		EmitSoundOnEntity( player, SFX_LOCKOUTTIME_RESET_TEAMMATE )
+	}
+}
+
+void function Respawn_FromDeathbox_SV2CL_DeathboxRecoveryOnDeathHint( entity deathboxOwner )
+{
+	if ( !IsValid( deathboxOwner ) )
+		return
+
+	if ( !tunings.hud_ShowMessage_RecoverTeammateAtBox )
+		return
+
+	if ( !RespawnLockout_IsPlayerLockedOut( deathboxOwner ) )
+	{
+		AddPlayerHint( 5.0, 1.0, $"", Localize( "#DEATHBOXRESPAWN_HINT_RECOVER_TEAMMATE", deathboxOwner.GetPlayerName() ) )
+	}
+}
+
+void function Respawn_FromDeathbox_SV2CL_Respawned1P_FX()
+{
+	entity playerToUse = GetLocalViewPlayer()
+
+	entity cockpit = playerToUse.GetCockpit()
+	if ( !cockpit )
+		return
+
+	int fxID = GetParticleSystemIndex( FX_RESPAWNEDPLAYER_1PFX )
+	int fxHandle = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+
+	EffectSetIsWithCockpit( fxHandle, true )
+
+	
+	vector shieldColor = GetFXRarityColorForTier( 1 )
+	EffectSetControlPointVector( fxHandle, 1, shieldColor )
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Respawn_DeathBox_Waypoints(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+entity function Waypt_ForDeathBox_Get( entity box )
+{
+	entity wp
+
+	if( !IsValid( box ) )
+		return wp
+
+	EHI deathBoxEHI = ToEHI( box )
+	if( deathBoxEHI in file.respawnDeathbox_Waypts )
+	{
+		wp = file.respawnDeathbox_Waypts[ deathBoxEHI ]
+	}
+	return wp
+}
+
+void function Respawn_FromDeathBox_Waypt_ForDeathBox_Remove( entity box )
+{
+	EHI deathBoxEHI = ToEHI( box )
+	if( deathBoxEHI in file.respawnDeathbox_Waypts )
+	{
+		delete file.respawnDeathbox_Waypts[ deathBoxEHI ] 
+	}
+}
+
+
+void function Waypt_CL_OnCreated( entity wp )
+{
+	if ( !IsValid( wp ) )
+		return
+
+	if ( wp.GetWaypointCustomType() != WAYPOINT_RESPAWNDEATHBOX_NAME )
+		return
+
+	entity deathBox = wp.GetWaypointEntity( WAYPT_RESPAWNDEATHBOX_ENT_IDX_DEATHBOX )
+
+	EHI deathBoxEHI = ToEHI( deathBox )
+	file.respawnDeathbox_Waypts[ deathBoxEHI ] <- wp
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Respawn_DeathBox_InProgress_Functions(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function DeathBoxRespawn_InProgress_UserCount_Get( entity box )
+{
+	int result = 0
+	entity wp = Waypt_ForDeathBox_Get( box )
+	if( !IsValid( wp ) )
+		return result
+
+	result = wp.GetWaypointInt( WAYPT_RESPAWNDEATHBOX_INT_IDX_USERCOUNT )
+	return result
+}
+
+bool function DeathBoxRespawn_InProgress_Check( entity box )
+{
+	if( !IsValid( box ) )
+		return false
+
+	bool result = DeathBoxRespawn_InProgress_UserCount_Get( box ) > 0
+	return result
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Prompt_Functions(){}
+#endif
+
+
+
+string function Respawn_FromDeathbox_Get_UsePrompts( entity player, entity deathBox )
+{
+	string result = ""
+
+	if( Respawn_FromDeathbox_Enabled() && Respawn_FromDeathbox_Active() )
+	{
+
+		string formattedString = Respawn_FromDeathbox_UsePrompt ( player, deathBox )
+		if (formattedString != "")
+		{
+			result = formattedString
+		}
+	}
+	return result
+}
+
+string function Respawn_FromDeathbox_UsePrompt( entity player, entity deathBox )
+{
+	string result = ""
+
+	entity deadPlayer = deathBox.GetOwner()
+	entity localViewPlayer = GetLocalViewPlayer()
+
+	if ( !IsValid ( deadPlayer ) )
+		return result
+
+	if ( IsAlive( deadPlayer ) )
+		return result
+
+	if ( !IsValid ( localViewPlayer ) )
+		return result
+
+	bool isFriendly = IsFriendlyTeam( localViewPlayer.GetTeam(), deadPlayer.GetTeam() )
+
+	if ( isFriendly )
+	{
+		if( Deathbox_Latest_Get( deadPlayer ) != deathBox )
+			return result
+
+		if( HasTeammatesRespawningFromBeacon( player.GetTeam() ) )
+			return Localize( "#HINT_RESPAWN_INPROGRESS" )
+
+		bool inUseRange = Respawn_FromDeathbox_PlayerInUseRange( player, deathBox )
+		if( !inUseRange )
+			return result
+
+		string deadPlayerName = deadPlayer.GetPlayerName()
+		if( !DeathBoxRespawn_InProgress_Check( deathBox ) )
+		{
+			result = Localize( "#DEATHBOX_RESPAWN_PROMPT", deadPlayerName )
+			if( tunings.respawnLockout_Enabled )
+			{
+				
+				string lockoutPrompt = RespawnLockout_Prompt( deadPlayer )
+				if( lockoutPrompt != "" )
+				{
+					result = lockoutPrompt
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Player_Status_Change_Functions(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Respawn_FromDeathbox_OnRespawnStatusChanged( entity player, int newLength )
+{
+	if( !Respawn_FromDeathbox_Enabled() )
+		return
+
+	if ( newLength == eRespawnStatus.NONE )
+	{
+		player.Signal( SIG_ONDEATHBOXRESPAWNED )
+	}
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Recently_RespawnedFromDeathBox_Functions(){}
+#endif
+
+
+
+bool function DeathboxRespawnedRecently_Check( entity player )
+{
+	if( !Respawn_FromDeathbox_Active() )
+		return false
+
+	if( !IsValid( player ) )
+		return false
+
+	if( !player.IsPlayer() )
+		return false
+
+	bool wasDeathboxRespawned = player.GetPlayerNetBool( NETVAR_BOOL_PLAYER_WAS_DEATHBOXRESPAWNED )
+	return wasDeathboxRespawned
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Deathbox_Respawn_Visual_Emphasis_Functions(){}
+#endif
+
+
+
+void function Respawn_FromDeathbox_SV2CL_RespawnDeathbox_Visuals( entity deathbox )
+{
+	if( !tunings.markRespawnDeathbox )
+		return
+
+	thread CL_RespawnDeathbox_Visuals_Thread (deathbox)
+}
+
+void function CL_RespawnDeathbox_Visuals_Thread ( entity deathbox )
+{
+	wait 1.0
+
+	if( !Respawn_FromDeathbox_Enabled() )
+		return
+
+	if( !Respawn_FromDeathbox_Active() )
+		return
+
+	if( !IsValid( deathbox ) )
+		return
+
+	entity owner = deathbox.GetOwner()
+
+	if( !IsValid( owner ) )
+		return
+
+	owner.EndSignal( "OnDestroy" )
+	owner.EndSignal( SIG_ONDEATHBOXRESPAWNED )
+	deathbox.EndSignal( "OnDestroy" )
+	deathbox.EndSignal( SIG_RESPAWNDEATHBOX_ACTIVE_VISUALS )
+
+	EHI deathboxEHI = ToEHI( deathbox )
+	if( !file.activeTeammateDeathBoxes_EHIs.contains( deathboxEHI ) )
+	{
+		file.activeTeammateDeathBoxes_EHIs.append( deathboxEHI )
+	}
+
+	const float SCALE_MINIMAP = 1.1
+	const float SCALE_FULLMAP = 11
+
+	vector loc = deathbox.GetOrigin()
+	vector ang = < 0, 0, 0 >
+	
+
+	vector mapIconColor = GetPlayerInfoColor( owner ) / 255.0
+
+	
+	float fadeDistance = 20.0 * METERS_TO_INCHES
+
+	var rui_Overhead = AddOverheadIcon( deathbox, ICON_DEATHBOX_RESPAWN, false, $"ui/overhead_icon_generic.rpak" )
+	RuiSetFloat3 ( rui_Overhead, "pos", deathbox.GetOrigin() + < 0, 0, 32 > )
+	RuiSetFloat2( rui_Overhead, "iconSize", < 70, 70, 0 > )
+	RuiSetFloat( rui_Overhead, "distanceFade", fadeDistance )
+	RuiSetBool( rui_Overhead, "adsFade", true )
+	RuiSetBool( rui_Overhead, "pinToEdge", false )
+
+	
+	
+
+	vector playerColor = GetPlayerInfoColor( owner )
+
+	OnThreadEnd
+	(
+		function() : ( deathbox, deathboxEHI, rui_Overhead )
+		{
+			if( IsValid( deathbox ) )
+			{
+				
+				
+				if( file.activeTeammateDeathBoxes_EHIs.contains( deathboxEHI ) )
+				{
+					file.activeTeammateDeathBoxes_EHIs.fastremovebyvalue( deathboxEHI )
+				}
+			}
+
+			RuiDestroyIfAlive( rui_Overhead )
+			HidePlayerHint( "#RESPAWN_AT_BEACONS_HINT" )
+		}
+	)
+
+	float radiusMin = 90
+	float radiusMax = 55.0
+	float radiusDelta = -0.25
+	float radiusCurrent = radiusMax
+
+	
+	
+	
+
+	int team = owner.GetTeam()
+	bool hasAliveTeammates = GetPlayerArrayOfTeam_Alive( team ).len() > 0
+	bool wasLocked = false
+	while( !IsAlive( owner ) && hasAliveTeammates )
+	{
+		if( tunings.respawnLockout_Enabled )
+		{
+			string lockoutPrompt = RespawnLockout_Prompt( owner )
+			if( ( lockoutPrompt != "" ) )
+			{
+				
+				RuiSetImage( rui_Overhead, "icon", ICON_DEATHBOX_RESPAWN_LOCKED )
+				wasLocked = true
+			}
+			else if( ( lockoutPrompt == "" ) && wasLocked )
+			{
+				
+				RuiSetImage( rui_Overhead, "icon", ICON_DEATHBOX_RESPAWN )
+				wasLocked = false
+			}
+		}
+
+		WaitFrame()
+		hasAliveTeammates = GetPlayerArrayOfTeam_Alive( team ).len() > 0
+	}
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Respawn_Lockout_Functions(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function PlayerDeathCount_Get( entity player )
+{
+	if( !IsValid( player ) )
+		return 0
+
+	if( !player.IsPlayer() )
+		return 0
+
+	int result = player.GetPlayerNetInt( NETVAR_INT_PLAYERDEATHCOUNT )
+	
+	
+	
+
+	return result
+}
+
+float function RespawnLockout_Duration( entity playerToRespawn )
+{
+	if( !tunings.respawnLockout_Enabled )
+		return 0.0
+
+	float duration = 0.0
+	int numDeaths = PlayerDeathCount_Get( playerToRespawn )
+	if( numDeaths > 1 )
+	{
+		float possibleDuration = tunings.respawnLockout_Penalty_Base * pow( 2, numDeaths - 2 )
+		duration = min ( possibleDuration, tunings.respawnLockout_Escalation_Period )
+	}
+
+	return duration
+}
+
+float function RespawnLockout_TimeLeft( entity playerToRespawn )
+{
+	if( !tunings.respawnLockout_Enabled )
+		return 0
+
+	float lockoutDuration = RespawnLockout_Duration( playerToRespawn )
+	float timePassed = Time() - playerToRespawn.GetDeathTime()
+	float timeLeft = lockoutDuration - timePassed
+
+	return timeLeft
+}
+
+bool function RespawnLockout_IsPlayerLockedOut( entity playerToRespawn )
+{
+	if( !tunings.respawnLockout_Enabled )
+		return false
+
+	if( !IsValid( playerToRespawn ) )
+		return true
+
+	bool isLockedOut = RespawnLockout_TimeLeft( playerToRespawn ) > 0
+
+	return isLockedOut
+}
+
+
+
+
+
+
+string function RespawnLockout_Prompt( entity playerToRespawn )
+{
+	
+
+	if( !tunings.respawnLockout_Enabled )
+		return ""
+
+	if( !IsValid( playerToRespawn ) || !playerToRespawn.IsPlayer() )
+		return ""
+
+	float timeLeft = RespawnLockout_TimeLeft( playerToRespawn )
+	if( timeLeft <= 0 )
+		return ""
+
+	float msecsleft = timeLeft - int( timeLeft )
+	string timeStr = format( "%02d", timeLeft + 1 )
+
+	string prompt = Localize( "#HINT_DEATHBOX_RESPAWN_PLAYER_LOCKED", playerToRespawn.GetPlayerName(), timeStr )
+
+	return prompt
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CL_Respawn_FromDeathbox_Lockout_EndTime_Changed( entity player, float newValue )
+{
+	if( !IsValid( player ) )
+		return
+
+#if DEV
+		DevOut( FUNC_NAME() + "(): Called for player " + player.GetPlayerName() + "with value " + newValue )
+#endif
+
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Shutoff_Round_Functions(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CL_Respawn_FromDeathbox_Show_Deactivated( entity player, bool isActivated )
+{
+	
+	
+	
+	
+	
+	
+
+	clGlobal.levelEnt.Signal( SIG_RESPAWN_ONDEATHBOX_DISABLED )
+
+#if DEV
+		DevOut( FUNC_NAME() + "(): Called. isActivated == " + isActivated )
+#endif
+
+	Respawn_FromDeathbox_ShowRespawnsDisabledSplash()
+
+	
+	foreach( boxEHI in file.activeTeammateDeathBoxes_EHIs )
+	{
+		entity activeDeathbox = FromEHI( boxEHI )
+		if( IsValid( activeDeathbox ) )
+		{
+			activeDeathbox.Signal( SIG_RESPAWNDEATHBOX_ACTIVE_VISUALS )
+		}
+	}
+}
+
+void function Respawn_FromDeathbox_ShowRespawnsDisabledSplash()
+{
+	if ( GetGameState() != eGameState.Playing )
+		return
+
+	const string 	MSG_TEXT 	= "#ANNOUNCE_TEXT_DEATHBOX_RESPAWN_DISABLED"
+	const string	MSG_SUBTEXT = "#ANNOUNCE_TEXT_DEATHBOX_RESPAWN_DISABLED"
+	const float 	MSG_DURATION = 4.0
+	const string 	SFX_DEATHBOX_RESPAWN_DEACTIVATED = "UI_3Strikes_RespawningDisabled"
+
+	string message = Localize( MSG_TEXT )
+	AnnouncementData announcement = Announcement_Create( message )
+
+	int style = ANNOUNCEMENT_STYLE_FINAL_RING_NO_RESPAWNS
+	string subText = ""
+	vector messageColor = SrgbToLinear( GetKeyColor( COLORID_DANGER_WARNING_RED ) / 255 )
+
+	Announcement_SetUseColorOnSubtext( announcement, false )
+	Announcement_SetFrameColor( announcement, messageColor )
+	Announcement_SetTitleColor( announcement, <1.0, 1.0, 1.0> )
+	Announcement_SetDuration( announcement, MSG_DURATION )
+	Announcement_SetStyle( announcement, style )
+
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateDeprecatedStyle( announcement )
+	mainBanner.priority = eHudNotificationQueuePriority.HIGH
+	mainBanner.soundAliases = [ SFX_DEATHBOX_RESPAWN_DEACTIVATED ]
+	
+	CenterAnnouncements_QueueItem( mainBanner, ePersistenceContext.GLOBAL )
+}
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEV_Functions(){}
+#endif
+
+
+#if DEV
+
+void function DevOut( string str )
+{
+if( !file.devOut )
+	return
+
+	printt( str )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function DEV_DBRespawn_Lockout_Enabled( bool isOn )
+{
+	tunings.respawnLockout_Enabled = isOn
+}
+
+void function DEV_DBRespawn_RespawnedPresentation_Enabled( bool isOn )
+{
+	tunings.respawnedPresentation_Enabled = isOn
+}
+
+void function DEV_DBRespawn_RespawnedPresentation_Parms( float duration_Loop = 4.0,
+															float duration_Spawn = 1.5,
+															float fOVOffset_Start = 30.0,
+															float fOVOffset_End = -30.0,
+															float camOffset_Y = -50.0,
+															float camOffset_Z = 75.0  )
+{
+	tunings.respawnedPresentation_Duration_Incoming 	= duration_Loop
+	tunings.respawnedPresentation_Duration_Spawn 	= duration_Spawn
+	tunings.respawnedPresentation_FOVOffset_Start	= fOVOffset_Start
+	tunings.respawnedPresentation_FOVOffset_End	= fOVOffset_End
+	tunings.respawnedPresentation_CamOffset_Y	= camOffset_Y
+	tunings.respawnedPresentation_CamOffset_Z	= camOffset_Z
+}
+
+#endif
+
+                               
