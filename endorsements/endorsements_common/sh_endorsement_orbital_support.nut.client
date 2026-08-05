@@ -1,0 +1,1062 @@
+
+
+
+
+global function Endorsement_OrbitalSupport_Init
+global function OnProjectileCollision_WeaponOrbitalSupportExplosion
+
+
+
+
+
+
+
+
+
+global function OrbitalSupport_EnemyHasTag
+global function IsOrbtialFiring
+global function ServerToClient_ResetOrbitalStikeTimer
+global function ServerToClient_UpdateOrbitalCharge
+global function ServerToClient_UpdateOrbitalIsFiring
+global function ServerToClient_UpdateOrbitalIsFiring_Target
+
+
+
+
+
+const vector ORBITAL_SUPPORT_PROJECTILE_STARTING_OFFSET	= <0,0, 10000>
+
+const float PLAYERORBITALDATA_MAX_CHARGE = 100.0
+const float ORBITAL_SUPPORT_RECHARGE_MODIFIER = 20
+
+
+const string SCRIPT_NAME_ORBITAL_SUPPORT_WAYPOINT = "orbital_support_waypoint"
+const string SCRIPT_NAME_ORBITAL_SUPPORT_WEAPON = "mp_weapon_orbital_support_weapon"
+
+
+const string SIG_ORBITAL_SUPPORT_DESTROY_RUI 						= "HopupOrbitalSupportDestroyRui"
+const string SIG_ORBITAL_SUPPORT_DEACTIVATE 						= "HopupOrbitalSupportDeactivate"
+const string SIG_ORBITAL_SUPPORT_TAG_LOST 							= "HopupOrbitalSupportLost"
+const string SIG_ORBITAL_SUPPORT_DESTROY_ORBITAL_SUPPORT_STATUS_RUI = "HopupOrbitalSupportDestroyMissileStatusRui"
+
+
+const asset FX_BOMBARDMENT_MARKER = $"P_ar_artillery_marker"
+const asset FX_DEFENSIVE_BOMBARDMENT_SCAN = $"P_artillery_marker_scan"
+const asset FX_ORBITAL_SUPPORT_BOMB = $"P_artillery_bomb_wc"
+
+
+const string SFX_ORBITAL_SUPPORT_FAIL_LOCK_1P = "Unhinged_Wildcard_HeavyarmsSalvo_UI_FailedLock_1p"
+const string SFX_ORBITAL_SUPPORT_HALF_LOCK_1P = "Unhinged_Wildcard_HeavyarmsSalvo_UI_PartialLock_1p"
+const string SFX_ORBITAL_SUPPORT_FULL_LOCK_1P = "Unhinged_Wildcard_HeavyarmsSalvo_UI_FullLock_1p"
+const string SFX_ORBITAL_SUPPORT_FIRE_1P = "weapon_r97_mythic_rocket_fire_1p"
+const string SFX_ORBITAL_SUPPORT_FIRE_3P = "weapon_r97_mythic_rocket_fire_3p"
+const string SFX_ORBITAL_SUPPORT_LOCKON_1P = "Unhinged_Wildcard_HeavyarmsSalvo_LockOn_3p_vs_1p"
+const string SFX_ORBITAL_SUPPORT_READY = "Unhinged_Wildcard_HeavyarmsSalvo_UI_Ready"
+
+
+const asset RUI_ORBITAL_SUPPORT = $"ui/endorsement_tone_tracker_hopup.rpak"
+const asset RUI_ORBITAL_SUPPORT_STATUS = $"ui/missile_status_hud.rpak"
+
+const vector RUI_BEAMSTICK_HUD_COLOR = <19, 82, 240> / 255.0
+
+struct TagVictimData
+{
+	entity waypoint
+	float timeSinceLastHit
+}
+
+struct TagData
+{
+	table< entity, TagVictimData > targets
+	bool tagReady
+}
+
+struct FiredOrbitals
+{
+	entity orbitalTarget
+	array<entity> orbitalsFiredAtTarget
+}
+
+struct PlayerOrbitalData
+{
+	float curChargeVal
+	float maxChargeVal
+	bool orbitalReady
+	int targetsLocked
+	bool orbitalFiring
+}
+
+struct
+{
+	float explosionRadius = 75
+	float strikeDelay = 0.5
+	float strikeRadius = 125
+	float impulse = 0
+	float damage = 25
+	float delayBetweenShots = 0.2
+	float cooldown = 10.0
+	int hitsPerTag 			= 100
+	int numberOfStrikes 	= 3
+	float hitExpireTimeSec 	= 10.0
+
+	int shotgunFillAmount = 34
+	int sniperFillAmount = 60
+	int marksmanFillAmount = 40
+	int lmgFillAmount = 28
+	int assaultFillAmount = 22
+	int smgFillAmount = 20
+	int pistolFillAmount = 18
+	int maxFillAmount = 100
+	bool disableLockonOnBleedout = false
+} tuning
+
+struct
+{
+
+
+
+
+	table<entity, PlayerOrbitalData> playerOrbitalData
+
+
+		array<entity> lockedPlayers
+		bool activelyFiring
+
+
+} file
+
+void function Endorsement_OrbitalSupport_Init()
+{
+	RegisterTuningStruct( "tuning", "endorsement_orbital_strike_" )
+	Endorsement_OrbitalSupport_Networking()
+
+
+
+
+
+
+		AddCallback_OnPassiveChanged( ePassives.PAS_ENDORSEMENT_ORBITAL_SUPPORT, Endorsement_OrbitalSupport_OnPassiveChanged )
+
+
+	PrecacheParticleSystem( FX_BOMBARDMENT_MARKER )
+	PrecacheParticleSystem( FX_DEFENSIVE_BOMBARDMENT_SCAN )
+	PrecacheParticleSystem( FX_ORBITAL_SUPPORT_BOMB )
+	PrecacheWeapon( SCRIPT_NAME_ORBITAL_SUPPORT_WEAPON )
+}
+
+asset function Endorsement_OrbitalSupport_GetIcon()
+{
+	EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( "orbitalsupport" )
+	return endorsementDefinition.endorsementIcon
+}
+
+void function Endorsement_OrbitalSupport_Networking()
+{
+
+
+
+
+
+
+		AddCreateCallback( PLAYER_WAYPOINT_CLASSNAME, OnWaypointCreated )
+
+		RegisterSignal( SIG_ORBITAL_SUPPORT_DESTROY_RUI )
+		RegisterSignal( SIG_ORBITAL_SUPPORT_DESTROY_ORBITAL_SUPPORT_STATUS_RUI )
+
+
+	Remote_RegisterClientFunction( "ServerToClient_ResetOrbitalStikeTimer" )
+	Remote_RegisterClientFunction( "ServerToClient_UpdateOrbitalCharge", "float", 0.0, PLAYERORBITALDATA_MAX_CHARGE, 32  )
+	Remote_RegisterClientFunction( "ServerToClient_UpdateOrbitalIsFiring", "bool" )
+	Remote_RegisterClientFunction( "ServerToClient_UpdateOrbitalIsFiring_Target", "bool" )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CallbackHandling___________________(){}
+#endif
+
+void function Endorsement_OrbitalSupport_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( !IsValidPlayer( player ) )
+		return
+
+	if ( nowHas )
+	{
+
+
+
+
+
+
+
+
+		if ( !(player in file.playerOrbitalData) )
+		{
+			PlayerOrbitalData pod
+			pod.curChargeVal = PLAYERORBITALDATA_MAX_CHARGE * 0.9 
+			pod.maxChargeVal = PLAYERORBITALDATA_MAX_CHARGE
+			pod.orbitalReady = false
+			file.playerOrbitalData[player] <- pod
+		}
+
+
+
+
+
+
+			thread OrbitalSupport_StatusRui_Thread( player )
+
+	}
+	else
+	{
+
+
+
+
+
+
+
+
+
+			player.Signal( SIG_ORBITAL_SUPPORT_DESTROY_RUI )
+			player.Signal( SIG_ORBITAL_SUPPORT_DESTROY_ORBITAL_SUPPORT_STATUS_RUI )
+
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnProjectileCollision_WeaponOrbitalSupportExplosion( entity projectile, vector pos, vector normal, entity hitEnt, int hitbox, bool isCritical, bool isPassthrough )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Weapon_Functions__________________(){}
+#endif
+
+bool function OrbitalSupportReady( entity player )
+{
+	if ( !(player in file.playerOrbitalData) )
+		return false
+
+	PlayerOrbitalData playerOD = file.playerOrbitalData[player]
+	playerOD.orbitalReady = playerOD.curChargeVal >= playerOD.maxChargeVal
+
+	return playerOD.orbitalReady
+}
+
+int function GetHitsOnTarget( entity waypoint )
+{
+	return int(waypoint.GetWaypointFloat( 0 ))
+}
+
+int function GetTargetsLocked( entity player )
+{
+	return file.playerOrbitalData[player].targetsLocked
+}
+
+bool function HasTargets( entity player )
+{
+	bool hasTargets = true 
+
+	return hasTargets
+}
+
+
+bool function OrbitalSupport_EnemyHasTag()
+{
+	return file.lockedPlayers.len() > 0
+}
+
+
+
+
+
+
+
+
+
+
+void function OrbitalSupport_StatusRui_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( player ) || !IsLocalViewPlayer( player ) )
+		return
+
+	player.Signal( SIG_ORBITAL_SUPPORT_DESTROY_ORBITAL_SUPPORT_STATUS_RUI )
+	player.EndSignal( "OnDeath", "OnDestroy" )
+	player.EndSignal( SIG_ORBITAL_SUPPORT_DESTROY_ORBITAL_SUPPORT_STATUS_RUI )
+
+	var rui = CreateCockpitPostFXRui( RUI_ORBITAL_SUPPORT_STATUS )
+
+	OnThreadEnd(
+		function() : ( rui )
+		{
+			RuiDestroyIfAlive( rui )
+		}
+	)
+
+	PlayerOrbitalData playerOD = file.playerOrbitalData[player]
+	RuiSetAsset( rui, "missileIcon", Endorsement_OrbitalSupport_GetIcon() )
+
+	bool playSound = false
+	while ( player.HasPassive( ePassives.PAS_ENDORSEMENT_ORBITAL_SUPPORT ))
+	{
+		if ( !OrbitalSupportReady( player ) )
+		{
+			bool isFiring = file.playerOrbitalData[player].orbitalFiring
+			vector color = isFiring ? COLOR_RED : COLOR_BLACK
+			float alpha = isFiring ? 0.95 : max( 0.25, playerOD.curChargeVal / PLAYERORBITALDATA_MAX_CHARGE )
+
+			RuiSetColorAlpha( rui, "missileIconColor", COLOR_GRAY / 255.0, alpha)
+			RuiSetColorAlpha( rui, "backgroundColor", color / 255.0, alpha )
+
+			RuiSetGameTime( rui, "missileReadyTime", RUI_BADGAMETIME )
+			playSound = false
+		}
+		else 
+		{
+			RuiSetColorAlpha( rui, "missileIconColor", COLOR_WHITE / 255.0, 0.95 )
+			RuiSetColorAlpha( rui, "backgroundColor", UNHINGED_COLOR / 255.0, 0.95 )
+
+			if ( !playSound )
+			{
+				EmitSoundOnEntity( player, SFX_ORBITAL_SUPPORT_READY )
+				playSound = true
+			}
+		}
+
+		WaitFrame()
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PostDamage________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Lock_on___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Waypoint__________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function GetLastTimeOnTarget( entity waypoint )
+{
+	return waypoint.GetWaypointGametime( 0 )
+}
+
+
+void function OnWaypointCreated( entity wp )
+{
+	int wpType = wp.GetWaypointType()
+
+	if ( wpType == eWaypoint.ORBITAL_SUPPORT_TRACKER )
+	{
+		thread OrbitalSupport_UpdateWaypoint_Thread( wp )
+	}
+}
+
+
+
+void function ServerToClient_ResetOrbitalStikeTimer()
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) )
+		return
+
+	if ( !( player in file.playerOrbitalData ) )
+		return
+
+	file.playerOrbitalData[player].curChargeVal = 0
+}
+
+
+
+void function ServerToClient_UpdateOrbitalCharge( float value )
+{
+	entity player = GetLocalViewPlayer()
+	file.playerOrbitalData[player].curChargeVal = value
+}
+
+
+
+void function ServerToClient_UpdateOrbitalIsFiring( bool value )
+{
+	entity player = GetLocalViewPlayer()
+	file.playerOrbitalData[player].orbitalFiring = value
+}
+
+
+
+void function ServerToClient_UpdateOrbitalIsFiring_Target( bool value )
+{
+	file.activelyFiring = value
+}
+
+
+
+bool function IsOrbtialFiring()
+{
+	return file.activelyFiring
+}
+
+
+
+void function OrbitalSupport_UpdateWaypoint_Thread( entity wp )
+{
+	wp.SetDoDestroyCallback( true )
+	wp.EndSignal( "OnDeath" )
+	wp.EndSignal( "OnDestroy" )
+
+	entity owner  = wp.GetOwner()
+	entity target = wp.GetParent()
+
+	bool isOwner = GetLocalViewPlayer() == owner
+
+	if ( isOwner )
+	{
+		
+		var rui = CreateCockpitRui( RUI_ORBITAL_SUPPORT, 1 )
+		RuiTrackFloat3( rui, "worldPos", wp, RUI_TRACK_ABSORIGIN_FOLLOW )
+		RuiTrackFloat( rui, "curTone", wp, RUI_TRACK_WAYPOINT_FLOAT, 0 )
+		RuiTrackFloat( rui, "maxTone", wp, RUI_TRACK_WAYPOINT_FLOAT, 1 )
+		RuiSetColorAlphaIfExists( rui, "fillColor", UNHINGED_COLOR / 255.0, 1.0 )
+
+		OnThreadEnd(
+			function() : ( rui )
+			{
+				
+				
+				RuiSetBool( rui, "dieWhenPossible", true )
+			}
+		)
+
+		while( true )
+		{
+			bool hasTag          = GetHitsOnTarget( wp ) >= tuning.hitsPerTag
+			bool show            = isOwner
+			bool playerCanSeePos = PlayerCanSeePos( GetLocalViewPlayer(), wp.GetOrigin(), true, 90 )
+			entity targetHoverVeh = HoverVehicle_GetVehicleOccupiedByPlayer( target )
+			bool targetInVehicle = IsValid( targetHoverVeh )
+			if ( targetInVehicle )
+			{
+				playerCanSeePos = PlayerCanSee( GetLocalViewPlayer(), targetHoverVeh, true, 90, true )
+			}
+			show = show && ( hasTag || playerCanSeePos )
+			RuiSetBool( rui, "isVisible", show )
+
+			if ( hasTag )
+			{
+				float startTime   = GetLastTimeOnTarget( wp )
+				float lockonScale = 1 - ((Time() - startTime) / tuning.hitExpireTimeSec )
+				RuiSetFloat( rui, "lockonScale", 1 ) 
+			}
+			WaitFrame()
+		}
+
+		WaitForever()
+	}
+	else if ( GetLocalViewPlayer() == target )
+	{
+		file.lockedPlayers.append( owner )
+
+		OnThreadEnd(
+			function() : ( owner )
+			{
+				file.lockedPlayers.fastremovebyvalue( owner )
+			}
+		)
+		WaitForever()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Activate_Ability__________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ORBITAL_PROJECTILE_______________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________HELPER___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEV___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

@@ -1,0 +1,6423 @@
+global function Sh_RespawnBeacon_Init
+
+global function GetRespawnStyle
+global function GetRemainingRespawnsForPlayer
+global function IsRespawnBeacon
+global function GetAllRespawnBeacons
+global function RespawnChamberOnUse
+global function GetStartingRespawnCount
+global function ShouldRestoreKittedWeapons
+
+global function Get_RespawnStatus_String_ForPlayer
+
+global function RespawnBeacons_PLV_NoBanners
+global function RespawnBeacons_HasAutoBanners
+global function RespawnBeacons_DNALifetime
+global function Player_Banners_Enabled
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ServerCallback_RespawnPodStarted
+global function ServerCallback_DisplayWaitingForRespawn
+global function ServerCallback_RespawnDNAHint
+
+global function ServerCallback_RespawnBeaconStart
+global function ServerCallback_RespawnBeaconStop
+
+global function TryPingRespawnItem
+
+global function UpdateRespawnChamberRuis
+
+
+
+
+
+global function ReusableBeacon_ServerCallback_OnBeaconStateChanged
+global function ReusableBeacon_ServerCallback_OnBeaconShouldBlink
+
+
+
+global function ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled
+global function ReusableBeacon_IsBeaconUsable
+
+
+
+#if DEV
+global function DEV_Respawn_DropshipSequence_AnimSpeed
+#endif
+
+global function AddBeaconEntToRespawnBeaconsArray
+global function GetRespawnStatus
+global function GetEliminationStyle
+
+global function CountTeammatesWaitingToBeRespawned
+global function HasTeammatesToRespawn
+global function HasTeammatesRespawningFromBeacon
+global function ShouldFastBannerPickup
+global function HasInterruptableBannerPickup
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global const string RESPAWN_CHAMBER_SCRIPTNAME = "respawn_chamber"
+
+global const string RESPAWN_DNA_TARGETNAME = "respawn_dna"
+global const string RESPAWN_DROPSHIP_TARGETNAME = "respawn_dropship"
+global const string PICKING_UP_RESPAWN_BANNER_ANIM = "ptpov_burn_card_activate_seq_gladcard"
+global const string PICKING_UP_RESPAWN_BANNER_AND_MRB_ANIM = "ptpov_burn_card_and_respawn_activate_seq_gladcard"
+
+const string RESPAWN_BEACON_ALTMOVENODE_MOVER_SCRIPTNAME = "respawn_beacon_altmovenode_mover"
+
+const float RESPAWN_BEACON_HOLO_EFFECT_HEIGHT = 75.0
+
+global const float RESPAWN_DNA_LIFETIME = 90.0
+const float RESPAWN_DROP_TIME = 20.0
+global const float RESPAWN_BEACON_RESPAWN_TIME = 5.0
+global const int RESPAWN_BEACON_MAX_NUM_POSITIONS_ON_DROPSHIP = 4
+
+global const int DROPSHIP_ANIM_HEIGHT_OFFSET = 2897
+
+global const string RESPAWN_BEACON_SUCCESS_SOUND = "Survival_RespawnChamber_Activate"
+global const string RESPAWN_BEACON_LOOP_SOUND = "Survival_RespawnBeacon_Linking_loop"
+
+global const asset RESPAWN_DROPSHIP_MODEL = $"mdl/vehicle/goblin_dropship/goblin_dropship.rmdl"
+global const asset RESPAWN_BEACON_EMITTER_FX = $"P_chamber_proj_holo"
+global const asset RESPAWN_BEACON_BEAM_FX = $"P_chamber_beam"
+global const asset RESPAWN_BEACON_SCAN_FX = $"P_chamber_celebration_s19"
+
+const int MAX_DROPSHIP_SEATS = 4
+
+
+const asset RESPAWN_BEACON_PULSATE_FX = $"P_chamber_pulse_s19"	
+const string RESPAWN_INTERACT_PULSATE_SOUND = "Survival_RespawnEquippedBeacon_Full" 
+
+global const asset RESPAWN_BEACON_ICON = $"rui/hud/gametype_icons/survival/dna_station"
+global const asset RESPAWN_BEACON_ICON_NO_FRAME = $"rui/hud/gametype_icons/survival/beacon_icon"
+global const asset RESPAWN_BEACON_ICON_SMALL = $"rui/hud/gametype_icons/survival/dna_station_small"
+global const asset RESPAWN_BEACON_INUSE_ICON = $"rui/hud/gametype_icons/survival/dna_station_inuse"
+global const asset RESPAWN_BEACON_DISABLED_ICON = $"rui/hud/gametype_icons/survival/dna_station_disabled"
+const string SOUND_HOLOGRAM_LOOP = "Survival_Emit_RespawnChamber"
+
+const float RESPAWN_CHAMBER_ICON_FADE_DIST_NEAR = 300.0
+const float RESPAWN_CHAMBER_ICON_FADE_DIST_FAR = 1000.0
+
+const int RESPAWN_THANKS_DELAY = 4
+
+const string ANIM_FLYIN_IDLE = "dropship_classic_mp_flyin_idle"
+const string ANIM_FLYIN_MOVE = "dropship_classic_mp_flyin"
+const string ANIM_FLYIN_MOVE_SHORT = "dropship_classic_mp_flyin_short"
+
+const float MOBILE_RESPAWN_BEACON_ICON_FADE_DIST_ZERO = 0.0
+global const string MOBILE_RESPAWN_BEACON_SCRIPTNAME = "respawn_chamber_mobile"
+
+
+
+
+
+const string FUNCNAME_PingBeaconFromMap = "RespawnBeacon_ClientToServer_PingBeaconFromMap"
+
+
+
+const string WAYPOINT_REUSABLE_RESPAWNBEACON = "waypoint_reusable_respawnbeacon"
+const int WAYPOINT_ENT_IDX_RESPAWN_BEACON_ENT = 0
+const int WAYPOINT_INT_IDX_BEACON_STATE = 3
+const int WAYPOINT_INT_NUM_BITS_PER_BEACON_STATE = 2 
+const int WAYPOINT_INT_BEACON_STATE_MASK = 0x3 
+const int WAYPOINT_INT_MAX_TEAMS = (32 / WAYPOINT_INT_NUM_BITS_PER_BEACON_STATE) * WAYPOINT_COMMON_VAR_COUNT 
+const int WAYPOINT_FLOAT_IDX_RESPAWN_BEACON_COOLDOWN_END_TIME = 0
+const float UNSET_TIME = -1.0
+
+
+
+
+
+
+
+global enum eReusableRespawnBeaconState
+{
+	AVAILABLE, 
+	COOLDOWN, 
+	USED, 
+	INVALID,
+	_count
+}
+
+
+global struct dropshipAnimData
+{
+	string                     idleAnim
+	string                     idlePOVAnim
+	string                     jumpAnim
+	string                     jumpPOVAnim
+	string                     attachment = "origin"
+	bool                       hideProxy = true
+	void functionref( entity ) viewConeFunc
+	float                      yawAngle
+	string                     firstPersonJumpOutSound 
+}
+
+global struct DropshipAltFlyinData
+{
+	vector startPos
+	vector endPos
+	float  timeToTake
+	entity dropship
+	string dropshipAISettings
+}
+
+global struct sRestoreWeaponInfo
+{
+	entity ent
+	string weaponRef = ""
+	array< string > modRefs = []
+	int slot = -1
+
+		int weaponXp = -1
+
+
+		int hopupPoints = 0
+
+
+
+
+
+
+	bool hasAkimbo = false
+	int skinItemFlavorGUID = ASSET_SETTINGS_UNIQUE_ID_INVALID
+}
+
+global struct respawnLoadout
+{
+	array< sRestoreWeaponInfo > restoreWeaponInfos
+
+	ArmorData armorData
+	string helmetRef
+
+	bool wasDeath_Suicide
+}
+
+struct
+{
+	bool respawnStyleIsCached = false
+	int cachedRespawnStyle
+
+	array<dropshipAnimData>      dropshipAnimDataList
+	array<entity>                allStations
+
+
+		table < entity, entity > reusableBeaconEntToWaypointTable
+
+
+
+		table<entity, int> chamberToBeamFX
+		table<entity, var> beaconEntToMiniMapIconRuiTable
+		table<entity, var> beaconEntToFullMapIconRuiTable
+		table<entity, var> beaconEntToInWorldIconRuiTable
+
+		bool mobileRespawnSpawnInProgress
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+file
+
+
+
+
+struct sTunings
+{
+	bool fasterDropshipSequence_Enabled = false
+	float respawn_Dropship_PlayerExitAnim_Delay = 5.0 
+	string dropship_Anim_Flyin_Move = ANIM_FLYIN_MOVE
+
+	
+	float respawn_DropshipSequence_AnimSpeed = 1.0
+
+	float respawn_Dropship_Overflow_ZOffset = 30.0 
+
+	
+	string br_Respawn_Equipment_Str = "incapshield_pickup_lv1 backpack_pickup_lv1"
+
+	
+	string br_Respawn_Consumables_Str = "health_pickup_health_small:4 health_pickup_combo_small:4"
+}
+sTunings tunings
+
+
+
+void function Sh_RespawnBeacon_Init()
+{
+
+
+
+
+
+
+
+
+
+	Tunings_Init()
+
+	PrecacheScriptString( RESPAWN_CHAMBER_SCRIPTNAME )
+	PrecacheScriptString( MOBILE_RESPAWN_BEACON_SCRIPTNAME )
+
+
+
+
+	PrecacheModel( RESPAWN_DROPSHIP_MODEL )
+
+	int respawnStyle = GetRespawnStyle()
+	printt( "Sh_RespawnBeacon_Init() - Respawn style - " + respawnStyle  )
+
+
+		if ( !IsLobby() )
+		{
+			
+			RegisterNetworkedVariable( "respawnStatus", SNDC_PLAYER_GLOBAL, SNVT_INT, eRespawnStatus.NONE )
+		}
+
+
+	if ( respawnStyle == eRespawnStyle.NONE )
+		return
+
+	PrecacheParticleSystem( RESPAWN_BEACON_EMITTER_FX )
+	PrecacheParticleSystem( RESPAWN_BEACON_BEAM_FX )
+	PrecacheParticleSystem( RESPAWN_BEACON_SCAN_FX )
+	PrecacheParticleSystem( RESPAWN_BEACON_PULSATE_FX )
+
+
+		RegisterNetworkedVariable( "respawnsRemaining", SNDC_PLAYER_GLOBAL, SNVT_INT, GetStartingRespawnCount() )
+		RegisterNetworkedVariable( "eliminationStyle", SNDC_PLAYER_GLOBAL, SNVT_INT, eEliminationStyle.NONE )
+		RegisterNetworkedVariable( "respawnStatusEndTime", SNDC_PLAYER_GLOBAL, SNVT_TIME, -1 )
+		RegisterNetworkedVariable( "respawnBannerPickedUpTime", SNDC_PLAYER_GLOBAL, SNVT_TIME, -1 )
+
+		Remote_RegisterClientFunction( "ServerCallback_DisplayWaitingForRespawn", "entity", "float", 0.0, 5000.0, 32, "float", 0.0, 5000.0, 32 )
+		Remote_RegisterClientFunction( "ServerCallback_RespawnPodStarted", "float", 0.0, 5000.0, 32 )
+		Remote_RegisterClientFunction( "ServerCallback_RespawnDNAHint" )
+
+		Remote_RegisterClientFunction( "ServerCallback_RespawnBeaconStart", "float", 0.0, 5000.0, 16, "float", 0.0, 5000.0, 16 )
+		Remote_RegisterClientFunction( "ServerCallback_RespawnBeaconStop" )
+
+		Remote_RegisterClientFunction( "ServerCallback_PromptRespawnThanks" )
+
+
+		if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() )
+		{
+			Remote_RegisterClientFunction( "ReusableBeacon_ServerCallback_OnBeaconStateChanged", "entity", "int", 0, eReusableRespawnBeaconState._count + 1 )
+			Remote_RegisterClientFunction( "ReusableBeacon_ServerCallback_OnBeaconShouldBlink", "entity" )
+		}
+
+
+		Remote_RegisterServerFunction( "ClientCallback_PingNearestRespawn", "vector", -FLT_MAX, FLT_MAX, 32 )
+		Remote_RegisterServerFunction( FUNCNAME_PingBeaconFromMap, "typed_entity", "prop_script" )
+
+		if ( HasInterruptableBannerPickup() )
+		{
+			Remote_RegisterServerFunction( "ClientToServer_CancelBannerPickupAnim" )
+		}
+
+
+
+		RegisterSignal( "ReviveRuiThread" )
+		RegisterSignal( "SpectatorShowRespawnRui" )
+
+
+
+
+			{
+				AddCreateCallback( "prop_dynamic", RespawnEntitySpawned )
+				AddCreateCallback( "prop_script", RespawnEntitySpawned )
+			}
+
+		RegisterNetVarIntChangeCallback( "respawnStatus", RespawnStatusChanged )
+
+		AddCreateCallback( PLAYER_WAYPOINT_CLASSNAME, PlayerWaypoint_CreateCallback )
+		AddDestroyCallback( PLAYER_WAYPOINT_CLASSNAME, PlayerWaypoint_DestroyCallback )
+
+		if ( HasInterruptableBannerPickup() )
+		{
+			RegisterConCommandTriggeredCallback( "+attack", AttemptCancelBannerPickup )
+			RegisterConCommandTriggeredCallback( "+melee", AttemptCancelBannerPickup )
+
+			RegisterConCommandTriggeredCallback( "+speed", AttemptCancelBannerPickup )
+		}
+
+		RegisterMinimapPackages()
+		RegisterButtonPressedCallback( KEY_SPACE, TryPingRespawnItem )
+		RegisterButtonPressedCallback( BUTTON_A, TryPingRespawnItem )
+
+		if( RespawnBeacons_PingFromMap_Enabled() )
+			AddCallback_OnFindFullMapAimEntity( GetRespawnBeaconUnderAim, PingRespawnBeaconUnderAim )
+
+		bool doSetupMapFeatureItem = SpawnGroupSkydive_AreRespawnBeaconsEnabled() || ( ( GetRespawnStyle() == eRespawnStyle.RESPAWN_CHAMBERS ) && RespawnBeacons_PLV_Enabled() && !RespawnBeacons_ShouldEnableBeaconsInNonBeaconRespawnMode() )
+		string beaconDescription = RespawnBeacons_PLV_NoBanners() || RespawnBeacons_HasAutoBanners() ? "#NO_BANNER_RESPAWN_BEACON_DESC" : "#RESPAWN_BEACON_DESC"
+		if ( doSetupMapFeatureItem )
+			SetMapFeatureItem( 1100, "#RESPAWN_BEACON", beaconDescription, RESPAWN_BEACON_ICON )
+
+		RegisterSignal( "ManageRespawnChamberDataThread" )
+
+			if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() )
+			{
+				RegisterSignal( "ReusableBeaconDisabled" )
+				Waypoints_RegisterCustomType( WAYPOINT_REUSABLE_RESPAWNBEACON, ReusableBeacon_OnWaypointInstanced )
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function Tunings_Init()
+{
+	tunings.fasterDropshipSequence_Enabled = GetCurrentPlaylistVarBool( "respawn_fasterdropshipsequence_enabled", tunings.fasterDropshipSequence_Enabled )
+	tunings.respawn_DropshipSequence_AnimSpeed = GetCurrentPlaylistVarFloat( "respawn_dropshipsequence_animspeed", 	tunings.respawn_DropshipSequence_AnimSpeed )
+
+	if( tunings.fasterDropshipSequence_Enabled )
+	{
+		tunings.dropship_Anim_Flyin_Move = ANIM_FLYIN_MOVE_SHORT
+	}
+
+	tunings.respawn_Dropship_Overflow_ZOffset = GetCurrentPlaylistVarFloat( "respawn_dropship_overflow_zoffset", tunings.respawn_Dropship_Overflow_ZOffset )
+	tunings.respawn_Dropship_Overflow_ZOffset = tunings.respawn_Dropship_Overflow_ZOffset * METERS_TO_INCHES
+
+	
+	tunings.br_Respawn_Equipment_Str = GetCurrentPlaylistVarString( "br_respawn_equipment", tunings.br_Respawn_Equipment_Str )
+	tunings.br_Respawn_Consumables_Str = GetCurrentPlaylistVarString( "br_respawn_consumables", tunings.br_Respawn_Consumables_Str )
+}
+
+void function ShRespawnBeacon_RegisterAinAnalysisFuncs()
+{
+	AddDropshipFlightAnalysis( eFlightPathAnalysisIndex.RESPAWN_DROPSHIP_FLYIN_MOVE, RESPAWN_DROPSHIP_MODEL, ANIM_FLYIN_MOVE, AnaylsisFuncDropshipTestJumpout, "dropship_deploy" )
+}
+
+
+void function RegisterMinimapPackages()
+{
+
+
+
+
+
+
+	bool doRegister = GetRespawnStyle() == eRespawnStyle.RESPAWN_CHAMBERS || RespawnBeacons_ShouldEnableBeaconsInNonBeaconRespawnMode() || SpawnGroupSkydive_AreRespawnBeaconsEnabled()
+	if ( doRegister )
+	{
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.RESPAWN_CHAMBER, MINIMAP_OBJECT_RUI, MinimapPackage_RespawnChamber, FULLMAP_OBJECT_RUI, FullmapPackage_RespawnChamber )
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.RESPAWN_DNA, $"ui/minimap_square_respawn_dna_pickup.rpak", MinimapPackage_RespawnDNA, $"ui/in_world_minimap_respawn_dna.rpak", MinimapPackage_RespawnDNA )
+	}
+}
+
+void function RespawnStatusChanged( entity player, int new )
+{
+	if ( !RespawnBeacons_ShouldShowInGameUI() )
+		return
+
+	if ( player == GetLocalClientPlayer() )
+		UpdateRespawnStatus( new )
+
+	if ( new == eRespawnStatus.WAITING_FOR_DROPPOD )
+		FlashGameWindow()
+
+	entity viewPlayer = GetLocalViewPlayer()
+
+	if ( !IsValid( viewPlayer ) )
+		viewPlayer = GetLocalClientPlayer()
+
+	if ( !IsValid( viewPlayer ) )
+		return
+
+	bool waitingToBeRespawned = HasTeammatesToRespawn( viewPlayer.GetTeam() )
+
+	foreach ( rui in file.beaconEntToInWorldIconRuiTable.clonevalues() )
+	{
+		UpdateRespawnChamberRuis( rui, waitingToBeRespawned )
+	}
+
+	
+	foreach( rui in file.beaconEntToMiniMapIconRuiTable.clonevalues() )
+	{
+		RuiSetBool( rui, "hasSmallIcon", !waitingToBeRespawned )
+	}
+
+	
+	foreach( rui in file.beaconEntToFullMapIconRuiTable.clonevalues() )
+	{
+		RuiSetBool( rui, "hasSmallIcon", !waitingToBeRespawned )
+	}
+
+	bool doRespawnBeaconFX = SpawnGroupSkydive_AreRespawnBeaconsEnabled() || ( GetRespawnStyle() != eRespawnStyle.NONE && !RespawnBeacons_ShouldEnableBeaconsInNonBeaconRespawnMode() )
+	if ( doRespawnBeaconFX )
+	{
+		int fxId = GetParticleSystemIndex( RESPAWN_BEACON_BEAM_FX )
+
+		foreach ( ent in file.allStations )
+		{
+			if ( !( ent in file.chamberToBeamFX ) )
+				continue
+
+			if ( waitingToBeRespawned )
+			{
+				if ( !EffectDoesExist( file.chamberToBeamFX[ ent ] ) )
+				{
+					file.chamberToBeamFX[ ent ] = StartParticleEffectOnEntity( ent, fxId, FX_PATTACH_POINT_FOLLOW_NOROTATE, ent.LookupAttachment( "FX_EMITTER" ) )
+				}
+			}
+			else
+			{
+				if ( EffectDoesExist( file.chamberToBeamFX[ ent ] ) )
+				{
+					EffectStop( file.chamberToBeamFX[ ent ], true, true )
+				}
+
+				file.chamberToBeamFX[ ent ] = -1
+			}
+		}
+	}
+
+	
+	DeathScreen_RespawnStatusChanged( player, new )
+}
+
+void function UpdateRespawnChamberRuis( var rui, bool waitingToBeRespawned )
+{
+	if ( waitingToBeRespawned )
+	{
+		RuiSetFloat( rui, "distanceFade", RESPAWN_CHAMBER_ICON_FADE_DIST_FAR )
+		RuiSetBool( rui, "pinToEdge", true )
+		RuiSetBool( rui, "showClampArrow", true )
+	}
+	else if ( file.mobileRespawnSpawnInProgress )
+	{
+		RuiSetFloat( rui, "distanceFade", MOBILE_RESPAWN_BEACON_ICON_FADE_DIST_ZERO )
+		RuiSetBool( rui, "pinToEdge", false )
+		RuiSetBool( rui, "showClampArrow", false )
+	}
+	else
+	{
+		RuiSetFloat( rui, "distanceFade", RESPAWN_CHAMBER_ICON_FADE_DIST_NEAR )
+		RuiSetBool( rui, "pinToEdge", false )
+		RuiSetBool( rui, "showClampArrow", false )
+	}
+}
+
+
+int function GetStartingRespawnCount()
+{
+	return GetCurrentPlaylistVarInt( "respawns", 0 )
+}
+
+
+bool function RespawnBeacons_PingFromMap_Enabled()
+{
+	return GetCurrentPlaylistVarBool( "respawnbeacons_pingfrommap_enabled", true )
+}
+
+
+
+
+bool function RespawnBeacons_ShouldEnableBeaconsInNonBeaconRespawnMode()
+{
+
+
+
+
+
+
+
+
+
+
+	return false
+}
+
+
+bool function IsRespawnBeacon( entity ent )
+{
+	switch ( ent.GetScriptName() )
+	{
+		case RESPAWN_CHAMBER_SCRIPTNAME:
+
+
+
+		case MOBILE_RESPAWN_BEACON_SCRIPTNAME:
+			return true
+	}
+	return false
+}
+
+array<entity> function GetAllRespawnBeacons()
+{
+	return file.allStations
+}
+
+bool function ShouldFastBannerPickup()
+{
+	return GetCurrentPlaylistVarBool( "fast_banner_pickup", true )
+}
+
+bool function HasInterruptableBannerPickup()
+{
+	return GetCurrentPlaylistVarBool( "cancelable_banner_pickup_enabled", true )
+}
+
+bool function ShouldRestoreKittedWeapons()
+{
+	return GetCurrentPlaylistVarBool( "restore_kitted_weapons", false )
+}
+
+void function RespawnEntitySpawned( entity ent )
+{
+	if( !IsValid( ent ) )
+		return
+
+	if ( !IsRespawnStationEnt( ent ) )
+		return
+
+	if ( !RespawnBeacons_PLV_Enabled() && ent.GetScriptName() != MOBILE_RESPAWN_BEACON_SCRIPTNAME )
+	{
+		
+		
+		
+		
+
+
+
+
+
+		return
+	}
+
+
+		if ( RespawnBeacons_ShouldShowInGameUI() )
+		{
+
+				if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() && ReusableBeacon_IsValidReusableMapBeacon( ent ) )
+				{
+					AddEntityCallback_GetUseEntOverrideText( ent, ReusableBeacon_TextOverride )
+				}
+				else
+
+				{
+					SetBeaconToDefaultState_Client( ent )
+					AddEntityCallback_GetUseEntOverrideText( ent, RespawnChamber_TextOverride )
+				}
+		}
+		else if ( IsValid( ent ) && ent in file.chamberToBeamFX )
+		{
+			if ( EffectDoesExist( file.chamberToBeamFX[ ent ] ) )
+				EffectStop( file.chamberToBeamFX[ ent ], true, true )
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	AddBeaconEntToRespawnBeaconsArray( ent )
+
+	SetCallback_CanUseEntityCallback( ent, Beacon_CanUse )
+	SetCallback_ShouldUseBlockReloadCallback( ent, SimpleShouldNotBlockReloadCallback )
+
+	AddCallback_OnUseEntity_ClientServer( ent, RespawnChamberOnUse )
+	AddEntityDestroyedCallback( ent, RespawnEntityDestroyed )
+
+	
+	
+	
+	
+	
+	
+	
+}
+
+void function RespawnEntityDestroyed( entity ent )
+{
+
+		if ( ent in file.beaconEntToMiniMapIconRuiTable )
+		{
+			delete file.beaconEntToMiniMapIconRuiTable[ ent ]
+		}
+
+		if ( ent in file.beaconEntToFullMapIconRuiTable )
+		{
+			delete file.beaconEntToFullMapIconRuiTable[ ent ]
+		}
+
+		if ( ent in file.beaconEntToInWorldIconRuiTable )
+		{
+			delete file.beaconEntToInWorldIconRuiTable[ ent ]
+		}
+
+
+
+		if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() )
+		{
+			if ( ent in file.reusableBeaconEntToWaypointTable )
+				delete file.reusableBeaconEntToWaypointTable[ ent ]
+		}
+
+
+	file.allStations.fastremovebyvalue( ent )
+}
+
+
+void function SetBeaconToDefaultState_Client( entity ent )
+{
+	var rui
+	if ( ent.GetScriptName() == MOBILE_RESPAWN_BEACON_SCRIPTNAME )
+		rui = AddOverheadIcon( ent, RESPAWN_BEACON_ICON, false, $"ui/overhead_icon_mobile_respawn_beacon.rpak" )
+	else
+		rui = AddOverheadIcon( ent, RESPAWN_BEACON_ICON, false, $"ui/overhead_icon_respawn_beacon.rpak" )
+	RuiSetFloat2( rui, "iconSize", <80, 80, 0> )
+	RuiSetFloat( rui, "distanceFade", RESPAWN_CHAMBER_ICON_FADE_DIST_NEAR )
+	RuiSetBool( rui, "adsFade", true )
+	RuiSetString( rui, "hint", "#RESPAWN_ALLCAPS" )
+
+	thread ManageRespawnChamberData( ent, rui )
+
+	if ( ent.GetScriptName() == RESPAWN_CHAMBER_SCRIPTNAME ) 
+		thread RespawnBeacon_PlayHologramVFX( ent )
+}
+
+
+
+
+void function AddBeaconEntToRespawnBeaconsArray( entity beacon )
+{
+	if ( IsValid( beacon ) )
+		file.allStations.append( beacon )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Beacon_CanUse( entity player, entity ent, int useFlags )
+{
+	if ( Bleedout_IsBleedingOut( player ) )
+		return false
+
+	if ( player.ContextAction_IsActive() )
+		return false
+
+	if ( PlayerDrone_IsPlayerInDroneView( player ) )
+		return false
+
+	if ( !SURVIVAL_PlayerAllowedToPickup( player ) )
+	{
+
+		
+		entity exclusiveUseEnt = ent.GetExclusiveUseEnt()
+		if ( exclusiveUseEnt != player )
+		{
+			return false
+		}
+
+
+
+	}
+
+	if ( ent.e.isBusy )
+		return false
+
+	if ( GetCurrentPlaylistVarBool( "interrupted_stops_revive", false ) )
+	{
+		if ( StatusEffect_HasSeverity( player, eStatusEffect.interrupted ) )
+			return false
+	}
+
+	return true
+}
+
+bool function Has_BR_Respawn_WithArmor()
+{
+	bool hasRespawnWithArmor = GameMode_IsActive( eGameModes.SURVIVAL ) && GetCurrentPlaylistVarBool( "has_br_respawn_witharmor", true )
+
+
+	if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_STRIKEOUT ) )
+		hasRespawnWithArmor = true
+
+
+	return( hasRespawnWithArmor )
+}
+
+bool function RespawnEquipped_PLV_EnsureMin_Weapon()
+{
+	
+	return( GetCurrentPlaylistVarBool( "respawnequipped_ensuremin_weapon", true ) )
+}
+
+bool function RespawnEquipped_PLV_EnsureMin_Consumables()
+{
+	
+	return( GetCurrentPlaylistVarBool( "respawnEquipped_ensuremin_consumables", false ) )
+}
+
+
+bool function RespawnEquipped_PLV_UseArmorCore()
+{
+	
+	return( GetCurrentPlaylistVarBool( "br_respawn_use_armor_core", true ) )
+}
+
+
+bool function Has_BR_Respawn_Restore_NoSuicide()
+{
+	bool hasPreventSuicideExploit = GameMode_IsActive( eGameModes.SURVIVAL ) && GetCurrentPlaylistVarBool( "has_br_respawn_restore_nosuicide", false )
+	return( hasPreventSuicideExploit )
+}
+
+
+bool function RespawnBeacons_PLV_NoBanners()
+{
+	return( GetCurrentPlaylistVarBool( "RespawnBeacon_NoBanners", false ) )
+}
+
+
+bool function RespawnBeacons_HasAutoBanners()
+{
+	return GetCurrentPlaylistVarBool( "has_auto_banners", false )
+}
+
+
+
+
+
+
+
+
+float function RespawnBeacons_DNALifetime()
+{
+	return GetCurrentPlaylistVarFloat( "respawn_dna_lifetime", RESPAWN_DNA_LIFETIME )
+}
+
+bool function RespawnEquipped_PLV_RestoreAkimbo()
+{
+	return( GetCurrentPlaylistVarBool( "respawnequipped_restoreakimbo", true ))
+}
+
+bool function Player_Banners_Enabled()
+{
+	bool RespawnBeacons_Enabled = RespawnBeacons_PLV_Enabled()
+	if( !RespawnBeacons_Enabled )
+		return false
+
+	bool no_banners = RespawnBeacons_PLV_NoBanners()
+	if( no_banners )
+		return false
+
+	bool auto_banners = RespawnBeacons_HasAutoBanners()
+	if( auto_banners )
+		return false
+
+	return true
+}
+
+
+bool function RespawnBeacons_ShouldShowInGameUI()
+{
+	return GetCurrentPlaylistVarBool( "mrb_show_ingame_ui", true )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Has_BR_Respawn_WithWeapons()
+{
+	bool hasRespawnWithWeapons = GameMode_IsActive( eGameModes.SURVIVAL ) && GetCurrentPlaylistVarBool( "has_br_respawn_withweapons", true )
+	return( hasRespawnWithWeapons )
+}
+
+bool function RespawnBeacon_PLV_RestoreAttachments_Enabled()
+{
+	
+	return( GetCurrentPlaylistVarBool( "has_br_respawn_withattachments", false ))
+}
+
+string function RespawnBeacon_PLV_RestoreAttachments_Types()
+{
+	return( GetCurrentPlaylistVarString( "respawnbeacon_restorableattachmenttypes", "barrel bolt hopup laser mag optic stock" ))
+}
+
+array< string > function RestorableAttachments_GetRestorableTypes()
+{
+	string plv = RespawnBeacon_PLV_RestoreAttachments_Types()
+	array< string > results = GetTrimmedSplitString( plv, " " )
+	return results
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Has_Respawn_ChargeTac()
+{
+	bool hasRespawnChargeTac = GetCurrentPlaylistVarBool( "has_respawn_chargetac", false  )
+	return hasRespawnChargeTac
+}
+
+
+
+void function ManageRespawnChamberData( entity ent, var rui )
+{
+	ent.Signal( "ManageRespawnChamberDataThread" ) 
+
+	file.chamberToBeamFX[ ent ] <- -1
+	file.beaconEntToInWorldIconRuiTable[ ent ] <- rui
+	ent.EndSignal( "OnDestroy" )
+	ent.EndSignal( "ManageRespawnChamberDataThread" )
+
+
+		
+		if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() && ReusableBeacon_IsValidReusableMapBeacon( ent ) )
+		{
+			ent.EndSignal( "ReusableBeaconDisabled" )
+		}
+
+
+	UpdateRespawnChamberRuis( rui, HasTeammatesToRespawn( GetLocalViewPlayer().GetTeam() ) )
+
+	OnThreadEnd(
+		function() : ( ent, rui )
+		{
+			if ( EffectDoesExist( file.chamberToBeamFX[ ent ] ) )
+				EffectStop( file.chamberToBeamFX[ ent ], true, true )
+
+			delete file.chamberToBeamFX[ ent ]
+
+			if ( ent in file.beaconEntToInWorldIconRuiTable )
+				delete file.beaconEntToInWorldIconRuiTable[ ent ]
+
+			file.mobileRespawnSpawnInProgress = false
+		}
+	)
+
+	WaitForever()
+}
+
+void function RespawnBeacon_PlayHologramVFX( entity ent )
+{
+	bool isMobile = ent.GetScriptName() == MOBILE_RESPAWN_BEACON_SCRIPTNAME
+
+	vector fwd    = AnglesToForward( ent.GetAngles() )
+	vector up     = AnglesToUp( ent.GetAngles() )
+	vector rgt    = AnglesToRight( ent.GetAngles() )
+	vector offset = up * 100
+	vector angles = AnglesCompose( ent.GetAngles(), <0, 0, -10> )
+
+	ent.EndSignal( "OnDestroy" )
+
+
+		
+		if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() && ReusableBeacon_IsValidReusableMapBeacon( ent ) )
+		{
+			ent.EndSignal( "ReusableBeaconDisabled" )
+		}
+
+
+	float height = isMobile ? 32.0 : RESPAWN_BEACON_HOLO_EFFECT_HEIGHT
+
+	entity fxHolder = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", ent.GetOrigin() + up * height, <-90, 0, 0> )
+
+	array<int> fx
+	fx.append( StartParticleEffectOnEntity( fxHolder, GetParticleSystemIndex( RESPAWN_BEACON_EMITTER_FX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID ) )
+	EmitSoundOnEntity( fxHolder, SOUND_HOLOGRAM_LOOP )
+
+	OnThreadEnd(
+		function() : ( fx, fxHolder )
+		{
+			
+			foreach ( effect in fx )
+			{
+				EffectStop( effect, false, true )
+			}
+			fxHolder.Destroy()
+		}
+	)
+
+	WaitForever()
+}
+
+void function MinimapPackage_RespawnDNA( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", $"" )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetBool( rui, "useTeamColor", false )
+	RuiSetFloat2( rui, "iconScale", <1.0, 60.0 / 120.0, 0.0> * 2.0 )
+
+	thread RespawnDNA_SetCharacterIcon( ent, rui, "defaultIcon" )
+}
+
+void function RespawnDNA_SetCharacterIcon( entity ent, var rui, string argName )
+{
+	ent.EndSignal( "OnDestroy" )
+
+	entity owner = ent.GetOwner()
+	if ( !IsValid( owner ) )
+		return
+
+	owner.EndSignal( "OnDestroy" )
+
+	ItemFlavor character = LoadoutSlot_WaitForItemFlavor( ToEHI( owner ), Loadout_Character() )
+
+	asset setFile = CharacterClass_GetSetFile( character )
+	asset icon    = GetGlobalSettingsAsset( setFile, "unitframe_icon" )
+
+	RuiSetImage( rui, argName, icon )
+}
+
+void function MinimapPackage_RespawnChamber( entity ent, var rui )
+{
+#if MINIMAP_DEBUG
+		printt( "Adding " + RESPAWN_BEACON_ICON + " (RespawnChamber) icon to minimap" )
+#endif
+
+	RespawnChamber_SetMapIconsToDefaultState( ent, rui )
+	file.beaconEntToMiniMapIconRuiTable[ ent ] <- rui
+}
+
+void function FullmapPackage_RespawnChamber( entity ent, var rui )
+{
+#if MINIMAP_DEBUG
+		printt( "Adding " + RESPAWN_BEACON_ICON + " (RespawnChamber) icon to full map" )
+#endif
+
+	RespawnChamber_SetMapIconsToDefaultState( ent, rui )
+	file.beaconEntToFullMapIconRuiTable[ ent ] <- rui
+}
+
+
+void function RespawnChamber_SetMapIconsToDefaultState( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", RESPAWN_BEACON_ICON )
+	RuiSetImage( rui, "smallIcon", RESPAWN_BEACON_ICON_SMALL )
+	RuiSetBool( rui, "hasSmallIcon", true )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetBool( rui, "useTeamColor", false )
+
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( !IsValid( viewPlayer ) )
+		viewPlayer = GetLocalClientPlayer()
+	if ( !IsValid( viewPlayer ) )
+		return
+	bool waitingToBeRespawned = HasTeammatesToRespawn( viewPlayer.GetTeam() )
+	RuiSetBool( rui, "hasSmallIcon", !waitingToBeRespawned )
+}
+
+void function MinimapPackage_RespawnChamber_ListenForBannerPossession( entity ent, var rui )
+{
+}
+
+string function RespawnChamber_TextOverride( entity ent )
+{
+	string baseString = Localize( RespawnChamber_TextOverride_BaseString( ent ) )
+
+
+	entity player = GetLocalViewPlayer()
+	if( Perk_CanBuyBanners( player ) )
+	{
+		baseString += "\n" + Localize( "#PERK_BANNER_CRAFTING_RESPAWN_BEACON_HINT" )
+	}
+
+
+	return baseString
+}
+
+string function RespawnChamber_TextOverride_BaseString( entity ent )
+{
+
+	if ( ent.GetScriptPropFlags() == 1 )
+		ent.e.munitionsDropSpawned = true
+
+
+	if ( file.mobileRespawnSpawnInProgress )
+	{
+		return ""
+	}
+
+	entity player = GetLocalViewPlayer()
+	int team      = player.GetTeam()
+	if ( GetPlayerArrayOfTeam( team ).len() == GetPlayerArrayOfTeam_Alive( team ).len() ||
+			!HasTeammatesToRespawn( team ) )
+	{
+
+
+
+
+
+
+
+
+
+
+		if( HasTeammates_WaitingForRespawn( team ) )
+			return "#HINT_RESPAWN_INPROGRESS"
+
+		if ( RespawnBeacons_PLV_NoBanners() || RespawnBeacons_HasAutoBanners() )
+			return "#NO_BANNER_HINT_RESPAWN_NEED"
+
+		return "#HINT_RESPAWN_NEED"
+	}
+
+		return "#HINT_RESPAWN_USE"
+}
+
+string function RespawnDNA_TextOverride( entity ent )
+{
+	if ( GetLocalViewPlayer().GetTeam() == ent.GetTeam() )
+		return Localize( "#HINT_PICKUP_DNA_USE", ent.GetOwner().GetPlayerName() )
+
+	return "#HINT_DESTROY_DNA_USE"
+}
+
+
+
+float function GetRespawnStationUseTime( entity ent )
+{
+	return RESPAWN_BEACON_RESPAWN_TIME
+}
+
+void function RespawnChamberOnUse( entity pickup, entity player, int pickupFlags )
+{
+	if ( !IsBitFlagSet( pickupFlags, USE_INPUT_LONG ) )
+		return
+
+
+
+
+
+
+	if ( !HasTeammatesToRespawn( player.GetTeam() ) )
+		return
+
+
+	RespawnChamberOnUse_Common( pickup, player )
+}
+
+void function RespawnChamberOnUse_Common( entity pickup, entity player )
+{
+	bool isMobile = pickup.GetScriptName() == MOBILE_RESPAWN_BEACON_SCRIPTNAME
+
+		if ( ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() && ReusableBeacon_IsValidReusableMapBeacon( pickup ) )
+		{
+			
+			
+			if ( !ReusableBeacon_IsBeaconUsable( pickup, player.GetTeam() ) )
+			{
+
+
+
+
+				return
+			}
+		}
+
+
+
+		HidePlayerHint( "#RESPAWN_AT_BEACONS_HINT" )
+
+
+	ExtendedUseSettings settings
+	settings.successSound = RESPAWN_BEACON_SUCCESS_SOUND
+
+
+		settings.loopSound = RESPAWN_BEACON_LOOP_SOUND
+		settings.ruiType = eExtendedUseRui.PROGRESS_BAR
+		settings.displayRuiFunc = DisplayRuiForRespawnChamber
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		settings.hint = "#HINT_RESPAWNING"
+		settings.icon = RESPAWN_BEACON_ICON_NO_FRAME
+
+		if ( isMobile )
+		{
+			settings.successFunc = RespawnSuccessClient_Mobile
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	if ( isMobile )
+	{
+		settings.duration = GetRespawnStationUseTime_Mobile( pickup )
+	}
+
+
+
+
+
+
+	else
+		settings.duration = GetRespawnStationUseTime( pickup )
+
+	settings.useInputFlag = IN_USE_LONG
+	settings.movementDisable = true
+
+	thread ExtendedUse( pickup, player, settings )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function DisplayRuiForRespawnChamber( entity ent, entity player, var rui, ExtendedUseSettings settings )
+{
+	float startTime = settings.startTime_Internal > 0.0 ? settings.startTime_Internal : Time()
+	float endTime = startTime + settings.duration
+	DisplayRuiForRespawnChamber_Internal( rui, settings.icon, startTime, endTime, settings.hint )
+}
+
+void function DisplayRuiForRespawnChamber_Internal( var rui, asset icon, float startTime, float endTime, string hint )
+{
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetImage( rui, "icon", icon )
+	RuiSetGameTime( rui, "startTime", startTime )
+	RuiSetGameTime( rui, "endTime", endTime )
+	RuiSetString( rui, "hintKeyboardMouse", hint )
+	RuiSetString( rui, "hintController", hint )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array< entity > function GetPlayersWaitingToBeRespawned( int team, bool checkDelivery = true, bool checkBeacon = true )
+{
+	array<entity> playersToSpawn
+	foreach ( p in GetPlayerArrayOfTeam( team ) )
+	{
+		int respawnStatus 		= p.GetPlayerNetInt( "respawnStatus" )
+		bool inDelivery 		= checkDelivery && ( respawnStatus == eRespawnStatus.WAITING_FOR_DELIVERY )
+		bool inBeaconRespawn 	= checkBeacon	&& ( respawnStatus == eRespawnStatus.WAITING_FOR_BEACON )
+
+		if ( !IsAlive( p ) && inDelivery || inBeaconRespawn )
+		{
+			playersToSpawn.append( p )
+		}
+	}
+
+	return playersToSpawn
+}
+
+int function CountTeammatesWaitingToBeRespawned( int team, bool checkDelivery = true, bool checkBeacon = true )
+{
+	array< entity > playersToRespawn = GetPlayersWaitingToBeRespawned( team, checkDelivery, checkBeacon )
+	return playersToRespawn.len()
+}
+
+bool function HasTeammatesToRespawn( int team, bool checkDelivery = true, bool checkBeacon = true )
+{
+	return CountTeammatesWaitingToBeRespawned( team, checkDelivery, checkBeacon ) > 0
+}
+
+bool function HasTeammatesRespawningFromBeacon( int team )
+{
+	return HasTeammatesToRespawn( team, false, true )
+}
+
+
+
+array< entity > function GetPlayers_WaitingForRespawn( int team )
+{
+	array< entity > teamPlayers = GetPlayerArrayOfTeam( team )
+	array< entity > playersWaitingToRespawn
+	foreach( pl in teamPlayers )
+	{
+		int respawnStatus = pl.GetPlayerNetInt( "respawnStatus" )
+		if( respawnStatus == eRespawnStatus.WAITING_FOR_RESPAWN )
+		{
+			playersWaitingToRespawn.append( pl )
+		}
+	}
+
+	return playersWaitingToRespawn
+}
+
+bool function HasTeammates_WaitingForRespawn( int team )
+{
+	array< entity > playersWaitingForRespawn = GetPlayers_WaitingForRespawn( team )
+
+	bool hasWaitingPlayers = playersWaitingForRespawn.len() > 0
+
+	return  hasWaitingPlayers
+}
+
+
+string function RespawnBeacon_TextOverride( entity ent )
+{
+	entity player = GetLocalViewPlayer()
+	entity owner  = ent.GetOwner()
+
+	if ( !IsValid( owner ) )
+		return ""
+
+	if ( !owner.IsPlayer() )
+		return ""
+
+	if ( ent.GetTeam() == player.GetTeam() )
+		return Localize( "%use% Respawn " + owner.GetPlayerName() )
+
+	return Localize( "%use% Destroy Respawn Beacon" )
+}
+
+
+int function GetRespawnStatus( entity player )
+{
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return eRespawnStatus.NONE
+
+	if ( GetRespawnStyle() == eRespawnStyle.NONE )
+		return eRespawnStatus.NONE
+
+	return player.GetPlayerNetInt( "respawnStatus" )
+}
+
+int function GetEliminationStyle( entity player )
+{
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return eEliminationStyle.NONE
+
+	if ( GetRespawnStyle() == eRespawnStyle.NONE )
+		return eEliminationStyle.NONE
+
+	return player.GetPlayerNetInt( "eliminationStyle" )
+}
+
+int function GetRespawnStyle()
+{
+	if ( file.respawnStyleIsCached )
+		return file.cachedRespawnStyle
+
+	if ( IsLobby() )
+	{
+		file.respawnStyleIsCached = true
+		file.cachedRespawnStyle = eRespawnStatus.NONE
+		return eRespawnStatus.NONE
+	}
+
+	int respawnStyle
+	string playlistRespawnStyle = GetCurrentPlaylistVarString( "survival_respawn_style", "respawn_chambers" ).tolower()
+	bool respawnStyleFound = false
+
+	for( int i = 0; i < eRespawnStyle._COUNT; i++ )
+	{
+		string enumStyle = GetEnumString( "eRespawnStyle", i )
+		if (enumStyle.tolower() == playlistRespawnStyle)
+		{
+			respawnStyle = i
+			respawnStyleFound = true
+			break
+		}
+	}
+
+	Assert( respawnStyleFound, "Playlist Respawn Style '" + playlistRespawnStyle + "' is not a specified enumerator." )
+
+	file.respawnStyleIsCached = true
+	file.cachedRespawnStyle = respawnStyle
+
+	return respawnStyle
+}
+
+string function Get_RespawnStatus_String_ForPlayer( entity player )
+{
+	int respawnStatus = GetRespawnStatus( player )
+	string respawnStatusString = respawnStatus_EnumToStringMap[ respawnStatus ]
+	return( respawnStatusString )
+}
+
+const int INFINITE_RESPAWNS = -1
+int function GetRemainingRespawnsForPlayer( entity player )
+{
+	int numRespawnsForMode = GetStartingRespawnCount() 
+	if ( numRespawnsForMode == INFINITE_RESPAWNS )
+		return INFINITE_RESPAWNS
+
+	if ( !IsValid( player ) )
+		return 0
+
+	return player.GetPlayerNetInt( "respawnsRemaining" )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerCallback_DisplayWaitingForRespawn( entity ent, float startTime, float endTime )
+{
+	thread DisplayWaitingForRespawnThread( ent, startTime, endTime )
+}
+
+void function DisplayWaitingForRespawnThread( entity ent, float startTime, float endTime )
+{
+	clGlobal.levelEnt.Signal( "ReviveRuiThread" )
+	clGlobal.levelEnt.EndSignal( "SquadEliminated" )
+	clGlobal.levelEnt.EndSignal( "ReviveRuiThread" )
+
+	if ( !IsValid( ent ) )
+		return
+
+	ent.SetDoDestroyCallback( true )
+	ent.EndSignal( "OnDestroy" )
+
+	if ( Time() > endTime )
+		return
+
+	DeathScreen_UpdateRespawnTime( startTime, endTime )
+
+	OnThreadEnd(
+		function() : ()
+		{
+		}
+	)
+
+	wait endTime - Time()
+}
+
+void function ServerCallback_RespawnPodStarted( float endTime )
+{
+	thread ReviveRuiThread( endTime )
+}
+
+void function ReviveRuiThread( float endTime )
+{
+	clGlobal.levelEnt.Signal( "ReviveRuiThread" )
+	clGlobal.levelEnt.EndSignal( "SquadEliminated" )
+
+	DeathScreen_UpdateRespawnTime( Time(), endTime )
+
+	Chroma_RespawningInDropship()
+
+	OnThreadEnd(
+		function() : ()
+		{
+			Chroma_RespawnComplete()
+		}
+	)
+
+	wait (endTime - Time())
+}
+
+void function ServerCallback_RespawnDNAHint()
+{
+	
+	
+	
+	
+	
+	
+	
+	
+
+	AddPlayerHint( 10.0, 1.0, $"", "#RESPAWN_AT_BEACONS_HINT" )
+}
+
+void function AttemptCancelBannerPickup( entity player )
+{
+	if ( !HasInterruptableBannerPickup() )
+		return
+
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return
+
+	if ( !IsPlayingBannerPickupAnim( player ) )
+		return
+
+	Remote_ServerCallFunction( "ClientToServer_CancelBannerPickupAnim" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function AnaylsisFuncDropshipTestJumpout( FlightPath flightPath, vector origin, float yaw )
+{
+	vector angles  = <0, yaw, 0>
+	vector forward = AnglesToForward( angles )
+	vector right   = AnglesToRight( angles )
+
+	if ( !IsLegalFlightPath( flightPath, origin, forward, right, true ) )
+		return false
+
+	if ( !CanDeploy( flightPath, origin, angles, forward, right ) )
+		return false
+
+	return true
+}
+
+bool function CanDeploy( FlightPath flightPath, vector origin, vector angles, vector forward, vector right )
+{
+	Point deployPoint   = GetPreviewPoint( flightPath )
+	vector deployOrigin = GetOriginFromPoint( deployPoint, origin, forward, right )
+	vector deployAngles = GetAnglesFromPoint( deployPoint, angles )
+
+	
+	deployAngles.x = 0
+	deployAngles.z = 0
+
+	vector deployFwd = AnglesToForward( deployAngles )
+
+	deployOrigin = deployOrigin - deployFwd * 150 
+
+	TraceResults results = TraceHull( deployOrigin, deployOrigin - <0, 0, 1000>, <-300, -300, -300>, <300, 300, 300>, null, flightPath.traceMask, TRACE_COLLISION_GROUP_NONE )
+	
+	
+	
+
+	if ( results.startSolid )
+		return false
+
+	if ( results.fraction < 1 )
+		return false
+
+	return true
+}
+
+
+void function TryPingRespawnItem( entity player )
+{
+	if ( !IsSpectating() )
+		return
+
+	entity viewPlayer = GetLocalViewPlayer()
+
+	if ( PlayerIsMarkedAsCanBeRespawned( player ) )
+	{
+		vector org = viewPlayer.GetOrigin()
+		Remote_ServerCallFunction( "ClientCallback_PingNearestRespawn", org )
+	}
+
+
+		if ( !PlayerIsMarkedAsCanBeRespawned( player ) )
+		{
+			vector org = viewPlayer.GetOrigin()
+			Remote_ServerCallFunction( "ClientCallback_PingNearestRespawn", org )
+		}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsRespawnStationPingType( int pingType )
+{
+	switch( pingType )
+	{
+		case ePingType.RESPAWN_STATION:
+		case ePingType.RESPAWN_MOBILE:
+
+
+
+			return true
+	}
+
+	return false
+}
+
+void function PlayerWaypoint_CreateCallback( entity wp )
+{
+	int wpType = wp.GetWaypointType()
+
+	int pingType = Waypoint_GetPingTypeForWaypoint( wp )
+
+	entity pingedEnt = GetPingedEntForLocWaypoint( wp )
+
+	if ( WaypointOwnerIsMuted( wp ) )
+		return
+
+	if ( IsRespawnStationPingType( pingType ) )
+	{
+		if ( IsValid( pingedEnt ) )
+		{
+			if ( IsRespawnStationEnt( pingedEnt ) )
+			{
+				var rui = pingedEnt.e.overheadRui
+				if ( rui != null && RuiIsAlive( rui ) )
+				{
+					RuiSetBool( rui, "isVisible", false )
+				}
+			}
+		}
+	}
+
+	if ( pingType == ePingType.RESPAWN_CARD )
+	{
+		if ( IsValid( pingedEnt ) && pingedEnt.GetNetworkedClassName() == PLAYER_WAYPOINT_CLASSNAME )
+		{
+			var rui = pingedEnt.wp.ruiHud
+			if ( rui != null && RuiIsAlive( rui ) )
+			{
+				RuiSetGameTimeIfExists( rui, "startPingTime", Time() )
+			}
+		}
+	}
+}
+
+void function PlayerWaypoint_DestroyCallback( entity wp )
+{
+	int wpType = wp.GetWaypointType()
+
+	int pingType = Waypoint_GetPingTypeForWaypoint( wp )
+
+	entity pingedEnt = GetPingedEntForLocWaypoint( wp )
+
+	if ( IsRespawnStationPingType( pingType ) )
+	{
+		if ( IsValid( pingedEnt ) )
+		{
+			if ( IsRespawnStationEnt( pingedEnt ) )
+			{
+				var rui = pingedEnt.e.overheadRui
+				if ( rui != null && RuiIsAlive( rui ) )
+				{
+					RuiSetBool( rui, "isVisible", true )
+				}
+			}
+		}
+	}
+}
+
+void function ServerCallback_RespawnBeaconStart( float startTime, float endTime )
+{
+	if ( IsSpectating() )
+	{
+		thread SpectatorShowRespawnRui( startTime, endTime )
+	}
+}
+
+void function SpectatorShowRespawnRui( float startTime, float endTime )
+{
+	entity player = GetLocalViewPlayer()
+
+	if ( !IsValid( player ) )
+		return
+
+	if ( Time() > endTime )
+		return
+
+	player.EndSignal( "OnDeath" )
+	clGlobal.levelEnt.EndSignal( "SpectatorShowRespawnRui" )
+
+	var rui = CreateFullscreenRui( $"ui/health_use_progress.rpak" )
+	DisplayRuiForRespawnChamber_Internal( rui, RESPAWN_BEACON_ICON, startTime, endTime, "#HINT_RESPAWNING" )
+
+	EmitSoundOnEntity( player, RESPAWN_BEACON_LOOP_SOUND )
+
+	OnThreadEnd(
+		function() : ( rui, player )
+		{
+			if ( IsValid( player ) )
+			{
+				StopSoundOnEntity( player, RESPAWN_BEACON_LOOP_SOUND )
+			}
+
+			RuiDestroy( rui )
+		}
+	)
+
+	float waitTime = endTime - Time()
+	wait waitTime
+	EmitSoundOnEntity( player, RESPAWN_BEACON_SUCCESS_SOUND )
+}
+
+void function ServerCallback_RespawnBeaconStop()
+{
+	if ( IsSpectating() )
+		clGlobal.levelEnt.Signal( "SpectatorShowRespawnRui" )
+
+	entity player = GetLocalViewPlayer()
+
+
+
+
+}
+
+
+bool function IsRespawnStationEnt( entity ent )
+{
+	switch( ent.GetScriptName() )
+	{
+		case RESPAWN_CHAMBER_SCRIPTNAME:
+		case MOBILE_RESPAWN_BEACON_SCRIPTNAME:
+
+
+
+			return true
+
+	}
+
+	return false
+}
+
+
+void function RespawnSuccessClient_Mobile( entity ent, entity playerUser, ExtendedUseSettings settings )
+{
+	file.mobileRespawnSpawnInProgress = true
+
+	entity viewPlayer = GetLocalViewPlayer()
+
+	if ( !IsValid( viewPlayer ) )
+		viewPlayer = GetLocalClientPlayer()
+
+	if ( !IsValid( viewPlayer ) )
+		return
+
+	bool waitingToBeRespawned = HasTeammatesToRespawn( viewPlayer.GetTeam() )
+	foreach ( rui in file.beaconEntToInWorldIconRuiTable.clonevalues() )
+	{
+		UpdateRespawnChamberRuis( rui, waitingToBeRespawned )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+entity function GetRespawnBeaconUnderAim( vector worldPos, float worldRange )
+{
+	float closestDistSqr = FLT_MAX
+	float worldRangeSqr = worldRange * worldRange
+	entity closestEnt = null
+
+	if( MapPing_Modify_DistanceCheck_Enabled() )
+	{
+		float modifier = MapPing_DistanceCheck_GetModifier()
+
+		if( worldRange >= MapPing_DistanceCheck_GetDistanceRange() )
+			modifier *= 0.5
+
+		worldRangeSqr = ( worldRange * modifier ) * ( worldRange * modifier )
+	}
+
+	foreach ( beacon in file.allStations )
+	{
+		if ( !IsValid( beacon ) )
+			continue
+
+		vector beaconOrigin = beacon.GetOrigin()
+
+		float distSqr = Distance2DSqr( beaconOrigin, worldPos )
+		if ( distSqr < worldRangeSqr && distSqr < closestDistSqr  )
+		{
+			closestDistSqr = distSqr
+			closestEnt     = beacon
+		}
+	}
+
+	if ( !IsValid( closestEnt ) )
+	{
+		return null
+	}
+
+	
+	return closestEnt
+}
+
+bool function PingRespawnBeaconUnderAim( entity beacon )
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return false
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return false
+
+	Remote_ServerCallFunction( FUNCNAME_PingBeaconFromMap, beacon )
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled()
+{
+	return GetCurrentPlaylistVarBool( "infinite_respawn_beacon_use", true )
+}
+
+
+
+
+
+bool function ReusableBeacon_AreTeamBasedReusableRespawnBeaconUsesEnabled()
+{
+	return ReusableBeacon_AreInfiniteRespawnBeaconUsesEnabled() && GetCurrentPlaylistVarBool( "infinite_respawn_beacon_use_team_based", true )
+}
+
+
+
+
+
+bool function ReusableBeacon_ShouldResetOnRound()
+{
+	return ReusableBeacon_AreTeamBasedReusableRespawnBeaconUsesEnabled() && GetCurrentPlaylistVarBool( "infinite_respawn_beacon_reset_per_round", false )
+}
+
+
+
+
+
+float function ReusableBeacon_GetCooldownDuration()
+{
+	return GetCurrentPlaylistVarFloat( "infinite_respawn_beacon_cooldown_duration", 0.0 )
+}
+
+
+
+
+
+bool function ReusableBeacon_IsBeaconUsable( entity beacon, int team = -1 )
+{
+	if ( !ReusableBeacon_IsValidReusableMapBeacon( beacon ) )
+		return false
+
+	int beaconState = ReusableBeacon_GetBeaconState( beacon, team )
+
+	
+	if ( beaconState == eReusableRespawnBeaconState.AVAILABLE )
+		return true
+
+	return false
+}
+
+
+
+
+
+
+bool function ReusableBeacon_IsValidReusableMapBeacon( entity beacon )
+{
+	
+	return  IsValid( beacon ) && beacon.GetScriptName() == RESPAWN_CHAMBER_SCRIPTNAME
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ReusableBeacon_OnWaypointInstanced( entity wp )
+{
+	if ( !IsValid( wp ) )
+		return
+
+	if ( wp.GetWaypointCustomType() != WAYPOINT_REUSABLE_RESPAWNBEACON )
+		return
+
+	thread ReusableBeacon_SetupClientSideData_Thread( wp )
+}
+
+
+
+
+
+
+const float RESPAWNBEACON_ENT_VALIDITY_GRACE_PERIOD = 10.0
+void function ReusableBeacon_SetupClientSideData_Thread( entity wp )
+{
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	
+	FlagWait( "EntitiesDidLoad" )
+
+	entity localPlayer = GetLocalClientPlayer()
+	if ( !IsValid( localPlayer ) || !IsValid( wp ) )
+		return
+
+	localPlayer.EndSignal( "OnDestroy" )
+	wp.EndSignal( "OnDestroy" )
+
+	entity respawnBeacon = wp.GetWaypointEntity( WAYPOINT_ENT_IDX_RESPAWN_BEACON_ENT )
+	if ( !ReusableBeacon_IsValidReusableMapBeacon( respawnBeacon ) )
+	{
+		Warning( "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " Waypoint: " + wp + " returned a beacon ent that might be invalid or an unsupported type going to wait a few secs and try again one more time" )
+		
+		wait RESPAWNBEACON_ENT_VALIDITY_GRACE_PERIOD
+
+		respawnBeacon = wp.GetWaypointEntity( WAYPOINT_ENT_IDX_RESPAWN_BEACON_ENT )
+
+		if ( !ReusableBeacon_IsValidReusableMapBeacon( respawnBeacon ) )
+		{
+			Assert( false, "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " Waypoint: " + wp + " returned a beacon ent that might be invalid or an unsupported type" )
+			return
+		}
+	}
+
+	file.reusableBeaconEntToWaypointTable[ respawnBeacon ] <- wp
+
+	thread ReusableBeacon_UpdateBeaconStateOnClient_Thread( respawnBeacon ) 
+}
+
+
+
+
+
+void function ReusableBeacon_UpdateBeaconState( entity beacon, int beaconState )
+{
+	
+	if ( GetGameState() > eGameState.Playing  )
+		return
+
+	if ( !ReusableBeacon_IsValidReusableMapBeacon( beacon ) )
+		return
+
+	switch ( beaconState )
+	{
+		case eReusableRespawnBeaconState.INVALID:
+			
+			ReusableBeacon_UpdateMapIconsForBeacon( beacon, $"", false )
+			ReusableBeacon_DestroyInWorldIconForBeacon( beacon )
+			break
+		case eReusableRespawnBeaconState.AVAILABLE:
+			
+			ReusableBeacon_DestroyInWorldIconForBeacon( beacon )
+			
+			SetBeaconToDefaultState_Client( beacon )
+			ReusableBeacon_UpdateMapIconsForBeacon( beacon, $"", true )
+			break
+		case eReusableRespawnBeaconState.COOLDOWN:
+			
+			ReusableBeacon_DestroyInWorldIconForBeacon( beacon )
+			
+			var rui = AddOverheadIcon( beacon, RESPAWN_BEACON_ICON, false, $"ui/overhead_icon_respawn_beacon_states.rpak" )
+			RuiSetFloat2( rui, "iconSize", <80, 80, 0> )
+			RuiSetFloat( rui, "distanceFade", RESPAWN_CHAMBER_ICON_FADE_DIST_NEAR )
+			RuiSetBool( rui, "adsFade", true )
+			RuiSetString( rui, "hint", "#RESPAWN_ALLCAPS" )
+			RuiSetFloat3( rui, "iconColor", <1, 1, 1> )
+			RuiSetFloat3( rui, "bgColor", <0, 0, 0> )
+			RuiSetFloat3( rui, "borderColor", <1, 1, 1> )
+			RuiSetFloat3( rui, "cdStripes" , <0.4, 0.4, 0.4> )
+			RuiSetBool( rui, "isOnCooldown", true )
+			RuiSetFloat( rui, "remainingCdTime", ReusableBeacon_GetRemainingCooldownDuration( beacon ) )
+			RuiSetFloat( rui, "maxCdTime", ReusableBeacon_GetCooldownDuration() )
+			RuiSetBool( rui, "isInUse", false )
+			RuiSetBool( rui, "showHint", false )
+			file.beaconEntToInWorldIconRuiTable[beacon] <- rui
+			
+			ReusableBeacon_UpdateMapIconsForBeacon( beacon, RESPAWN_BEACON_DISABLED_ICON, false )
+			
+			beacon.Signal( "ReusableBeaconDisabled" )
+			break
+		case eReusableRespawnBeaconState.USED:
+			if ( ReusableBeacon_ShouldResetOnRound() )
+			{
+				
+				ReusableBeacon_DestroyInWorldIconForBeacon( beacon )
+				
+				var rui = AddOverheadIcon( beacon, RESPAWN_BEACON_ICON, false, $"ui/overhead_icon_respawn_beacon_states.rpak" )
+				RuiSetFloat2( rui, "iconSize", <80, 80, 0> )
+				RuiSetFloat( rui, "distanceFade", RESPAWN_CHAMBER_ICON_FADE_DIST_NEAR )
+				RuiSetBool( rui, "adsFade", true )
+				RuiSetString( rui, "hint", "#RESPAWN_ALLCAPS" )
+				RuiSetFloat3( rui, "iconColor", <1, 1, 1> )
+				RuiSetFloat3( rui, "bgColor", <0, 0, 0> )
+				RuiSetFloat3( rui, "borderColor", <1, 1, 1> )
+				RuiSetFloat3( rui, "cdStripes" , <0.4, 0.4, 0.4> )
+				RuiSetBool( rui, "isOnCooldown", true )
+				RuiSetFloat( rui, "remainingCdTime", 0.0 )  
+				RuiSetFloat( rui, "maxCdTime", 0.0 ) 
+				RuiSetBool( rui, "isInUse", false )
+				RuiSetBool( rui, "showHint", false )
+				file.beaconEntToInWorldIconRuiTable[beacon] <- rui
+				
+				ReusableBeacon_UpdateMapIconsForBeacon( beacon, RESPAWN_BEACON_DISABLED_ICON, false )
+			}
+			else
+			{
+				
+				ReusableBeacon_DestroyInWorldIconForBeacon( beacon )
+				ReusableBeacon_UpdateMapIconsForBeacon( beacon, $"", false )
+			}
+			
+			beacon.Signal( "ReusableBeaconDisabled" )
+			break
+		default:
+			
+			ReusableBeacon_UpdateMapIconsForBeacon( beacon, $"", false )
+			ReusableBeacon_DestroyInWorldIconForBeacon( beacon )
+			Assert( false, "REUSABLE RESPAWN BEACON: Unsupported beacon state: " + beaconState + " for beacon: " + beacon + " in " + FUNC_NAME() )
+			break
+	}
+}
+
+
+
+
+
+
+string function ReusableBeacon_TextOverride( entity beacon )
+{
+	entity localPlayer = GetLocalClientPlayer()
+	string hintString = ""
+
+	if ( !IsValid( localPlayer ) || !IsValid( beacon ) )
+		return hintString
+
+	if ( !( beacon in file.reusableBeaconEntToWaypointTable ) )
+		return hintString
+
+	int currentBeaconState = ReusableBeacon_GetBeaconState( beacon, localPlayer.GetTeam() )
+
+	switch( currentBeaconState )
+	{
+		case eReusableRespawnBeaconState.INVALID: 
+			break
+		case eReusableRespawnBeaconState.AVAILABLE: 
+			hintString = RespawnChamber_TextOverride( beacon )
+			break
+		case eReusableRespawnBeaconState.COOLDOWN: 
+			hintString = Localize( "#SHADOW_ARMY_RESPAWNBEACON_COOLDOWN", int( ReusableBeacon_GetRemainingCooldownDuration( beacon ) ) )
+			break
+		case eReusableRespawnBeaconState.USED:
+			if ( ReusableBeacon_ShouldResetOnRound() && !DeathField_IsPointInsideRing( beacon.GetOrigin(), localPlayer.DeathFieldIndex() ) )
+				hintString = Localize( "#HINT_BEACON_OUTSIDE_RING" )
+			else if ( ReusableBeacon_ShouldResetOnRound() )
+				hintString = Localize( "#HINT_BEACON_DISABLED_FOR_ROUND" )
+			break
+		default:
+			Assert( false, "REUSABLE RESPAWN BEACON: Unsupported beacon state: " + currentBeaconState + " for beacon: " + beacon + " in " + FUNC_NAME() )
+			break
+	}
+
+	return hintString
+}
+
+
+
+
+
+
+int function ReusableBeacon_GetBeaconState( entity beacon, int team = -1 )
+{
+	if ( !ReusableBeacon_IsValidReusableMapBeacon( beacon ) )
+	{
+		Assert( false, "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " is going to return eReusableRespawnBeaconState.INVALID due to beacon being invalid or an unsupported type" )
+		return eReusableRespawnBeaconState.INVALID
+	}
+
+	entity beaconWaypoint = ReusableBeacon_GetBeaconWaypointForBeaconEnt( beacon )
+	if ( !IsValid( beaconWaypoint ) || beaconWaypoint.GetWaypointCustomType() != WAYPOINT_REUSABLE_RESPAWNBEACON )
+		return eReusableRespawnBeaconState.INVALID
+
+	int beaconState = eReusableRespawnBeaconState.INVALID
+
+	if ( ReusableBeacon_AreTeamBasedReusableRespawnBeaconUsesEnabled() )
+		beaconState = ReusableBeacon_GetTeamBeaconStateFromWaypoint( beaconWaypoint, team )
+	else
+		beaconState = beaconWaypoint.GetWaypointInt( WAYPOINT_INT_IDX_BEACON_STATE )
+
+	return beaconState
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function ReusableBeacon_GetTeamBeaconStateFromWaypoint( entity waypoint, int team )
+{
+	Assert( eReusableRespawnBeaconState._count == 4, "REUSABLE RESPAWN BEACON: The number of possible beacon states has changed, so the data layout for per team beacon states may need to change" )
+	Assert( WAYPOINT_INT_MAX_TEAMS >= ABSOLUTE_MAX_TEAMS, "REUSABLE RESPAWN BEACON: The maximum number of beacon states that can be stored may be insufficient, so the data layout for per team beacon states may need to change" )
+
+	if ( team < 0 || team >= ABSOLUTE_MAX_TEAMS )
+		return eReusableRespawnBeaconState.INVALID
+
+	int beaconStateBitOffset = team * WAYPOINT_INT_NUM_BITS_PER_BEACON_STATE
+	int waypointIntIdx = beaconStateBitOffset / 32
+	int waypointIntBitOffset = beaconStateBitOffset % 32
+
+	int waypointInt = waypoint.GetWaypointInt( waypointIntIdx )
+	
+	waypointInt = waypointInt >> waypointIntBitOffset
+	
+	waypointInt = waypointInt & WAYPOINT_INT_BEACON_STATE_MASK
+
+	return waypointInt
+}
+
+
+
+
+
+
+float function ReusableBeacon_GetRemainingCooldownDuration( entity beacon )
+{
+	float duration = UNSET_TIME
+
+	if ( !ReusableBeacon_IsValidReusableMapBeacon( beacon ) )
+	{
+		Warning( "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " going to return UNSET_TIME because the Beacon was not valid or an unsupported type." )
+		return duration
+	}
+
+	entity beaconWaypoint = ReusableBeacon_GetBeaconWaypointForBeaconEnt( beacon )
+	if ( IsValid( beaconWaypoint ) && beaconWaypoint.GetWaypointCustomType() == WAYPOINT_REUSABLE_RESPAWNBEACON )
+	{
+		duration = max( 0.0, ( beaconWaypoint.GetWaypointFloat( WAYPOINT_FLOAT_IDX_RESPAWN_BEACON_COOLDOWN_END_TIME ) - Time() ) )
+	}
+#if DEV
+	else
+	{
+		Warning( "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " going to return UNSET_TIME because the Beacon Waypoint was not valid." )
+	}
+#endif
+
+	return duration
+}
+
+
+
+
+
+
+entity function ReusableBeacon_GetBeaconWaypointForBeaconEnt( entity beacon )
+{
+	if ( !ReusableBeacon_IsValidReusableMapBeacon( beacon ) )
+	{
+		Assert( false, "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " is going to return null due to beacon that is invalid or an unsupported type" )
+		return null
+	}
+
+	entity beaconWaypoint
+	if ( beacon in file.reusableBeaconEntToWaypointTable )
+	{
+		beaconWaypoint = file.reusableBeaconEntToWaypointTable[ beacon ]
+	}
+
+	if ( !IsValid( beaconWaypoint ) )
+	{
+		Assert( false, "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " failed to get beacon waypoint from file.reusableBeaconEntToWaypointTable, going to return null" )
+		return null
+	}
+
+	if ( beaconWaypoint.GetWaypointCustomType() != WAYPOINT_REUSABLE_RESPAWNBEACON )
+	{
+		Assert( false, "REUSABLE RESPAWN BEACON: " + FUNC_NAME() + " beacon waypoint assigned to " + beacon + " is not the correct waypoint type, expect: " + WAYPOINT_REUSABLE_RESPAWNBEACON + " type is: " + beaconWaypoint.GetWaypointCustomType() + " , going to return null" )
+		return null
+	}
+
+	return beaconWaypoint
+}
+
+
+
+
+
+
+void function ReusableBeacon_ServerCallback_OnBeaconStateChanged( entity beacon, int newValue )
+{
+	ReusableBeacon_UpdateBeaconState( beacon, newValue )
+}
+
+
+
+
+
+
+void function ReusableBeacon_ServerCallback_OnBeaconShouldBlink( entity beacon )
+{
+	thread ReusableBeacon_BlinkMapIconsForBeacon_Thread( beacon )
+}
+
+
+
+
+
+
+void function ReusableBeacon_UpdateBeaconStateOnClient_Thread( entity beacon )
+{
+	if ( !IsValid( beacon ) )
+		return
+
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	beacon.EndSignal( "OnDestroy" )
+
+	WaitEndFrame()
+
+	if ( beacon in file.reusableBeaconEntToWaypointTable )
+	{
+		entity viewPlayer = GetLocalViewPlayer()
+		int beaconState = IsValid( viewPlayer ) ? ReusableBeacon_GetBeaconState( beacon, viewPlayer.GetTeam() ) : eReusableRespawnBeaconState.INVALID
+		ReusableBeacon_UpdateBeaconState( beacon, beaconState )
+	}
+	else
+	{
+		Assert( false, "REUSABLE RESPAWN BEACON: Beacon Ent: " + beacon + " not already in reusableBeaconEntToWaypointTable when calling " + FUNC_NAME() )
+	}
+}
+
+
+
+
+
+void function ReusableBeacon_BlinkMapIconsForBeacon_Thread( entity beacon )
+{
+	if ( !IsValid( beacon ) )
+		return
+
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	beacon.EndSignal( "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( beacon )
+		{
+			if ( IsValid( beacon ) )
+			{
+				if ( beacon in file.beaconEntToMiniMapIconRuiTable )
+				{
+					var rui = file.beaconEntToMiniMapIconRuiTable[beacon]
+					if ( rui != null && RuiIsAlive( rui ) )
+					{
+						RuiSetBoolIfExists( rui, "showPulseAnimation", false )
+						RuiSetGameTimeIfExists( rui, "pulseAnimationStartime", RUI_BADGAMETIME )
+					}
+				}
+
+				if ( beacon in file.beaconEntToFullMapIconRuiTable )
+				{
+					var rui = file.beaconEntToFullMapIconRuiTable[beacon]
+					if ( rui != null && RuiIsAlive( rui ) )
+					{
+						RuiSetBoolIfExists( rui, "showPulseAnimation", false )
+						RuiSetGameTimeIfExists( rui, "pulseAnimationStartime", RUI_BADGAMETIME )
+					}
+				}
+			}
+		}
+	)
+
+	
+	if ( beacon in file.beaconEntToMiniMapIconRuiTable )
+	{
+		var rui = file.beaconEntToMiniMapIconRuiTable[beacon]
+		RuiSetBoolIfExists( rui, "showPulseAnimation", true )
+		RuiSetFloatIfExists( rui, "pulseAnimationTime", RESPAWN_DROP_TIME )
+		RuiSetGameTimeIfExists( rui, "pulseAnimationStartime", ClientTime() )
+	}
+
+	
+	if ( beacon in file.beaconEntToFullMapIconRuiTable )
+	{
+		var rui = file.beaconEntToFullMapIconRuiTable[beacon]
+		RuiSetBoolIfExists( rui, "showPulseAnimation", true )
+		RuiSetFloatIfExists( rui, "pulseAnimationTime", RESPAWN_DROP_TIME )
+		RuiSetGameTimeIfExists( rui, "pulseAnimationStartime", ClientTime() )
+	}
+
+	wait RESPAWN_DROP_TIME
+}
+
+
+
+
+
+void function ReusableBeacon_UpdateMapIconsForBeacon( entity beacon, asset icon, bool setToDefault )
+{
+	
+	if ( beacon in file.beaconEntToMiniMapIconRuiTable )
+	{
+		var rui = file.beaconEntToMiniMapIconRuiTable[beacon]
+
+		if ( setToDefault )
+		{
+			RespawnChamber_SetMapIconsToDefaultState( beacon, rui )
+		}
+		else
+		{
+			RuiSetImage( rui, "defaultIcon", icon )
+		}
+	}
+
+	
+	if ( beacon in file.beaconEntToFullMapIconRuiTable )
+	{
+		var rui = file.beaconEntToFullMapIconRuiTable[beacon]
+		if ( setToDefault )
+		{
+			RespawnChamber_SetMapIconsToDefaultState( beacon, rui )
+		}
+		else
+		{
+			RuiSetImage( rui, "defaultIcon", icon )
+		}
+	}
+}
+
+
+
+
+
+void function ReusableBeacon_DestroyInWorldIconForBeacon( entity beacon )
+{
+	if ( beacon in file.beaconEntToInWorldIconRuiTable )
+	{
+		var rui = file.beaconEntToInWorldIconRuiTable[ beacon ]
+		if ( IsValid( rui ) )
+			RuiDestroyIfAlive( rui )
+
+		delete file.beaconEntToInWorldIconRuiTable[ beacon ]
+	}
+}
+
+
+
+#if DEV
+
+void function DEV_Respawn_DropshipSequence_AnimSpeed( float newSpeed )
+{
+	tunings.respawn_DropshipSequence_AnimSpeed = newSpeed
+}
+
+#endif
+ 

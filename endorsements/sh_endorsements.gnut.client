@@ -1,0 +1,2349 @@
+const asset ENDORSEMENT_STATION_ICON = $"rui/hud/gametype_icons/survival/endorsement_map_icon"
+const asset ENDORSEMENT_STATION_BG_ICON = $"rui/hud/gametype_icons/survival/endorsement_map_icon_shadow"
+
+global function Endorsements_Init
+global function Endorsements_IsActive
+global function Endorsements_GetDeliveryType
+global function Endorsements_FadePOINameEndorsementStationIconAtDifferentHeight
+global function Endorsements_AdditionalHeightForPOINameEndorsementStationIconFade
+global function Endorsements_AreEndorsementStationsEnabled
+global function Endorsements_GetEndorsementStationIcon
+global function Endorsements_GetEndorsementStationBackgroundIcon
+global function Endorsements_GetMaxEndorsementCount
+
+
+
+
+
+global function Endorsements_GetMaxEndorsementsPerRound
+global function Endorsements_GetNormalEndorsementsPerRound
+global function Endorsements_GetMaxEndorsementID
+global function Endorsements_GetPerPlayerEndorsementData
+global function Endorsements_PlayerHasEndorsement
+global function Endorsements_PlayerHasEndorsementByPassive
+global function Endorsements_IsValidEndorsementForPurchase
+global function Endorsements_GetPlayerEndorsementArray
+global function Endorsements_GetPlayerEndorsementChoiceString
+global function Endorsements_GetPlayerEndorsementCount
+global function Endorsements_GetEndorsementDefinitionFromRef
+global function Endorsements_GetEndorsementDefinitionFromID
+global function Endorsements_GetEndorsementGroupDefinitionFromRef
+global function Endorsements_GetEndorsementSponsorDefinitionFromSponsor
+global function Endorsements_GetSponsorEnumFromRef
+global function Endorsements_AreChoicesDifferentSponsors
+global function Endorsements_IsPlayerLockedOutFromCrafter
+
+global function ServerToClient_Endorsements_DisplayEndorsementUsedPopup
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	global function Endorsements_UpdateTicketCountUI
+	global function Endorsements_UpdateUnitframeRuiForPlayer
+	global function Endorsements_OverrideUnitframeRuiProgressForPlayer
+	global function Endorsements_AnimateUnitframeRuiForPlayer
+	global function Endorsements_AddCallback_OnEndorsementsChanged
+	global function Endorsements_SetCraftingStationUISkin
+	global function Endorsements_GetCraftingStationUISkin
+	global function Endorsements_SetDefaultCraftingStationUISkin
+	global function Endorsements_GetPrimaryReplicatorUIColorFromSponsorChoices
+	global function Endorsements_GetCurrentTrackIconForReplicatorFromSponsorChoices
+	global function Endorsements_GetHoverSoundForSponsor
+	global function Endorsements_GetSelectionSoundForSponsor
+
+	global function Endorsements_GetCurrentBackgroundIconForReplicatorFromSponsorChoices
+	global function Endorsements_GetCurrentLeadingChoiceForReplicatorFromSponsorChoices
+
+	global function Endorsements_DisplayEndorsementUsedPopup
+	global function Endorsements_DisplayEndorsemenUsedPopupByPassiveID
+	global function Endorsements_UpdateLocalPlayerEndorsementProgressByPassiveID
+	global function Endorsements_UpdateEndorsementSlotsForRui
+
+
+global enum eEndorsementType
+{
+	INVALID = -1,
+	PASSIVE,
+	ITEM,
+	GADGET,
+	DUMMY,
+
+
+
+
+
+
+	_count,
+}
+
+global enum eEndorsementDeliveryType
+{
+	GROUNDED_CRAFTERS,
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global const int ENDORSEMENT_INVALID = -1
+
+global enum eEndorsementSponsor
+{
+	ENDORSEMENT_SPONSOR_INVALID,
+	ENDORSEMENT_SPONSOR_DEMON,
+	ENDORSEMENT_SPONSOR_REAPER,
+	ENDORSEMENT_SPONSOR_WILD_CARD,
+
+		ENDORSEMENT_SPONSOR_CLOCKUP,
+
+	_COUNT,
+}
+
+global struct EndorsementDefinition
+{
+	string endorsementRef																			= ""
+	int endorsementID																				= -1
+	int endorsementType																				= eEndorsementType.INVALID
+	int passiveID																					= ePassives.INVALID
+	string gadgetRef																				= ""
+	string modRef																					= ""
+	string displayName																				= "#NOT_SET_UP"
+	string displayDescription																		= "#NOT_SET_UP"
+	array< string > excludedCharacterRefs															= []
+	array< int > excludedCharacterRoles																= []
+	asset endorsementIcon																			= $""
+	string notifSound_1p																			= ""
+	float duration																					= 0.0 
+	float cooldown																					= 0.0 
+	bool hasEndorsementStationLockout																= false
+	asset boxIcon																					= $""
+	int index																						= 0
+}
+
+global struct EndorsementGroupEntry
+{
+	string endorsementRef																			= ""
+	string endorsementGroupRef																		= ""
+	int weight																						= 0
+}
+
+global struct EndorsementGroupDefinition
+{
+	string endorsementGroupRef																		= ""
+	array< EndorsementGroupEntry > endorsementGroupEntries											= []
+}
+
+global struct EndorsementSponsorDefinition
+{
+	int    endorsementSponsorEnum																	= eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID
+	string displayName																				= ""
+	string displayDescription																		= ""
+	vector color																					= UNHINGED_COLOR
+	asset  icon																						= $""
+	string hoverSound_1p 																			= "Unhinged_WildcardStation_UI_Hover_1P"
+	string selectSound_1p 																			= "Unhinged_WildcardStation_UI_Select_1P"
+	string selectLastSound_1p																		= "Unhinged_WildcardStation_UI_Select_Last_1P"
+
+	asset background																				= $""
+	bool leadingChoice																				= false
+
+}
+
+global struct EndorsementTrackDefinition
+{
+	array< EndorsementGroupDefinition > endorsementLevelToGroup
+	int weight																						= 0
+	int endorsementSponsorEnum																		= eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID
+}
+
+global struct EndorsementOptionData
+{
+	string endorsementRef																			= ""
+	int endorsementSponsorEnum																		= eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID
+}
+
+global struct EndorsementChoiceData
+{
+	int choiceId																					= 0
+	string choiceString																				= ""
+	array< string > endorsementExclusionList														= []
+	array< EndorsementOptionData > endorsementOptions												= []
+}
+
+global struct PerPlayerEndorsementCraftingData
+{
+	table<int, array<int> > roundToUpgradeID
+	table<string, EndorsementChoiceData> choiceStringToChoiceData
+}
+
+
+global enum eEndorsementConveyanceFlags
+{
+	UNIT_FRAME					= (1 << 1) 
+	UNIT_FRAME_TEAM				= (1 << 2) 
+	TOAST						= (1 << 3) 
+	TOAST_TEAM					= (1 << 4) 
+	ANNOUNCEMENT				= (1 << 5) 
+	ANNOUNCEMENT_TEAM			= (1 << 6) 
+	WEAPON_STATUS				= (1 << 7) 
+}
+
+
+global const RGBA UNHINGED_RGBA_UI = {
+	r = UNHINGED_COLOR.x / 255,
+	g = UNHINGED_COLOR.y / 255,
+	b = UNHINGED_COLOR.z / 255,
+	a = 1.0
+}
+
+global struct EndorsementCrafterUISkin
+{
+	RGBA& primaryThemeColor =
+	{
+		r = UNHINGED_COLOR_UI.x,
+		g = UNHINGED_COLOR_UI.y,
+		b = UNHINGED_COLOR_UI.z,
+		a = 1.0
+	}
+	RGBA& themeColorForMultipleSponsors =
+	{
+		r = COLOR_GRAY.x,
+		g = COLOR_GRAY.y,
+		b = COLOR_GRAY.z,
+		a = 1.0
+	}
+
+	
+	RGBA& backgroundColor =
+	{
+		r = 0.0,
+		g = 0.0,
+		b = 0.0,
+		a = 1.0
+	}
+
+	
+	asset backgroundTexture 				= $""
+	float backgroundTextureTileCount		= 1
+	RGBA& backgroundTextureColor =
+	{
+		r = 0.0,
+		g = 0.0,
+		b = 0.0,
+		a = 0.0
+	}
+
+	bool scanlinesEnabled 					= true
+
+	
+	
+	asset decal1 = $""
+	vector decal1Size = <0, 0, 0>
+	RuiPin& decal1Pin
+	RGBA& decal1Color =
+	{
+		r = 1.0,
+		g = 1.0,
+		b = 1.0,
+		a = 1.0
+	}
+
+	asset decal2 = $""
+	vector decal2Size = <0, 0, 0>
+	RuiPin& decal2Pin
+	RGBA& decal2Color =
+	{
+		r = 1.0,
+		g = 1.0,
+		b = 1.0,
+		a = 1.0
+	}
+
+	asset decal3 = $""
+	vector decal3Size = <0, 0, 0>
+	RuiPin& decal3Pin
+	RGBA& decal3Color =
+	{
+		r = 1.0,
+		g = 1.0,
+		b = 1.0,
+		a = 1.0
+	}
+
+	
+	asset itemBackgroundTexture 			= $"rui/hud/endorsements/endorsement_card"
+	RGBA& itemBackgroundTextureColor =
+	{
+		r = UNHINGED_COLOR_UI.x,
+		g = UNHINGED_COLOR_UI.y,
+		b = UNHINGED_COLOR_UI.z,
+		a = 1.0
+	}
+	asset itemBackgroundMask 				= $"rui/hud/endorsements/endorsement_card_fill"
+
+	asset itemFrameImage					= $"rui/hud/endorsements/endorsement_card_stroke"
+	RGBA& itemFrameColor 					=
+	{
+		r = UNHINGED_COLOR_UI.x,
+		g = UNHINGED_COLOR_UI.y,
+		b = UNHINGED_COLOR_UI.z,
+		a = 1.0
+	}
+}
+
+
+struct {
+
+		table< string, EndorsementDefinition > endorsementRefToDefinition
+		table< int, EndorsementDefinition > endorsementIDToDefinition
+		table< string, EndorsementGroupDefinition > endorsementGroupRefToDefinition
+		table < int, EndorsementSponsorDefinition > endorsementSponsorToDefinition
+		table< int, EndorsementDefinition > passiveIDToEndorsementDef 
+		array< EndorsementTrackDefinition > endorsementTracks											= []
+
+		table< EHI, PerPlayerEndorsementCraftingData > perPlayerEndorsementCraftingData
+		int maxEndorsementID																			= 0
+
+
+
+
+
+
+
+
+		var endorsementHUDRui
+
+		float endorsementUsedLastTime
+		int endorsementQueueItemsInFlight
+		array< void functionref( entity ) >			callbacks_OnEndorsementsChanged		= []
+
+		EndorsementCrafterUISkin& crafterUISkin
+
+
+
+
+
+} file
+
+global const int MAX_ENDORSEMENTS_PER_ROUND_BASE = 2
+
+
+const string NETVAR_ENDORSEMENT_0 = "Endorsements_PlayerEndorsement0"
+const string NETVAR_ENDORSEMENT_1 = "Endorsements_PlayerEndorsement1"
+const string NETVAR_ENDORSEMENT_2 = "Endorsements_PlayerEndorsement2"
+
+
+global const vector ENDORSEMENTS_UNITFRAME_SIZE = <260, 70, 0>
+global const vector ENDORSEMENTS_UNITFRAME_SIZE_COMPACT_UI = <383, 90, 0>
+
+
+
+
+const bool DEFAULTS_ENDORSEMENTS_ACTIVE																= false
+const bool DEFAULTS_ENDORSEMENTS_TRACKS_FIXED_ORDER_ENABLED											= false
+const bool DEFAULTS_ENDORSEMENTS_ENABLED_BY_PLAYLIST												= true
+const bool DEFAULTS_ENDORSEMENTS_GROUP_ENABLED_BY_PLAYLIST											= true
+const bool DEFAULTS_ENDORSEMENTS_GROUP_ENTRY_ENABLED_BY_PLAYLIST									= true
+const string DEFAULTS_ENDORSEMENTS_DISPLAY_NAME_OVERRIDE											= ""
+const string DEFAULTS_ENDORSEMENTS_DISPLAY_DESCRIPTION_OVERRIDE										= ""
+const string DEFAULTS_ENDORSEMENTS_EXCLUDED_CHARACTERS_OVERRIDE										= "INVALID"
+const string DEFAULTS_ENDORSEMENTS_EXCLUDED_CHARACTER_ROLES_OVERRIDE								= "INVALID"
+const asset DEFAULTS_ENDORSEMENTS_ICON_OVERRIDE														= $""
+const string DEFAULTS_ENDORSEMENT_NOTIF_SOUND_1P_OVERRIDE											= ""
+const string DEFAULTS_ENDORSEMENT_SPONSOR_DISPLAY_NAME_OVERRIDE										= ""
+const string DEFAULTS_ENDORSEMENT_SPONSOR_DISPLAY_DESCRIPTION_OVERRIDE								= ""
+const string DEFAULTS_ENDORSEMENT_SPONSOR_COLOR_OVERRIDE											= ""
+const asset DEFAULTS_ENDORSEMENT_SPONSOR_ICON_OVERRIDE												= $""
+const string DEFAULTS_ENDORSEMENT_SPONSOR_HOVER_SOUND_1P_OVERRIDE									= ""
+const string DEFAULTS_ENDORSEMENT_SPONSOR_SELECT_SOUND_1P_OVERRIDE									= ""
+const string DEFAULTS_ENDORSEMENT_SPONSOR_SELECT_LAST_SOUND_1P_OVERRIDE								= ""
+const bool DEFAULTS_ENDORSEMENTS_FADE_POI_ICON_AT_DIFFERENT_HEIGHTS									= true
+const float DEFAULTS_ENDORSEMENTS_FADE_POI_ICON_ADDITIONAL_HEIGHT									= 7000
+const bool DEFAULTS_ENDORSEMENTS_STATIONS_ENABLED													= true
+const int DEFAULTS_ENDORSEMENTS_MAX_ENDORSEMENT_COUNT												= 3
+const string DEFAULTS_ENDORSEMENT_PASSIVE_BASE														= "PAS_ENDORSEMENT_"
+
+
+const int CLOCKUP_ENDORSEMENTS_ENDORSEMENT_COUNT														= 1
+
+
+
+const string PVAR_ENDORSEMENTS_ACTIVE																= "endorsements_enable"
+const string PVAR_ENDORSEMENTS_TRACKS																= "endorsements_tracks"
+const string PVAR_ENDORSEMENTS_TRACKS_FIXED_ORDER_ENABLED											= "endorsements_tracks_fixed_order_enabled"
+const string PVAR_ENDORSEMENTS_FADE_POI_ICON_AT_DIFFERENT_HEIGHTS									= "endorsements_fade_poi_name_endorsement_station_icon_at_diff_height"
+const string PVAR_ENDORSEMENTS_FADE_POI_ICON_ADDITIONAL_HEIGHT										= "endorsements_additional_height_for_endorsement_station_icon_fade"
+const string PVAR_ENDORSEMENTS_STATIONS_ENABLED														= "endorsements_stations_enabled"
+const string PVAR_ENDORSEMENTS_MAX_ENDORSEMENT_COUNT												= "endorsements_max_endorsement_count"
+
+
+const asset ENDORSEMENTS_ASSET_ENDORSEMENT_DEFINITIONS												= $"datatable/endorsements/endorsement_definitions.rpak"
+const asset ENDORSEMENTS_ASSET_ENDORSEMENT_GROUP_DEFINITIONS										= $"datatable/endorsements/endorsement_group_definitions.rpak"
+const asset ENDORSEMENTS_ASSET_ENDORSEMENT_SPONSOR_DEFINITIONS										= $"datatable/endorsements/endorsement_sponsor_definitions.rpak"
+
+
+global const string SIG_ENDORSEMENTS_NETVAR_UPDATE 													= "Endorsements_NetvarUpdated"
+
+void function Endorsements_Init()
+{
+	if ( !Endorsements_IsActive() )
+		return
+
+	Assert( Endorsements_GetMaxEndorsementCount() <= 3, "Need to update endorsement netvars to support endorsement counts greater than 3" )
+
+
+	Endorsements_LoadEndorsementDefinitions( ENDORSEMENTS_ASSET_ENDORSEMENT_DEFINITIONS )
+	Endorsements_LoadEndorsementGroupDefinitions( ENDORSEMENTS_ASSET_ENDORSEMENT_GROUP_DEFINITIONS )
+	Endorsements_LoadEndorsementSponsorDefinitions( ENDORSEMENTS_ASSET_ENDORSEMENT_SPONSOR_DEFINITIONS )
+	Endorsements_InitializeEndorsementTracks()
+
+	Endorsements_RegisterCommonEndorsements()
+
+	if ( Endorsements_GetDeliveryType() == eEndorsementDeliveryType.GROUNDED_CRAFTERS )
+	{
+		Endorsements_Delivery_GroundedInit()
+		Endorsements_Crafting_Init()
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	AddCallback_ItemFlavorLoadoutSlotDidChange_AnyPlayer( Loadout_Character(), void function( EHI playerEHI, ItemFlavor character ) { Endorsements_SetupPerPlayerEndorsementDistribution( FromEHI( playerEHI ) ) } )
+
+
+
+
+
+
+
+
+
+
+
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_DisplayEndorsementUsedPopup ), "entity", "int", ENDORSEMENT_INVALID, Endorsements_GetMaxEndorsementID(), "int", 0, INT_MAX, "float", -FLT_MAX, FLT_MAX, 32, "float", -FLT_MAX, FLT_MAX, 32 )
+
+	RegisterNetworkedVariable( NETVAR_ENDORSEMENT_0, SNDC_PLAYER_GLOBAL, SNVT_INT, ENDORSEMENT_INVALID )
+	RegisterNetworkedVariable( NETVAR_ENDORSEMENT_1, SNDC_PLAYER_GLOBAL, SNVT_INT, ENDORSEMENT_INVALID )
+	RegisterNetworkedVariable( NETVAR_ENDORSEMENT_2, SNDC_PLAYER_GLOBAL, SNVT_INT, ENDORSEMENT_INVALID )
+
+
+		RegisterNetVarIntChangeCallback( NETVAR_ENDORSEMENT_0, Endorsements_NetVarChanged_ActiveEndorsements )
+		RegisterNetVarIntChangeCallback( NETVAR_ENDORSEMENT_1, Endorsements_NetVarChanged_ActiveEndorsements )
+		RegisterNetVarIntChangeCallback( NETVAR_ENDORSEMENT_2, Endorsements_NetVarChanged_ActiveEndorsements )
+		AddCallback_OnClientScriptInit( Endorsements_InitClientHUD )
+
+		RegisterSignal( SIG_ENDORSEMENTS_NETVAR_UPDATE )
+
+
+
+}
+
+bool function Endorsements_IsActive()
+{
+	return GetCurrentPlaylistVarBool( PVAR_ENDORSEMENTS_ACTIVE, DEFAULTS_ENDORSEMENTS_ACTIVE )
+}
+
+int function Endorsements_GetDeliveryType()
+{
+	return eEndorsementDeliveryType[ GetCurrentPlaylistVarString( "endorsements_delivery_type", "grounded_crafters" ).toupper() ]
+}
+
+bool function Endorsements_IsTracksFixedOrderEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_ENDORSEMENTS_TRACKS_FIXED_ORDER_ENABLED, DEFAULTS_ENDORSEMENTS_TRACKS_FIXED_ORDER_ENABLED )
+}
+
+bool function Endorsements_FadePOINameEndorsementStationIconAtDifferentHeight()
+{
+	return GetCurrentPlaylistVarBool( PVAR_ENDORSEMENTS_FADE_POI_ICON_AT_DIFFERENT_HEIGHTS, DEFAULTS_ENDORSEMENTS_FADE_POI_ICON_AT_DIFFERENT_HEIGHTS )
+}
+
+float function Endorsements_AdditionalHeightForPOINameEndorsementStationIconFade()
+{
+	return GetCurrentPlaylistVarFloat( PVAR_ENDORSEMENTS_FADE_POI_ICON_ADDITIONAL_HEIGHT, DEFAULTS_ENDORSEMENTS_FADE_POI_ICON_ADDITIONAL_HEIGHT )
+}
+
+bool function Endorsements_AreEndorsementStationsEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_ENDORSEMENTS_STATIONS_ENABLED, DEFAULTS_ENDORSEMENTS_STATIONS_ENABLED ) && Endorsements_GetDeliveryType() == eEndorsementDeliveryType.GROUNDED_CRAFTERS
+}
+
+int function Endorsements_GetMaxEndorsementCount()
+{
+
+		if ( GetCurrentPlaylistVarBool( "clockup_endorsements_is_enabled", false ) )
+			return CLOCKUP_ENDORSEMENTS_ENDORSEMENT_COUNT
+
+
+	return GetCurrentPlaylistVarInt( PVAR_ENDORSEMENTS_MAX_ENDORSEMENT_COUNT, DEFAULTS_ENDORSEMENTS_MAX_ENDORSEMENT_COUNT )
+}
+
+asset function Endorsements_GetEndorsementStationIcon()
+{
+	return ENDORSEMENT_STATION_ICON
+}
+
+asset function Endorsements_GetEndorsementStationBackgroundIcon()
+{
+	return ENDORSEMENT_STATION_BG_ICON
+}
+
+
+
+int function Endorsements_GetMaxEndorsementsPerRound()
+{
+	return Endorsements_GetNormalEndorsementsPerRound()
+}
+
+int function Endorsements_GetNormalEndorsementsPerRound()
+{
+	return MAX_ENDORSEMENTS_PER_ROUND_BASE
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function Endorsements_GetTracks()
+{
+	return strip( GetCurrentPlaylistVarString( PVAR_ENDORSEMENTS_TRACKS, "" ) )
+}
+
+void function Endorsements_LoadEndorsementDefinitions( asset dataTableAsset )
+{
+	var dataTable = GetDataTable( dataTableAsset )
+	int rowCount = GetDataTableRowCount( dataTable )
+	int col_featureFlag = GetDataTableColumnByName( dataTable, "featureFlag" )
+	int col_isDisabled = GetDataTableColumnByName( dataTable, "isDisabled" )
+	int col_endorsementRef = GetDataTableColumnByName( dataTable, "endorsementRef" )
+	int col_endorsementType = GetDataTableColumnByName( dataTable, "endorsementType" )
+	int col_endorsementGrantIdentifier = GetDataTableColumnByName( dataTable, "endorsementGrantIdentifier" )
+	int col_endorsementDisplayName = GetDataTableColumnByName( dataTable, "endorsementDisplayName" )
+	int col_endorsementDisplayDescription = GetDataTableColumnByName( dataTable, "endorsementDisplayDescription" )
+	int col_endorsementIcon = GetDataTableColumnByName( dataTable, "endorsementIcon" )
+	int col_notifSound_1p = GetDataTableColumnByName( dataTable, "notifSound_1p" )
+	int col_excludedCharacters = GetDataTableColumnByName( dataTable, "excludedCharacters" )
+	int col_excludedCharacterRoles = GetDataTableColumnByName( dataTable, "excludedCharacterRoles" )
+	int col_hasEndorsementStationLockout = GetDataTableColumnByName( dataTable, "hasEndorsementStationLockout" )
+	int col_boxIcon = GetDataTableColumnByName( dataTable, "boxIcon" )
+
+	for ( int rowIdx = 0; rowIdx < rowCount; rowIdx++ )
+	{
+		EndorsementDefinition endorsementDefinition
+		endorsementDefinition.endorsementID = rowIdx
+
+		endorsementDefinition.endorsementRef = strip( GetDataTableString( dataTable, rowIdx, col_endorsementRef ) ).toupper()
+		Assert( endorsementDefinition.endorsementRef != "", format( "%s - Malformed Endorsement Data Line[%d] - Endorsement Definition Requires an Endorsement Reference String", FUNC_NAME(), rowIdx ) )
+		Assert( !(endorsementDefinition.endorsementRef in file.endorsementRefToDefinition), format( "%s - Data Error Line[%d] - Endorsement[%s] is defined more than once", FUNC_NAME(), rowIdx, endorsementDefinition.endorsementRef ) )
+
+		bool isDisabled = GetDataTableBool( dataTable, rowIdx, col_isDisabled )
+		bool isDisabledByPlaylist = !GetCurrentPlaylistVarBool( "endorsement_" + endorsementDefinition.endorsementRef + "_enable", DEFAULTS_ENDORSEMENTS_ENABLED_BY_PLAYLIST )
+		if ( isDisabled || isDisabledByPlaylist )
+			continue
+
+		string endorsementTypeName = strip( GetDataTableString( dataTable, rowIdx, col_endorsementType) ).toupper()
+		endorsementDefinition.endorsementType = eEndorsementType[ endorsementTypeName ]
+		string endorsementGrantIdentifier = strip( GetDataTableString( dataTable, rowIdx, col_endorsementGrantIdentifier) ).toupper()
+		switch( endorsementDefinition.endorsementType )
+		{
+			case eEndorsementType.PASSIVE:
+			{
+				
+				Assert( endorsementGrantIdentifier in ePassives, format( "%s - Malformed Endorsement Data Line[%d] - Endorsement Definition of Type %s grants an INVALID[%s] Passive", FUNC_NAME(), rowIdx, endorsementTypeName, endorsementGrantIdentifier ) )
+				endorsementDefinition.passiveID = ePassives[ endorsementGrantIdentifier ]
+				break
+			}
+			case eEndorsementType.GADGET:
+			{
+				endorsementDefinition.gadgetRef = endorsementGrantIdentifier
+				break
+			}
+			case eEndorsementType.DUMMY:
+			{
+				break
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			default:
+			{
+				Assert( false, format( "%s - Malformed Endorsement Data Line[%d] - Endorsement Definition of Type %s is not supported", FUNC_NAME(), rowIdx, endorsementTypeName ) )
+				break
+			}
+		}
+
+		string endorsementDisplayNameOverride = strip( GetCurrentPlaylistVarString( "endorsement_" + endorsementDefinition.endorsementRef + "_display_name", DEFAULTS_ENDORSEMENTS_DISPLAY_NAME_OVERRIDE ) )
+		endorsementDefinition.displayName = (endorsementDisplayNameOverride.len() == 0) ? strip( GetDataTableString( dataTable, rowIdx, col_endorsementDisplayName ) ) : endorsementDisplayNameOverride
+
+		string endorsementDisplayDescriptionOverride = strip( GetCurrentPlaylistVarString( "endorsement_" + endorsementDefinition.endorsementRef + "_display_description", DEFAULTS_ENDORSEMENTS_DISPLAY_DESCRIPTION_OVERRIDE ) )
+		endorsementDefinition.displayDescription = (endorsementDisplayDescriptionOverride.len() == 0) ? strip( GetDataTableString( dataTable, rowIdx, col_endorsementDisplayDescription ) ) : endorsementDisplayDescriptionOverride
+
+		asset endorsementIconOverride = GetCurrentPlaylistVarAsset( "endorsement_" + endorsementDefinition.endorsementRef + "_icon", DEFAULTS_ENDORSEMENTS_ICON_OVERRIDE )
+		endorsementDefinition.endorsementIcon = (endorsementIconOverride == $"") ? GetDataTableAsset( dataTable, rowIdx, col_endorsementIcon ) : endorsementIconOverride
+
+		string endorsementNotifSoundOverride = strip( GetCurrentPlaylistVarString( "endorsement_" + endorsementDefinition.endorsementRef + "_notif_sound_1P", DEFAULTS_ENDORSEMENT_NOTIF_SOUND_1P_OVERRIDE ) )
+		endorsementDefinition.notifSound_1p = (endorsementNotifSoundOverride.len() == 0) ? strip( GetDataTableString( dataTable, rowIdx, col_notifSound_1p ) ) : endorsementNotifSoundOverride
+
+		string excludedCharactersOverride = strip( GetCurrentPlaylistVarString( "endorsement_" + endorsementDefinition.endorsementRef + "_excluded_characters", DEFAULTS_ENDORSEMENTS_EXCLUDED_CHARACTERS_OVERRIDE ) )
+		string excludedCharacters = (excludedCharactersOverride == DEFAULTS_ENDORSEMENTS_EXCLUDED_CHARACTERS_OVERRIDE) ? strip( GetDataTableString( dataTable, rowIdx, col_excludedCharacters ) ) : excludedCharactersOverride
+		array< string > excludedCharactersTokens = GetTrimmedSplitString( excludedCharacters, "," )
+		foreach ( string excludedCharacterToken in excludedCharactersTokens )
+		{
+			string characterRefString = format( "character_%s", excludedCharacterToken.tolower() )
+			Assert( IsValidItemFlavorCharacterRef( characterRefString ), format( "%s - Data Error Line[%d] - Endorsement[%s] excludes an invalid character[%s]", FUNC_NAME(), rowIdx, endorsementDefinition.endorsementRef, excludedCharacterToken ) )
+
+			endorsementDefinition.excludedCharacterRefs.append( characterRefString )
+		}
+
+		string excludedCharacterRolesOverride = strip( GetCurrentPlaylistVarString( "endorsement_" + endorsementDefinition.endorsementRef + "excluded_character_roles", DEFAULTS_ENDORSEMENTS_EXCLUDED_CHARACTER_ROLES_OVERRIDE ) )
+		string excludedCharacterRoles = (excludedCharacterRolesOverride == DEFAULTS_ENDORSEMENTS_EXCLUDED_CHARACTER_ROLES_OVERRIDE) ? strip( GetDataTableString( dataTable, rowIdx, col_excludedCharacterRoles ) ) : excludedCharacterRolesOverride
+		array< string > excludedCharacterRolesTokens = GetTrimmedSplitString( excludedCharacterRoles, "," )
+		foreach ( string excludedCharacterRolesToken in excludedCharacterRolesTokens )
+		{
+			Assert( excludedCharacterRolesToken in eCharacterClassRole, format( "%s - Data Error Line[%d] - Endorsement[%s] excludes an invalid CharacterRole[%s]", FUNC_NAME(), rowIdx, endorsementDefinition.endorsementRef, excludedCharacterRolesToken ) )
+			endorsementDefinition.excludedCharacterRoles.append( eCharacterClassRole[excludedCharacterRolesToken] )
+		}
+
+		endorsementDefinition.hasEndorsementStationLockout = GetCurrentPlaylistVarBool( "endorsement_" + endorsementDefinition.endorsementRef + "has_endorsement_station_lockout", GetDataTableBool( dataTable, rowIdx, col_hasEndorsementStationLockout ) )
+
+		file.endorsementRefToDefinition[endorsementDefinition.endorsementRef] <- endorsementDefinition
+		file.endorsementIDToDefinition[endorsementDefinition.endorsementID] <- endorsementDefinition
+
+		if ( endorsementDefinition.passiveID != ePassives.INVALID )
+		{
+			file.passiveIDToEndorsementDef[ endorsementDefinition.passiveID ] <- endorsementDefinition
+		}
+
+		asset boxIconOverride = GetCurrentPlaylistVarAsset( "endorsement_" + endorsementDefinition.boxIcon + "_icon", DEFAULTS_ENDORSEMENTS_ICON_OVERRIDE )
+		endorsementDefinition.boxIcon = (boxIconOverride == $"") ? GetDataTableAsset( dataTable, rowIdx, col_boxIcon ) : boxIconOverride
+	}
+
+	file.maxEndorsementID = rowCount
+}
+
+void function Endorsements_LoadEndorsementGroupDefinitions( asset dataTableAsset )
+{
+	var dataTable = GetDataTable( dataTableAsset )
+	int rowCount = GetDataTableRowCount( dataTable )
+	int col_featureFlag = GetDataTableColumnByName( dataTable, "featureFlag" )
+	int col_isDisabled = GetDataTableColumnByName( dataTable, "isDisabled" )
+	int col_endorsementGroupRef = GetDataTableColumnByName( dataTable, "endorsementGroupRef" )
+	int col_reference = GetDataTableColumnByName( dataTable, "reference" )
+	int col_selectionWeight = GetDataTableColumnByName( dataTable, "selectionWeight" )
+
+	string currentEndorsementGroupRef = ""
+	for ( int rowIdx = 0; rowIdx < rowCount; rowIdx++ )
+	{
+		bool isDisabled = GetDataTableBool( dataTable, rowIdx, col_isDisabled )
+		string endorsementGroupRef = strip( GetDataTableString( dataTable, rowIdx, col_endorsementGroupRef ) ).toupper()
+		string reference = strip( GetDataTableString( dataTable, rowIdx, col_reference ) ).toupper()
+
+		if ( endorsementGroupRef.len() > 0 )
+		{
+			
+			bool isGroupDisabledByPlaylist = !GetCurrentPlaylistVarBool( "endorsement_group_" + endorsementGroupRef + "_enable", DEFAULTS_ENDORSEMENTS_GROUP_ENABLED_BY_PLAYLIST )
+			if ( isDisabled || isGroupDisabledByPlaylist )
+				continue
+
+			currentEndorsementGroupRef = endorsementGroupRef
+
+			Assert( !(endorsementGroupRef in file.endorsementGroupRefToDefinition), format( "%s - DATA ERROR Line[%d] - Endorsement Group[%s] Defined More Than Once", FUNC_NAME(), rowIdx, endorsementGroupRef ) )
+			EndorsementGroupDefinition endorsementGroupDefinition
+			endorsementGroupDefinition.endorsementGroupRef = endorsementGroupRef
+			file.endorsementGroupRefToDefinition[endorsementGroupDefinition.endorsementGroupRef] <- endorsementGroupDefinition
+
+			continue
+		}
+		else if ( reference.len() == 0 )
+		{
+			
+			currentEndorsementGroupRef = ""
+			continue
+		}
+		else if ( currentEndorsementGroupRef.len() == 0 )
+		{
+			
+			
+			continue
+		}
+
+		Assert( reference != "", format( "%s - DATA ERROR Line[%d] - Endorsement Group Entry For Group[%s] Has Invalid Reference", FUNC_NAME(), rowIdx, currentEndorsementGroupRef ) )
+		EndorsementGroupEntry newEndorsementGroupEntry
+		if ( reference in file.endorsementRefToDefinition )
+		{
+			
+			newEndorsementGroupEntry.endorsementRef = reference
+		}
+		else
+		{
+			
+			newEndorsementGroupEntry.endorsementGroupRef = reference
+		}
+
+		bool isEntryInGroupDisabledByPlaylist = !GetCurrentPlaylistVarBool( "endorsement_group_" + currentEndorsementGroupRef + "_entry_" + reference + "_enable", DEFAULTS_ENDORSEMENTS_GROUP_ENTRY_ENABLED_BY_PLAYLIST )
+		if ( isDisabled || isEntryInGroupDisabledByPlaylist )
+			continue
+
+		newEndorsementGroupEntry.weight = GetDataTableInt( dataTable, rowIdx, col_selectionWeight )
+		Assert( newEndorsementGroupEntry.weight >= 0, format( "%s - DATA ERROR Line[%d] - Endorsement[%s] For Group[%s] Has Invalid Weight[%d]", FUNC_NAME(), rowIdx, newEndorsementGroupEntry.endorsementRef, currentEndorsementGroupRef, newEndorsementGroupEntry.weight ) )
+
+		file.endorsementGroupRefToDefinition[currentEndorsementGroupRef].endorsementGroupEntries.append( newEndorsementGroupEntry )
+	}
+
+	
+	foreach ( EndorsementGroupDefinition endorsementGroupDefinition in file.endorsementGroupRefToDefinition )
+	{
+		
+		array< string > groupRefStack = [ endorsementGroupDefinition.endorsementGroupRef ]
+		array< int > groupRefEntriesIndex = [ 0 ]
+
+		
+		
+		while ( groupRefStack.len() > 0 )
+		{
+			string groupReference = groupRefStack.top()
+			Assert( groupReference in file.endorsementGroupRefToDefinition, format( "%s - ERROR - THIS SHOULD NOT BE POSSIBLE - Group[%s] is not defined", FUNC_NAME(), groupReference ) )
+
+			EndorsementGroupDefinition referencedEndorsementGroupDefinition = file.endorsementGroupRefToDefinition[groupReference]
+			int endorsementGroupEntriesCount = referencedEndorsementGroupDefinition.endorsementGroupEntries.len()
+			for ( int entryIndex = groupRefEntriesIndex.top(); entryIndex < endorsementGroupEntriesCount; entryIndex++ )
+			{
+				EndorsementGroupEntry endorsementGroupEntry = referencedEndorsementGroupDefinition.endorsementGroupEntries[entryIndex]
+
+				
+				if ( endorsementGroupEntry.endorsementRef.len() > 0 )
+					continue
+
+				if ( !(endorsementGroupEntry.endorsementGroupRef in file.endorsementGroupRefToDefinition) )
+				{
+					
+					endorsementGroupEntry.weight = 0
+					continue
+				}
+
+				Assert( !groupRefStack.contains( endorsementGroupEntry.endorsementGroupRef ), format( "%s - ERROR - CIRCULAR REFERENCE DETECTED FOR GROUP[%s]", FUNC_NAME(), endorsementGroupEntry.endorsementGroupRef ) )
+				groupReference = endorsementGroupEntry.endorsementGroupRef
+				groupRefEntriesIndex.pop()
+				groupRefEntriesIndex.push( entryIndex + 1 )
+				break
+			}
+
+			if ( groupReference != groupRefStack.top() )
+			{
+				
+				groupRefStack.push( groupReference )
+				groupRefEntriesIndex.push( 0 )
+			}
+			else
+			{
+				
+				groupRefStack.pop()
+				groupRefEntriesIndex.pop()
+			}
+		}
+	}
+}
+
+void function Endorsements_LoadEndorsementSponsorDefinitions( asset dataTableAsset )
+{
+	var dataTable = GetDataTable( dataTableAsset )
+	int rowCount = GetDataTableRowCount( dataTable )
+	int col_endorsementSponsorRef = GetDataTableColumnByName( dataTable, "endorsementSponsorRef" )
+	int col_displayName = GetDataTableColumnByName( dataTable, "displayName" )
+	int col_displayDescription = GetDataTableColumnByName( dataTable, "displayDescription" )
+	int col_color = GetDataTableColumnByName( dataTable, "color" )
+	int col_icon = GetDataTableColumnByName( dataTable, "icon" )
+	int col_hoverSound1p = GetDataTableColumnByName( dataTable, "hoverSound_1p" )
+	int col_selectSound1p = GetDataTableColumnByName( dataTable, "selectSound_1p" )
+	int col_selectLastSound1p = GetDataTableColumnByName( dataTable, "selectLastSound_1p" )
+
+	int col_background = GetDataTableColumnByName( dataTable, "background" )
+	int col_leadingChoice = GetDataTableColumnByName( dataTable, "leadingChoice" )
+
+
+	for ( int rowIdx = 0; rowIdx < rowCount; rowIdx++ )
+	{
+		string endorsementSponsorRef = strip( GetDataTableString( dataTable, rowIdx, col_endorsementSponsorRef ) ).toupper()
+		EndorsementSponsorDefinition endorsementSponsorDefinition
+		int endorsementSponsor = Endorsements_GetSponsorEnumFromRef( endorsementSponsorRef )
+		endorsementSponsorDefinition.endorsementSponsorEnum = endorsementSponsor
+
+		string sponsorDisplayNameOverride = strip( GetCurrentPlaylistVarString( "endorsement_sponsor" + endorsementSponsorRef + "_display_name", DEFAULTS_ENDORSEMENT_SPONSOR_DISPLAY_NAME_OVERRIDE ) )
+		endorsementSponsorDefinition.displayName = (sponsorDisplayNameOverride.len() == 0) ? strip( GetDataTableString( dataTable, rowIdx, col_displayName ) ) : sponsorDisplayNameOverride
+
+		string sponsorDisplayDescriptionOverride = strip( GetCurrentPlaylistVarString( "endorsement_sponsor" + endorsementSponsorRef + "_display_description", DEFAULTS_ENDORSEMENT_SPONSOR_DISPLAY_DESCRIPTION_OVERRIDE ) )
+		endorsementSponsorDefinition.displayDescription = (sponsorDisplayDescriptionOverride.len() == 0) ? strip( GetDataTableString( dataTable, rowIdx, col_displayDescription ) ) : sponsorDisplayDescriptionOverride
+
+		string sponsorColorOverride = strip( GetCurrentPlaylistVarString( "endorsement_sponsor" + endorsementSponsorRef + "color", DEFAULTS_ENDORSEMENT_SPONSOR_COLOR_OVERRIDE ) )
+		if ( sponsorColorOverride.len() > 0 )
+		{
+			endorsementSponsorDefinition.color = StringToVector( sponsorColorOverride )
+		}
+		else
+		{
+			endorsementSponsorDefinition.color = GetDataTableVector( dataTable, rowIdx, col_color )
+		}
+
+		asset sponsorIconOverride = GetCurrentPlaylistVarAsset( "endorsement_sponsor" + endorsementSponsorRef + "_icon", DEFAULTS_ENDORSEMENT_SPONSOR_ICON_OVERRIDE )
+		endorsementSponsorDefinition.icon = (sponsorIconOverride == $"") ? GetDataTableAsset( dataTable, rowIdx, col_icon ) : sponsorIconOverride
+
+		
+		string hoverSound1pOverride = strip( GetCurrentPlaylistVarString( "endorsement_sponsor" + endorsementSponsorRef + "_hoverSound1p", DEFAULTS_ENDORSEMENT_SPONSOR_HOVER_SOUND_1P_OVERRIDE ) )
+		endorsementSponsorDefinition.hoverSound_1p = ( hoverSound1pOverride.len() == 0 ) ? strip( GetDataTableString( dataTable, rowIdx, col_hoverSound1p ) ) : hoverSound1pOverride
+
+		string selectSound1pOverride = strip( GetCurrentPlaylistVarString( "endorsement_sponsor" + endorsementSponsorRef + "_selectSound1p", DEFAULTS_ENDORSEMENT_SPONSOR_SELECT_SOUND_1P_OVERRIDE ) )
+		endorsementSponsorDefinition.selectSound_1p = ( selectSound1pOverride.len() == 0 ) ? strip( GetDataTableString( dataTable, rowIdx, col_selectSound1p ) ) : selectSound1pOverride
+
+		string selectLastSound1pOverride = strip( GetCurrentPlaylistVarString( "endorsement_sponsor" + endorsementSponsorRef + "_selectLastSound1p", DEFAULTS_ENDORSEMENT_SPONSOR_SELECT_LAST_SOUND_1P_OVERRIDE ) )
+		endorsementSponsorDefinition.selectLastSound_1p = ( selectLastSound1pOverride.len() == 0 ) ? strip( GetDataTableString( dataTable, rowIdx, col_selectLastSound1p ) ) : selectLastSound1pOverride
+
+
+		asset backgroundOverride = GetCurrentPlaylistVarAsset( "endorsement_sponsor" + endorsementSponsorRef + "_background", $"" )
+		endorsementSponsorDefinition.background = ( backgroundOverride == $"" ) ? GetDataTableAsset( dataTable, rowIdx, col_background ) : backgroundOverride
+
+		bool leadingChoiceOverride = GetCurrentPlaylistVarBool( "endorsement_sponsor" + endorsementSponsorRef + "_leadingChoice", true )
+		endorsementSponsorDefinition.leadingChoice = ( leadingChoiceOverride ) ? GetDataTableBool( dataTable, rowIdx, col_leadingChoice ) : leadingChoiceOverride
+
+
+		file.endorsementSponsorToDefinition[endorsementSponsor] <- endorsementSponsorDefinition
+	}
+}
+
+int function Endorsements_GetSponsorEnumFromRef( string ref )
+{
+	int sponsorType = eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID
+	bool typeFound = false
+	for( int i = 0; i < eEndorsementSponsor._COUNT; i++ )
+	{
+		string enumType = GetEnumString( "eEndorsementSponsor", i ).tolower()
+		if ( enumType.tolower() == ref.tolower() )
+		{
+			sponsorType = i
+			typeFound = true
+			break
+		}
+	}
+
+	Assert( typeFound, "Endorsement sponsor type '" + ref + "' is not a specified enumerator." )
+
+	return sponsorType
+}
+
+void function Endorsements_InitializeEndorsementTracks()
+{
+	string endorsementTracksString = Endorsements_GetTracks()
+	bool isTracksFixedOrderEnabled = Endorsements_IsTracksFixedOrderEnabled()
+
+	if ( endorsementTracksString.len() == 0 )
+	{
+		Assert( !isTracksFixedOrderEnabled, format( "%s - ERROR - TracksFixedOrderEnabled is true but there are no tracks defined", FUNC_NAME() ) )
+		return
+	}
+
+	foreach ( string endorsementTrackEntryString in GetTrimmedSplitString( endorsementTracksString, "|" ) )
+	{
+		
+		array< string > endorsementTrackTokens = GetTrimmedSplitString( endorsementTrackEntryString, ":" )
+		Assert( endorsementTrackTokens.len() >= 2, format( "%s - DATA ERROR - PlaylistVar[%s] Is Incorrectly Formatted, Every Track Entry Requires a Weight - Format = group_a,group_b,group_c:track1_weight:optional_sponsor|group_x,group_y,group_z:track2_weight:optional_sponsor", FUNC_NAME(), PVAR_ENDORSEMENTS_TRACKS ) )
+
+		EndorsementTrackDefinition newEndorsementTrack
+		
+		
+		
+		
+		if ( endorsementTrackTokens.len() > 2 )
+		{
+			string endorsementSponsorRef = endorsementTrackTokens[2]
+			int endorsementSponsor = Endorsements_GetSponsorEnumFromRef( endorsementSponsorRef )
+			if ( endorsementSponsor in file.endorsementSponsorToDefinition )
+			{
+				newEndorsementTrack.endorsementSponsorEnum = endorsementSponsor
+			}
+		}
+
+		newEndorsementTrack.weight = int(endorsementTrackTokens[1])
+
+		
+		
+		foreach ( int index, string endorsementGroupRef in GetTrimmedSplitString( endorsementTrackTokens[0], "," ) )
+		{
+			string endorsementGroupRefUpper = endorsementGroupRef.toupper()
+			Assert( endorsementGroupRefUpper in file.endorsementGroupRefToDefinition, format( "%s - DATA ERROR - PlaylistVar[%s] References Endorsement Group[%s], Which Is Not Defined", FUNC_NAME(), PVAR_ENDORSEMENTS_TRACKS, endorsementGroupRefUpper ) )
+			newEndorsementTrack.endorsementLevelToGroup.append( file.endorsementGroupRefToDefinition[endorsementGroupRefUpper] )
+		}
+
+		file.endorsementTracks.append( newEndorsementTrack )
+	}
+
+	Assert( !isTracksFixedOrderEnabled || (Endorsements_GetMaxEndorsementsPerRound() <= file.endorsementTracks.len()), format( "%s - ERROR - TracksFixedOrderEnabled is true but there are no sufficient tracks defined", FUNC_NAME() ) )
+}
+
+void function Endorsements_SetupPerPlayerEndorsementDistribution( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	string matchID
+
+
+
+
+
+
+		{
+			matchID = GetUniqueServerId()
+		}
+
+	matchID = lstrip( rstrip( matchID ) )
+	int hash = StringHash( format("%s_%s", matchID, player.GetUserID() ) )
+	var randomSeed = CreateRandomSeed( hash )
+	EHI playerEHI = ToEHI( player )
+
+	PerPlayerEndorsementCraftingData playerCraftingData
+	table<int, table<int, array<int> > > availableUpgradesPerRound 
+	for ( int i = 0; i < Endorsements_GetMaxEndorsementCount(); i++ )
+	{
+		availableUpgradesPerRound[ i ] <- {}
+		playerCraftingData.roundToUpgradeID[ i ] <- []
+	}
+
+	int choiceIndex = 0
+	array< EndorsementChoiceData > currentLevelChoices = []
+	table< EndorsementOptionData, EndorsementTrackDefinition > endorsementOptionToEndorsementTrack
+	for ( int roundIndex = 0; roundIndex < Endorsements_GetMaxEndorsementCount(); ++roundIndex )
+	{
+		array< EndorsementChoiceData > nextLevelChoices  = []
+		if ( roundIndex == 0 )
+		{
+			
+			
+			table< EndorsementDefinition, EndorsementTrackDefinition > selectedStartingEndorsements = Endorsements_SelectEndorsementsFromTracks( randomSeed, Endorsements_GetNormalEndorsementsPerRound(), roundIndex, file.endorsementTracks, player, Endorsements_IsTracksFixedOrderEnabled() )
+			Assert( selectedStartingEndorsements.len() == Endorsements_GetNormalEndorsementsPerRound(), format("%s - ERROR - Selected Endorsement Count [%d] != Endorsements Required [%d]", FUNC_NAME(), selectedStartingEndorsements.len(), Endorsements_GetMaxEndorsementsPerRound() ) )
+
+			EndorsementChoiceData newEndorsementChoice
+			newEndorsementChoice.choiceId = choiceIndex
+			newEndorsementChoice.choiceString = ""
+			choiceIndex++
+
+			foreach ( EndorsementDefinition startingEndorsement, EndorsementTrackDefinition selectedEndorsementTrack in selectedStartingEndorsements )
+			{
+				newEndorsementChoice.endorsementExclusionList.append( startingEndorsement.endorsementRef )
+
+				EndorsementOptionData newEndorsementOption
+				newEndorsementOption.endorsementRef         = startingEndorsement.endorsementRef
+				newEndorsementOption.endorsementSponsorEnum = selectedEndorsementTrack.endorsementSponsorEnum
+				endorsementOptionToEndorsementTrack[newEndorsementOption] <- selectedEndorsementTrack
+
+				newEndorsementChoice.endorsementOptions.append( newEndorsementOption )
+			}
+
+			nextLevelChoices.append( newEndorsementChoice )
+			playerCraftingData.choiceStringToChoiceData[newEndorsementChoice.choiceString] <- newEndorsementChoice
+		}
+		else
+		{
+			foreach ( EndorsementChoiceData currentChoiceData in currentLevelChoices )
+			{
+				foreach ( EndorsementOptionData currentEndorsementOption in currentChoiceData.endorsementOptions )
+				{
+					EndorsementDefinition endorsementDefinition = file.endorsementRefToDefinition[currentEndorsementOption.endorsementRef]
+					EndorsementTrackDefinition endorsementTrack = endorsementOptionToEndorsementTrack[currentEndorsementOption]
+
+					
+					EndorsementChoiceData newEndorsementChoice
+					newEndorsementChoice.choiceId = choiceIndex
+					newEndorsementChoice.choiceString = (currentChoiceData.choiceString.len() == 0) ? format( "%d", endorsementDefinition.endorsementID ) : format( "%s_%d", currentChoiceData.choiceString, endorsementDefinition.endorsementID )
+					choiceIndex++
+
+					
+					newEndorsementChoice.endorsementExclusionList = currentChoiceData.endorsementExclusionList.slice( 0 )
+					array< EndorsementDefinition > selectedEndorsements = Endorsements_SelectEndorsementsFromGroup( randomSeed, Endorsements_GetNormalEndorsementsPerRound(), newEndorsementChoice.endorsementExclusionList, endorsementTrack.endorsementLevelToGroup[roundIndex], player )
+					Assert( selectedEndorsements.len() == Endorsements_GetNormalEndorsementsPerRound(), format("%s - ERROR - Selected Endorsement Count [%d] != Endorsements Required [%d]", FUNC_NAME(), selectedEndorsements.len(), Endorsements_GetMaxEndorsementsPerRound() ) )
+
+					foreach ( EndorsementDefinition selectedEndorsement in selectedEndorsements )
+					{
+						EndorsementOptionData newEndorsementOption
+						newEndorsementOption.endorsementRef         = selectedEndorsement.endorsementRef
+						newEndorsementOption.endorsementSponsorEnum = endorsementTrack.endorsementSponsorEnum
+						endorsementOptionToEndorsementTrack[newEndorsementOption] <- endorsementTrack
+
+						newEndorsementChoice.endorsementOptions.append( newEndorsementOption )
+					}
+
+					nextLevelChoices.append( newEndorsementChoice )
+					playerCraftingData.choiceStringToChoiceData[newEndorsementChoice.choiceString] <- newEndorsementChoice
+				}
+			}
+		}
+
+		currentLevelChoices = nextLevelChoices.slice( 0 )
+	}
+
+	file.perPlayerEndorsementCraftingData[ playerEHI ] <- playerCraftingData
+}
+
+array< EndorsementDefinition > function Endorsements_SelectEndorsementsFromGroup( var randomSeed, int desiredEndorsementCount, array< string > endorsementExclusionList, EndorsementGroupDefinition endorsementGroup, entity player )
+{
+	
+	string characterRef = "INVALID"
+	int characterRole = eCharacterClassRole.UNDECIDED
+	if ( IsValid( player ) )
+	{
+		ItemFlavor character = LoadoutSlot_GetItemFlavor( ToEHI( player ), Loadout_Character() )
+		characterRef  = ItemFlavor_GetCharacterRef( character ).tolower()
+		characterRole = CharacterClass_GetRole( character )
+	}
+
+	array< EndorsementDefinition > selectedEndorsements = []
+
+	
+	int totalGroupWeight = 0
+	foreach ( EndorsementGroupEntry endorsementGroupEntry in endorsementGroup.endorsementGroupEntries )
+	{
+		string entryRef = (endorsementGroupEntry.endorsementRef.len() != 0) ? endorsementGroupEntry.endorsementRef : endorsementGroupEntry.endorsementGroupRef
+		if ( endorsementExclusionList.contains( entryRef ) )
+			continue
+
+		if ( endorsementGroupEntry.weight <= 0 )
+			continue
+
+		if ( entryRef == endorsementGroupEntry.endorsementRef )
+		{
+			EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( entryRef )
+			if ( endorsementDefinition.excludedCharacterRefs.contains( characterRef ) || endorsementDefinition.excludedCharacterRoles.contains( characterRole ) )
+			{
+				endorsementExclusionList.append( entryRef )
+				continue
+			}
+		}
+
+		totalGroupWeight += endorsementGroupEntry.weight
+	}
+
+	
+	while ( (selectedEndorsements.len() < desiredEndorsementCount) && (0 < totalGroupWeight) )
+	{
+		int randomWeight = RandomIntSeeded( randomSeed, totalGroupWeight )
+		foreach ( EndorsementGroupEntry endorsementGroupEntry in endorsementGroup.endorsementGroupEntries )
+		{
+			string entryRef = (endorsementGroupEntry.endorsementRef.len() != 0) ? endorsementGroupEntry.endorsementRef : endorsementGroupEntry.endorsementGroupRef
+			if ( endorsementExclusionList.contains( entryRef ) )
+				continue
+
+			if ( endorsementGroupEntry.weight <= 0 )
+				continue
+
+			randomWeight -= endorsementGroupEntry.weight
+			if ( 0 <= randomWeight )
+				continue
+
+			
+			
+			if ( endorsementGroupEntry.endorsementRef.len() != 0 )
+			{
+				
+				selectedEndorsements.append( file.endorsementRefToDefinition[entryRef] )
+			}
+			else
+			{
+				
+				
+				int endorsementsNeeded = desiredEndorsementCount - selectedEndorsements.len()
+				EndorsementGroupDefinition selectedEndorsementGroup = file.endorsementGroupRefToDefinition[entryRef]
+				array< EndorsementDefinition > recursiveSelectedEndorsements = Endorsements_SelectEndorsementsFromGroup( randomSeed, endorsementsNeeded, endorsementExclusionList, selectedEndorsementGroup, player )
+				selectedEndorsements.extend( recursiveSelectedEndorsements )
+			}
+
+			endorsementExclusionList.append( entryRef )
+			totalGroupWeight -= endorsementGroupEntry.weight
+			break
+		}
+	}
+
+	return selectedEndorsements
+}
+
+table< EndorsementDefinition, EndorsementTrackDefinition > function Endorsements_SelectEndorsementsFromTracks( var randomSeed, int desiredEndorsementCount, int endorsementLevel, array< EndorsementTrackDefinition > endorsementTracks, entity player, bool useFixedOrder )
+{
+	table< EndorsementDefinition, EndorsementTrackDefinition > selectedEndorsementToEndorsementTrackDefinition
+
+	if ( endorsementTracks.len() == 0 )
+		return selectedEndorsementToEndorsementTrackDefinition
+
+	if ( useFixedOrder )
+	{
+		
+		
+		array< string > endorsementExclusionList = []
+		for ( int endorsementTrackIndex = 0; endorsementTrackIndex < desiredEndorsementCount; ++endorsementTrackIndex )
+		{
+			array< EndorsementDefinition > selectedEndorsements = Endorsements_SelectEndorsementsFromGroup( randomSeed, 1, endorsementExclusionList, endorsementTracks[endorsementTrackIndex].endorsementLevelToGroup[endorsementLevel], player )
+			foreach ( EndorsementDefinition selectedEndorsement in selectedEndorsements )
+			{
+				selectedEndorsementToEndorsementTrackDefinition[selectedEndorsement] <- endorsementTracks[endorsementTrackIndex]
+			}
+		}
+	}
+	else if ( endorsementTracks.len() == 1 )
+	{
+		
+		EndorsementGroupDefinition selectedEndorsementGroup = endorsementTracks[0].endorsementLevelToGroup[endorsementLevel]
+		array< EndorsementDefinition > recursiveSelectedEndorsements = Endorsements_SelectEndorsementsFromGroup( randomSeed, desiredEndorsementCount, [], selectedEndorsementGroup, player )
+		foreach ( EndorsementDefinition selectedEndorsement in recursiveSelectedEndorsements )
+		{
+			selectedEndorsementToEndorsementTrackDefinition[selectedEndorsement] <- endorsementTracks[0]
+		}
+	}
+	else
+	{
+		
+		array< string > endorsementExclusionList = []
+
+		
+		int totalTracksWeight = 0
+		foreach ( EndorsementTrackDefinition currentEndorsementTrack in endorsementTracks )
+		{
+			if ( currentEndorsementTrack.weight <= 0 )
+				continue
+
+			totalTracksWeight += currentEndorsementTrack.weight
+		}
+
+		
+		array< EndorsementTrackDefinition > selectedTracks = []
+		while ( (selectedEndorsementToEndorsementTrackDefinition.len() < desiredEndorsementCount) && (0 < totalTracksWeight) )
+		{
+			int randomWeight = RandomIntSeeded( randomSeed, totalTracksWeight )
+			foreach ( EndorsementTrackDefinition currentEndorsementTrack in endorsementTracks )
+			{
+				if ( selectedTracks.contains( currentEndorsementTrack ) )
+					continue
+
+				if ( currentEndorsementTrack.weight <= 0 )
+					continue
+
+				randomWeight -= currentEndorsementTrack.weight
+				if ( 0 <= randomWeight )
+					continue
+
+				
+				
+				EndorsementGroupDefinition selectedEndorsementGroup = currentEndorsementTrack.endorsementLevelToGroup[endorsementLevel]
+				array< EndorsementDefinition > recursiveSelectedEndorsements = Endorsements_SelectEndorsementsFromGroup( randomSeed, 1, endorsementExclusionList, selectedEndorsementGroup, player )
+				foreach ( EndorsementDefinition selectedEndorsement in recursiveSelectedEndorsements )
+				{
+					selectedEndorsementToEndorsementTrackDefinition[selectedEndorsement] <- currentEndorsementTrack
+				}
+
+				selectedTracks.append( currentEndorsementTrack )
+				totalTracksWeight -= currentEndorsementTrack.weight
+				break
+			}
+		}
+	}
+
+	Assert( desiredEndorsementCount == selectedEndorsementToEndorsementTrackDefinition.len(), format( "%s - ERROR - There was an issue selecting the desired endorsement count [%d] from the tracks provided, verify your endorsement data", FUNC_NAME(), desiredEndorsementCount ) )
+	return selectedEndorsementToEndorsementTrackDefinition
+}
+
+int function Endorsements_GetMaxEndorsementID()
+{
+	return file.maxEndorsementID
+}
+
+EndorsementDefinition function Endorsements_GetEndorsementDefinitionFromRef( string endorsementRef )
+{
+	string endorsementRefUpper = endorsementRef.toupper()
+	Assert( endorsementRefUpper in file.endorsementRefToDefinition, format( "%s - ERROR - EndorsementRef[%s] is not a valid Endorsement ref", FUNC_NAME(), endorsementRefUpper ) )
+
+	return file.endorsementRefToDefinition[endorsementRefUpper]
+}
+
+EndorsementDefinition function Endorsements_GetEndorsementDefinitionFromID( int endorsementID )
+{
+	Assert( endorsementID in file.endorsementIDToDefinition, format("%s - ERROR - EndorsementID[%d] is not a valid Endorsement ID", FUNC_NAME(), endorsementID ) )
+
+	return file.endorsementIDToDefinition[endorsementID]
+}
+
+EndorsementGroupDefinition function Endorsements_GetEndorsementGroupDefinitionFromRef( string endorsementGroupRef )
+{
+	string endorsementGroupRefUpper = endorsementGroupRef.toupper()
+	Assert( endorsementGroupRefUpper in file.endorsementGroupRefToDefinition, format( "%s - ERROR - EndorsementGroupRef[%s] is not a valid Endorsement ref", FUNC_NAME(), endorsementGroupRefUpper ) )
+
+	return file.endorsementGroupRefToDefinition[endorsementGroupRefUpper]
+}
+
+EndorsementSponsorDefinition function Endorsements_GetEndorsementSponsorDefinitionFromSponsor( int endorsementSponsor )
+{
+	Assert( endorsementSponsor in file.endorsementSponsorToDefinition, format( "%s - ERROR - EndorsementSponsorRef[%s] is not a valid Endorsement Sponsor Ref", FUNC_NAME(), endorsementSponsor ) )
+
+	return file.endorsementSponsorToDefinition[endorsementSponsor]
+}
+
+bool function Endorsements_AreChoicesDifferentSponsors( EndorsementChoiceData choiceData )
+{
+	int sponsor = eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID
+	foreach ( EndorsementOptionData optionData in choiceData.endorsementOptions )
+	{
+		if ( sponsor != eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		{
+			if ( sponsor != optionData.endorsementSponsorEnum )
+			{
+				return true
+			}
+		}
+		else
+		{
+			sponsor = optionData.endorsementSponsorEnum
+		}
+	}
+
+	return false
+}
+
+table<EHI, PerPlayerEndorsementCraftingData> function Endorsements_GetPerPlayerEndorsementData()
+{
+	return clone file.perPlayerEndorsementCraftingData
+}
+
+array<int> function Endorsements_GetPlayerEndorsementArray( entity player )
+{
+	array<int> endorsements
+	int endorsement = player.GetPlayerNetInt( NETVAR_ENDORSEMENT_0 )
+	if ( endorsement != ENDORSEMENT_INVALID )
+	{
+		endorsements.append( endorsement )
+	}
+
+	endorsement = player.GetPlayerNetInt( NETVAR_ENDORSEMENT_1 )
+	if ( endorsement != ENDORSEMENT_INVALID )
+	{
+		endorsements.append( endorsement )
+	}
+
+	endorsement = player.GetPlayerNetInt( NETVAR_ENDORSEMENT_2 )
+	if ( endorsement != ENDORSEMENT_INVALID )
+	{
+		endorsements.append( endorsement )
+	}
+
+	return endorsements
+}
+
+string function Endorsements_GetPlayerEndorsementChoiceString( entity player )
+{
+	if ( !IsValid( player ) )
+		return ""
+
+	string endorsementChoiceString = ""
+	array< int > playerEndorsementArray = Endorsements_GetPlayerEndorsementArray( player )
+	foreach ( int playerEndorsementID in playerEndorsementArray )
+	{
+		if ( playerEndorsementID == ENDORSEMENT_INVALID )
+			break
+
+		endorsementChoiceString = (endorsementChoiceString.len() == 0) ? format( "%d", playerEndorsementID ) : format( "%s_%d", endorsementChoiceString, playerEndorsementID )
+	}
+
+	return endorsementChoiceString
+}
+
+bool function Endorsements_PlayerHasEndorsement( entity player, int endorsement )
+{
+	return player.GetPlayerNetInt( NETVAR_ENDORSEMENT_0 ) == endorsement || player.GetPlayerNetInt( NETVAR_ENDORSEMENT_1 ) == endorsement || player.GetPlayerNetInt( NETVAR_ENDORSEMENT_2 ) == endorsement
+}
+
+bool function Endorsements_PlayerHasEndorsementByPassive( entity player, int passiveId )
+{
+	return passiveId in file.passiveIDToEndorsementDef && Endorsements_PlayerHasEndorsement( player, file.passiveIDToEndorsementDef[ passiveId ].endorsementID )
+}
+
+int function Endorsements_GetPlayerEndorsementCount( entity player )
+{
+	return ( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_0 ) == ENDORSEMENT_INVALID ? 0 : 1 )
+			+ ( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_1 ) == ENDORSEMENT_INVALID ? 0 : 1 )
+			+ ( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_2 ) == ENDORSEMENT_INVALID ? 0 : 1 )
+}
+
+bool function Endorsements_IsPlayerLockedOutFromCrafter( entity player )
+{
+	bool isPlayerLockedOutFromCrafter = false
+	if ( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_0 ) != ENDORSEMENT_INVALID )
+	{
+		isPlayerLockedOutFromCrafter = isPlayerLockedOutFromCrafter || Endorsements_GetEndorsementDefinitionFromID( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_0 ) ).hasEndorsementStationLockout
+	}
+	if ( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_1 ) != ENDORSEMENT_INVALID )
+	{
+		isPlayerLockedOutFromCrafter = isPlayerLockedOutFromCrafter || Endorsements_GetEndorsementDefinitionFromID( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_1 ) ).hasEndorsementStationLockout
+	}
+	if ( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_2 ) != ENDORSEMENT_INVALID )
+	{
+		isPlayerLockedOutFromCrafter = isPlayerLockedOutFromCrafter || Endorsements_GetEndorsementDefinitionFromID( player.GetPlayerNetInt( NETVAR_ENDORSEMENT_2 ) ).hasEndorsementStationLockout
+	}
+
+	return isPlayerLockedOutFromCrafter
+}
+
+bool function Endorsements_IsValidEndorsementForPurchase( entity player, int round, int endorsementID )
+{
+	if ( !IsValid( player ) || (endorsementID == ENDORSEMENT_INVALID ) )
+		return false
+
+	EHI playerEHI = ToEHI( player )
+	if ( !(playerEHI in file.perPlayerEndorsementCraftingData) )
+		return false
+
+	EndorsementDefinition endorsementDefinitionToCheck = Endorsements_GetEndorsementDefinitionFromID( endorsementID )
+	string endorsementChoiceString = Endorsements_GetPlayerEndorsementChoiceString( player )
+	PerPlayerEndorsementCraftingData playerCraftingData = file.perPlayerEndorsementCraftingData[playerEHI]
+
+	Assert( endorsementChoiceString in playerCraftingData.choiceStringToChoiceData, format( "%s - ERROR - INVALID Choice String[%s] for Player Choice Data", FUNC_NAME(), endorsementChoiceString ) )
+	EndorsementChoiceData endorsementChoiceData = playerCraftingData.choiceStringToChoiceData[endorsementChoiceString]
+
+	foreach ( EndorsementOptionData endorsementOption in endorsementChoiceData.endorsementOptions )
+	{
+		if ( endorsementOption.endorsementRef == endorsementDefinitionToCheck.endorsementRef )
+			return true
+	}
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Endorsements_InitClientHUD( entity player )
+{
+	AddCallback_OnGetUnitframeSizeForMode( Endorsements_GetUnitframeSizeForMode )
+}
+
+vector function Endorsements_GetUnitframeSizeForMode()
+{
+#if SUPPORTS_COMPACT_UI
+        return IsUsingCompactUILayout() ? ENDORSEMENTS_UNITFRAME_SIZE_COMPACT_UI : ENDORSEMENTS_UNITFRAME_SIZE;
+#else
+		return ENDORSEMENTS_UNITFRAME_SIZE
+#endif
+}
+
+void function Endorsements_UpdateTicketCountUI( int newVal )
+{
+	RuiSetString( file.endorsementHUDRui, "ticketText", Localize( newVal == 0 ? "#ENDORSEMENT_TICKET_COUNT_NONE" : "#ENDORSEMENT_TICKET_COUNT_NONZERO", newVal ) )
+}
+
+void function Endorsements_NetVarChanged_ActiveEndorsements( entity player, int newVal )
+{
+	Endorsements_UpdateUnitframeRuiForPlayer( player )
+
+	foreach ( void functionref( entity ) callback in file.callbacks_OnEndorsementsChanged )
+	{
+		callback( player )
+	}
+
+	Signal( player, SIG_ENDORSEMENTS_NETVAR_UPDATE )
+}
+
+void function Endorsements_AddCallback_OnEndorsementsChanged( void functionref( entity ) callback )
+{
+	Assert( !file.callbacks_OnEndorsementsChanged.contains( callback ), "Already added " + string( callback ) + " to callbacks_OnEndorsementsChanged" )
+	file.callbacks_OnEndorsementsChanged.append( callback )
+}
+
+var function Endorsements_Unitframes_TryGetUnitframeForPlayer( entity player )
+{
+	
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( !IsValidPlayer( player ) || !IsValidPlayer( viewPlayer ) )
+		return null
+
+	int viewPlayerTeam = viewPlayer.GetTeam()
+	bool isViewPlayer = player == viewPlayer
+	bool isFriendlyPlayer = IsFriendlyTeam( player.GetTeam(), viewPlayerTeam )
+	bool isLivingOrNotSpectating = IsAlive( player ) || !IsSpectating()
+
+	if ( !isViewPlayer && !isFriendlyPlayer )
+		return null
+
+	var unitframeRui
+	
+	if ( isViewPlayer && isLivingOrNotSpectating )
+	{
+		unitframeRui = GetPilotRui()
+	}
+	else if ( PlayerHasUnitFrame( player ) )
+	{
+		unitframeRui = GetUnitFrame( player ).rui
+	}
+
+	if ( unitframeRui == null || !RuiIsAlive( unitframeRui ) )
+		return null
+
+	
+	return unitframeRui
+}
+
+void function Endorsements_UpdateUnitframeRuiForPlayer( entity player )
+{
+	var unitframeRui = Endorsements_Unitframes_TryGetUnitframeForPlayer( player )
+	if ( unitframeRui == null )
+		return
+
+	RuiSetBoolIfExists( unitframeRui, "endorsementsVisible", true )
+	Endorsements_UpdateEndorsementSlotsForRui( unitframeRui, player )
+}
+
+
+void function Endorsements_UpdateEndorsementSlotsForRui( var rui, entity player )
+{
+	if ( rui == null || !IsValid( player ) )
+		return
+
+	array<int> activeEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+	int maxSlotsToShow = Endorsements_GetMaxEndorsementCount()
+	int unclaimedTicketCount = maxSlotsToShow
+	if ( Endorsements_GetDeliveryType() == eEndorsementDeliveryType.GROUNDED_CRAFTERS )
+	{
+		unclaimedTicketCount = Endorsements_Delivery_GetPlayerTicketCount( player )
+	}
+
+
+		bool isClockUpModeEnabled = ClockUp_Endorsements_IsEnabled()
+		RuiSetBoolIfExists( rui, "hasClockUpEndorsement", isClockUpModeEnabled )
+		RuiSetBoolIfExists( rui, "endorsementsFixedWidth", isClockUpModeEnabled ) 
+
+		if ( isClockUpModeEnabled )
+		{
+			maxSlotsToShow = 1
+		}
+
+
+	
+	for ( int idx = 0; idx < maxSlotsToShow; idx++ )
+	{
+		if ( activeEndorsements.len() > idx )
+		{
+			EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromID( activeEndorsements[idx] )
+			RuiSetAssetIfExists( rui, "endorsementSlotIcon" + idx, endorsementDefinition.endorsementIcon )
+			RuiSetBoolIfExists( rui, "endorsementSlotLocked" + idx, false )
+			RuiSetBoolIfExists( rui, "endorsementSlotEmpty" + idx, false )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		}
+		else if ( activeEndorsements.len() + unclaimedTicketCount > idx )
+		{
+			RuiSetAssetIfExists( rui, "endorsementSlotIcon" + idx, $"" )
+			RuiSetBoolIfExists( rui, "endorsementSlotLocked" + idx, false )
+			RuiSetBoolIfExists( rui, "endorsementSlotEmpty" + idx, true )
+			RuiSetFloatIfExists( rui, "endorsementProgressOverride" + idx, -1.0 )
+		}
+		else
+		{
+			RuiSetAssetIfExists( rui, "endorsementSlotIcon" + idx, $"" )
+			RuiSetBoolIfExists( rui, "endorsementSlotLocked" + idx, true )
+			RuiSetBoolIfExists( rui, "endorsementSlotEmpty" + idx, true )
+			RuiSetFloatIfExists( rui, "endorsementProgressOverride" + idx, -1.0 )
+		}
+	}
+
+	
+	for ( int idx = maxSlotsToShow; idx < Endorsements_GetMaxEndorsementCount(); idx++ )
+	{
+		RuiSetAssetIfExists( rui, "endorsementSlotIcon" + idx, $"" )
+		RuiSetBoolIfExists( rui, "endorsementSlotLocked" + idx, true )
+		RuiSetBoolIfExists( rui, "endorsementSlotEmpty" + idx, true )
+		RuiSetFloatIfExists( rui, "endorsementProgressOverride" + idx, -1.0 )
+	}
+}
+
+
+void function Endorsements_AnimateUnitframeRuiForPlayer( entity player, int endorsementID, EndorsementDefinition endorsementDefinition )
+{
+	var unitframeRui = Endorsements_Unitframes_TryGetUnitframeForPlayer( player )
+	if ( unitframeRui == null )
+	{
+		return
+	}
+
+	array<int> activeEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+
+	int endorsementIndex = activeEndorsements.find( endorsementID )
+	if ( endorsementIndex < 0 || endorsementIndex >= Endorsements_GetMaxEndorsementCount() )
+	{
+		return
+	}
+
+	RuiSetGameTimeIfExists( unitframeRui, "endorsementSlotAnimStartTime" + endorsementIndex, ClientTime() )
+	RuiSetGameTimeIfExists( unitframeRui, "endorsementSlotAnimEndTime" + endorsementIndex, ClientTime() + endorsementDefinition.duration )
+	RuiSetFloatIfExists( unitframeRui, "endorsementSlotAnimOutroDuration" + endorsementIndex, ( endorsementDefinition.cooldown > 0.0 || endorsementDefinition.duration > 0.0 ) ? 0.0 : 3.50 )
+	RuiSetGameTimeIfExists( unitframeRui, "endorsementSlotCDStartTime" + endorsementIndex, ClientTime() )
+	RuiSetGameTimeIfExists( unitframeRui, "endorsementSlotCDEndTime" + endorsementIndex, ClientTime() + endorsementDefinition.cooldown )
+	RuiSetGameTimeIfExists( unitframeRui, "endorsementProgressOverride" + endorsementIndex, -1.0 )
+}
+
+void function Endorsements_OverrideUnitframeRuiProgressForPlayer( entity player, int endorsementID, float overrideProgress = 0.0 )
+{
+	var unitframeRui = Endorsements_Unitframes_TryGetUnitframeForPlayer( player )
+	if ( unitframeRui == null )
+	{
+		return
+	}
+
+	array<int> activeEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+
+	int endorsementIndex = activeEndorsements.find( endorsementID )
+
+	if ( endorsementIndex < 0 || endorsementIndex >= Endorsements_GetMaxEndorsementCount() )
+	{
+		return
+	}
+
+	RuiSetFloatIfExists( unitframeRui, "endorsementProgressOverride" + endorsementIndex, overrideProgress )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ENDORSEMENT_STATION_UI_SKIN___________________________(){}
+#endif
+
+
+void function Endorsements_SetCraftingStationUISkin( EndorsementCrafterUISkin crafterSkin )
+{
+	file.crafterUISkin = crafterSkin
+}
+
+EndorsementCrafterUISkin function Endorsements_GetCraftingStationUISkin()
+{
+	return file.crafterUISkin
+}
+
+void function Endorsements_SetDefaultCraftingStationUISkin()
+{
+	EndorsementCrafterUISkin skin
+	Endorsements_SetCraftingStationUISkin( skin )
+}
+
+RGBA function Endorsements_GetPrimaryReplicatorUIColorFromSponsorChoices( EndorsementChoiceData choiceData )
+{
+	Assert( choiceData.endorsementOptions.len() > 0, format( "%s - Cannot get endorsement replicator theme for player %s that has no available endorsement options.", FUNC_NAME(), ( IsValid( GetLocalViewPlayer() ) ? GetLocalViewPlayer().GetPlayerName() : "INVALID" ) ) )
+
+	if ( Endorsements_AreChoicesDifferentSponsors( choiceData ) )
+	{
+		return RGBAToLinear( Endorsements_GetCraftingStationUISkin().themeColorForMultipleSponsors )
+	}
+	else
+	{
+		int sponsor = choiceData.endorsementOptions[0].endorsementSponsorEnum
+		if ( sponsor != eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		{
+			EndorsementSponsorDefinition sponsorDefinition = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( sponsor )
+			return RGBAToLinear( VectorToRGBA( sponsorDefinition.color / 255.0 ) )
+		}
+	}
+
+	return RGBAToLinear( Endorsements_GetCraftingStationUISkin().primaryThemeColor )
+}
+
+asset function Endorsements_GetCurrentTrackIconForReplicatorFromSponsorChoices( EndorsementChoiceData choiceData )
+{
+	Assert( choiceData.endorsementOptions.len() > 0, format( "%s - Cannot get endorsement replicator track icon for player %s that has no available endorsement options.", FUNC_NAME(), ( IsValid( GetLocalViewPlayer() ) ? GetLocalViewPlayer().GetPlayerName() : "INVALID" ) ) )
+
+	if ( !Endorsements_AreChoicesDifferentSponsors( choiceData ) )
+	{
+		int sponsor = choiceData.endorsementOptions[0].endorsementSponsorEnum
+		if ( sponsor != eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		{
+			EndorsementSponsorDefinition sponsorDefinition = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( sponsor )
+			return sponsorDefinition.icon
+		}
+	}
+
+	return $""
+}
+
+string function Endorsements_GetHoverSoundForSponsor( int sponsor )
+{
+	const string DEFAULT_HOVER_SOUND = "Unhinged_WildcardStation_UI_Hover_1P"
+
+	if ( sponsor == eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		return DEFAULT_HOVER_SOUND
+
+	EndorsementSponsorDefinition sponsorData = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( sponsor )
+	return sponsorData.hoverSound_1p.len() > 0 ? sponsorData.hoverSound_1p : DEFAULT_HOVER_SOUND
+}
+
+string function Endorsements_GetSelectionSoundForSponsor( int sponsor, bool isLast )
+{
+	const string DEFAULT_SELECT_SOUND = "Unhinged_WildcardStation_UI_Select_1P"
+	const string DEFAULT_SELECT_LAST_SOUND = "Unhinged_WildcardStation_UI_Select_Last_1P"
+
+	if ( sponsor == eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		return isLast ? DEFAULT_SELECT_LAST_SOUND : DEFAULT_SELECT_SOUND
+
+	EndorsementSponsorDefinition sponsorData = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( sponsor )
+
+	if ( isLast )
+	{
+		return sponsorData.selectLastSound_1p.len() > 0 ? sponsorData.selectLastSound_1p : DEFAULT_SELECT_LAST_SOUND
+	}
+	else
+	{
+		return sponsorData.selectSound_1p.len() > 0 ? sponsorData.selectSound_1p : DEFAULT_SELECT_LAST_SOUND
+	}
+
+	unreachable
+}
+
+
+asset function Endorsements_GetCurrentBackgroundIconForReplicatorFromSponsorChoices( EndorsementChoiceData choiceData )
+{
+	Assert( choiceData.endorsementOptions.len() > 0, format( "%s - Cannot get endorsement replicator background icon for player %s that has no available endorsement options.", FUNC_NAME(), ( IsValid( GetLocalViewPlayer() ) ? GetLocalViewPlayer().GetPlayerName() : "INVALID" ) ) )
+
+	if ( Endorsements_AreChoicesDifferentSponsors( choiceData ) )
+	{
+		int sponsor = choiceData.endorsementOptions[0].endorsementSponsorEnum
+		if ( sponsor != eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		{
+			EndorsementSponsorDefinition sponsorDefinition = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( sponsor )
+			return sponsorDefinition.background
+		}
+	}
+
+	return $""
+}
+
+bool function Endorsements_GetCurrentLeadingChoiceForReplicatorFromSponsorChoices( EndorsementChoiceData choiceData )
+{
+	Assert( choiceData.endorsementOptions.len() > 0, format( "%s - Cannot get endorsement replicator leading choice bool for player %s that has no available endorsement options.", FUNC_NAME(), ( IsValid( GetLocalViewPlayer() ) ? GetLocalViewPlayer().GetPlayerName() : "INVALID" ) ) )
+
+	if ( Endorsements_AreChoicesDifferentSponsors( choiceData ) )
+	{
+		int sponsor = choiceData.endorsementOptions[0].endorsementSponsorEnum
+		if ( sponsor != eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		{
+			EndorsementSponsorDefinition sponsorDefinition = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( sponsor )
+			return sponsorDefinition.leadingChoice
+		}
+	}
+
+	return false
+}
+
+
+
+const float ENDORSEMENT_USED_MIN_TIME = 0.6
+const float ENDORSEMENT_USED_TOTAL_TIME = 1.5
+
+void function ServerToClient_Endorsements_DisplayEndorsementUsedPopup( entity player, int endorsementID, int conveyanceType, float overrideDuration, float overrideCooldown )
+{
+
+	Endorsements_DisplayEndorsementUsedPopup( player, endorsementID, conveyanceType, overrideDuration, overrideCooldown )
+
+
+
+}
+
+
+void function Endorsements_DisplayEndorsemenUsedPopupByPassiveID( entity player, int passiveID, int conveyanceType, float overrideDuration = 0.0, float overrideCooldown = 0.0 )
+{
+	if ( !( passiveID in file.passiveIDToEndorsementDef ) )
+	{
+		Assert( false, "Endorsements_DisplayEndorsementPassiveUsedPopup failed to map passiveID to endorsement def: " + passiveID )
+		return
+	}
+
+	Endorsements_DisplayEndorsementUsedPopup( player, file.passiveIDToEndorsementDef[ passiveID ].endorsementID, conveyanceType, overrideDuration, overrideCooldown )
+}
+
+
+void function Endorsements_UpdateLocalPlayerEndorsementProgressByPassiveID( entity player, int passiveID, int conveyanceType, float overrideProgress = 0.0 )
+{
+	if ( !Endorsements_IsActive() )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "ks_notifyplayerusedendorsement", false ) )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+	{
+		Assert( false, "Endorsements_UpdateLocalPlayerEndorsementProgress called on non-local player" )
+		return
+	}
+
+	if ( !IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.UNIT_FRAME ) )
+		return
+
+	if ( !( passiveID in file.passiveIDToEndorsementDef ) )
+	{
+		Assert( false, "Endorsements_UpdateLocalPlayerEndorsementProgress failed to map passiveID to endorsement def: " + passiveID )
+		return
+	}
+
+	Endorsements_OverrideUnitframeRuiProgressForPlayer( player, file.passiveIDToEndorsementDef[ passiveID ].endorsementID, overrideProgress )
+}
+
+void function Endorsements_DisplayEndorsementUsedPopup( entity player, int endorsementID, int conveyanceType, float overrideDuration = 0.0 , float overrideCooldown = 0.0  )
+{
+	if ( !Endorsements_IsActive() )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "ks_notifyplayerusedendorsement", false ) )
+		return
+
+	EndorsementDefinition endorsementDefinition = clone Endorsements_GetEndorsementDefinitionFromID( endorsementID )
+
+	if ( overrideDuration > 0.0 )
+		endorsementDefinition.duration = overrideDuration
+
+	if ( overrideCooldown > 0.0 )
+		endorsementDefinition.cooldown = overrideCooldown
+
+	bool isLocalPlayer = player == GetLocalViewPlayer()
+
+	if ( ( isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.UNIT_FRAME ) ) ||
+		( !isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.UNIT_FRAME_TEAM ) ) )
+		Endorsements_AnimateUnitframeRuiForPlayer( player, endorsementID, endorsementDefinition )
+
+	if ( ( isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.TOAST ) ) ||
+		( !isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.TOAST_TEAM ) ) )
+		EndorsementAnnouncement_QueueItem( player, endorsementID, isLocalPlayer )
+
+	if ( ( isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.ANNOUNCEMENT ) ) ||
+		( !isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.ANNOUNCEMENT_TEAM ) ) )
+	{
+		AnnouncementData announcement = Announcement_Create( Localize( endorsementDefinition.displayName ) )
+		Announcement_SetSubText( announcement, Localize( endorsementDefinition.displayDescription ) )
+		Announcement_SetHideOnDeath( announcement, true )
+		Announcement_SetDuration( announcement, 3.5 )
+		Announcement_SetPurge( announcement, false )
+		AnnouncementFromClass( GetLocalViewPlayer(), announcement )
+	}
+
+	if ( isLocalPlayer && IsBitFlagSet( conveyanceType, eEndorsementConveyanceFlags.WEAPON_STATUS ) )
+	{
+		thread function () : ( endorsementID, endorsementDefinition )
+		{
+			float timeSinceLast = Time() - file.endorsementUsedLastTime
+			if ( timeSinceLast < ENDORSEMENT_USED_MIN_TIME )
+			{
+				EndSignal( clGlobal.signalDummy, "ViewPlayerChanged" )
+				file.endorsementQueueItemsInFlight++
+				OnThreadEnd( function() : () { file.endorsementQueueItemsInFlight-- } )
+
+				wait ( ENDORSEMENT_USED_MIN_TIME - timeSinceLast ) * file.endorsementQueueItemsInFlight
+			}
+
+			if ( !GetCurrentPlaylistVarBool( "hud_hide_infopopup", false ) )
+			{
+
+				PopupData data
+				data.popupType = ePopupType.PASSIVE
+				data.popupSlot = eHopupPopupSlot.PASSIVE
+				data.slotKey = "passive"
+				data.holdTime = ENDORSEMENT_USED_TOTAL_TIME
+				data.passiveTier = 1
+				data.passiveAltTier = 2
+				data.passiveDesc = Localize( "#ENDORSEMENT_TRIGGERED" )
+				data.passiveMagIcon = $"rui/hud/gametype_icons/survival/endorsement_map_icon"
+				data.passiveWeaponIcon = $""
+				data.endorsementName = Localize( endorsementDefinition.displayName )
+				data.endorsementIcon = endorsementDefinition.endorsementIcon
+				data.passiveAmmoIcon = $""
+				data.displayMagDetails = false
+
+				HopupPopupQueue_ShowPopup( data )
+			}
+
+			if ( endorsementDefinition.notifSound_1p != "" )
+			{
+				EmitSoundOnEntity( GetLocalViewPlayer(), endorsementDefinition.notifSound_1p )
+			}
+
+			file.endorsementUsedLastTime = Time()
+		}()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

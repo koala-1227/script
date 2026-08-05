@@ -1,0 +1,1714 @@
+
+
+global function Unhinged_IsModeActive
+global function ServerToClient_Unhinged_SetSummaryScreen
+
+
+
+
+
+
+
+
+
+global function Unhinged_OnPlayerCreated
+global function Unhinged_ServerToClient_SetRepeatRevivesShouldWarnUI
+global function Unhinged_GetRepeatRevivesShouldWarnUI
+global function Unhinged_ServerToClient_SetRepeatRevivesWarnIsReviver
+global function Unhinged_GetRepeatRevivesWarnIsReviver
+
+global function Unhinged_MessageForRemovedMythicWeapons
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Consts___________________________(){}
+#endif
+
+
+const float LOOTBIN_TIME_TO_WAIT_FOR_JACKPOT = 1.5
+const vector LOOTBIN_JACKPOT_EVO_SPAWN_OFFSET = <0, 0, 40>
+const float UNHINGED_MIN_WEAPON_THROW_VELOCITY = 150
+const float UNHINGED_MAX_WEAPON_THROW_VELOCITY = 250
+const float UNHINGED_MIN_EQUIPMENT_THROW_VELOCITY = 300
+const float UNHINGED_MAX_EQUIPMENT_THROW_VELOCITY = 400
+const float UNHINGED_MAX_EQUIPMENT_THROW_VERTICAL_VELOCITY = 125
+const string UNHINGED_MINLOOTTIERPERROUND_DEFAULTS = "0:2 1:3 2:4 3:4 4:4"
+global const float UNHINGED_EVO_SCORE_MESSAGING_DELAY = 1.0
+const int UNHINGED_DEATHFIELD_REVIVE_DAMAGE_MULTIPLER_DEFAULT = 1
+const string UNHINGED_WILDCARD_EVENT_WEAPON_MOD = "wildcard_event_weapon"
+const string UNHINGED_DEATHFIELD_REPEAT_REVIVE_SHOULD_WARN_TARGET_FUNCTION = "Unhinged_ServerToClient_SetRepeatRevivesShouldWarnUI"
+const string UNHINGED_DEATHFIELD_REPEAT_REVIVE_SHOULD_WARN_REVIVER_FUNCTION = "Unhinged_ServerToClient_SetRepeatRevivesWarnIsReviver"
+const string UNHINGED_MESSAGE_MYTHIC_WEAPON_REMOVED_FUNCTION = "Unhinged_MessageForRemovedMythicWeapons"
+
+
+const float PV_UNHINGED_DEFAULT_MAP_PARTITION_MIN_DISTANCE_APART_METERS = 30.0
+const float PV_UNHINGED_DEFAULT_MAP_PARTITION_RADIUS_METERS = 125.0
+const int PV_UNHINGED_DEFAULT_ENDORSEMENT_CRAFTERS_MAX_COUNT = 25
+const int PV_UNHINGED_DEFAULT_DEV_FLOOR_LOOT_START_TIER = 0
+const bool PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TRACK_REVIVER = false
+const bool PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TRACK_TARGET = true
+const int PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_COUNT_THRESHOLD = 2
+const float PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TIME_BETWEEN_REVIVES = 15.0
+const float PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TRACKING_RESET_TIME_DEFAULT = 30.0
+
+
+const asset UNHINGED_HORIZONTAL_LAUNCHER_MODEL									= $"mdl/props/district_horizontal_launcher/uh_horizontal_launcher_base_w.rmdl"
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Settings___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+struct {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		bool repeatRevivesShouldWarn = false
+		bool repeatedRevivesWarnIsReviver = false
+
+
+	bool isEnabled = false
+} file
+
+table< string, int > weaponLockedSetCount =
+{
+	[ "COMMON" ] 	= 0,
+	[ "RARE" ] 		= 0,
+	[ "EPIC" ] 		= 0,
+	[ "LEGENDARY" ]	= 0,
+	[ "MYTHIC" ]	= 0
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Init___________________________(){}
+#endif
+
+
+global function Sh_GamemodeSurvivalUnhinged_Init
+
+
+
+void function Sh_GamemodeSurvivalUnhinged_Init()
+{
+	printt( FUNC_NAME() )
+
+	Unhinged_InitSettings()
+	if ( !Unhinged_IsModeActive() )
+		return
+
+
+		
+		SetCustomScreenFadeAsset( $"ui/screen_fade_wildcard.rpak" )
+
+
+	
+	if ( Unhinged_IsThreeStrikes() )
+	{
+		Sh_Survival_Strikeout_Init()
+	}
+
+	GamemodeVariant_UH_Holiday_Init()
+
+
+
+
+
+
+		GamemodeVariant_UH_Beamstick_Init()
+
+
+
+		GamemodeVariant_UH_ClockUp_Init()
+
+
+
+
+
+
+	PrecacheModel( UNHINGED_HORIZONTAL_LAUNCHER_MODEL )
+
+	Remote_RegisterClientFunction( UNHINGED_DEATHFIELD_REPEAT_REVIVE_SHOULD_WARN_TARGET_FUNCTION, "bool" )
+	Remote_RegisterClientFunction( UNHINGED_DEATHFIELD_REPEAT_REVIVE_SHOULD_WARN_REVIVER_FUNCTION, "bool" )
+	Remote_RegisterClientFunction( UNHINGED_MESSAGE_MYTHIC_WEAPON_REMOVED_FUNCTION, "int", -1, INT_MAX, "int", -1, INT_MAX )
+	Remote_RegisterClientFunction( string(ServerToClient_Unhinged_SetSummaryScreen) )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		Pickup_SelfRevive_Kit_Init()
+
+
+		Endorsements_Init()
+
+
+		Unhinged_MatchModifiers_Init()
+
+		Unhinged_SetUpScoreEvents()
+
+
+
+		AddCreateCallback( "player", Unhinged_OnPlayerCreated )
+		AddClientCallback_OnResolutionChanged( Unhinged_OnResolutionChanged )
+
+		SetChatHUDPosition( DEFAULT_TEXTCHAT_VERTICAL_OFFSET + 80 )
+
+#if SUPPORTS_COMPACT_UI
+		    SetChatHUDPositionCompactUi( DEFAULT_TEXTCHAT_Y_OFFSET_COMPACT_UI + 30 )
+#endif
+
+		Unhinged_OverrideGameState()
+
+		AddScriptNameCreateCallback( "district_launcher_horizontal_trigger_small", Unhinged_OnLauncherCreated )
+		AddScriptNameCreateCallback( "district_launcher_horizontal_trigger_medium", Unhinged_OnLauncherCreated )
+		AddScriptNameCreateCallback( "district_launcher_horizontal_trigger_heavy", Unhinged_OnLauncherCreated )
+
+}
+
+
+
+void function Unhinged_InitSettings()
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	file.isEnabled = GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_UNHINGED )
+}
+
+
+void function Unhinged_SetUpScoreEvents()
+{
+	ScoreEvent shareEvoEvent = GetScoreEvent( "Evo_MaxLevel_Shared" )
+	ScoreEvent_SetMessagingDelay( shareEvoEvent, UNHINGED_EVO_SCORE_MESSAGING_DELAY )
+
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PlaylistVars___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function PLV_Unhinged_EvoWeaponsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "unhinged_evolving_weapons_enabled", false )
+}
+
+float function PLV_Unhinged_MapPartition_MinDistanceApart()
+{
+	return GetCurrentPlaylistVarFloat( "unhinged_map_partition_min_distance_apart_meters", PV_UNHINGED_DEFAULT_MAP_PARTITION_MIN_DISTANCE_APART_METERS ) * METERS_TO_INCHES
+}
+
+float function PLV_Unhinged_MapPartition_Radius()
+{
+	return GetCurrentPlaylistVarFloat( "unhinged_map_partition_radius_meters", PV_UNHINGED_DEFAULT_MAP_PARTITION_RADIUS_METERS ) * METERS_TO_INCHES
+}
+
+int function PLV_Unhinged_EndorsementCrafters_MaxCount()
+{
+	return GetCurrentPlaylistVarInt( "unhinged_endorsement_crafters_max_count", PV_UNHINGED_DEFAULT_ENDORSEMENT_CRAFTERS_MAX_COUNT )
+}
+
+bool function PLV_Unhinged_DeathfieldReviveTrackingForReviver_Enabled()
+{
+	return GetCurrentPlaylistVarBool( "unhinged_deathfield_revive_tracking_for_reviver_enabled", PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TRACK_REVIVER )
+}
+
+bool function PLV_Unhinged_DeathfieldReviveTrackingForTarget_Enabled()
+{
+	return GetCurrentPlaylistVarBool( "unhinged_deathfield_revive_tracking_for_target_enabled", PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TRACK_TARGET )
+}
+
+int function PLV_Unhinged_DeathfieldReviveTrackingCountThreshold()
+{
+	return GetCurrentPlaylistVarInt( "unhinged_deathfield_revive_tracking_count_threshold", PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_COUNT_THRESHOLD )
+}
+
+float function PLV_Unhinged_DeathfieldReviveTrackingTimeBetweenRevives()
+{
+	return GetCurrentPlaylistVarFloat( "unhinged_deathfield_revive_tracking_time_between_revives", PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TIME_BETWEEN_REVIVES )
+}
+
+float function PLV_Unhinged_DeathfieldReviveTrackingResetTime()
+{
+	return GetCurrentPlaylistVarFloat( "unhinged_deathfield_revive_tracking_reset_time", PV_UNHINGED_DEFAULT_DEATHFIELD_REVIVE_TRACKING_RESET_TIME_DEFAULT )
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Callbacks___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Unhinged_OnPlayerCreated( entity player )
+{
+
+	if ( ReservedInventory_IsEnabled() )
+	{
+		Survival_SetInventorySlotVisibility( "gadgetslot", false )
+		Survival_SetInventorySlotVisibility( "helmet", false )
+		Survival_SetInventorySlotVisibility( "armor", false )
+		Survival_SetInventorySlotVisibility( "incapshield", false )
+		Survival_SetInventorySlotVisibility( "backpack", false )
+		Survival_SetInventorySlotVisibility( "augment", false )
+		RunUIScript( "SurvivalQuickInventory_SetHudElementVisibility", "GearBracketL", false )
+		RunUIScript( "SurvivalQuickInventory_SetHudElementVisibility", "GearBracketR", false )
+
+		InventoryUltimatePositionData ultPos
+		ultPos.pinCorner = ePinCorners.TOP
+		ultPos.siblingCorner = ePinCorners.BOTTOM
+
+
+
+
+#if SUPPORTS_COMPACT_UI
+            ultPos.xPos = 0
+            if ( IsUsingCompactUILayout() )
+                ultPos.yPos = 10
+            else
+                ultPos.yPos = 45
+#else
+			ultPos.xPos = 0
+			ultPos.yPos = 45
+#endif
+
+		SetInventoryUltimatePosition( ultPos )
+	}
+
+}
+
+
+
+void function Unhinged_OnResolutionChanged()
+{
+	
+	RunUIScript( "SurvivalQuickInventory_SetHudElementVisibility", "GearBracketL", false )
+	RunUIScript( "SurvivalQuickInventory_SetHudElementVisibility", "GearBracketR", false )
+	RunUIScript( "UpgradeCore_InitTuningValues" )
+}
+
+
+
+void function Unhinged_OverrideGameState()
+{
+
+		if ( MatchModifiers_Enabled() )
+		{
+			ClGameState_RegisterGameStateFullmapAsset( $"ui/juiced_gamestate_info_fullmap.rpak" )
+		}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Unhinged_MessageForRemovedMythicWeapons( int removedWeapon1, int removedWeapon2 )
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValidPlayer( player ) )
+		return
+
+	
+
+	if ( removedWeapon2 >= 0 && SURVIVAL_Loot_IsLootIndexValid( removedWeapon2 ) )
+	{
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( removedWeapon2 )
+
+		LootFeedItem item 			= LootFeed_CreateItem( player, data, -1 )
+		item.itemIconOverride 		= Unhinged_GetLootFeedItemIconOverrideForItem( data )
+		item.itemIconColorOverride 	= Unhinged_GetLootFeedItemIconColorOverrideForItem( data )
+		item.itemIconShadow			= Unhinged_GetLootFeedItemShadowIconForItem( data )
+		item.icon2Override 			= Unhinged_GetLootFeedIcon2OverrideForItem( data )
+		item.icon2ColorOverride 	= Unhinged_GetLootFeedIcon2ColorOverrideForItem( data )
+		item.backgroundEnabled 		= true
+		item.backgroundColor		= UNHINGED_COLOR_UI
+		LootFeed_QueueItem( item )
+	}
+
+	if ( removedWeapon1 >= 0 && SURVIVAL_Loot_IsLootIndexValid( removedWeapon1 ) )
+	{
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( removedWeapon1 )
+
+		LootFeedItem item 			= LootFeed_CreateItem( player, data, -1 )
+		item.itemIconOverride 		= Unhinged_GetLootFeedItemIconOverrideForItem( data )
+		item.itemIconColorOverride 	= Unhinged_GetLootFeedItemIconColorOverrideForItem( data )
+		item.itemIconShadow			= Unhinged_GetLootFeedItemShadowIconForItem( data )
+		item.icon2Override 			= Unhinged_GetLootFeedIcon2OverrideForItem( data )
+		item.icon2ColorOverride 	= Unhinged_GetLootFeedIcon2ColorOverrideForItem( data )
+		item.backgroundEnabled 		= true
+		item.backgroundColor		= UNHINGED_COLOR_UI
+		LootFeed_QueueItem( item )
+	}
+}
+
+asset function Unhinged_GetLootFeedItemIconOverrideForItem( LootData data )
+{
+	switch ( data.ref )
+	{
+		
+		default:
+			return $"rui/events/unhinged/brand_icon_wildcard" 
+	}
+
+	unreachable
+}
+
+vector function Unhinged_GetLootFeedItemIconColorOverrideForItem( LootData data )
+{
+	switch ( data.ref )
+	{
+		
+		default:
+			return <-1, -1, -1>
+	}
+
+	unreachable
+}
+
+
+asset function Unhinged_GetLootFeedItemShadowIconForItem( LootData data )
+{
+	switch ( data.ref )
+	{
+		default:
+			return $"rui/events/unhinged/icon_wildcard_shadow"
+	}
+
+	unreachable
+}
+
+asset function Unhinged_GetLootFeedIcon2OverrideForItem( LootData data )
+{
+	switch ( data.ref )
+	{
+		
+		default:
+			return $""
+	}
+
+	unreachable
+}
+
+vector function Unhinged_GetLootFeedIcon2ColorOverrideForItem( LootData data )
+{
+	switch ( data.ref )
+	{
+		
+		default:
+			return <-1, -1, -1>
+	}
+
+	unreachable
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Unhinged_OnLauncherCreated( entity ent )
+{
+	array<entity> launcherLights = GetEntitiesFromArrayNearPos( GetEntArrayByScriptName( "uh_horizontal_light" ), ent.GetOrigin(), 100 )
+	if ( launcherLights.len() > 0 )
+	{
+		entity launcherLight = launcherLights[0]
+		string launcherName = ent.GetScriptName()
+		if ( launcherName == "district_launcher_horizontal_trigger_small" )
+		{
+			launcherLight.SetTweakLightColor( <0.0, 1.0, 0.901> )
+		}
+		else if ( launcherName == "district_launcher_horizontal_trigger_medium" )
+		{
+			launcherLight.SetTweakLightColor( <0.0, 1.0, 0.277> )
+		}
+		else if ( launcherName == "district_launcher_horizontal_trigger_heavy" )
+		{
+			launcherLight.SetTweakLightColor( <0.199, 1.0, 0.0> )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Deathfield_Revive_Tracking___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Unhinged_ServerToClient_SetRepeatRevivesShouldWarnUI( bool state )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	if ( !IsValid( localViewPlayer ) )
+		return
+
+	file.repeatRevivesShouldWarn = state
+#if DEV
+		printt( "Tracking Target: " + file.repeatRevivesShouldWarn )
+#endif
+}
+
+
+
+bool function Unhinged_GetRepeatRevivesShouldWarnUI()
+{
+	return file.repeatRevivesShouldWarn
+}
+
+
+
+void function Unhinged_ServerToClient_SetRepeatRevivesWarnIsReviver( bool state )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	if ( !IsValid( localViewPlayer ) )
+		return
+
+	file.repeatedRevivesWarnIsReviver = state
+#if DEV
+		printt( "Tracking Reviver: " + file.repeatedRevivesWarnIsReviver )
+#endif
+}
+
+
+
+bool function Unhinged_GetRepeatRevivesWarnIsReviver()
+{
+	return file.repeatedRevivesWarnIsReviver
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Remote_Calls___________________________(){}
+#endif
+
+void function ServerToClient_Unhinged_SetSummaryScreen()
+{
+
+		SetSummaryDataDisplayStringsCallback( Unhinged_PopulateSummaryDataStrings )
+
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Utility___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Unhinged_IsModeActive()
+{
+	return GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_UNHINGED )
+}
+bool function Unhinged_IsThreeStrikes()
+{
+	return GetCurrentPlaylistVarBool( "uh_strikeout_enabled", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Unhinged_PopulateSummaryDataStrings( SquadSummaryPlayerData data )
+{
+	data.modeSpecificSummaryData[0].displayString = "#DEATH_SCREEN_SUMMARY_KILLS"
+	data.modeSpecificSummaryData[1].displayString = "#DEATH_SCREEN_SUMMARY_ASSISTS"
+	data.modeSpecificSummaryData[2].displayString = "#DEATH_SCREEN_SUMMARY_KNOCKDOWNS"
+	data.modeSpecificSummaryData[3].displayString = "#DEATH_SCREEN_SUMMARY_DAMAGE_DEALT"
+	data.modeSpecificSummaryData[4].displayString = "#DEATH_SCREEN_SUMMARY_SURVIVAL_TIME"
+	data.modeSpecificSummaryData[5].displayString = "#DEATH_SCREEN_SUMMARY_LAST_LEGEND_STANDING_SURVIVED"
+	data.modeSpecificSummaryData[6].displayString = "#DEATH_SCREEN_SUMMARY_SELF_RES_COMPLETED"
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Analytics___________________________(){}
+#endif
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEV___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

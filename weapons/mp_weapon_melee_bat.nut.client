@@ -1,0 +1,1847 @@
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________GLOBAL_FUNCTIONS___________________________(){}
+#endif
+
+global function MpWeaponMeleeBat_Init
+
+global function MeleeBat_WeaponRefIsMeleeBat
+global function MeleeBat_ShouldSpawnInDeathbox
+
+global function MeleeBat_OnMeleeWeaponPrimaryAttack
+global function MeleeBat_OnWeaponCustomActivityStart
+global function MeleeBat_OnWeaponCustomActivityEnd
+global function MeleeBat_OnWeaponActivate
+global function MeleeBat_OnWeaponDeactivate
+global function MeleeBat_OnWeaponChargeBegin
+global function MeleeBat_OnWeaponChargeEnd
+global function MeleeBat_OnWeaponChargeLevelIncreased
+
+global function MeleeBat_ScriptAnimWindowStartCallback
+global function MeleeBat_ScriptAnimWindowStopCallback
+
+global function MeleeBat_WeaponIsMeleeBat
+
+
+global function MeleeBat_OnClientAnimEvent
+global function MeleeBat_DisplayHint
+global function MeleeBat_ServerToClient_AcknowledgeBatPickup
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________GLOBAL_VARS___________________________(){}
+#endif
+
+
+global const string WEAPON_MELEE_BAT_REF = "mp_weapon_melee_bat"
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________VARS___________________________(){}
+#endif
+
+
+const string FUNCNAME_MeleeBat_ServerToClient_AcknowledgeBatPickup = "MeleeBat_ServerToClient_AcknowledgeBatPickup"
+
+
+const string MELEE_BAT_LOC_MAIN_HINT = "#WPN_MELEE_BAT_HINT"
+const string MELEE_BAT_LOC_MAIN_HINT_ALT = "#WPN_MELEE_BAT_HINT_ALT"
+
+
+const string PVAR_MELEE_BAT_IS_ENABLED = "melee_bat_is_enabled"
+const string PVAR_MELEE_BAT_SPAWN_IN_DEATHBOX = "melee_bat_spawn_in_deathbox"
+const string PVAR_MELEE_BAT_LAUNCH_FRIENDLY_TEAMMATES = "melee_bat_launch_friendly_teammates"
+const string PVAR_MELEE_BAT_SPEED_BOOST_ENABLED = "melee_bat_speed_boost_enabled"
+const string PVAR_MELEE_BAT_SPEED_BOOST_SCALE = "melee_bat_speed_boost_scale"
+
+
+const string SIGNAL_MELEE_BAT_HEAT_HUD_UPDATE = "Melee_Bat_Heat_HUD_Update"
+const string SIGNAL_MELEE_BAT_SPEED_BOOST_STOP = "Melee_Bat_speed_boost_stop"
+const string SIGNAL_MELEE_BAT_SPEED_BOOST_TARGETING_STOP = "Melee_Bat_speed_boost_targeting_stop"
+const string SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE = "Melee_Bat_charge_meter_update"
+
+
+const string MELEE_BAT_VFX_CALLBACK_NAME = "MeleeBat_Callback"
+
+
+const string SFX_MELEE_BAT_LOOT_AIR_LOOP = "Bat_Gameplay_Drop_Air_Spin_LP_3P"
+const string SFX_MELEE_BAT_SPEED_BOOST_ACTIVATION_1P = "Bat_Gameplay_SpeedBoost_Activate_1P"
+const string SFX_MELEE_BAT_VICTIM_AIRBORNE_3P = "Bat_Gameplay_AirborneMvmt_3p"
+
+
+const string SFX_VO_MELEE_BAT_PICKUP = "bc_heirloomWeaponPickup"
+const string SFX_VO_MELEE_BAT_STANDARD_ATTACK = "bc_heirloomWeaponCloseAttack"
+const string SFX_VO_MELEE_BAT_CHARGE_ATTACK = "bc_heirloomWeaponBigAttack"
+
+
+const float SFX_VO_MELEE_BAT_PICKUP_CHANCE = 1.0
+const float SFX_VO_MELEE_BAT_STANDARD_ATTACK_CHANCE = 0.25
+const float SFX_VO_MELEE_BAT_CHARGE_ATTACK_CHANCE = 0.25
+
+
+const asset BAT_FX_THRUSTER_SWIPE_L_FP = $"P_bat_thruster_swipe"
+const asset BAT_FX_THRUSTER_SWIPE_R_FP = $"P_bat_thruster_swipe"
+const asset BAT_FX_THRUSTER_SWIPE_L_3P = $"P_bat_thruster_swipe_l_3P"
+const asset BAT_FX_THRUSTER_SWIPE_R_3P = $"P_bat_thruster_swipe_r_3P"
+const asset BAT_FX_THRUSTER_L_FP = $"P_bat_base_thruster"
+const asset BAT_FX_THRUSTER_R_FP = $"P_bat_base_thruster"
+const asset BAT_FX_THRUSTER_L_3P = $"P_bat_base_thruster_3P"
+const asset BAT_FX_THRUSTER_R_3P = $"P_bat_base_thruster_3P"
+const asset BAT_FX_THRUSTER_cover_L_FP = $"P_bat_base_thruster_shell_l"
+const asset BAT_FX_THRUSTER_cover_R_FP = $"P_bat_base_thruster_shell_r"
+
+
+
+const string SPEED_BOOST_COCKPIT_FX		= $"P_screen_buff_speed"
+const string BAT_FX_IMPACT_CHARGED = $"P_bat_base_impact_charged"
+const string BAT_FX_THRUSTER_CHARGED_FP = $"P_bat_base_charge"
+const string BAT_FX_THRUSTER_CHARGED_3P = $"P_bat_base_charge_3P"
+const string BAT_FX_THRUSTER_CHARGED_READY_FP = $"P_bat_base_charge_ready"
+const string BAT_FX_THRUSTER_CHARGED_READY_3P = $"P_bat_base_charge_ready_3P"
+
+
+const string MELEE_BAT_FX_ATTACHMENT = "fx_attachment"
+const string MELEE_BAT_FX_TOP_JET_L_ATTACHMENT = "fx_top_jet_l"
+const string MELEE_BAT_FX_TOP_JET_R_ATTACHMENT = "fx_top_jet_r"
+const string MELEE_BAT_FX_TOP_JET_COVER_L_ATTACHMENT = "fx_top_jet_cover_l"
+const string MELEE_BAT_FX_TOP_JET_COVER_R_ATTACHMENT = "fx_top_jet_cover_r"
+
+
+const string IMPACT_TABLE_MELEE_BAT_MELEE = "melee_bat"
+const string IMPACT_TABLE_MELEE_BAT_SLAM = "melee_bat_charged"
+
+
+
+const float MELEE_BAT_MULTI_ATTACK_DISTANCE = 90
+const float MELEE_BAT_MULTI_ATTACK_ANGLE_HORIZONTAL = 60
+const float MELEE_BAT_MULTI_ATTACK_ANGLE_VERTICAL = 30
+
+const string MELEE_BAT_HIT_STREAK_LAUNCHER_MOD = "hit_streak_launcher"
+const float MELEE_BAT_HIT_STREAK_MAX_HEAT = 1.0
+const float MELEE_BAT_HIT_STREAK_HEAT_INCREMENT = 0.5
+
+const string MELEE_BAT_CHARGE_MODS_BASE_STR = "charge_lv"
+const int MELEE_BAT_CHARGE_LEVEL_SWEET_SPOT = 4
+const int MELEE_BAT_CHARGE_LEVEL_MIN = 1
+
+const float MELEE_BAT_SPEED_BOOST_ACTIVATION_DOT_ANGLE = DOT_45DEGREE
+const float MELEE_BAT_SPEED_BOOST_ACTIVATION_TIME = 0.5
+const float MELEE_BAT_SPEED_BOOST_ACTIVATION_DISTANCE = 40
+const float MELEE_BAT_SPEED_BOOST_ACTIVATION_MIN_SPEED = 200
+const float MELEE_BAT_SPEED_BOOST_ADRENALINE_EFFECT_DURATION = 2.0
+const float MELEE_BAT_SPEED_BOOST_GET_ENEMIES_DISTANCE = 2000
+const float MELEE_BAT_SPEED_BOOST_CHARGE_RATE = 0.1
+const float MELEE_BAT_SPEED_BOOST_DEFAULT_SPEED = 0.3
+const string MELEE_BAT_SPEED_BOOST_BEST_TARGET_NETVAR = "melee_bat_speed_boost_bestTarget"
+const string MELEE_BAT_SPEED_BOOST_CHARGE_END_NETVAR = "melee_bat_speed_boost_chargeEndTime"
+
+
+	const int MELEE_BAT_EVO_ACTION_MIN_NUM_ENEMIES_HIT = 2
+
+
+
+const float MELEE_BAT_HINT_MAIN_DISPLAY_TIME = 5.0
+const float MELEE_BAT_HINT_MAIN_DEBOUNCE_TIME = 0.0
+
+
+
+const float MELEE_BAT_DROP_SEQUENCE_WAIT_TIME = 0.6
+const float MELEE_BAT_DROP_SEQUENCE_MIN_WAIT_BASED_ON_DISTANCE_TIME = 0.3
+const float MELEE_BAT_DROP_SEQUENCE_MAX_WAIT_BASED_ON_DISTANCE_TIME = 1.2
+
+
+const asset RUI_MELEE_BAT_HEAT_HUD = $"ui/weapon_hud_charged_bat.rpak"
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________STRUCTS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+struct HitStreak
+{
+	float	lastIncrementTime	= 0
+}
+
+struct
+{
+	table<entity, HitStreak>	batHitStreaks
+
+	table<entity, entity> attackerComboTrackerTable
+
+
+	bool wasLaunchAttack = false
+
+
+
+
+
+
+		float debounceMainMsg
+
+} file
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________INIT___________________________(){}
+#endif
+
+void function MpWeaponMeleeBat_Init()
+{
+	if ( !MeleeBat_IsEnabled() )
+	{
+		SURVIVAL_Loot_AddDisabledRef( WEAPON_MELEE_BAT_REF )
+		return
+	}
+
+	MeleeWeaponInterface meleeWeaponInterface
+	meleeWeaponInterface.callback_OnMeleeHit                   = MeleeBat_OnMeleeHit
+	meleeWeaponInterface.callback_GetCustomKnockbackForce      = MeleeBat_GetCustomKnockbackForce
+	meleeWeaponInterface.callback_PerformCustomVictimKnockback = MeleeBat_PerformCustomVictimKnockback
+	Melee_RegisterMeleeWeaponInterface( WEAPON_MELEE_BAT_REF, meleeWeaponInterface )
+
+	RegisterNetworkedVariable( MELEE_BAT_SPEED_BOOST_BEST_TARGET_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_ENTITY )
+	RegisterNetworkedVariable( MELEE_BAT_SPEED_BOOST_CHARGE_END_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_TIME, -1 )
+
+	
+
+
+
+
+
+
+	Melee_AddCallback_OnMeleeAttackAnimEvent( MeleeBat_OnMeleeAttackAnimEvent )
+
+	RegisterScriptAnimWindowCallbacks( MELEE_BAT_VFX_CALLBACK_NAME, MeleeBat_ScriptAnimWindowStartCallback, MeleeBat_ScriptAnimWindowStopCallback )
+
+
+		RegisterNetVarEntityChangeCallback( MELEE_BAT_SPEED_BOOST_BEST_TARGET_NETVAR, Start_SpeedBoost_Rui )
+
+		RegisterSignal( SIGNAL_MELEE_BAT_HEAT_HUD_UPDATE )
+		RegisterSignal( SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.speed_boost, MeleeBat_SpeedBoost_OnStatusEnabled )
+
+
+	Remote_RegisterClientFunction( FUNCNAME_MeleeBat_ServerToClient_AcknowledgeBatPickup )
+
+	RegisterSignal( SIGNAL_MELEE_BAT_SPEED_BOOST_STOP )
+	RegisterSignal( SIGNAL_MELEE_BAT_SPEED_BOOST_TARGETING_STOP )
+
+	PrecacheParticleSystem( BAT_FX_THRUSTER_SWIPE_L_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_SWIPE_R_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_L_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_R_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_cover_L_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_cover_R_FP )
+	PrecacheParticleSystem( BAT_FX_IMPACT_CHARGED )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_CHARGED_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_CHARGED_3P )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_CHARGED_READY_FP )
+	PrecacheParticleSystem( BAT_FX_THRUSTER_CHARGED_READY_3P )
+
+	
+
+	
+	
+	RegisterImpactTable( IMPACT_TABLE_MELEE_BAT_SLAM )
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________REFERENCE___________________________(){}
+#endif
+
+bool function MeleeBat_WeaponRefIsMeleeBat( string ref )
+{
+	return ref == WEAPON_MELEE_BAT_REF
+}
+
+bool function MeleeBat_WeaponIsMeleeBat( entity weapon )
+{
+	return IsValid( weapon) && MeleeBat_WeaponRefIsMeleeBat( weapon.GetWeaponClassName() )
+}
+
+entity function MeleeBat_GetMainWeapon( entity player )
+{
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) )
+		return null
+
+	if ( !MeleeBat_WeaponIsMeleeBat( weapon ) )
+		return null
+
+	return weapon
+}
+
+bool function MeleeBat_IsActiveWeapon( entity player )
+{
+	entity weapon = MeleeBat_GetMainWeapon( player )
+	return IsValid( weapon )
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PLAYLIST___________________________(){}
+#endif
+
+bool function MeleeBat_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_MELEE_BAT_IS_ENABLED, false )
+}
+
+bool function MeleeBat_ShouldSpawnInDeathbox()
+{
+	return GetCurrentPlaylistVarBool( PVAR_MELEE_BAT_SPAWN_IN_DEATHBOX, true )
+}
+
+bool function MeleeBat_ShouldLaunchFriendlyTeammates()
+{
+	return GetCurrentPlaylistVarBool( PVAR_MELEE_BAT_LAUNCH_FRIENDLY_TEAMMATES, true )
+}
+
+bool function MeleeBat_IsSpeedBoostEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_MELEE_BAT_SPEED_BOOST_ENABLED, true )
+}
+
+float function MeleeBat_GetSpeedBoostScale()
+{
+	return GetCurrentPlaylistVarFloat( PVAR_MELEE_BAT_SPEED_BOOST_SCALE, MELEE_BAT_SPEED_BOOST_DEFAULT_SPEED )
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ATTACKS___________________________(){}
+#endif
+
+int function MeleeBat_OnMeleeWeaponPrimaryAttack( entity weapon, entity player )
+{
+	if ( !MeleeBat_IsEnabled() )
+		return PLAYER_MELEE_STATE_NONE
+
+	if ( !IsValid( weapon ) || !IsValid( player ) )
+		return PLAYER_MELEE_STATE_NONE
+
+	
+	if ( weapon.IsWeaponInAds() && !player.IsInputCommandPressed( IN_ATTACK ) )
+	{
+#if DEV
+			printt( "BAT - Weapon in ADS")
+#endif
+		return PLAYER_MELEE_STATE_NONE
+	}
+
+	
+	weapon.PlayWeaponEffect( BAT_FX_THRUSTER_SWIPE_L_FP, BAT_FX_THRUSTER_SWIPE_L_3P, MELEE_BAT_FX_TOP_JET_L_ATTACHMENT )
+	weapon.PlayWeaponEffect( BAT_FX_THRUSTER_SWIPE_R_FP, BAT_FX_THRUSTER_SWIPE_R_3P, MELEE_BAT_FX_TOP_JET_R_ATTACHMENT )
+
+	if ( weapon.GetWeaponChargeLevel() > 0 )
+	{
+#if DEV
+			printt( "BAT - Charge Attack")
+#endif
+
+		weapon.Signal( SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+
+		return PLAYER_MELEE_STATE_KICK_ATTACK
+	}
+
+	if ( weapon.GetHeatValue() == MELEE_BAT_HIT_STREAK_MAX_HEAT )
+	{
+#if DEV
+			printt( "BAT - Hit Streak Trigger Attack" )
+#endif
+		return PLAYER_MELEE_STATE_KICK_ATTACK
+	}
+
+	
+#if DEV
+		printt( "BAT - Standard Attack")
+#endif
+	return PLAYER_MELEE_STATE_KICK_ATTACK
+}
+
+void function MeleeBat_OnMeleeHit( entity attacker, entity target, entity weapon )
+{
+	if ( !MeleeBat_WeaponIsMeleeBat( weapon ) )
+		return
+
+	bool isValidTarget = target.IsPlayer() || IsTrainingDummie( target ) || target.IsNPC()
+	if ( isValidTarget )
+	{
+		if ( MeleeBat_HasLauncherMod( weapon ) )
+		{
+			file.wasLaunchAttack = true
+
+
+				if ( !IsFriendlyTeam( attacker.GetTeam(), target.GetTeam() ) )
+				{
+					MeleeBat_PlayBattleChatterToSelfOnClient( SFX_VO_MELEE_BAT_CHARGE_ATTACK )
+				}
+
+
+
+
+
+		}
+		else
+		{
+			
+			MeleeBat_IncrementHitStreak( weapon )
+
+				if ( !IsFriendlyTeam( attacker.GetTeam(), target.GetTeam() ) )
+				{
+					MeleeBat_PlayBattleChatterToSelfOnClient( SFX_VO_MELEE_BAT_STANDARD_ATTACK )
+				}
+
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function MeleeBat_OnMeleeAttackAnimEvent( entity attacker, entity meleeAttackWeapon, int impactTableOverride )
+{
+	if ( !MeleeBat_WeaponIsMeleeBat( meleeAttackWeapon ) )
+		return false
+
+	return MeleeBat_TryMultiAttack( attacker, meleeAttackWeapon, impactTableOverride )
+}
+
+bool function MeleeBat_TryMultiAttack( entity attacker, entity weapon, int impactTableOverride )
+{
+	array<entity> hitList = PlayerMelee_MultiAttackTrace( attacker, MELEE_BAT_MULTI_ATTACK_DISTANCE, MELEE_BAT_MULTI_ATTACK_ANGLE_HORIZONTAL, MELEE_BAT_MULTI_ATTACK_ANGLE_VERTICAL,
+				(int function( entity blockingEntity ) {
+			return TitanSword_CanGoThroughBlockingEntity( blockingEntity ) 
+		}),
+				(bool function( entity attacker, entity target ) : ( weapon ) {
+			return IsValidMeleeAttackTarget( attacker, null, weapon, target ) 
+		}),
+				(void function( entity attacker, table attackInfo ) : ( weapon, impactTableOverride ) {
+			Melee_Attack( attacker, weapon, impactTableOverride, attackInfo ) 
+		}) )
+
+
+
+
+
+
+	return hitList.len() > 0
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ANIMATION___________________________(){}
+#endif
+
+void function MeleeBat_OnWeaponCustomActivityStart( entity weapon, int activity, int sequence )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	switch( activity )
+	{
+		case ACT_VM_WEAPON_INSPECT:
+		{
+
+				weapon.Signal( SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+
+
+			MeleeBat_ResetHitStreak( weapon )
+			MeleeBat_ClearMods( weapon )
+		}
+		case ACT_VM_MELEE_ATTACK2:
+		{
+
+				if ( weapon.GetWeaponChargeLevel() == 0)
+				{
+					weapon.Signal( SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+				}
+
+		}
+		default:
+		{
+			break
+		}
+	}
+}
+
+void function MeleeBat_OnWeaponCustomActivityEnd( entity weapon, int activity )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	switch ( activity )
+	{
+		case ACT_VM_MELEE_ATTACK2:
+		{
+			if ( file.wasLaunchAttack || MeleeBat_HasChargeLevelMod( weapon ) )
+			{
+				file.wasLaunchAttack = false
+				MeleeBat_ResetHitStreak( weapon )
+				MeleeBat_ClearMods( weapon )
+			}
+			else
+			{
+				weapon.TryUpdatingFullyHeated()
+			}
+
+			weapon.StopWeaponEffect( BAT_FX_THRUSTER_SWIPE_L_FP, BAT_FX_THRUSTER_SWIPE_L_3P )
+			weapon.StopWeaponEffect( BAT_FX_THRUSTER_SWIPE_R_FP, BAT_FX_THRUSTER_SWIPE_R_3P )
+
+			break
+		}
+		default:
+		{
+			break
+		}
+	}
+}
+
+void function MeleeBat_ScriptAnimWindowStartCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != WEAPON_MELEE_BAT_REF )
+		return
+}
+
+void function MeleeBat_ScriptAnimWindowStopCallback( entity ent, string parameter )
+{
+	entity weapon = TryResolveScriptAnimWindowWeapon( ent )
+
+	
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != WEAPON_MELEE_BAT_REF )
+		return
+}
+
+
+void function MeleeBat_OnClientAnimEvent( entity weapon, string name )
+{
+	ClientCodeCallback_HandleClientAnimEvent( weapon, name )
+}
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ACTIVATE_DEACTIVATE___________________________(){}
+#endif
+
+void function MeleeBat_OnWeaponActivate( entity weapon )
+{
+	if ( !MeleeBat_IsEnabled() )
+		return
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+
+
+
+
+
+		if ( !player.IsZiplining() )
+		{
+			string hint = weapon.GetWeaponSettingBool( eWeaponVar.charge_is_triggered_by_ADS ) ? MELEE_BAT_LOC_MAIN_HINT_ALT : MELEE_BAT_LOC_MAIN_HINT
+			MeleeBat_DisplayHint( player, hint, MELEE_BAT_HINT_MAIN_DISPLAY_TIME, MELEE_BAT_HINT_MAIN_DEBOUNCE_TIME )
+		}
+
+		if ( GetLocalViewPlayer() == player )
+		{
+			thread MeleeBat_HeatHud_Thread( weapon, player )
+		}
+
+
+	weapon.PlayWeaponEffect( BAT_FX_THRUSTER_L_FP, BAT_FX_THRUSTER_L_3P, MELEE_BAT_FX_TOP_JET_L_ATTACHMENT )
+	weapon.PlayWeaponEffect( BAT_FX_THRUSTER_R_FP, BAT_FX_THRUSTER_R_3P, MELEE_BAT_FX_TOP_JET_R_ATTACHMENT )
+	
+	
+	
+}
+
+void function MeleeBat_OnWeaponDeactivate( entity weapon )
+{
+	if ( !MeleeBat_IsEnabled() )
+		return
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	MeleeBat_ResetHitStreak( weapon )
+	MeleeBat_ClearMods( weapon )
+
+
+
+
+
+
+		Signal( weapon, SIGNAL_MELEE_BAT_HEAT_HUD_UPDATE )
+		Signal( weapon, SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+		MeleeBat_ClearHints()
+
+
+	weapon.StopWeaponEffect( BAT_FX_THRUSTER_SWIPE_L_FP, BAT_FX_THRUSTER_SWIPE_L_3P )
+	weapon.StopWeaponEffect( BAT_FX_THRUSTER_SWIPE_R_FP, BAT_FX_THRUSTER_SWIPE_R_3P )
+	weapon.StopWeaponEffect( BAT_FX_THRUSTER_L_FP, BAT_FX_THRUSTER_L_3P )
+	weapon.StopWeaponEffect( BAT_FX_THRUSTER_R_FP, BAT_FX_THRUSTER_R_3P )
+	
+	
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________VO___________________________(){}
+#endif
+
+
+void function MeleeBat_ServerToClient_AcknowledgeBatPickup()
+{
+	MeleeBat_PlayBattleChatterToSelfOnClient( SFX_VO_MELEE_BAT_PICKUP )
+}
+
+
+
+void function MeleeBat_PlayBattleChatterToSelfOnClient( string chatterLine )
+{
+	entity localPlayer = GetLocalViewPlayer()
+
+	float playChance = 1.0
+	switch( chatterLine )
+	{
+		case SFX_VO_MELEE_BAT_PICKUP:
+		{
+			playChance = SFX_VO_MELEE_BAT_PICKUP_CHANCE
+			break
+		}
+		case SFX_VO_MELEE_BAT_STANDARD_ATTACK:
+		{
+			playChance = SFX_VO_MELEE_BAT_STANDARD_ATTACK_CHANCE
+			break
+		}
+		case SFX_VO_MELEE_BAT_CHARGE_ATTACK:
+		{
+			playChance = SFX_VO_MELEE_BAT_CHARGE_ATTACK_CHANCE
+			break
+		}
+	}
+
+	float chance = RandomFloat( 1.0 )
+	if ( chance < playChance )
+	{
+		PlayBattleChatterToSelfOnClient( localPlayer, chatterLine )
+	}
+}
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________LAUNCH_MOD___________________________(){}
+#endif
+
+bool function MeleeBat_HasLauncherMod( entity weapon )
+{
+	if ( !MeleeBat_WeaponIsMeleeBat( weapon ) )
+		return false
+
+	return MeleeBat_HasChargeLevelMod( weapon )
+		|| weapon.HasMod( MELEE_BAT_HIT_STREAK_LAUNCHER_MOD )
+}
+
+vector function MeleeBat_GetCustomKnockbackForce( entity weapon, entity attacker, entity victim, vector velocity )
+{
+	if ( !MeleeBat_WeaponIsMeleeBat( weapon ) )
+		return velocity
+
+	if ( MeleeBat_HasLauncherMod( weapon ) && MeleeBat_ShouldLaunchVictim( attacker, victim ) )
+	{
+		string launchVelZVar = MeleeBat_HasChargeLevelMod( weapon ) ? ( MELEE_BAT_CHARGE_MODS_BASE_STR + ( MeleeBat_GetChargeLevelFromMod( weapon ) ) + "_vel_z" ) : "launcher_vel_z"
+		float velZ = GetWeaponInfoFileKeyField_GlobalFloat( WEAPON_MELEE_BAT_REF, launchVelZVar )
+		return <velocity.x , velocity.y, velZ>
+	}
+
+	return velocity
+}
+
+bool function MeleeBat_PerformCustomVictimKnockback( entity weapon, entity attacker, entity victim, vector velocity )
+{
+	if ( !MeleeBat_WeaponIsMeleeBat( weapon ) )
+		return false
+
+	if ( MeleeBat_HasLauncherMod( weapon ) && MeleeBat_ShouldLaunchVictim( attacker, victim ) )
+	{
+		TitanSword_LaunchEntity( victim, velocity ) 
+		return true
+	}
+
+	return false
+}
+
+bool function MeleeBat_ShouldLaunchVictim( entity attacker, entity victim )
+{
+	if ( MeleeBat_ShouldLaunchFriendlyTeammates() )
+		return true
+
+	return !IsFriendlyTeam( attacker.GetTeam(), victim.GetTeam() )
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________MODS___________________________(){}
+#endif
+
+void function MeleeBat_SafelyAddAttackMod( entity weapon, string mod )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+	
+	MeleeBat_ClearMods( weapon )
+
+	
+	weapon.AddMod( mod )
+}
+
+void function MeleeBat_ClearMods( entity weapon )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+	MeleeBat_ClearChargeLevelMods( weapon )
+	weapon.RemoveMod( MELEE_BAT_HIT_STREAK_LAUNCHER_MOD )
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CHARGE___________________________(){}
+#endif
+
+bool function MeleeBat_OnWeaponChargeBegin( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return false
+
+	if ( weapon.IsWeaponInAds() && player.IsZiplining() )
+		return false
+
+#if DEV
+		printt( "BAT - Charge Begin" )
+#endif
+
+	MeleeBat_ResetHitStreak( weapon )
+	MeleeBat_ClearMods( weapon )
+
+
+		if ( GetLocalViewPlayer() == player  )
+		{
+			thread MeleeBat_ChargeCrosshairRui_Thread( weapon , player )
+		}
+
+	return true
+}
+
+void function MeleeBat_OnWeaponChargeEnd( entity weapon )
+{
+	if ( !MeleeBat_IsEnabled() )
+		return
+
+	if ( !IsValid( weapon ) )
+		return
+
+#if DEV
+		printt( "BAT - Charge End" )
+#endif
+
+
+		entity player = weapon.GetWeaponOwner()
+		if ( !IsValid( player ) )
+			return
+
+		if ( !weapon.IsWeaponInAds() )
+		{
+			weapon.Signal( SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+		}
+
+}
+
+bool function MeleeBat_OnWeaponChargeLevelIncreased( entity weapon )
+{
+	MeleeBat_ApplyModsForChargeLevel( weapon, weapon.GetWeaponChargeLevel() )
+
+	return true
+}
+
+bool function MeleeBat_ApplyModsForChargeLevel( entity weapon, int level )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return false
+
+
+	MeleeBat_ClearMods( weapon )
+	if ( level > 0 )
+	{
+		weapon.AddMod( MELEE_BAT_CHARGE_MODS_BASE_STR + (level) )
+#if DEV
+			printt( "BAT - Charge Level: " + level )
+#endif
+		return true
+	}
+
+	return false
+}
+
+void function MeleeBat_ClearChargeLevelMods( entity weapon )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+	for ( int i = MELEE_BAT_CHARGE_LEVEL_MIN; i <= weapon.GetWeaponChargeLevelMax(); i++ )
+	{
+		weapon.RemoveMod( MELEE_BAT_CHARGE_MODS_BASE_STR + i )
+	}
+}
+
+bool function MeleeBat_HasChargeLevelMod( entity weapon )
+{
+	for ( int i = MELEE_BAT_CHARGE_LEVEL_MIN; i <= weapon.GetWeaponChargeLevelMax(); i++ )
+	{
+		if ( weapon.HasMod( MELEE_BAT_CHARGE_MODS_BASE_STR + i ) )
+			return true
+	}
+
+	return false
+}
+
+int function MeleeBat_GetChargeLevelFromMod( entity weapon )
+{
+	for ( int i = MELEE_BAT_CHARGE_LEVEL_MIN; i <= weapon.GetWeaponChargeLevelMax(); i++ )
+	{
+		if ( weapon.HasMod( MELEE_BAT_CHARGE_MODS_BASE_STR + i ) )
+			return i
+	}
+
+	return 0
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________HIT_STREAK___________________________(){}
+#endif
+
+void function MeleeBat_SetupHitStreak( entity weapon )
+{
+	if ( !( weapon in file.batHitStreaks ) )
+	{
+		HitStreak streak
+		file.batHitStreaks[weapon] <- streak
+	}
+}
+
+HitStreak function MeleeBat_GetHitStreak( entity weapon )
+{
+	MeleeBat_SetupHitStreak( weapon )
+
+	return file.batHitStreaks[weapon]
+}
+
+void function MeleeBat_SetHitStreak( entity weapon, HitStreak streak )
+{
+	MeleeBat_SetupHitStreak( weapon )
+
+	file.batHitStreaks[weapon] = streak
+}
+
+void function MeleeBat_IncrementHitStreak( entity weapon )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+	MeleeBat_SetupHitStreak( weapon )
+	HitStreak streak = MeleeBat_GetHitStreak( weapon )
+
+	
+	float timeSinceLastIncrement = Time() - streak.lastIncrementTime
+#if DEV
+		printt( "BAT - Hit Streak - Time Since Last: " + timeSinceLastIncrement )
+#endif
+	if( timeSinceLastIncrement <= 0.0 )
+		return
+	streak.lastIncrementTime = Time()
+
+	
+	float currentHeat = weapon.GetHeatValue()
+	float newHeat = clamp( currentHeat + MELEE_BAT_HIT_STREAK_HEAT_INCREMENT, 0, 1 )
+	weapon.SetHeatValue( newHeat )
+
+	MeleeBat_SetHitStreak( weapon, streak )
+}
+
+void function MeleeBat_ResetHitStreak( entity weapon )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+			return
+
+
+#if DEV
+		printt( "BAT - Reset Hit Streak" )
+#endif
+	HitStreak streak
+	MeleeBat_SetHitStreak( weapon, streak )
+
+	weapon.SetHeatValue( 0 )
+	if ( GetWeaponInfoFileKeyField_GlobalBool( WEAPON_MELEE_BAT_REF, "heat_decay_sound_play_only_on_fully_heated_decay" ) )
+	{
+		weapon.TryUpdatingFullyHeated()
+	}
+
+
+		
+		entity weaponOwner = weapon.GetOwner()
+		if ( weaponOwner in file.attackerComboTrackerTable )
+		{
+			delete file.attackerComboTrackerTable[weaponOwner]
+		}
+
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________HUD___________________________(){}
+#endif
+
+
+void function MeleeBat_ClearHints()
+{
+	HidePlayerHint( MELEE_BAT_LOC_MAIN_HINT )
+	HidePlayerHint( MELEE_BAT_LOC_MAIN_HINT_ALT )
+}
+
+void function MeleeBat_DisplayHint( entity player, string message, float time = 6.0, float debounce = 0.0 )
+{
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	switch( message )
+	{
+		case MELEE_BAT_LOC_MAIN_HINT:
+		case MELEE_BAT_LOC_MAIN_HINT_ALT:
+			if ( Time() < file.debounceMainMsg )
+				return
+			file.debounceMainMsg = Time() + debounce
+			break
+
+		default:
+			break
+	}
+
+	MeleeBat_ClearHints()
+	AddPlayerHint( time, 0.5, $"", message )
+}
+
+
+
+void function MeleeBat_HeatHud_Thread( entity weapon, entity player )
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( player ) || !IsLocalViewPlayer( player ) )
+		return
+
+	if ( weapon != player.GetActiveWeapon( eActiveInventorySlot.mainHand ) )
+		return
+
+	weapon.Signal( SIGNAL_MELEE_BAT_HEAT_HUD_UPDATE )
+	weapon.EndSignal( SIGNAL_MELEE_BAT_HEAT_HUD_UPDATE )
+	weapon.EndSignal( "OnDestroy" )
+	player.EndSignal( WEAPON_CHARGED_RUI_ABORT_SIGNAL )
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+
+
+	var rui = ClWeaponStatus_GetWeaponHudRui( player )
+	if ( rui == null )
+		return
+
+	RuiDestroyNestedIfAlive( rui, "chargedHandle" )
+
+	var nestedRui = RuiCreateNested( rui, "chargedHandle", RUI_MELEE_BAT_HEAT_HUD )
+	if ( nestedRui == null )
+		return
+
+	vector batFrameColor = SrgbToLinear( GetAmmoColorByType( "supply_drop" ) )
+	RuiSetFloat3( nestedRui, "frameColor", batFrameColor )
+
+	OnThreadEnd(
+		function() : ( player )
+	{
+		if ( !IsValid( player ) )
+			return
+
+		var weaponRui = ClWeaponStatus_GetWeaponHudRui( player )
+		if ( weaponRui == null )
+			return
+
+		RuiDestroyNestedIfAlive( weaponRui, "chargedHandle" )
+	})
+
+	while ( IsValid( weapon ) && weapon == player.GetActiveWeapon( eActiveInventorySlot.mainHand ) )
+	{
+		float frac = weapon.GetHeatValue()
+
+		if ( nestedRui == null || !RuiIsAlive( nestedRui ) )
+			return
+
+		RuiSetFloat( nestedRui, "batHeatFrac", frac )
+		RuiSetBool( nestedRui, "showBatHeatBar", true )
+
+		WaitFrame()
+	}
+}
+
+
+
+void function MeleeBat_ChargeCrosshairRui_Thread( entity weapon, entity player )
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( player ) || !IsLocalViewPlayer( player ) )
+		return
+
+	if ( weapon != player.GetActiveWeapon( eActiveInventorySlot.mainHand ) )
+		return
+
+	weapon.EndSignal( SIGNAL_MELEE_BAT_CHARGE_METER_UPDATE )
+	weapon.EndSignal( "OnDestroy" )
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+
+	var rui = CreateCockpitPostFXRui( $"ui/crosshair_bat_sweetspot.rpak" )
+	if ( rui == null )
+		return
+
+	OnThreadEnd( function() : ( rui )
+	{
+		if ( rui != null )
+			RuiDestroyIfAlive( rui )
+	})
+
+	while ( IsValid( weapon ) && weapon == player.GetActiveWeapon( eActiveInventorySlot.mainHand ) )
+	{
+		float frac = weapon.GetWeaponChargeFraction()
+
+		if ( rui == null || !RuiIsAlive( rui ) )
+			return
+
+		RuiSetFloat( rui, "meterFrac", frac )
+		WaitFrame()
+	}
+}
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEATHBOX___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PASSIVE___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function MeleeBat_SpeedBoost_OnStatusDisabled( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( !IsValid( player ) )
+		return
+}
+
+
+
+void function MeleeBat_SpeedBoost_OnStatusEnabled( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( !player.HasPassive( ePassives.PAS_MELEE_BAT_SPEED_BOOST ) )
+		return
+
+	if ( !IsValid( player.GetPlayerNetEnt( MELEE_BAT_SPEED_BOOST_BEST_TARGET_NETVAR ) ) )
+		return
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	int fxHandle = StartParticleEffectOnEntity( cockpit, GetParticleSystemIndex( SPEED_BOOST_COCKPIT_FX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	thread MeleeBat_SpeedBoost_FX_Thread( player, fxHandle, cockpit )
+}
+
+
+
+void function MeleeBat_SpeedBoost_FX_Thread( entity player, int fxHandle, entity cockpit )
+{
+	if( player != GetLocalViewPlayer() )
+		return
+
+	EndSignal( player, "OnDestroy"  )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, SIGNAL_MELEE_BAT_SPEED_BOOST_TARGETING_STOP )
+	EndSignal( cockpit,"OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( fxHandle , player )
+		{
+			if ( !EffectDoesExist( fxHandle ) )
+				return
+
+			EffectStop( fxHandle, false, true )
+
+			if( IsValid( player ) )
+			{
+				StopSoundOnEntity( player, SFX_MELEE_BAT_SPEED_BOOST_ACTIVATION_1P )
+			}
+		}
+	)
+
+	EmitSoundOnEntity( player, SFX_MELEE_BAT_SPEED_BOOST_ACTIVATION_1P )
+	while( IsValid( player ) && EffectDoesExist( fxHandle ) )
+	{
+		float velocityX = Length( player.GetVelocity() )
+		velocityX = GraphCapped( velocityX, 0.0, 360, 5, 200 )
+		EffectSetControlPointVector( fxHandle, 1, <velocityX,999,0> )
+		WaitFrame()
+	}
+}
+
+
+
+void function Start_SpeedBoost_Rui( entity player, entity target )
+{
+	if ( !IsValid( player ) )
+		return
+
+	player.Signal( SIGNAL_MELEE_BAT_SPEED_BOOST_TARGETING_STOP )
+	thread SpeeedBoost_Rui_Thread( player, target )
+}
+
+
+
+void function SpeeedBoost_Rui_Thread(  entity player, entity target )
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( player ) || !IsValid( target ) )
+		return
+
+	if ( GetGameState() >= eGameState.Resolution )
+		return
+
+	EndSignal( target, "OnDestroy", "OnDeath" )
+	EndSignal( target, "OnModelChanged" )
+	EndSignal( player, SIGNAL_MELEE_BAT_SPEED_BOOST_TARGETING_STOP )
+	EndSignal( player, SIGNAL_MELEE_BAT_SPEED_BOOST_STOP )
+	EndSignal( player, "OnDestroy" )
+
+	var rui = RuiCreate( $"ui/in_world_targeted_speed_boost.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, RuiCalculateDistanceSortKey( player.EyePosition(), target.GetOrigin() ) )
+	InitHUDRui( rui )
+
+	RuiSetBool( rui, "isVisible", false )
+	RuiSetBool( rui, "isEnemyTarget", true )
+
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	target.DoModelChangeScriptCallback( true )
+
+	OnThreadEnd(
+		function() : ( rui, target, player)
+		{
+			RuiDestroyIfAlive( rui )
+
+			if ( IsValid( target ) && target.IsPlayer() )
+			{
+				target.DoModelChangeScriptCallback( false )
+				target.SetTargetInfoStatusIcon( $"" )
+			}
+		}
+	)
+
+	while ( IsValid( player ) )
+	{
+		
+		bool isValidTarget = IsValid( target )
+
+		if ( isValidTarget )
+		{
+			RuiSetFloat3( rui, "pos", target.GetWorldSpaceCenter() )
+			RuiSetBool( rui, "isVisible", true )
+
+			
+			RuiSetBool( rui, "showPassive", true )
+
+			float chargeEndTime = player.GetPlayerNetTime( MELEE_BAT_SPEED_BOOST_CHARGE_END_NETVAR )
+			float chargeTimeRemaining = chargeEndTime != -1 ? max( chargeEndTime - Time(), 0.0 ) : MELEE_BAT_SPEED_BOOST_ACTIVATION_TIME
+			RuiSetFloat( rui, "passiveFill", 1.0 - chargeTimeRemaining / MELEE_BAT_SPEED_BOOST_ACTIVATION_TIME )
+			RuiSetBool( rui, "enemyObstructing", CheckIfEnemyIsObstructing( player, target ) )
+		}
+		else
+		{
+			RuiSetBool( rui, "isVisible", false )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DROP_SEQUENCE___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________EVO_ACTIONS___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+       

@@ -1,0 +1,492 @@
+
+global function WeaponAutoHemlok_Init
+global function OnWeaponActivate_hemlok_auto
+global function OnWeaponDeactivate_hemlok_auto
+global function OnWeaponPrimaryAttack_hemlok_auto
+global function OnProjectileCollision_hemlok_auto
+global function OnWeaponReload_weapon_hemlok_auto
+global function OnWeaponStartZoomIn_weapon_hemlok_auto
+global function OnWeaponStartZoomOut_weapon_hemlok_auto
+global function WeaponAutoHemlok_BreachChargeOnCooldown
+
+
+global function ServerToSpectator_WeaponAutoHemlok_SetEffectDurationOverride
+
+
+
+global const string AUTO_HEMLOK_CLASS_NAME = "mp_weapon_auto_hemlok"
+const string PVAR_AUTO_HEMLOK_BASE = "auto_hemlok_"
+
+
+global const string COOLDOWN_RUI_ABORT_SIGNAL = "auto_hemlok_rui_abort"
+
+
+const asset AUTO_HEMLOK_COOLDOWN_RUI = $"ui/weapon_hud_charged_hemlok.rpak"
+
+
+const string COOLDOWN_END_SOUND_FP = "weapon_hemlock_elite_Breachcharge_ready"
+
+
+const asset FX_BREACH_MODE_MUZZLE_FLASH_FP = $"P_hemlok_breach_round_muzzle_FP"
+const asset FX_BREACH_MODE_MUZZLE_FLASH_3P = $"P_hemlok_breach_round_muzzle_3p"
+
+const asset FX_BARREL_LIGHT_1P = $"P_hemlok_breach_supp_light"
+const string BARREL_LIGHT_ATTACHPOINT = "fx_explosive_barrel_and_suppressor"
+
+struct
+{
+	float cooldownTime = 25.0
+	float constructDamageMult = 8.0
+	float selfDamageMult = 0.5
+	float maxDamage = 2000.0
+
+	string extraDamageDisableScriptNames = ""
+}tuning
+
+struct
+{
+	var cooldownRui
+	array <string> scriptNamesToCheck
+}file
+
+void function WeaponAutoHemlok_Init()
+{
+	RegisterTuningStruct( "tuning", PVAR_AUTO_HEMLOK_BASE )
+	file.scriptNamesToCheck = split( tuning.extraDamageDisableScriptNames, WHITESPACE_CHARACTERS )
+
+	PrecacheParticleSystem( FX_BREACH_MODE_MUZZLE_FLASH_FP )
+	PrecacheParticleSystem( FX_BREACH_MODE_MUZZLE_FLASH_3P )
+	PrecacheParticleSystem( FX_BARREL_LIGHT_1P )
+
+	Remote_RegisterClientFunction( "ServerToSpectator_WeaponAutoHemlok_SetEffectDurationOverride", "typed_entity", "weaponx" )
+
+	AddCallback_OnPlayerAddedToggleWeaponMod( WeaponAutoHemlok_AddedToggleWeaponMod )
+	AddCallback_OnPlayerRemovedToggleWeaponMod( WeaponAutoHemlok_RemovedToggleWeaponMod )
+
+
+
+
+
+
+		AddCallback_OnPrimaryWeaponStatusUpdate( OnPrimaryWeaponStatusUpdate_WeaponAutoHemlok )
+		RegisterSignal( COOLDOWN_RUI_ABORT_SIGNAL )
+
+}
+
+void function OnWeaponActivate_hemlok_auto( entity weapon )
+{
+
+		thread BreachCharge_ClientRui( weapon )
+
+		if ( GetLocalClientPlayer() == GetLocalViewPlayer() )
+		{
+			if ( weapon.HasMod( "altfire" ) && WeaponAutoHemlok_BreachChargeOnCooldown( weapon ))
+			{
+				WeaponModCommand_Remove( weapon, "altfire" )
+			}
+		}
+
+
+	if ( weapon.HasMod( "altfire" ) )
+		weapon.PlayWeaponEffect( FX_BARREL_LIGHT_1P, $"", BARREL_LIGHT_ATTACHPOINT )
+
+	HopupGunshield_OnWeaponActivate( weapon )
+
+	if ( weapon.HasMod( "hopup_smart_reload" ) )
+	{
+		SmartReloadSettings settings
+		settings.OverloadedAmmo				 = GetWeaponInfoFileKeyField_GlobalInt( AUTO_HEMLOK_CLASS_NAME, OVERLOAD_AMMO_SETTING )
+		settings.LowAmmoFrac				 = GetWeaponInfoFileKeyField_GlobalFloat( AUTO_HEMLOK_CLASS_NAME, SMART_RELOAD_LOW_AMMO_FRAC_SETTING )
+
+		OnWeaponActivate_Smart_Reload ( weapon, settings )
+	}
+	else
+	{
+
+
+
+
+	}
+}
+
+void function OnWeaponDeactivate_hemlok_auto( entity weapon )
+{
+	HopupGunshield_OnWeaponDeactivate( weapon )
+
+	OnWeaponDeactivate_Smart_Reload ( weapon )
+}
+
+var function OnWeaponPrimaryAttack_hemlok_auto( entity weapon, WeaponPrimaryAttackParams attackParams)
+{
+	if ( weapon.HasMod( "altfire" ) && WeaponAutoHemlok_BreachChargeOnCooldown( weapon ) )
+	{
+		Warning( "Weapon shouldn't have been able to get into this mode.")
+		return 0
+	}
+	else if ( weapon.HasMod( "altfire" ) )
+	{
+		entity projectile_single             = Grenade_Launch( weapon, attackParams.pos, attackParams.dir, true, true, weapon.GetWeaponDamageFlags(), <0, 0, 0> )
+
+
+
+
+
+
+
+		weapon.PlayWeaponEffect( FX_BREACH_MODE_MUZZLE_FLASH_FP, FX_BREACH_MODE_MUZZLE_FLASH_3P, "muzzle_flash" )
+
+		thread BreachCharge_CooldownThread( weapon )
+
+
+			Assert( InPrediction() )
+			WeaponModCommand_Remove( weapon, "altfire" )
+
+	}
+	else
+	{
+		weapon.FireWeapon_Default( attackParams.pos, attackParams.dir, 1.0, 1.0, false )
+	}
+
+	return weapon.GetWeaponSettingInt( eWeaponVar.ammo_per_shot )
+}
+
+void function OnProjectileCollision_hemlok_auto( entity projectile, vector pos, vector normal, entity hitEnt, int hitbox, bool isCritical, bool isPassthrough )
+{
+	if ( IsValid( projectile ) && projectile.HasWeaponMod( "altfire" ) && projectile.GetCodeClassName() == "grenade" )
+	{
+		projectile.GrenadeExplode( normal )
+
+
+
+
+
+
+	}
+}
+
+void function OnWeaponReload_weapon_hemlok_auto( entity weapon, int milestoneIndex )
+{
+	OnWeaponReload_Smart_Reload ( weapon, milestoneIndex )
+}
+
+
+void function OnWeaponStartZoomIn_weapon_hemlok_auto( entity weapon )
+{
+	HopupGunshield_OnWeaponStartZoomIn( weapon )
+}
+
+void function OnWeaponStartZoomOut_weapon_hemlok_auto( entity weapon )
+{
+	HopupGunshield_OnWeaponStartZoomOut( weapon )
+}
+
+void function BreachCharge_CooldownThread( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	weapon.EndSignal( "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( weapon )
+		{
+			if ( IsValid( weapon ) )
+			{
+
+				if ( InPrediction() )
+
+				{
+					weapon.SetScriptTime0( Time() )
+
+
+
+
+
+
+
+
+				}
+			}
+		} )
+
+	float debounce = tuning.cooldownTime
+	if ( IsInfiniteAmmoEnabled() )
+		debounce = 0.0
+	float debounceTime = Time() + debounce
+
+
+	if ( InPrediction() )
+
+	{
+		weapon.SetScriptTime0( debounceTime )
+	}
+
+	wait debounce
+}
+
+bool function WeaponAutoHemlok_BreachChargeOnCooldown( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( !weapon.IsWeaponX() )
+		return false
+
+	bool onCooldown = false
+	if ( IsInfiniteAmmoEnabled() )
+	{
+		onCooldown = false
+	}
+	else if ( Time() < weapon.GetScriptTime0() )
+	{
+		onCooldown = true
+	}
+
+	return onCooldown
+}
+
+float function WeaponAutoHemlok_BreachChargeCooldownTimeLeft( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return 0
+
+	if ( !weapon.IsWeaponX() )
+		return 0
+
+	float timeLeft = weapon.GetScriptTime0() - Time()
+	if ( timeLeft < 0.0 )
+		return 0
+
+	return timeLeft
+}
+
+void function WeaponAutoHemlok_AddedToggleWeaponMod( entity player, entity weapon, string mod )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( !weapon.IsWeaponX() )
+		return
+
+	if ( mod != "altfire" )
+		return
+
+	if ( weapon.GetWeaponClassName() != AUTO_HEMLOK_CLASS_NAME )
+		return
+
+	weapon.PlayWeaponEffect( FX_BARREL_LIGHT_1P, $"", BARREL_LIGHT_ATTACHPOINT )
+
+
+
+
+
+
+		float fuseTime = weapon.GetWeaponSettingFloat( eWeaponVar.grenade_fuse_time )
+		weapon.SetIndicatorEffectDurationOverride( fuseTime )
+
+}
+
+void function WeaponAutoHemlok_RemovedToggleWeaponMod( entity player, entity weapon, string mod )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( !weapon.IsWeaponX() )
+		return
+
+	if ( mod != "altfire" )
+		return
+
+	if ( weapon.GetWeaponClassName() != AUTO_HEMLOK_CLASS_NAME )
+		return
+
+	weapon.StopWeaponEffect( FX_BARREL_LIGHT_1P, $"" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnPrimaryWeaponStatusUpdate_WeaponAutoHemlok( entity selectedWeapon, var weaponRui )
+{
+	if ( !IsValid( selectedWeapon ) )
+		return
+
+	
+	entity activeWeapon = GetLocalViewPlayer().GetActiveWeapon( eActiveInventorySlot.mainHand  )
+	bool switchToMeleeOrGrenade = IsBitFlagSet( selectedWeapon.GetWeaponTypeFlags(), ( WPT_VIEWHANDS | WPT_GRENADE ) )
+	if ( IsValid( activeWeapon ) && activeWeapon != selectedWeapon )
+	{
+		if ( !( WeaponAutoHemlok_BreachChargeOnCooldown( activeWeapon ) && switchToMeleeOrGrenade ) )
+		{
+			activeWeapon.Signal( COOLDOWN_RUI_ABORT_SIGNAL )
+		}
+	}
+
+	if ( selectedWeapon.GetWeaponClassName() == AUTO_HEMLOK_CLASS_NAME )
+	{
+		thread BreachCharge_ClientRui( selectedWeapon )
+	}
+	else if ( file.cooldownRui != null && RuiIsAlive( file.cooldownRui ) )
+	{
+		RuiSetBool( file.cooldownRui, "showChargeBar", false )
+	}
+}
+
+void function BreachCharge_ClientRui( entity weapon )
+{
+	AssertIsNewThread()
+
+	if ( !IsValid( weapon ) )
+		return
+
+	weapon.Signal( COOLDOWN_RUI_ABORT_SIGNAL )
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( COOLDOWN_RUI_ABORT_SIGNAL )
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) || !IsLocalViewPlayer( player ) )
+		return
+
+	player.Signal( WEAPON_CHARGED_RUI_ABORT_SIGNAL )
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( WEAPON_CHARGED_RUI_ABORT_SIGNAL )
+
+	var rui = ClWeaponStatus_GetWeaponHudRui( player )
+	if ( rui == null )
+		return
+
+	RuiDestroyNestedIfAlive( rui, "chargedHandle" )
+
+	var nestedRui = RuiCreateNested( rui, "chargedHandle", AUTO_HEMLOK_COOLDOWN_RUI )
+	if ( nestedRui == null )
+		return
+
+	file.cooldownRui = nestedRui
+	OnThreadEnd(
+		function() : ( player, weapon, rui, nestedRui )
+		{
+			RuiSetBool( rui, "showChargeBar", false )
+			RuiSetBool( rui, "showChargeBarBorderColor", false )
+			RuiDestroyNestedIfAlive( rui, "chargedHandle" )
+			file.cooldownRui = null
+		}
+	)
+
+	vector frameColorBase    	= SrgbToLinear( GetAmmoColorByType( "highcal" ) )
+	vector frameColorCharged 	= SrgbToLinear( GetAmmoColorByType( "highcal" ) )
+	vector frameColorBackground = SrgbToLinear( GetAmmoColorByType( "highcal" ) )
+
+	RuiSetString( nestedRui, "chargeBarText", "" )
+	RuiSetBool( nestedRui, "showChargeBar", true )
+	RuiSetBool( rui, "showChargeBar", true )
+
+	while( IsValid( weapon ) && IsValid( player ) && file.cooldownRui != null )
+	{
+		WaitEndFrame()
+
+		if ( nestedRui == null || !RuiIsAlive( nestedRui ) )
+			return
+
+		string chargeBarText	= ""
+		bool onCooldown			= WeaponAutoHemlok_BreachChargeOnCooldown( weapon )
+		float secRemaining		= WeaponAutoHemlok_BreachChargeCooldownTimeLeft( weapon )
+		float cooldownFrac		= secRemaining / tuning.cooldownTime
+		bool altFireActive = weapon.HasMod( "altfire" )
+
+		if ( !onCooldown && altFireActive )
+		{
+			chargeBarText    = Localize( "#HEMLOK_BREACH_CHARGE_RUI_LAUNCH" )
+		}
+		else if ( !onCooldown )
+		{
+			chargeBarText    = Localize( "#HEMLOK_BREACH_CHARGE_RUI_READY" )
+		}
+		else
+		{
+			chargeBarText = Localize( "#PHASEDRIVER_RECHARGING" )
+			int chargePercent = int( Time() )
+			chargeBarText += (" " + Localize( "#HUD_ABILITY_RECHARGE_REMAINING_SEC", string( int ( secRemaining ) + 1 ) ))
+		}
+
+		RuiSetString( nestedRui, "chargeBarText", chargeBarText )
+		RuiSetFloat( nestedRui, "chargeBarFrac", cooldownFrac )
+		RuiSetFloat3( nestedRui, "chargeBGcolor", frameColorBackground )
+		RuiSetBool( nestedRui, "onCooldown", onCooldown )
+
+		WaitFrame()
+	}
+}
+
+void function ServerToSpectator_WeaponAutoHemlok_SetEffectDurationOverride( entity weapon )
+{
+	entity clientPlayer = GetLocalClientPlayer()
+	if ( !clientPlayer.IsObserver() || clientPlayer.GetTeam() != TEAM_SPECTATOR )
+		return
+
+	if ( !IsValid( weapon ) )
+		return
+
+	float fuseTime = weapon.GetWeaponSettingFloat( eWeaponVar.grenade_fuse_time )
+	weapon.SetIndicatorEffectDurationOverride( fuseTime )
+}
+
+
+
+ 

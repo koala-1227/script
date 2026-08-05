@@ -1,0 +1,6107 @@
+global function Arsenals_Init
+
+
+
+
+
+global function Arsenals_IsWeaponMaxed
+global function Arsenals_GetMinAttachmentTierForWeapon
+global function Arsenals_GetWeaponAttachmentsOfLevel
+global function Arsenals_GetQuickUpgradeAttachments_Ordered
+global function Arsenals_CombineAttachmentUpgradesForWeapon
+global function Arsenasl_SetCustomConsoleOnUseFunc
+
+
+global function Arsenals_GetAllArsenalLocations
+global function Arsenals_GetPingTypeForEnt
+
+
+global function Arsenals_LoadPOINameData
+global function Arsenals_GetArsenalsWithinRangeOfPOIZone
+
+
+
+
+global function Arsenals_Enabled
+global function Arsenals_MaxDisplayedPerPOI
+global function Arsenals_LootBinResetEnabled
+global function Arsenals_PingNearestArsenalOnInventoryEvent
+global function Arsenals_PingArsenalNotWeaponAtDistance
+global function Arsenals_PromptAllCraftersDisabled
+global function Arsenals_FadePOINameArsenalIconAtDifferentHeight
+global function Arsenals_AdditionalHeightForPOINameArsenalIconFade
+global function Arsenals_ShowHudDisplay
+global function Arsenals_RemoveAmmoFromCrafter
+global function Arsenals_ArsenalsShowOnMap
+
+global function Arsenals_GetActivationTimeGateDuration
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ServerToClient_ArsenalUsed
+global function ServerToClient_Arsenals_ShowWeaponUpgrade
+global function ServerToClient_Arsenals_Play3PWeaponUpgradeFX
+
+global function ServerToClient_ResetArsenals
+global function Arsenals_SetWeaponSlotPinged
+
+global function Arsenals_ArsenalPinged
+global function Arsenals_UpdateHighlightedArsenalIcon
+global function Arsenals_GetHighlightedArsenal
+global function Arsenals_CheckInventoryChanged
+
+global function ServerToClient_Arsenals_SetGroupParentLocation
+
+global function Arsenals_GetArsenalIcon
+global function Arsenals_GetArsenalIconFromWeaponData
+global function Arsenals_GetArsenalBGIcon
+global function Arsenals_HighlightArsenalInRangeMap
+global function UIToClient_Arsenals_SetMapHudIdentifierSettings
+
+
+
+const float ARSENALS_WEAPON_UPGRADE_FX_RANGE = 3937.0 
+
+const float ARSENAL_PING_DISTANCE = 1500
+const float ARSENAL_PING_DISTANCE_SMALL = 1000
+const float ARSENAL_MIN_DISPLAY_DISTANCE_DEFAULT = 1500
+const float ARSENAL_MAX_DISPLAY_DISTANCE_DEFAULT = 2000
+const float ARSENAL_CLOSE_UP_MIN_DISPLAY_DISTANCE_DEFAULT = 200
+const float ARSENAL_CLOSE_UP_MAX_DISPLAY_DISTANCE_DEFAULT = 300
+const float ARSENAL_MIN_DISPLAY_DISTANCE_SMALL = 1000
+const float ARSENAL_MAX_DISPLAY_DISTANCE_SMALL = 1250
+const float ARSENAL_MIN_DISPLAY_DISTANCE_MODERATE_MODIFIER = .75
+const float ARSENAL_MIN_DISPLAY_DISTANCE_MINIMAL_MODIFIER = .75
+
+const float ARSENAL_MAP_MAX_DISPLAY_DISTANCE = 17000
+const float ARSENAL_SAME_TYPE_EXCLUSION_RADIUS_SQR = 10000 * 10000
+
+const float ARSENAL_ACTIVATION_TIME_GATE = 0.0
+
+global const string ARSENAL_ACTIVATION_TIME = "arsenal_activation_time"
+
+const float WEAPON_RESPAWN_TIME = 15
+const float AKIMBO_WEAPON_RESPAWN_TIME = 7.5
+const float AMMO_RESPAWN_TIME = 20
+const float AMMO_RESPAWN_TIME_POST_RESET = 10
+const float ARSENAL_LOOT_FADE_DIST = 4000.0
+
+const float BOW_VERTICAL_ADDITION = 8.0
+
+
+const vector ARSENAL_CONSOLE_OFFSET = <0, 50, 40 >
+const vector ARSENAL_CONSOLE_MINS = < -25, -8, -20 >
+const vector ARSENAL_CONSOLE_MAXS =  < 25, 5, 20 >
+const float ARSENAL_CONSOLE_MAX_INTERACT_ANGLE = 80.0
+
+global const string ARSENAL_SCRIPTNAME = "arsenal"
+const string ARSENAL_EDITOR_CLASSNAME = "info_arsenal_target"
+global const string ARSENAL_RESET_SKIN_NAME = "shimmer"
+
+const string ARSENAL_UPGRADE_CHARGE_UP_SFX = "Survival_Arsenal_Upgrade_ChargeUp"
+const string ARSENAL_UPGRADE_COMPLETE_SFX = "Survival_Arsenal_Upgrade_Complete"
+const string ARSENAL_UPGRADE_CANCELED_SFX = "Survival_Arsenal_Upgrade_Cancel"
+const string ARSENAL_WEAPON_RESPAWNED_SFX = "Survival_Arsenal_WeaponRespawn"
+
+const string ARSENAL_ENHANCEMENT_COMPLETE_LINE = "bc_arsenalEnhanceComplete"
+
+const string ARSENAL_WINDOW_BODYGROUP_NAME = "middle_screen"
+const string ARSENAL_CONSOLE_BODYGROUP_NAME = "computer_screen"
+const int ARSENAL_WINDOW_OPEN_BODYGROUP_INT = 0
+const int ARSENAL_WINDOW_CLOSED_BODYGROUP_INT = 1
+const int ARSENAL_CONSOLE_UNUSED_BODYGROUP_INT = 1
+const int ARSENAL_CONSOLE_USED_BODYGROUP_INT = 0
+
+const int ARSENAL_USED_COLOR_R = 255
+const int ARSENAL_USED_COLOR_G = 0
+const int ARSENAL_USED_COLOR_B = 0
+
+const int ARSENAL_BASE_COLOR_R = 0
+const int ARSENAL_BASE_COLOR_G = 255
+const int ARSENAL_BASE_COLOR_B = 0
+
+const int MINIMAP_ARRAY_INDEX = 0
+const int FULLMAP_ARRAY_INDEX = 1
+
+
+
+
+
+
+const string NOT_ON_ARSENAL_STR = "not_on_station"
+
+
+enum eArsenalIdentifierSettings
+{
+	MINIMAL,
+	MODERATE,
+	MAXIMUM,
+}
+
+const asset FX_WEAPON_EVO_UPGRADE_FP = $"P_wpn_evo_upgrade_FP"
+const asset FX_EXP_LEVELUP_3P = $"P_wpn_evo_upgrade"
+
+
+int REQUEST_ATTACHMENT_COMMS_START = eCommsAction.INVENTORY_NEED_ATTACHMENT_MAG_BULLET
+
+
+const int EMPTY_HOPUP_TIER = 3
+const float QUICKCHAT_FAIL_TIME = 3.0
+
+#if DEV
+const bool INFINITE_UPGRADES_ENABLED = false
+const bool DEBUG_SHOW_LINKED_ARSENALS = false
+#endif
+
+const array<string> ARSENALS_WEAPON_SET_STRINGS_FOR_TIER =
+[
+	"",
+	WEAPON_LOCKEDSET_SUFFIX_WHITESET,
+	WEAPON_LOCKEDSET_SUFFIX_BLUESET,
+	WEAPON_LOCKEDSET_SUFFIX_PURPLESET,
+	WEAPON_LOCKEDSET_SUFFIX_GOLD,
+]
+
+const asset ARSENALS_MODEL = $"mdl/props/weapon_crate/weapon_crate_01.rmdl"
+const asset ARSENALS_RESET_FLASH = $"P_arsenal_spawn_flash"
+const array< string > ARSENALS_PARTICLE_REF_EXCEPTIONS =
+[
+
+	"mp_weapon_auto_hemlok",
+
+]
+const table< string, asset > ARSENALS_REF_TO_HOLO_MAP =
+{
+	["mp_weapon_alternator_smg"] 	= $"P_holo_wpn_alternator",
+	["mp_weapon_semipistol"] 		= $"P_holo_wpn_p2020",
+	["mp_weapon_autopistol"] 		= $"P_holo_wpn_re45",
+	["mp_weapon_lmg"] 				= $"P_holo_wpn_spitfire",
+	["mp_weapon_rspn101"] 			= $"P_holo_wpn_r301",
+	["mp_weapon_g2"] 				= $"P_holo_wpn_g7",
+	["mp_weapon_r97"]				= $"P_holo_wpn_r99",
+	["mp_weapon_doubletake"] 		= $"P_holo_wpn_tripletake",
+	["mp_weapon_volt_smg"] 			= $"P_holo_wpn_volt",
+	["mp_weapon_lstar"] 			= $"P_holo_wpn_lstar",
+	["mp_weapon_esaw"] 				= $"P_holo_wpn_devotion",
+	["mp_weapon_nemesis"] 			= $"P_holo_wpn_nemesis",
+	["mp_weapon_energy_ar"] 		= $"P_holo_wpn_havoc",
+	["mp_weapon_defender"] 			= $"P_holo_wpn_chargerifle",
+	["mp_weapon_dmr"] 				= $"P_holo_wpn_longbow",
+	["mp_weapon_wingman"] 			= $"P_holo_wpn_wingman",
+	["mp_weapon_sentinel"] 			= $"P_holo_wpn_sentinel",
+	["mp_weapon_dragon_lmg"] 		= $"P_holo_wpn_dragon",
+	["mp_weapon_pdw"]	 			= $"P_holo_wpn_prowler",
+	["mp_weapon_car"] 				= $"P_holo_wpn_car",
+	["mp_weapon_vinson"] 			= $"P_holo_wpn_flatline_car",
+
+	["mp_weapon_auto_hemlok"] 		= $"P_holo_wpn_hemlok_breach",
+
+	["mp_weapon_hemlok"] 			= $"P_holo_wpn_hemlok",
+	["mp_weapon_3030"] 				= $"P_holo_wpn_3030",
+	["mp_weapon_mastiff"] 			= $"P_holo_wpn_mastiff",
+	["mp_weapon_shotgun_pistol"] 	= $"P_holo_wpn_mozambique",
+	["mp_weapon_shotgun"] 			= $"P_holo_wpn_eva8",
+	["mp_weapon_energy_shotgun"] 	= $"P_holo_wpn_peacekeeper",
+	["mp_weapon_sniper"] 			= $"P_holo_wpn_kraber",
+	["mp_weapon_bow"] 				= $"P_holo_wpn_bocek",
+	["bullet"] 						= $"P_holo_ammo_light",
+	["highcal"] 					= $"P_holo_ammo_heavy",
+	["special"] 					= $"P_holo_ammo_energy",
+	["sniper"] 						= $"P_holo_ammo_sniper",
+	["shotgun"] 					= $"P_holo_ammo_shotgun",
+
+
+
+}
+
+const table< string, asset > ARSENALS_REF_TO_HOLO_FADEIN_MAP =
+{
+	["mp_weapon_alternator_smg"] 	= $"P_holo_wpn_alternator_fadein",
+	["mp_weapon_semipistol"] 		= $"P_holo_wpn_p2020_fadein",
+	["mp_weapon_autopistol"] 		= $"P_holo_wpn_re45_fadein",
+	["mp_weapon_lmg"] 				= $"P_holo_wpn_spitfire_fadein",
+	["mp_weapon_rspn101"] 			= $"P_holo_wpn_r301_fadein",
+	["mp_weapon_g2"] 				= $"P_holo_wpn_g7_fadein",
+	["mp_weapon_r97"]				= $"P_holo_wpn_r99_fadein",
+	["mp_weapon_doubletake"] 		= $"P_holo_wpn_tripletake_fadein",
+	["mp_weapon_volt_smg"] 			= $"P_holo_wpn_volt_fadein",
+	["mp_weapon_lstar"] 			= $"P_holo_wpn_lstar_fadein",
+	["mp_weapon_esaw"] 				= $"P_holo_wpn_devotion_fadein",
+	["mp_weapon_nemesis"] 			= $"P_holo_wpn_nemesis_fadein",
+	["mp_weapon_energy_ar"] 		= $"P_holo_wpn_havoc_fadein",
+	["mp_weapon_defender"] 			= $"P_holo_wpn_chargerifle_fadein",
+	["mp_weapon_dmr"] 				= $"P_holo_wpn_longbow_fadein",
+	["mp_weapon_wingman"] 			= $"P_holo_wpn_wingman_fadein",
+	["mp_weapon_sentinel"] 			= $"P_holo_wpn_sentinel_fadein",
+	["mp_weapon_dragon_lmg"] 		= $"P_holo_wpn_dragon_fadein",
+	["mp_weapon_pdw"]	 			= $"P_holo_wpn_prowler_fadein",
+	["mp_weapon_car"] 				= $"P_holo_wpn_car_fadein",
+	["mp_weapon_vinson"] 			= $"P_holo_wpn_flatline_car_fadein",
+
+	["mp_weapon_auto_hemlok"] 		= $"P_holo_wpn_hemlok_breach_fadein",
+
+	["mp_weapon_hemlok"] 			= $"P_holo_wpn_hemlok_fadein",
+	["mp_weapon_3030"] 				= $"P_holo_wpn_3030_fadein",
+	["mp_weapon_mastiff"] 			= $"P_holo_wpn_mastiff_fadein",
+	["mp_weapon_shotgun_pistol"] 	= $"P_holo_wpn_mozambique_fadein",
+	["mp_weapon_shotgun"] 			= $"P_holo_wpn_eva8_fadein",
+	["mp_weapon_energy_shotgun"] 	= $"P_holo_wpn_peacekeeper_fadein",
+	["mp_weapon_sniper"] 			= $"P_holo_wpn_kraber_fadein",
+	["mp_weapon_bow"] 				= $"P_holo_wpn_bocek_fadein",
+}
+
+const table< string, int > ARSENALS_REF_TO_HOLO_DISPLACEMENT_MAP =
+{
+	["mp_weapon_alternator_smg"] 	= 2,
+	["mp_weapon_semipistol"] 		= 3,
+	["mp_weapon_autopistol"] 		= 4,
+	["mp_weapon_lmg"] 				= 10,
+	["mp_weapon_rspn101"] 			= 11,
+	["mp_weapon_g2"] 				= 10,
+	["mp_weapon_r97"]				= 5,
+	["mp_weapon_doubletake"] 		= 9,
+	["mp_weapon_volt_smg"] 			= 8,
+	["mp_weapon_lstar"] 			= 1,
+	["mp_weapon_esaw"] 				= 12,
+	["mp_weapon_nemesis"] 			= 10,
+	["mp_weapon_energy_ar"] 		= 5,
+	["mp_weapon_defender"] 			= 7,
+	["mp_weapon_dmr"] 				= 12,
+	["mp_weapon_wingman"] 			= 5,
+	["mp_weapon_sentinel"] 			= 14,
+	["mp_weapon_dragon_lmg"] 		= 7,
+	["mp_weapon_pdw"]	 			= -2,
+	["mp_weapon_car"] 				= 6,
+	["mp_weapon_vinson"] 			= 5,
+
+	["mp_weapon_auto_hemlok"] 		= 6,
+
+	["mp_weapon_hemlok"] 			= 6,
+	["mp_weapon_3030"] 				= 11,
+	["mp_weapon_mastiff"] 			= 11,
+	["mp_weapon_shotgun_pistol"] 	= 5,
+	["mp_weapon_shotgun"] 			= 8,
+	["mp_weapon_energy_shotgun"] 	= 5,
+	["mp_weapon_sniper"] 			= 21,
+	["mp_weapon_bow"] 				= -3,
+}
+
+const asset ARSENALS_HOLO_DEFAULT = $"P_holo_wpn_r301"
+const asset ARSENALS_HOLO_FADEIN_DEFAULT = $"P_holo_wpn_r301_fadein"
+
+const asset ARSENALS_ICON_BG = $"rui/hud/gametype_icons/survival/arsenals_icon_bg"
+
+global struct ArsenalData
+{
+	EHI arsenalEHI
+	array< string > weaponRefs
+
+
+
+
+}
+
+struct ArsenalSpawnData
+{
+	vector pos
+	vector angles
+	bool canSpawnLight = true
+	bool canSpawnHeavy = true
+	bool canSpawnEnergy = true
+	bool canSpawnShotgun = true
+	bool canSpawnSniper = true
+
+	int group
+	string ammoType
+}
+
+
+
+
+
+
+
+
+
+struct UpgradingAttachmentData
+{
+	string ref
+	int tier
+}
+
+struct RuiLocationData
+{
+	var minimapRui
+	var fullmapRui
+	bool visibleOnMinimap = true
+	bool visibleOnFullmap = true
+	vector pos
+	int proximityCount = -1
+}
+
+
+
+
+
+
+
+
+
+
+struct
+{
+	table< EHI, ArsenalData > arsenalEHIToArsenalDataMap
+	bool hasCheckedIfEnabled = false
+	bool arsenalsEnabled = false
+
+	bool arsenalsReset = false
+	bool arsenalsSpawned = false
+
+	table< int, vector > arsenalGroupParentLocations
+
+	void functionref( entity, entity, int ) customArsenalConsoleOnUse = null
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		EHI highlightedPingEntEHI
+		array< EHI > pingedArsenals
+		table< EHI, bool > worldspaceArsenalIconVisibility
+		table< EHI, var > arsenalToWorldspaceRui
+		array< EHI > spawnedArsenals
+
+		array< EHI > arsenalsUsed
+
+		table< int, array< ArsenalData > > zoneIdToArsenalsMap
+
+		array<int> arsenalMarkerList
+		array<var> arsenalMarkerRuiList
+
+		array< var > weaponRespawnTopos
+		array< var > weaponRespawnRuis
+
+		table< EHI, RuiLocationData > ruiEHITable
+
+		table< int, bool > showArsenalHudIconsOfAmmoType
+
+		int weaponIdxPinged = -1
+
+		int mapHudIdentifierSettings = -1
+		float displayDistanceModifier = 1.0
+
+} file
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________INIT___________________________()
+{}
+#endif
+
+void function Arsenals_Init()
+{
+	if ( !Arsenals_Enabled() )
+		return
+
+	PrecacheModel( ARSENALS_MODEL )
+
+	PrecacheParticleSystem( ARSENALS_RESET_FLASH )
+
+	foreach ( particleSystem in ARSENALS_REF_TO_HOLO_MAP.clonevalues() )
+	{
+		PrecacheParticleSystem( particleSystem )
+	}
+
+	foreach( particleSystem in ARSENALS_REF_TO_HOLO_FADEIN_MAP.clonevalues() )
+	{
+		PrecacheParticleSystem( particleSystem )
+	}
+
+	RegisterNetworkedVariable( ARSENAL_ACTIVATION_TIME, SNDC_GLOBAL, SNVT_TIME , 0.0 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+		{
+			AddCallback_GameStateEnter( eGameState.WaitingForPlayers, Arsenals_OnWaitingForPlayers_Client )
+		}
+		else
+		{
+			AddCallback_GameStateEnter( eGameState.Playing, Arsenals_OnGameStatePlaying_Client )
+		}
+
+		AddCreateCallback( "prop_arsenal", Arsenals_OnArsenalCreated_Client )
+
+		RegisterNetVarTimeChangeCallback( ARSENAL_ACTIVATION_TIME, Arsenals_ArsenalActivationTimeChange )
+
+		Fullmap_AddCallback_OnMapLegendCreated( Arsenals_OnMapLegendCreated )
+
+		if ( Arsenals_ArsenalsShowOnMap() )
+		{
+			RegisterMinimapPackage( "prop_arsenal", eMinimapObject_prop_script.ARSENAL, MINIMAP_OBJECT_PROXIMITY_RUI, MinimapPackage_Arsenal, FULLMAP_OBJECT_PROXIMITY_RUI, FullmapPackage_Arsenal )
+		}
+
+		if ( Arsenals_PingNearestArsenalOnInventoryEvent() )
+		{
+			Arsenals_InitQuickChatEvents()
+			RegisterSignal( "WeaponQuickchatIdxSet" )
+		}
+
+		
+		
+		
+		
+
+		AddCallback_OnPlayerMatchStateChanged( OnPlayerMatchStateChanged_Client )
+
+		AddCallback_LocalPlayerPickedUpLoot( Arsenals_OnLocalPlayerPickedUpLoot )
+		AddCallback_LocalPlayerDroppedLoot( Arsenals_OnLocalPlayerDroppedLoot )
+
+		AddCallback_ClientOnPlayerConnectionStateChanged( Arsenals_OnPlayerConnectionStateChanged )
+
+		SetMapHudIdentifierSettings_Internal()
+
+		for ( int i = 0; i < eAmmoPoolType.len(); i++ )
+		{
+			file.showArsenalHudIconsOfAmmoType[i] <- false
+		}
+
+		AddCallback_OnEnterDroneView( Arsenal_OnPlayerEnterDroneView )
+
+
+	if ( Arsenals_ArsenalConsolesUpgradeWeapon() )
+	{
+		PrecacheParticleSystem( FX_WEAPON_EVO_UPGRADE_FP )
+		PrecacheParticleSystem( FX_EXP_LEVELUP_3P )
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	if ( Arsenals_ArsenalConsolesUpgradeWeapon() )
+	{
+		Remote_RegisterClientFunction( "ServerToClient_Arsenals_ShowWeaponUpgrade", "entity", "int", 0, 8, "int", -1, 1023, "int", -1, 1023, "int", -1, 1023 )
+		Remote_RegisterClientFunction( "ServerToClient_Arsenals_Play3PWeaponUpgradeFX", "entity", "int", 0, 8 )
+	}
+
+	Remote_RegisterServerFunction( "ClientToServer_PingArsenalFromMap", "typed_entity", "prop_arsenal" )
+	Remote_RegisterServerFunction( "ClientToServer_PingArsenalAfterQuickchat", "typed_entity", "prop_arsenal" )
+
+	if ( Arsenals_LootBinResetEnabled() && Arsenals_ArsenalResetResestUpgradeConsole() )
+	{
+		Remote_RegisterClientFunction( "ServerToClient_ResetArsenals" )
+	}
+
+	Remote_RegisterClientFunction( "ServerToClient_ArsenalUsed", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_Arsenals_SetGroupParentLocation", "int", 0, 256, "vector", -FLT_MAX, FLT_MAX, 32 )
+}
+
+
+
+void function Arsenals_InitQuickChatEvents()
+{
+	array< int > arsenalRelatedQuickChatEvents = [
+		
+		eCommsAction.INVENTORY_NEED_AMMO_BULLET,
+		eCommsAction.INVENTORY_NEED_AMMO_SPECIAL,
+		eCommsAction.INVENTORY_NEED_AMMO_HIGHCAL,
+		eCommsAction.INVENTORY_NEED_AMMO_SHOTGUN,
+		eCommsAction.INVENTORY_NEED_AMMO_SNIPER,
+		eCommsAction.INVENTORY_NO_AMMO_BULLET,
+		eCommsAction.INVENTORY_NO_AMMO_SPECIAL,
+		eCommsAction.INVENTORY_NO_AMMO_HIGHCAL,
+		eCommsAction.INVENTORY_NO_AMMO_SHOTGUN,
+		eCommsAction.INVENTORY_NO_AMMO_SNIPER,
+		eCommsAction.INVENTORY_NO_AMMO_ARROWS,
+
+		
+		eCommsAction.INVENTORY_NEED_FIRST_WEAPON,
+		eCommsAction.INVENTORY_NEED_ANOTHER_WEAPON,
+	]
+
+	if ( Arsenals_AllowPingingForAttachmentRequests() )
+	{
+		arsenalRelatedQuickChatEvents.extend( [
+			
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_MAG_BULLET,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_MAG_SPECIAL,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_MAG_SHOTGUN,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_MAG_HIGHCAL,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_MAG_SNIPER,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_PISTOL,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_SMG,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_ASSAULT,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_LMG,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_SHOTGUN,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_SNIPER,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_GRIP_MARKSMAN,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_PISTOL,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_SMG,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_ASSAULT,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_LMG,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_SHOTGUN,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_SNIPER,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_BARREL_MARKSMAN,
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_LASERSIGHT_SMG
+			eCommsAction.INVENTORY_NEED_ATTACHMENT_LASERSIGHT_PISTOL
+			eCommsAction.INVENTORY_NEED_WEAPONATTACHMENT_HOPUP,
+			eCommsAction.INVENTORY_NEED_WEAPONATTACHMENT_HOPUP_MULTI_A,
+			eCommsAction.INVENTORY_NEED_WEAPONATTACHMENT_HOPUP_MULTI_B,
+			eCommsAction.INVENTORY_NEED_HOPUP_CHOKE,
+			eCommsAction.INVENTORY_NEED_HOPUP_SELECTFIRE,
+			eCommsAction.INVENTORY_NEED_HOPUP_TURBOCHARGER,
+			eCommsAction.INVENTORY_NEED_HOPUP_SKULLPIERCER,
+			eCommsAction.INVENTORY_NEED_HOPUP_DISRUPTOR,
+			eCommsAction.INVENTORY_NEED_HOPUP_HAMMERPOINT,
+
+
+
+			eCommsAction.INVENTORY_NEED_HOPUP_DOUBLE_TAP,
+			eCommsAction.INVENTORY_NEED_HOPUP_BOOSTED_LOADER,
+			eCommsAction.INVENTORY_NEED_HOPUP_MARKSMANS_TEMPO,
+			eCommsAction.INVENTORY_NEED_HOPUP_QUICKDRAW_HOLSTER,
+			eCommsAction.INVENTORY_NEED_HOPUP_SHATTER_ROUNDS,
+			eCommsAction.INVENTORY_NEED_HOPUP_DUAL_SHELL,
+			eCommsAction.INVENTORY_NEED_HOPUP_KINETIC_FEEDER,
+			eCommsAction.INVENTORY_NEED_HOPUP_GUNSHIELD,
+		] )
+
+		if ( Arsenals_AllowPingingForAllSightRequests() )
+		{
+			arsenalRelatedQuickChatEvents.extend( [
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_PISTOL,
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_SMG,
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_ASSAULT,
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_LMG,
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_SHOTGUN,
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_SNIPER,
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_MARKSMAN,
+			] )
+		}
+		else if ( Arsenals_AllowPingingForSniperSightRequests() )
+		{
+			arsenalRelatedQuickChatEvents.extend( [
+				eCommsAction.INVENTORY_NEED_ATTACHMENT_SIGHT_SNIPER,
+			] )
+		}
+	}
+
+	foreach( commsAction in arsenalRelatedQuickChatEvents )
+	{
+		AddCallback_OnQuickchatEvent( commsAction, PingRelevantArsenalForChatEvent )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SERVER_GAME_CALLBACKS___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CLIENT_GAME_CALLBACKS___________________________()
+{}
+#endif
+
+
+void function Arsenals_OnGameStatePlaying_Client()
+{
+	if ( Arsenals_ArsenalShowWeaponRespawnTime() )
+	{
+		thread TrackClosestArsenalRespawns_Thread()
+	}
+
+	if ( Arsenals_OnlyShowClosestOnMinimap() || Arsenals_OnlyShowClosestOnFullmap() )
+	{
+		thread TrackClosestArsenalsToPlayerOnMinimap_Thread()
+	}
+}
+
+void function Arsenals_OnWaitingForPlayers_Client()
+{
+	if ( Arsenals_ArsenalShowWeaponRespawnTime() )
+	{
+		thread TrackClosestArsenalRespawns_Thread()
+	}
+}
+
+void function Arsenals_OnPlayerConnectionStateChanged( entity player )
+{
+	if ( IsValid( player ) && player == GetLocalClientPlayer() && player.IsConnectionActive() )
+	{
+		SetMapHudIdentifierSettings_Internal()
+	}
+}
+
+void function OnPlayerMatchStateChanged_Client( entity player, int newState )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( Arsenals_ShowArsenalsInSkydive() && newState == ePlayerMatchState.SKYDIVE_FALLING )
+	{
+		MarkAllArsenalsForSkydive()
+	}
+
+	if ( newState == ePlayerMatchState.NORMAL )
+	{
+		DestroySkydiveArsenalMarkers()
+
+		foreach ( key, value in clone file.zoneIdToArsenalsMap )
+		{
+			file.zoneIdToArsenalsMap[key].clear()
+			delete file.zoneIdToArsenalsMap[key]
+		}
+	}
+}
+
+void function Arsenals_OnArsenalCreated_Client( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return
+
+	if ( ent.GetScriptName() != ARSENAL_SCRIPTNAME )
+		return
+
+	EHI arsenalEHI = ToEHI( ent )
+
+	vector origin = ent.GetOrigin()
+
+	int ammoType = ent.GetAmmoType()
+	if ( !( ammoType in file.showArsenalHudIconsOfAmmoType ) || !file.showArsenalHudIconsOfAmmoType[ammoType] )
+	{
+		file.showArsenalHudIconsOfAmmoType[ammoType] <- true
+	}
+
+	
+	if ( !file.arsenalsUsed.contains( arsenalEHI ) )
+	{
+		if ( Arsenals_ArsenalConsolesUpgradeWeapon() )
+		{
+			if ( file.customArsenalConsoleOnUse == null )
+			{
+				AddCallback_OnUseEntity_ClientServer( ent, Arsenal_Console_OnUse )
+				AddEntityCallback_GetUseEntOverrideText( ent, Arsenal_Console_UseTextOverride )
+			}
+			else
+			{
+				AddCallback_OnUseEntity_ClientServer( ent, file.customArsenalConsoleOnUse )
+			}
+
+			SetCallback_CanUseEntityCallback( ent, Arsenal_Console_CanUse )
+
+			printt("Arsenal: ", ent)
+		}
+
+		ent.SetRenderColor( ARSENAL_BASE_COLOR_R, ARSENAL_BASE_COLOR_G, ARSENAL_BASE_COLOR_B )
+		ent.OverrideClientSideBodyGroupModelByIndex( ent.FindBodygroup( ARSENAL_CONSOLE_BODYGROUP_NAME ), ARSENAL_CONSOLE_UNUSED_BODYGROUP_INT )
+	}
+	else
+	{
+		ent.SetRenderColor( ARSENAL_USED_COLOR_R, ARSENAL_USED_COLOR_G, ARSENAL_USED_COLOR_B )
+		ent.OverrideClientSideBodyGroupModelByIndex( ent.FindBodygroup( ARSENAL_CONSOLE_BODYGROUP_NAME ), ARSENAL_CONSOLE_USED_BODYGROUP_INT )
+	}
+
+	file.arsenalsSpawned = true
+
+	if ( Arsenals_ShowHudDisplay() )
+	{
+		WorldspaceIconData iconSettings
+		iconSettings.ent = ent
+		iconSettings.imageAsset = Arsenals_GetArsenalIcon( FromEHI( arsenalEHI ) )
+		iconSettings.upOffset = EVO_HARVESTER_ICON_UP_OFFSET
+		iconSettings.descriptiveText = GetPromptPingForArsenalEnt( ent )
+		iconSettings.pingType = Arsenals_GetPingTypeForEnt( ent )
+		iconSettings.pingDistance = ARSENAL_PING_DISTANCE * file.displayDistanceModifier
+		iconSettings.minAlphaDistance = Arsenals_ArsenalMinHudDisplayDistance() * file.displayDistanceModifier
+		iconSettings.maxAlphaDistance = Arsenals_ArsenalMaxHudDisplayDistance() * file.displayDistanceModifier
+		iconSettings.closeUpFadeMinAlphaDistance = Arsenals_ArsenalCloseUpFadeMinHudDisplayDistance() * file.displayDistanceModifier
+		iconSettings.closeUpFadeMaxAlphaDistance = Arsenals_ArsenalCloseUpFadeMaxHudDisplayDistance() * file.displayDistanceModifier
+		iconSettings.mapPingFilterFunction = Arsenals_IsArsenalPingableOnMap
+
+		SetupWorldspaceIcon( iconSettings )
+
+		file.spawnedArsenals.append( arsenalEHI )
+
+#if DEV
+			printt( "Arsenal( Client ): ------ Arsenal Created." )
+			printt( "Arsenal( Client ): 	--- ammo type: " + ammoType  )
+			printt( "Arsenal( Client ): 	--- ping type: " + iconSettings.pingType )
+			printt( "Arsenal( Client ): 	--- ping text: " + iconSettings.descriptiveText )
+#endif
+	}
+
+	ArsenalData arsenalData
+	arsenalData.arsenalEHI = arsenalEHI
+	file.arsenalEHIToArsenalDataMap[arsenalEHI] <- arsenalData
+}
+
+void function Arsenals_OnMapLegendCreated( var mapLegend )
+{
+	if ( Arsenals_OnlyShowClosestOnFullmap() && mapLegend != null )
+	{
+		RuiSetString( mapLegend, "hintMidLeftText", "#SURVIVAL_MAP_PING_ARSENALS" )
+	}
+}
+
+void function Arsenal_OnPlayerEnterDroneView( entity player )
+{
+	CustomUsePrompt_Hide()
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SPAWNING_ARSENALS_AND_LOOT_SERVER___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________USE_FUNCTIONS___________________________()
+{}
+#endif
+
+void function Arsenal_Console_OnUse( entity arsenal, entity player, int useFlags )
+{
+	if( !IsValid( arsenal ) )
+		return
+
+	if( !IsValid( player ) )
+		return
+
+	if ( !IsBitFlagSet( useFlags, USE_INPUT_LONG ) )
+		return
+
+	EHI arsenalEHI = ToEHI( arsenal )
+	if ( !(arsenalEHI in file.arsenalEHIToArsenalDataMap) )
+		return
+
+	ArsenalData arsenalData = file.arsenalEHIToArsenalDataMap[ToEHI( arsenal )]
+
+	if ( !Arsenals_PlayerCanUseArsenalConsole( player, arsenalData ) )
+		return
+
+	ExtendedUseSettings settings
+	settings.duration = Arsenals_ArsenalExtendedUseDuration()
+	settings.successFunc = Arsenal_ExtendedUseSuccess
+	settings.failureFunc = Arsenal_ExtendedUseFailure
+	settings.movementDisable = true
+
+
+
+
+
+
+
+
+
+
+		string weaponRef = Arsenals_GetWeaponRefToUpgradeAtArsenal( player, arsenalData )
+		settings.outlineAlpha = 0.0
+		settings.hint = Localize ( "#ARSENALS_ACTIVATE_HINT", GetWeaponInfoFileKeyField_GlobalString( weaponRef, "shortprintname" ) )
+
+
+	thread ExtendedUse( arsenal, player, settings, false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Arsenal_ExtendedUseSuccess( entity arsenal, entity player, ExtendedUseSettings settings )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( !IsValid( arsenal ) )
+		return
+
+	EHI arsenalEHI = ToEHI( arsenal )
+	if ( !(arsenalEHI in file.arsenalEHIToArsenalDataMap) )
+		return
+
+	ArsenalData arsenalData = file.arsenalEHIToArsenalDataMap[arsenalEHI]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function Arsenal_ExtendedUseFailure( entity arsenal, entity player, ExtendedUseSettings settings )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( !IsValid( arsenal ) )
+		return
+
+	EHI arsenalEHI = ToEHI( arsenal )
+	if ( !(arsenalEHI in file.arsenalEHIToArsenalDataMap) )
+		return
+
+	ArsenalData arsenalData = file.arsenalEHIToArsenalDataMap[arsenalEHI]
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+bool function Arsenal_Console_CanUse( entity player, entity ent, int useFlags )
+{
+
+		if( GetLocalClientPlayer() != GetLocalViewPlayer() )
+			return false
+
+
+	if ( Bleedout_IsBleedingOut( player ) )
+		return false
+
+	if ( player.ContextAction_IsActive() )
+		return false
+
+	if ( PlayerDrone_IsPlayerInDroneView( player ) )
+		return false
+
+	if ( !SURVIVAL_PlayerAllowedToPickup( player ) )
+		return false
+
+	if ( IsPlayerInCryptoDroneCameraView( player ) )
+		return false
+
+	if ( player.IsPhaseShifted() )
+		return false
+
+	if ( GetPlayerIsEmoting( player ) )
+		return false
+
+	if ( player.IsInventoryOpen() )
+		return false
+
+	if ( player.Player_IsSkywardLaunching() )
+		return false
+
+	if ( player.Player_IsSkywardFollowing() )
+		return false
+
+	if ( Arsenals_GetActivationTimeGateDuration() > 0.0 && Time() <= GetGlobalNetTime( ARSENAL_ACTIVATION_TIME ) )
+		return false
+
+	return true
+}
+
+
+string function Arsenal_Console_UseTextOverride( entity arsenalEnt )
+{
+	if ( !IsValid( arsenalEnt ) )
+		return ""
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return ""
+
+	CustomUsePrompt_Show( arsenalEnt )
+	vector consolePos = arsenalEnt.GetClosestConsolePosition( player.GetOrigin() )
+	CustomUsePrompt_SetSourcePos( consolePos + < 0, 0, 30 > )
+
+	EHI arsenalEHI = ToEHI( arsenalEnt )
+	if ( !(arsenalEHI in file.arsenalEHIToArsenalDataMap) )
+		return ""
+
+	ArsenalData arsenalData = file.arsenalEHIToArsenalDataMap[arsenalEHI]
+
+	int ammoType = arsenalEnt.GetAmmoType()
+	array< string > weaponsOfCorrectType = GetPlayerWeaponsOfAmmoType( player, AmmoType_GetRefFromIndex( ammoType ) )
+
+	string weaponRef = Arsenals_GetWeaponRefToUpgradeAtArsenal( player, arsenalData )
+	string weaponRefPostLootReset = ""
+	if ( Arsenals_PreventGoldUpgradeBeforeBinResets() )
+	{
+		weaponRefPostLootReset = Arsenals_GetWeaponRefToUpgradeAtArsenal( player, arsenalData, true )
+	}
+
+	if ( file.arsenalsUsed.contains( ToEHI( arsenalEnt ) ) )
+	{
+		
+		CustomUsePrompt_SetText( Localize( "#ARSENALS_AMMO_CANNOT_USE_PROMPT" ) )
+	}
+	else if ( weaponRef != "")
+	{
+		
+		CustomUsePrompt_SetText( Localize( "#ARSENALS_USE_PROMPT_HOLD", GetWeaponInfoFileKeyField_GlobalString( weaponRef, "shortprintname" ) ) )
+	}
+	else if ( weaponRefPostLootReset != "" )
+	{
+		
+		CustomUsePrompt_SetText( Localize( "#ARSENALS_WAIT_UNTIL_LOOT_RESET_USE_PROMPT", GetWeaponInfoFileKeyField_GlobalString( weaponRefPostLootReset, "shortprintname" ) ) )
+	}
+	else if ( weaponsOfCorrectType.len() == 2 )
+	{
+		
+		CustomUsePrompt_SetText( Localize( "#ARSENALS_MAXED_WEAPONS_USE_PROMPT", Localize( AmmoType_GetRefFromIndex_GlobalString( ammoType ) ) ) )
+	}
+	else if ( weaponsOfCorrectType.len() == 1 )
+	{
+		
+		CustomUsePrompt_SetText( Localize( "#ARSENALS_MAXED_WEAPON_USE_PROMPT", GetWeaponInfoFileKeyField_GlobalString( weaponsOfCorrectType[0], "shortprintname" ) ) )
+	}
+	else
+	{
+		
+		CustomUsePrompt_SetText( Localize( "#ARSENALS_NO_AVAILABLE_USE_PROMPT", Localize( AmmoType_GetRefFromIndex_GlobalString( ammoType ) ) ) )
+	}
+
+	string ammoTypeStr = AmmoType_GetRefFromIndex( arsenalEnt.GetAmmoType() )
+	LootData ammoTypeData = SURVIVAL_Loot_GetLootDataByRef( ammoTypeStr )
+	vector ammoColor = GetAmmoColorByType( ammoTypeStr ) * 255
+
+	CustomUsePrompt_SetHintImage( ammoTypeData.hudIcon )
+	CustomUsePrompt_SetLineColor( < 1, 1, 1 > )
+	CustomUsePrompt_SetShouldCenterImage( true )
+
+	if ( PlayerIsInADS( player ) )
+		CustomUsePrompt_ShowSourcePos( false )
+	else
+		CustomUsePrompt_ShowSourcePos( true )
+
+	return ""
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________GAMEPLAY_SERVER___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________GAMEPLAY_CLIENT___________________________()
+{}
+#endif
+
+
+void function Arsenals_ArsenalActivationTimeChange( entity unused, float time )
+{
+	thread Arsenals_ArsenalActivation_Wait_Thread( time )
+}
+
+void function Arsenals_ArsenalActivation_Wait_Thread( float activationTime )
+{
+	float currentTime = Time()
+
+	if( currentTime < activationTime )
+		wait activationTime - currentTime
+	else
+		return
+
+
+	Arsenals_Announce_ArsenalActivation()
+}
+
+void function Arsenals_Announce_ArsenalActivation()
+{
+	if( !EvoLevels_IsDisplayingLevelUpMessage() )
+	{
+		
+		bool  doMinimapAnnounce = false
+		if ( MinimapAnnouncements_IsEnabled() && doMinimapAnnounce )
+		{
+			MapAnnouncementItem mapAnnouncementItem
+			mapAnnouncementItem.message = "#ARSENALS_ONLINE_ANNOUNCEMENT"
+			mapAnnouncementItem.colorIn =  < 255, 255, 0 > / 255.0
+			mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_evo_online"
+			mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_evo_online_shadow"
+			mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+			mapAnnouncementItem.speakerDialogueLines = []
+
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+			return
+		}
+
+		AnnouncementData announcement = Announcement_Create( "" )
+		Announcement_SetStyle( announcement, ANNOUNCEMENT_STYLE_LOOT_REFRESHED )
+		announcement.messageText = "#ARSENALS_ONLINE_ANNOUNCEMENT"
+		Announcement_SetPurge( announcement, true )
+		Announcement_SetSoundAlias( announcement, "UI_Crafting_Harvester_AvailableWarning" )
+		Announcement_SetDuration( announcement, 4.0 )
+		AnnouncementFromClass( GetLocalViewPlayer(), announcement )
+	}
+}
+
+void function TrackClosestArsenalRespawns_Thread()
+{
+	const float waitDelay = 0.5
+	EHI oldArsenalEHI
+	while ( true )
+	{
+		wait waitDelay
+
+		entity player = GetLocalViewPlayer()
+		if ( !IsValid( player ) )
+			continue
+
+		ArsenalData arsenalData = GetClosestArsenalDataToLocalPlayer_Internal()
+
+		entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+		if ( !IsValid( arsenalEnt ) || arsenalData.arsenalEHI == oldArsenalEHI )
+			continue
+
+		oldArsenalEHI = arsenalData.arsenalEHI
+
+		UpdateArsenalRespawnRUI_Internal( arsenalData )
+	}
+}
+
+void function UpdateArsenalRespawnRUIs()
+{
+	ArsenalData arsenalData = GetClosestArsenalDataToLocalPlayer_Internal()
+
+	UpdateArsenalRespawnRUI_Internal( arsenalData )
+}
+
+ArsenalData function GetClosestArsenalDataToLocalPlayer_Internal()
+{
+	ArsenalData arsenalData
+	array< EHI > arsenalEHIarray = GetSortedArsenalEHIArrayNearLocalPlayer()
+	foreach( arsenalEHI in arsenalEHIarray )
+	{
+		entity arsenalEnt = FromEHI( arsenalEHI )
+		if ( !IsValid( arsenalEnt ) )
+			continue
+
+		if ( arsenalEHI in file.arsenalEHIToArsenalDataMap )
+		{
+			return file.arsenalEHIToArsenalDataMap[arsenalEHI]
+		}
+	}
+
+	return arsenalData
+}
+
+void function UpdateArsenalRespawnRUI_Internal( ArsenalData arsenalData )
+{
+	entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return
+
+	int numItems = arsenalEnt.GetItemCount()
+	for ( int i = 0; i < numItems; i++ )
+	{
+		if ( file.weaponRespawnTopos.len() <= i )
+		{
+			AddNewWeaponRespawnRUI()
+		}
+
+		var topo = file.weaponRespawnTopos[i]
+		var rui = file.weaponRespawnRuis[i]
+
+		if ( !RuiIsAlive( rui ) )
+		{
+			if ( !IsValid( topo ) || topo == null )
+			{
+				topo = CreateRUITopology_Worldspace( ZERO_VECTOR, ZERO_VECTOR, 95, 95 )
+				file.weaponRespawnTopos[i] = topo
+			}
+			rui = RuiCreate( $"ui/arsenal_item_respawn_timer.rpak", topo, RUI_DRAW_WORLD, 0 )
+			file.weaponRespawnRuis[i] = rui
+		}
+
+		vector weaponPos = Arsenals_GetOriginForWeaponIdxAtArsenal( i, arsenalData )
+		vector weaponAngle = Arsenals_GetRespawnTimerAngleForIdxAtArsenal( i, arsenalEnt )
+		UpdateRUITopologyPos_Worldspace( topo, weaponPos, weaponAngle, 95, 95 )
+
+		RuiSetFloat( rui, "respawnDuration", arsenalEnt.GetItemRespawnDuration( i ) )
+		RuiTrackGameTime( rui, "endTime", arsenalEnt, RUI_TRACK_ARSENAL_RESPAWN_ENDTIME, i )
+	}
+}
+
+void function ServerToClient_ArsenalUsed( entity arsenalEnt )
+{
+	if( !IsValid( arsenalEnt ) )
+		return
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+#if DEV
+	if ( !INFINITE_UPGRADES_ENABLED )
+#endif
+	{
+		file.arsenalsUsed.append( ToEHI( arsenalEnt ) )
+
+		
+		for ( int i = 0; i < 2; i++ )
+		{
+			entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+			string ammoTypeRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+			if( ammoTypeRef != "" && ammoTypeRef != NOT_ON_ARSENAL_STR && Arsenals_IsWeaponMaxed( weapon, true ) )
+			{
+				int ammoType = AmmoType_GetTypeFromRef( ammoTypeRef )
+				file.showArsenalHudIconsOfAmmoType[ammoType] = false
+
+				CheckShowHudIconsForWeaponCar( weapon, false )
+
+				UpdateWorldspaceIconsShown_Internal()
+				break
+			}
+		}
+
+		EHI arsenalEHI = ToEHI( arsenalEnt )
+		if ( arsenalEHI in file.ruiEHITable )
+		{
+			RuiLocationData data = file.ruiEHITable[arsenalEHI]
+			if ( RuiIsAlive( data.minimapRui ) )
+			{
+				RuiSetFloat3( data.minimapRui, "iconColor", NON_INTERACTIBLE_PERK_MINIMAP_COLOR )
+			}
+			if ( RuiIsAlive( data.fullmapRui ) )
+			{
+				RuiSetFloat3( data.fullmapRui, "iconColor", NON_INTERACTIBLE_PERK_MINIMAP_COLOR )
+			}
+		}
+
+		SetWorldspaceIconColor( arsenalEnt, NON_INTERACTIBLE_PERK_MINIMAP_COLOR, NON_INTERACTIBLE_PERK_MINIMAP_COLOR )
+
+		arsenalEnt.SetRenderColor( ARSENAL_USED_COLOR_R, ARSENAL_USED_COLOR_G, ARSENAL_USED_COLOR_B )
+		arsenalEnt.OverrideClientSideBodyGroupModelByIndex( arsenalEnt.FindBodygroup( ARSENAL_CONSOLE_BODYGROUP_NAME ), ARSENAL_CONSOLE_USED_BODYGROUP_INT )
+	}
+}
+
+
+void function ServerToClient_Arsenals_ShowWeaponUpgrade( entity player, int expTier, int lootIdx1, int lootIdx2, int lootIdx3 )
+{
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return
+
+	if ( expTier <= 0 || expTier > CONTROL_MAX_EXP_TIER )
+		return
+
+	thread Arsenals_ShowWeaponUpgrade_Thread( player, expTier, lootIdx1, lootIdx2, lootIdx3 )
+}
+
+const float WEAPON_UPGRADE_VFX_DELAY = 0.1
+
+void function Arsenals_ShowWeaponUpgrade_Thread( entity player, int expTier, int lootIdx1, int lootIdx2, int lootIdx3 )
+{
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	EndSignal( player, "OnDestroy", "OnDeath" )
+
+	int activeWeaponSlot = SURVIVAL_GetActiveWeaponSlot( player )
+	entity activePrimaryWeapon = player.GetNormalWeapon( activeWeaponSlot )
+	float timeToWait = WEAPON_UPGRADE_VFX_DELAY
+
+	
+	if ( IsValid( activePrimaryWeapon ) )
+		timeToWait += activePrimaryWeapon.GetWeaponSettingFloat( eWeaponVar.deploy_time )
+
+	wait timeToWait
+
+	if ( !IsValid( player ) )
+		return
+
+	ShowWeaponUpgradeAnnouncement_Internal( lootIdx1, lootIdx2, lootIdx3 )
+
+	
+	switch ( expTier )
+	{
+		case 1:
+			EmitUISound( CONTROL_SFX_WEAPON_EVO_LVL_1 )
+			break
+
+		case 2:
+			EmitUISound( CONTROL_SFX_WEAPON_EVO_LVL_2 )
+			break
+
+		case 3:
+			EmitUISound( CONTROL_SFX_WEAPON_EVO_LVL_3 )
+			break
+
+		case 4:
+			EmitUISound( CONTROL_SFX_WEAPON_EVO_LVL_4 )
+			break
+		default:
+			EmitUISound( CONTROL_SFX_WEAPON_EVO_LVL_1 )
+			break
+	}
+
+	
+	thread Arsenals_PlayWeaponUpgradeVFX_Thread( player, expTier, FX_WEAPON_EVO_UPGRADE_FP, FX_EXP_LEVELUP_3P )
+}
+
+void function ShowWeaponUpgradeAnnouncement_Internal( int lootIdx1, int lootIdx2, int lootIdx3 )
+{
+	string announcementMessage = Localize( "#ARSENALS_UPGRADED_WEAPON_BASE" )
+	array< asset > upgradeIcons
+	array< int > upgradeTiers
+	array< vector > iconAspectRatios
+
+
+		int whichLootIsHopup = 0
+		int lootIdxCount = 0
+
+
+	array< int > lootIdxs = [ lootIdx1, lootIdx2, lootIdx3 ]
+	foreach ( lootIdx in lootIdxs )
+	{
+		if ( !SURVIVAL_Loot_IsLootIndexValid( lootIdx ) )
+			continue
+
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( lootIdx )
+		upgradeTiers.append( data.tier )
+		upgradeIcons.append( data.hudIcon )
+
+		vector imageSize = GetImageSize( data.hudIcon )
+		vector aspectRatio = GetAspectRatioBase1( imageSize )
+		iconAspectRatios.append( aspectRatio )
+
+
+			lootIdxCount++
+			if ( DormantHopups_IsEnabled() && data.ref.find( "hopup" ) > -1 )
+			{
+				whichLootIsHopup = lootIdxCount
+			}
+
+	}
+
+	AnnouncementData announcement = Announcement_Create( announcementMessage )
+	Announcement_SetStyle( announcement, ANNOUNCEMENT_STYLE_WEAPON_UPGRADED )
+	Announcement_SetPurge( announcement, true )
+	Announcement_SetSoundAlias( announcement, "UI_Crafting_Harvester_AvailableWarning" )
+	Announcement_SetDuration( announcement, 3.0 )
+
+
+	if ( upgradeIcons.len() > 0 )
+	{
+		Announcment_SetOptionalImageAssetArgsArray( announcement, upgradeIcons )
+		Announcment_SetOptionalImageTierArgsArray( announcement, upgradeTiers )
+		Announcment_SetOptionalImageAspectRatioArgsArray( announcement, iconAspectRatios )
+
+
+			Announcement_SetCustomHopupBorderInt( announcement, whichLootIsHopup )
+
+	}
+
+	AnnouncementFromClass( GetLocalViewPlayer(), announcement )
+}
+
+void function ServerToClient_Arsenals_Play3PWeaponUpgradeFX( entity player, int expTier )
+{
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return
+
+	if ( player == GetLocalClientPlayer() )
+		return
+
+	if ( !player.DoesShareRealms( GetLocalClientPlayer() ) )
+		return
+
+	if ( expTier <= 0 || expTier > CONTROL_MAX_EXP_TIER )
+		return
+
+	thread Arsenals_Play3PWeaponUpgradeFX_Thread( player, expTier )
+}
+
+
+void function Arsenals_Play3PWeaponUpgradeFX_Thread( entity player, int expTier )
+{
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	EndSignal( player, "OnDestroy", "OnDeath" )
+
+	int activeWeaponSlot = SURVIVAL_GetActiveWeaponSlot( player )
+	entity activePrimaryWeapon = player.GetNormalWeapon( activeWeaponSlot )
+	float timeToWait = WEAPON_UPGRADE_VFX_DELAY
+
+	
+	if ( IsValid( activePrimaryWeapon ) )
+		timeToWait += activePrimaryWeapon.GetWeaponSettingFloat( eWeaponVar.deploy_time )
+
+	wait timeToWait
+
+	thread Arsenals_PlayWeaponUpgradeVFX_Thread( player, expTier, $"", FX_EXP_LEVELUP_3P )
+}
+
+const float VFX_LIFETIME = 3.0
+void function Arsenals_PlayWeaponUpgradeVFX_Thread( entity player, int expTier, asset firstPersonVFXAsset, asset thirdPersonVFXAsset )
+{
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return
+
+	
+	int activeWeaponSlot = SURVIVAL_GetActiveWeaponSlot( player )
+	entity activePrimaryWeapon = player.GetNormalWeapon( activeWeaponSlot )
+
+	if ( !IsValid( activePrimaryWeapon ) )
+		return
+
+	PassByReferenceInt fpFXHandleMain
+
+	entity akimboWeapon
+	PassByReferenceInt fpFXHandleAkimbo
+	if ( activePrimaryWeapon.IsAkimboAvailable() )
+	{
+		int althandSlot = activeWeaponSlot + WEAPON_INVENTORY_SLOT_DUALPRIMARY_0
+		akimboWeapon = player.GetNormalWeapon( althandSlot )
+	}
+
+	EndSignal( player, "OnDestroy", "OnDeath" )
+	EndSignal( activePrimaryWeapon, "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( fpFXHandleMain, fpFXHandleAkimbo, activePrimaryWeapon, akimboWeapon, thirdPersonVFXAsset )
+		{
+			if ( EffectDoesExist( fpFXHandleMain.value ) )
+			{
+				EffectStop( fpFXHandleMain.value, true, false )
+			}
+
+			if ( EffectDoesExist( fpFXHandleAkimbo.value ) )
+			{
+				EffectStop( fpFXHandleAkimbo.value, true, false )
+			}
+
+			if ( IsValid( activePrimaryWeapon ) )
+			{
+				activePrimaryWeapon.StopWeaponEffect( $"", thirdPersonVFXAsset )
+			}
+
+			if ( IsValid( akimboWeapon ) )
+			{
+				akimboWeapon.StopWeaponEffect( $"", thirdPersonVFXAsset )
+			}
+		}
+	)
+
+	
+	vector tierColor = GetFXRarityColorForTier( expTier )
+	
+	int attachmentID = activePrimaryWeapon.LookupAttachment( "hcog" )
+	if ( attachmentID != 0 )
+	{
+		fpFXHandleMain.value = activePrimaryWeapon.PlayWeaponEffectReturnViewEffectHandle( firstPersonVFXAsset, thirdPersonVFXAsset, "hcog", true )
+		EffectSetControlPointVector( fpFXHandleMain.value, 1, tierColor )
+	}
+
+	if ( IsValid( akimboWeapon ) && akimboWeapon.LookupAttachment( "hcog" ) != 0 )
+	{
+		fpFXHandleAkimbo.value = akimboWeapon.PlayWeaponEffectReturnViewEffectHandle( firstPersonVFXAsset, thirdPersonVFXAsset, "hcog", true )
+		EffectSetControlPointVector( fpFXHandleAkimbo.value, 1, tierColor )
+	}
+
+	wait VFX_LIFETIME
+}
+
+void function ServerToClient_ResetArsenals()
+{
+	file.arsenalsReset = true
+
+	if ( Arsenals_ArsenalResetResestUpgradeConsole() )
+	{
+		foreach ( arsenalEHI in file.arsenalsUsed )
+		{
+			entity arsenal = FromEHI( arsenalEHI )
+			if ( !IsValid( arsenal ) )
+				continue
+
+			SetWorldspaceIconColor( arsenal, INTERACTIBLE_PERK_MINIMAP_COLOR, INTERACTIBLE_PERK_MINIMAP_COLOR )
+
+			arsenal.SetRenderColor( ARSENAL_BASE_COLOR_R, ARSENAL_BASE_COLOR_G, ARSENAL_BASE_COLOR_B )
+			arsenal.OverrideClientSideBodyGroupModelByIndex( arsenal.FindBodygroup( ARSENAL_CONSOLE_BODYGROUP_NAME ), ARSENAL_CONSOLE_UNUSED_BODYGROUP_INT )
+		}
+
+		file.arsenalsUsed.clear()
+	}
+
+	foreach ( ruiLocationData in file.ruiEHITable.clonevalues() )
+	{
+		if ( RuiIsAlive( ruiLocationData.minimapRui ) )
+		{
+			RuiSetFloat3( ruiLocationData.minimapRui, "iconColor", INTERACTIBLE_PERK_MINIMAP_COLOR )
+		}
+
+		if ( RuiIsAlive( ruiLocationData.fullmapRui ) )
+		{
+			RuiSetFloat3( ruiLocationData.fullmapRui, "iconColor", INTERACTIBLE_PERK_MINIMAP_COLOR )
+		}
+	}
+
+	
+	UpdateArsenalRespawnRUIs()
+}
+
+const string MAIN_WEAPON_STR = "main_weapon"
+void function Arsenals_SetWeaponSlotPinged( string equipSlot )
+{
+	if ( equipSlot.find( MAIN_WEAPON_STR ) == -1 )
+		return
+
+	int slotIdx = MAIN_WEAPON_STR.len()
+	string slot = equipSlot.slice( slotIdx, slotIdx + 1 )
+	if ( !slot.isnumeric() )
+		return
+
+	file.weaponIdxPinged = ConvertStringToInt( slot )
+
+	thread ResetWeaponIdxPingedIfQuickchatFails_Thread()
+}
+
+void function PingRelevantArsenalForChatEvent( entity player, int commsAction, entity subjectEnt )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( !file.arsenalsSpawned )
+		return
+
+	if ( !( file.weaponIdxPinged == 0 || file.weaponIdxPinged == 1 ) )
+		return
+
+	array< EHI > sortedArsenalEHI = GetSortedArsenalEHIArrayNearLocalPlayer()
+	ArsenalData closestArsenalData
+	int ammoType = -1
+	bool checkAmmoType = !( commsAction == eCommsAction.INVENTORY_NEED_FIRST_WEAPON || commsAction == eCommsAction.INVENTORY_NEED_ANOTHER_WEAPON )
+	bool isAttachmentRequest = commsAction >= REQUEST_ATTACHMENT_COMMS_START
+	int additionalAmmoType = -1
+	if ( checkAmmoType )
+	{
+		entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + file.weaponIdxPinged )
+		string ammoTypeRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+		if ( ammoTypeRef == NOT_ON_ARSENAL_STR || ammoTypeRef == "" )
+			return
+
+		ammoType = AmmoType_GetTypeFromRef( ammoTypeRef )
+
+		if ( IsValid( weapon ) && GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( weapon ) ) == "mp_weapon_car" )
+		{
+			additionalAmmoType = AmmoType_GetTypeFromRef( BULLET_AMMO )
+		}
+	}
+
+	foreach ( arsenalEHI in sortedArsenalEHI )
+	{
+		if ( !(arsenalEHI in file.arsenalEHIToArsenalDataMap) )
+			continue
+
+		entity arsenalEnt = FromEHI( arsenalEHI )
+		if ( !IsValid( arsenalEnt ) )
+			continue
+
+		if ( checkAmmoType && arsenalEnt.GetAmmoType() != ammoType && arsenalEnt.GetAmmoType() != additionalAmmoType )
+			continue
+
+		
+		
+		if ( isAttachmentRequest && file.arsenalsUsed.contains( arsenalEHI ) )
+			continue
+
+		if ( !DeathField_IsPointInsideRing( arsenalEnt.GetOrigin(), player.DeathFieldIndex() ) )
+			continue
+
+		closestArsenalData = file.arsenalEHIToArsenalDataMap[arsenalEHI]
+		break
+	}
+
+	entity arsenalEnt = FromEHI( closestArsenalData.arsenalEHI )
+
+	if ( IsValid( arsenalEnt ) )
+	{
+		Remote_ServerCallFunction( "ClientToServer_PingArsenalAfterQuickchat", arsenalEnt )
+	}
+
+	file.weaponIdxPinged = -1
+}
+
+void function ResetWeaponIdxPingedIfQuickchatFails_Thread()
+{
+	Signal( clGlobal.signalDummy, "WeaponQuickchatIdxSet" )
+	EndSignal( clGlobal.signalDummy, "WeaponQuickchatIdxSet" )
+
+	wait QUICKCHAT_FAIL_TIME
+
+	if ( file.weaponIdxPinged != -1 )
+	{
+		file.weaponIdxPinged = -1
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________UPGRADING_UTILITY___________________________()
+{}
+#endif
+
+string function Arsenals_GetWeaponRefToUpgradeAtArsenal( entity player, ArsenalData arsenalData, bool checkAfterLootReset = false )
+{
+	if ( !IsValid( player ) )
+		return ""
+
+	entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return ""
+
+	int indexToUpgrade = Arsenals_GetWeaponIdxToUpgradeAtArsenal( player, AmmoType_GetRefFromIndex( arsenalEnt.GetAmmoType() ), checkAfterLootReset )
+	if ( indexToUpgrade == -1 )
+		return ""
+
+	entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + indexToUpgrade )
+	return GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( weapon ) )
+}
+
+int function Arsenals_GetWeaponIdxToUpgradeAtArsenal( entity player, string ammoTypeStr, bool checkAfterLootReset = false )
+{
+	if ( !IsValid( player ) )
+		return -1
+
+	array< int > slotsToCheck
+
+	entity selectedWeapon = player.GetSelectedWeapon( eActiveInventorySlot.mainHand )
+	entity weapon1 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+	entity weapon2 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 )
+	if ( selectedWeapon == weapon1 )
+	{
+		slotsToCheck = [ 0, 1 ]
+	}
+	else if ( selectedWeapon == weapon2 )
+	{
+		slotsToCheck = [ 1, 0 ]
+	}
+	else
+	{
+		int activeSlot = SURVIVAL_GetActiveWeaponSlot( player )
+		slotsToCheck = [ activeSlot, 1 - activeSlot ]
+	}
+
+	foreach( weaponIdx in slotsToCheck )
+	{
+		entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + weaponIdx )
+		if ( IsWeaponUpgradableOfAmmoType( weapon, ammoTypeStr, checkAfterLootReset ) )
+			return weaponIdx
+	}
+
+	return -1
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function Arsenals_GetAmmoTypeStringForBaseWeaponRef( string baseWeaponRef )
+{
+	string overrideAmmoType = GetCurrentPlaylistVarString( "arsenals_ammo_override_" + baseWeaponRef, "" )
+	if ( overrideAmmoType == NOT_ON_ARSENAL_STR )
+		return NOT_ON_ARSENAL_STR
+
+	string ammoType = (overrideAmmoType == "") ? GetWeaponAmmoType( baseWeaponRef ) : overrideAmmoType
+
+
+
+
+
+
+
+
+	if ( !SURVIVAL_Loot_IsRefValid( ammoType ) || ammoType == ARROWS_AMMO )
+
+
+
+	{
+		
+		ammoType = SNIPER_AMMO
+	}
+
+	return ammoType
+}
+
+string function Arsenals_GetAmmoTypeForWeaponEnt( entity weapon )
+{
+	if( !IsValid( weapon ) )
+		return ""
+
+	string weaponRef = GetWeaponClassNameWithLockedSet( weapon )
+	if( !SURVIVAL_Loot_IsRefValid( weaponRef ) )
+		return ""
+
+	LootData data = SURVIVAL_Loot_GetLootDataByRef( weaponRef )
+	if( data.lootType != eLootType.MAINWEAPON || data.tier == eLootTier.MYTHIC )
+		return ""
+
+	return Arsenals_GetAmmoTypeStringForBaseWeaponRef( data.baseWeapon )
+}
+
+array< string > function GetPlayerWeaponsOfAmmoType( entity player, string ammoTypeStr )
+{
+	array< string > weapons
+	if ( !SURVIVAL_Loot_IsRefValid( ammoTypeStr ) )
+		return weapons
+
+	for( int i = 0; i < 2; i++ )
+	{
+		entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+		if ( !IsValid( weapon ) )
+			continue
+
+		string weaponAmmoTypeStr = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+		if ( weaponAmmoTypeStr == ammoTypeStr || ( GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( weapon ) ) == "mp_weapon_car" &&
+				ammoTypeStr == BULLET_AMMO && weaponAmmoTypeStr != NOT_ON_ARSENAL_STR ) )
+		{
+			weapons.append( GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( weapon ) ) )
+		}
+	}
+
+	return weapons
+}
+
+bool function IsWeaponUpgradableOfAmmoType( entity weapon, string ammoTypeStr, bool checkAfterLootReset = false )
+{
+	if ( !SURVIVAL_Loot_IsRefValid( ammoTypeStr ) )
+		return false
+
+	if ( !IsValid( weapon ) )
+		return false
+
+	string baseWeaponRef = GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( weapon ) )
+	if ( GetCurrentPlaylistVarBool( "arsenals_disable_upgrade_" + baseWeaponRef, false ) )
+		return false
+
+	string ammoRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+	bool carArsenalOverride = baseWeaponRef == "mp_weapon_car" && ammoTypeStr == BULLET_AMMO && ammoRef != NOT_ON_ARSENAL_STR
+	if ( ( ammoRef != ammoTypeStr && !carArsenalOverride ) || Arsenals_IsWeaponMaxed( weapon, true, checkAfterLootReset ) )
+		return false
+
+	return true
+}
+
+bool function Arsenals_IsWeaponMaxed( entity weapon, bool testSight = false, bool checkAfterLootReset = false )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	string weaponRef = GetWeaponClassNameWithLockedSet( weapon )
+
+	if ( Arsenals_EnableUpgradingLockedSets() && WeaponLootRefIsLockedSet( weaponRef ) )
+		return Arsenals_IsLockedSetRefMaxed( weaponRef, checkAfterLootReset )
+	else if ( WeaponLootRefIsLockedSet( weaponRef ) )
+		return true
+
+	string baseRef = GetBaseWeaponRef( weaponRef )
+	LootData baseWeaponData = SURVIVAL_Loot_GetLootDataByRef( baseRef )
+	array< string > attachmentSlots = clone baseWeaponData.supportedAttachments
+
+	table< string, string > attachmentSlotsToCurrentAttachmentMap
+
+	foreach ( attachment in attachmentSlots )
+	{
+		attachmentSlotsToCurrentAttachmentMap[attachment] <- GetInstalledWeaponAttachmentForPoint( weapon, attachment )
+	}
+
+	for ( int i = 0; i < attachmentSlotsToCurrentAttachmentMap.len(); i++ )
+	{
+		string attachmentType = attachmentSlots[i]
+		if ( SURVIVAL_IsAttachmentPointLocked( weaponRef, attachmentType, weapon.GetMods() ) )
+			continue
+
+		string currentAttachment = attachmentSlotsToCurrentAttachmentMap[attachmentType]
+
+		bool isSight = attachmentType == "sight"
+		if ( (!testSight && isSight) || (isSight && currentAttachment != "") )
+			continue
+
+		string upgradeAttachment
+		if ( currentAttachment == "" )
+		{
+			upgradeAttachment = Arsenals_GetFirstAttachmentForAttachPointOfTier( attachmentType, weaponRef, attachmentType == "hopup" ? EMPTY_HOPUP_TIER + 1 : Arsenals_GetMinAttachmentUpgradeTier(), checkAfterLootReset )
+		}
+		else
+		{
+			upgradeAttachment = Arsenals_GetUpgradeForWeaponAttachment( weaponRef, currentAttachment, checkAfterLootReset )
+		}
+
+		
+		
+		if ( !SURVIVAL_Loot_IsRefValid( upgradeAttachment ) )
+			continue
+
+		LootData upgradeData = SURVIVAL_Loot_GetLootDataByRef( upgradeAttachment )
+		if ( Arsenals_PreventGoldUpgradeBeforeBinResets() && !file.arsenalsReset && upgradeData.tier > PURPLE_TIER && !checkAfterLootReset )
+			continue
+
+		if ( currentAttachment != upgradeAttachment )
+			return false
+	}
+
+
+		LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+		if ( DormantHopups_WeaponHasDormantHopupInBaseMods( weaponData ) && !DormantHopups_IsHopupUnlocked( weapon, weaponData ) )
+			return false
+
+
+	return true
+}
+
+int function Arsenals_GetMinAttachmentTierForWeapon( entity weapon, bool includeSight = false )
+{
+	if ( !IsValid( weapon ) )
+		return 0
+
+	if ( Arsenals_IsWeaponMaxed( weapon ) )
+		return 4
+
+	string weaponRef = GetWeaponClassNameWithLockedSet( weapon )
+	if ( WeaponLootRefIsLockedSet( weaponRef ) )
+		return Arsenals_GetLockedSetTier( weaponRef )
+
+	string baseRef = GetBaseWeaponRef( weaponRef )
+	LootData baseWeaponData = SURVIVAL_Loot_GetLootDataByRef( baseRef )
+	array< string > attachmentSlots = clone baseWeaponData.supportedAttachments
+
+	int minTier = 10
+	foreach ( attachment in attachmentSlots )
+	{
+		if ( SURVIVAL_IsAttachmentPointLocked( weaponRef, attachment, weapon.GetMods() ) )
+			continue
+
+		if ( !includeSight && attachment == "sight" )
+			continue
+
+		string currAttachment = GetInstalledWeaponAttachmentForPoint( weapon, attachment )
+
+		if ( !SURVIVAL_Loot_IsRefValid( currAttachment ) )
+		{
+			if ( attachment.find( "hopup" ) == -1 )
+			{
+				return 0
+			}
+			else if ( minTier > EMPTY_HOPUP_TIER ) 
+			{
+				minTier = EMPTY_HOPUP_TIER
+			}
+
+			continue
+		}
+
+		LootData attachmentData = SURVIVAL_Loot_GetLootDataByRef( currAttachment )
+		if ( attachmentData.tier < minTier )
+		{
+			minTier = attachmentData.tier
+		}
+	}
+
+	return minTier
+}
+
+array< string > function Arsenals_GetWeaponAttachmentsOfLevel( string weaponRef, int tier )
+{
+	LootData baseWeaponData = SURVIVAL_Loot_GetLootDataByRef( weaponRef )
+	array< string > attachmentSlots = clone baseWeaponData.supportedAttachments
+	array< string > attachments
+
+	foreach ( attachmentSlot in attachmentSlots )
+	{
+		int tierToUse = tier
+		if ( attachmentSlot == "sight" && tier > 1 )
+		{
+			tierToUse = 1
+		}
+
+		string attachmentRef = Arsenals_GetFirstAttachmentForAttachPointOfTier( attachmentSlot, weaponRef, tierToUse )
+		if ( attachmentRef != "" )
+		{
+			attachments.append( attachmentRef )
+		}
+	}
+
+	return attachments
+}
+
+bool function Arsenals_IsLockedSetRefMaxed( string weaponRef, bool checkAfterLootReset )
+{
+	int weaponTier = Arsenals_GetLockedSetTier( weaponRef )
+	if ( Arsenals_PreventGoldUpgradeBeforeBinResets() && !file.arsenalsReset && !checkAfterLootReset )
+		return weaponTier >= 3
+
+	return weaponTier >= 4
+}
+
+int function Arsenals_GetLockedSetTier( string weaponRef )
+{
+	LootData data = SURVIVAL_Loot_GetLootDataByRef( weaponRef )
+	return data.tier
+}
+
+string function Arsenals_GetLockedSetUpgradeRef( string weaponRef )
+{
+	string baseWeaponRef = GetBaseWeaponRef( weaponRef )
+	if ( weaponRef.find( WEAPON_LOCKEDSET_SUFFIX_GOLD ) != -1 )
+		return weaponRef
+	else if( weaponRef.find( WEAPON_LOCKEDSET_SUFFIX_PURPLESET ) != -1 )
+		return baseWeaponRef + WEAPON_LOCKEDSET_SUFFIX_GOLD
+	else if( weaponRef.find( WEAPON_LOCKEDSET_SUFFIX_BLUESET ) != -1 )
+		return baseWeaponRef + WEAPON_LOCKEDSET_SUFFIX_PURPLESET
+	else if( weaponRef.find( WEAPON_LOCKEDSET_SUFFIX_WHITESET ) != -1 )
+		return baseWeaponRef + WEAPON_LOCKEDSET_SUFFIX_BLUESET
+
+	return weaponRef + WEAPON_LOCKEDSET_SUFFIX_WHITESET
+}
+
+
+array< string > function Arsenals_GetQuickUpgradeAttachments_Ordered( entity weapon )
+{
+	string weaponRef = GetWeaponClassNameWithLockedSet( weapon )
+	Assert( !WeaponLootRefIsLockedSet( weaponRef ), "You cannot call this function with a locked set weapon. Send this to BR Systems" )
+	string baseRef = GetBaseWeaponRef( weaponRef )
+	LootData baseWeaponData = SURVIVAL_Loot_GetLootDataByRef( baseRef )
+	array< string > attachmentSlots = clone baseWeaponData.supportedAttachments
+
+	table< string, string > attachmentSlotsToCurrentAttachmentMap
+	int minTier = 10
+
+	foreach ( attachment in attachmentSlots )
+	{
+		if ( SURVIVAL_IsAttachmentPointLocked( weaponRef, attachment, weapon.GetMods() ) )
+			continue
+
+		string currAttachment = GetInstalledWeaponAttachmentForPoint( weapon, attachment )
+		attachmentSlotsToCurrentAttachmentMap[attachment] <- currAttachment
+
+		if ( attachment == "sight" )
+			continue
+
+		if ( !SURVIVAL_Loot_IsRefValid( currAttachment ) )
+		{
+			if ( attachment.find( "hopup" ) == -1 )
+			{
+				minTier = 0
+			}
+			else if ( minTier > EMPTY_HOPUP_TIER ) 
+			{
+				minTier = EMPTY_HOPUP_TIER
+			}
+
+			continue
+		}
+
+		LootData attachmentData = SURVIVAL_Loot_GetLootDataByRef( currAttachment )
+		if ( attachmentData.tier < minTier )
+		{
+			minTier = attachmentData.tier
+		}
+	}
+
+	array< string > upgradeAttachments
+	foreach ( attachPoint, attachmentRef in attachmentSlotsToCurrentAttachmentMap )
+	{
+		if ( attachPoint == "sight" )
+		{
+			
+			upgradeAttachments.append( attachmentRef )
+			continue
+		}
+
+		if ( !SURVIVAL_Loot_IsRefValid( attachmentRef ) )
+		{
+			if ( attachPoint == "hopup" )
+			{
+				if ( minTier == EMPTY_HOPUP_TIER )
+				{
+					upgradeAttachments.append( Arsenals_GetFirstAttachmentForAttachPointOfTier( attachPoint, baseRef, EMPTY_HOPUP_TIER + 1 ) )
+				}
+				else
+				{
+					upgradeAttachments.append( "" )
+				}
+				continue
+			}
+
+			upgradeAttachments.append( Arsenals_GetFirstAttachmentForAttachPointOfTier( attachPoint, baseRef ) )
+
+			continue
+		}
+
+		LootData attachmentData = SURVIVAL_Loot_GetLootDataByRef( attachmentRef )
+		if ( attachmentData.tier == minTier )
+		{
+			upgradeAttachments.append( Arsenals_GetUpgradeForWeaponAttachment( weaponRef, attachmentRef ) )
+		}
+		else
+		{
+			upgradeAttachments.append( attachmentRef )
+		}
+	}
+
+	return upgradeAttachments
+}
+
+string function Arsenals_GetFirstAttachmentForAttachPointOfTier( string attachPoint, string weaponRef, int startTier = 1, bool checkAfterLootReset = false, string ammoTypeStr = "" )
+{
+	if ( startTier > Arsenals_GetMaxAttachmentUpgradeTier() )
+		return ""
+
+	int attachmentType = SURVIVAL_Loot_GetAttachmentType_Enum( attachPoint )
+	array<LootData> upgrades = GetAttachmentData_OfType_OfTier( attachmentType, startTier )
+	string attachmentStyle = GetAttachmentPointStyle( attachPoint, weaponRef )
+
+	if ( Arsenals_PreventGoldUpgradeBeforeBinResets() && !file.arsenalsReset && startTier > PURPLE_TIER && !checkAfterLootReset )
+		return ""
+
+	
+	if ( attachmentStyle == "hopup" )
+	{
+		array< string > validHopups
+		foreach ( LootData item in upgrades )
+		{
+			if ( CanAttachToWeapon( item.ref, weaponRef ) && !SURVIVAL_Loot_IsRefDisabled( item.ref ) )
+			{
+				validHopups.append( item.ref )
+			}
+		}
+
+		if ( validHopups.len() > 0 )
+			return validHopups.getrandom()
+	}
+
+	
+	if ( attachmentStyle == "mag_car" )
+	{
+		attachmentStyle = ammoTypeStr == BULLET_AMMO ? "mag_straight" : "mag"
+	}
+
+	foreach ( LootData item in upgrades )
+	{
+		if ( ammoTypeStr != "" && item.ammoType != "" && item.ammoType != ammoTypeStr )
+			continue
+
+		if ( item.attachmentStyle == attachmentStyle && CanAttachToWeapon( item.ref, weaponRef ) )
+			return item.ref
+	}
+
+	if ( attachmentStyle == "sight" && startTier >= 3 ) 
+	{
+		return Arsenals_GetFirstAttachmentForAttachPointOfTier( attachPoint, weaponRef, 2, checkAfterLootReset, ammoTypeStr )
+	}
+	else if ( startTier == 4 ) 
+	{
+		return Arsenals_GetFirstAttachmentForAttachPointOfTier( attachPoint, weaponRef, 3, checkAfterLootReset, ammoTypeStr )
+	}
+
+	return ""
+}
+
+string function Arsenals_GetUpgradeForWeaponAttachment( string weaponRef, string attachmentRef, bool checkAfterLootReset = false, string ammoTypeStr = "" )
+{
+	LootData lootItem = SURVIVAL_Loot_GetLootDataByRef( attachmentRef )
+
+	int currTier = lootItem.tier
+	if ( currTier >= Arsenals_GetMaxAttachmentUpgradeTier() )
+		return attachmentRef
+
+	if ( Arsenals_PreventGoldUpgradeBeforeBinResets() && !file.arsenalsReset && currTier >= PURPLE_TIER && !checkAfterLootReset )
+		return attachmentRef
+
+	array<LootData> upgrades = GetAttachmentData_OfType_OfTier( lootItem.attachmentType, currTier + 1 )
+
+	foreach ( LootData item in upgrades )
+	{
+		if ( ammoTypeStr != "" && item.ammoType != "" && item.ammoType != ammoTypeStr )
+			continue
+
+		if ( CanAttachToWeapon( item.ref, weaponRef ) )
+			return item.ref
+	}
+
+	return attachmentRef
+}
+
+void function Arsenasl_SetCustomConsoleOnUseFunc( void functionref( entity, entity, int ) func )
+{
+	file.customArsenalConsoleOnUse = func
+}
+
+array< string > function Arsenals_CombineAttachmentUpgradesForWeapon( array< string > currentMods, array< string > newMods, string newWeaponRef )
+{
+	array< string > currentModsCopy = clone currentMods
+	array< string > newModsCopy = clone newMods
+
+	foreach ( attachmentRef in newModsCopy )
+	{
+		if ( attachmentRef == "" )
+			continue
+
+		LootData data = SURVIVAL_Loot_GetLootDataByRef( attachmentRef )
+		if ( data.lootType == eLootType.ATTACHMENT && CanAttachToWeapon( data.ref, newWeaponRef ) )
+		{
+			bool shouldAddRef = true
+			for ( int i = 0; i < currentModsCopy.len(); i++ ) 
+			{
+				string existingMod = currentModsCopy[i]
+				if ( existingMod == "" )
+					continue
+
+				LootData existingData = SURVIVAL_Loot_GetLootDataByRef( existingMod )
+				if ( existingData.attachmentType == data.attachmentType )
+				{
+					if ( data.tier > existingData.tier )
+					{
+						currentModsCopy.fastremove( i )
+					}
+					else
+					{
+						shouldAddRef = false
+					}
+
+					break
+				}
+			}
+
+			if ( shouldAddRef )
+			{
+				currentModsCopy.append( data.ref )
+			}
+		}
+	}
+
+	return currentModsCopy
+}
+
+array< LootData > function GetAttachmentData_OfType_OfTier( int attachmentType, int tier )
+{
+	array< LootData > returnData
+	array<LootData> attachments = SURVIVAL_Loot_GetByType( eLootType.ATTACHMENT )
+
+	foreach( LootData ld in attachments )
+	{
+		if ( ld.attachmentType != attachmentType )
+			continue
+
+		if( ld.tier == tier)
+		{
+			returnData.append( ld )
+		}
+	}
+
+	return returnData
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ARSENAL_DISCOVERY_SYSTEMS___________________________()
+{}
+
+
+#endif
+
+
+
+void function MarkAllArsenalsForSkydive()
+{
+	if ( Arsenals_GetActivationTimeGateDuration() > 0.0 )
+		return
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	float minDistanceSqr = pow( Arsenals_GetMaxBeaconDisplayDistance(), 2 )
+	foreach( arsenalData in file.arsenalEHIToArsenalDataMap.clonevalues() )
+	{
+		entity arsenal = FromEHI( arsenalData.arsenalEHI )
+		if ( !IsValid( arsenal ) )
+			continue
+
+		if ( minDistanceSqr > 0 && Distance2DSqr( player.GetOrigin(), arsenal.GetOrigin() ) > minDistanceSqr )
+			continue
+
+		table<int, var> result = CreateArsenalSkydiveMarker( arsenalData )
+		foreach( fxId, rui in result )
+		{
+			file.arsenalMarkerList.append( fxId )
+			file.arsenalMarkerRuiList.append( rui )
+		}
+	}
+}
+
+table< int, var > function CreateArsenalSkydiveMarker( ArsenalData arsenalData, bool shouldFadeOutNearCrosshair = false )
+{
+	table<int, var> resultTable
+	entity arsenal = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenal ) )
+		return resultTable
+
+	string ammoTypeStr = AmmoType_GetRefFromIndex( arsenal.GetAmmoType() )
+	if ( !SURVIVAL_Loot_IsRefValid( ammoTypeStr ) )
+		return resultTable
+
+	LootData ammoData = SURVIVAL_Loot_GetLootDataByRef( ammoTypeStr )
+	asset iconToUse = Arsenals_GetArsenalIcon( arsenal )
+	vector color = GetAmmoColorByType( ammoTypeStr ) * 255
+
+	int fxHandle = StartParticleEffectInWorldWithHandle( GetParticleSystemIndex( FX_AIRDROP_BEAM_CP ), arsenal.GetOrigin(), ZERO_VECTOR )
+	EffectSetControlPointVector( fxHandle, 1, color )
+
+	entity localViewPlayer = GetLocalViewPlayer()
+	vector pos = arsenal.GetOrigin() + (arsenal.GetUpVector() * 200)
+	var rui = CreatePermanentCockpitRui( $"ui/arsenals_skydive_marker_icon.rpak", RuiCalculateDistanceSortKey( localViewPlayer.EyePosition(), pos ) )
+	RuiSetImage( rui, "beaconImage", iconToUse )
+	RuiSetGameTime( rui, "startTime", Time() )
+	RuiSetFloat3( rui, "pos", pos )
+	RuiSetFloat( rui, "sizeMin", 24 )
+	RuiSetFloat( rui, "sizeMax", 40 )
+	RuiSetFloat( rui, "minAlphaDist", 29000 )
+	RuiSetFloat( rui, "maxAlphaDist", 30000 )
+	RuiSetBool( rui, "shouldHideNearCrosshairs", shouldFadeOutNearCrosshair )
+
+
+	float skyWritingFadeOutHeight = ZoneSkyWriting_GetActiveHeightFadeOut()
+
+
+
+	if ( skyWritingFadeOutHeight == 0 )
+	{
+		skyWritingFadeOutHeight = localViewPlayer.GetOrigin().z
+	}
+
+	float minIconFadeOutDistanceHeight = skyWritingFadeOutHeight - ( skyWritingFadeOutHeight - GetSeaHeightForDisplay() ) * 0.5
+
+	RuiSetFloat( rui, "fadeInHeight", skyWritingFadeOutHeight + Arsenals_AdditionalHeightForPOINameArsenalIconFade() )
+	RuiSetFloat( rui, "distAlphaAdjustMinHeight", minIconFadeOutDistanceHeight )
+	RuiSetFloat( rui, "minDistAtMinHeight", 10000 )
+	RuiTrackFloat3( rui, "playerPos", localViewPlayer, RUI_TRACK_ABSORIGIN_FOLLOW )
+
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	resultTable[fxHandle] <- rui
+	return resultTable
+}
+
+void function DestroySkydiveArsenalMarkers()
+{
+	foreach( id in file.arsenalMarkerList )
+	{
+		EffectStop( id, true, false )
+	}
+
+	file.arsenalMarkerList.clear()
+
+	foreach( rui in file.arsenalMarkerRuiList )
+	{
+		RuiSetBool( rui, "isFinished", true )
+	}
+
+	file.arsenalMarkerRuiList.clear()
+}
+
+
+void function ListenForArsenalPinged( EHI entEHI, var rui )
+{
+	entity arsenalEnt = FromEHI( entEHI )
+	arsenalEnt.EndSignal( "OnDestroy" )
+
+	int ammoType = arsenalEnt.GetAmmoType()
+
+	while( true )
+	{
+		if( !file.pingedArsenals.contains( entEHI ) )
+			arsenalEnt.WaitSignal( "PerkPropPinged" )
+
+		arsenalEnt = FromEHI( entEHI )
+		file.worldspaceArsenalIconVisibility[entEHI] <- false
+		RuiSetBool( rui, "isVisible", false )
+
+		arsenalEnt.WaitSignal( "PerkPropPingDestroyed" )
+
+		file.worldspaceArsenalIconVisibility[entEHI] <- true
+		UpdateWorldspaceIconsShown_Internal()
+		RuiSetBool( rui, "isVisible", !(file.mapHudIdentifierSettings == eArsenalIdentifierSettings.MINIMAL || Arsenals_HideUnneededWorldIcons()) || file.showArsenalHudIconsOfAmmoType[ammoType] )
+	}
+}
+
+void function Arsenals_ArsenalPinged( entity arsenalEnt, entity wp )
+{
+	if ( !Perks_Enabled() )
+		return
+
+	EHI arsenalEHI = ToEHI( arsenalEnt )
+
+	arsenalEnt.Signal( "PerkPropPinged" )
+	file.pingedArsenals.append( arsenalEHI )
+	
+	SetMapRuiVisibleForArsenal( arsenalEHI, true, true )
+
+	wp.WaitSignal( "OnDestroy" )
+
+	file.pingedArsenals.fastremovebyvalue( arsenalEHI )
+	
+	if ( arsenalEHI in file.ruiEHITable )
+	{
+		int proximityCount = file.ruiEHITable[arsenalEHI].proximityCount
+
+		array < int > numArsenals = Arsenals_GetNumArsenalsArrayForMaps()
+		SetMapRuiVisibleForArsenal( arsenalEHI, proximityCount < numArsenals[MINIMAP_ARRAY_INDEX], proximityCount < numArsenals[FULLMAP_ARRAY_INDEX] )
+	}
+
+	arsenalEnt.Signal( "PerkPropPingDestroyed" )
+}
+
+entity function Arsenals_GetArsenalUnderAim( vector worldPos, float worldRange )
+{
+	if ( !Arsenals_ShowHudDisplay() )
+		return null
+
+	float closestDistSqr = FLT_MAX
+	float worldRangeSqr = worldRange * worldRange
+	entity closestEnt = null
+
+	if( MapPing_Modify_DistanceCheck_Enabled() )
+	{
+		float modifier = MapPing_DistanceCheck_GetModifier()
+
+		if( worldRange >= MapPing_DistanceCheck_GetDistanceRange() )
+			modifier *= 0.5
+
+		worldRangeSqr = ( worldRange * modifier ) * ( worldRange * modifier )
+	}
+
+	foreach ( entEHI, rui in file.arsenalToWorldspaceRui )
+	{
+		entity arsenal = FromEHI( entEHI )
+		if ( !IsValid( arsenal ) )
+			continue
+
+		vector objOrigin = arsenal.GetOrigin()
+
+		float distSqr = Distance2DSqr( objOrigin, worldPos )
+		if ( distSqr < worldRangeSqr && distSqr < closestDistSqr )
+		{
+			closestDistSqr = distSqr
+			closestEnt = arsenal
+		}
+	}
+
+	if ( !IsValid( closestEnt ) )
+	{
+		return null
+	}
+
+	return closestEnt
+}
+
+bool function Arsenals_PingArsenalUnderAim( entity ent )
+{
+	if ( !Arsenals_ShowHudDisplay() )
+		return false
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return false
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return false
+
+	Remote_ServerCallFunction( "ClientToServer_PingArsenalFromMap", ent )
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+	return true
+}
+
+bool function Arsenals_IsArsenalPingableOnMap( WorldspaceIconData data, vector worldPos, float worldRange )
+{
+	if ( GetBigMapZoomScale() < 2 )
+		return false
+
+	EHI arsenalEHI = ToEHI( data.ent )
+	if ( !( arsenalEHI in file.ruiEHITable ) )
+		return false
+
+	return file.ruiEHITable[arsenalEHI].proximityCount < Arsenals_GetNumArsenalsArrayForMaps()[FULLMAP_ARRAY_INDEX]
+}
+
+bool function Arsenals_UpdateHighlightedArsenalIcon()
+{
+	if ( !Arsenals_ArsenalsShowHighlight() )
+		return false
+
+	if ( Perks_GetPerkPingInfo().ent != null || DeathBoxInsight_GetCurrentPingInfo().loot != null )
+		return false
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return false
+
+	vector playerEyePos = player.EyePosition()
+	vector viewVector = player.GetViewVector()
+	float minDot = deg_cos( PERK_HIGHLIGHT_DEGREES )
+	float bestDot = 0
+	entity bestEnt = null
+
+	array< entity > arsenals = GetArsenalEntitiesNearLocalPlayer( ARSENAL_PING_DISTANCE * file.displayDistanceModifier )
+	if ( !(file.mapHudIdentifierSettings == eArsenalIdentifierSettings.MINIMAL || Arsenals_HideUnneededWorldIcons()) )
+	{
+		float smallDistSqr = ARSENAL_PING_DISTANCE_SMALL * ARSENAL_PING_DISTANCE_SMALL * file.displayDistanceModifier * file.displayDistanceModifier
+		for ( int i = arsenals.len() - 1; i >= 0; i-- )
+		{
+			entity arsenalEnt = arsenals[i]
+			if ( !(arsenalEnt instanceof C_ArsenalProp) )
+				continue
+
+			if ( !file.showArsenalHudIconsOfAmmoType[arsenalEnt.GetAmmoType()] && DistanceSqr( arsenalEnt.GetOrigin(), playerEyePos ) > smallDistSqr )
+			{
+				arsenals.fastremove( i )
+			}
+		}
+	}
+
+	foreach( entity ent in arsenals )
+	{
+		EHI entEHI = ToEHI( ent )
+		if( !(entEHI in file.worldspaceArsenalIconVisibility) || !file.worldspaceArsenalIconVisibility[entEHI] || !( entEHI in file.arsenalToWorldspaceRui ) )
+			continue
+
+		vector iconPos
+		iconPos = ent.GetOrigin() + <0, 0, EVO_HARVESTER_ICON_UP_OFFSET>
+		vector eyeToIcon = iconPos - playerEyePos
+		vector eyeToIconNormalized = Normalize( eyeToIcon )
+		float dot = DotProduct( eyeToIconNormalized, viewVector )
+		if( dot < minDot || dot < bestDot )
+			continue
+
+		bestDot = dot
+		bestEnt = ent
+	}
+
+	Arsenals_SetHighlightedArsenalIcon( bestEnt )
+	return bestEnt != null
+}
+
+entity function Arsenals_GetHighlightedArsenal()
+{
+	return FromEHI( file.highlightedPingEntEHI )
+}
+
+
+void function MinimapPackage_Arsenal( entity ent, var rui )
+{
+	thread WaitAndSetMapData_Thread( rui, ent, true )
+}
+
+void function FullmapPackage_Arsenal( entity ent, var rui )
+{
+	thread WaitAndSetMapData_Thread( rui, ent, false )
+}
+
+void function WaitAndSetMapData_Thread( var rui, entity arsenalEnt, bool isMinimap )
+{
+	ArsenalData arsenalData
+	EHI arsenalEHI = ToEHI( arsenalEnt )
+
+	while( true )
+	{
+		WaitFrame()
+
+		if ( !RuiIsAlive( rui ) )
+			return
+
+		if ( !(arsenalEHI in file.arsenalEHIToArsenalDataMap) )
+			continue
+
+		arsenalData = file.arsenalEHIToArsenalDataMap[arsenalEHI]
+		break
+	}
+
+	if ( !RuiIsAlive( rui ) )
+		return
+
+	arsenalEnt = FromEHI( arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return
+
+	RuiSetImage( rui, "defaultIcon", Arsenals_GetArsenalMapIcon( FromEHI( arsenalData.arsenalEHI ) ) )
+	RuiSetBool( rui, "hasSmallIcon", true )
+	RuiSetBool( rui, "showPulseAnimation", true )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetFloat3( rui, "iconColor", < 1.0, 1.0, 1.0 > )
+	if( !isMinimap )
+	{
+		RuiSetBool( rui, "isArsenal", true )
+	}
+
+	vector pos = arsenalEnt.GetOrigin()
+    bool shouldBeVisible = true
+
+	if ( arsenalEHI in file.ruiEHITable )
+	{
+		if ( isMinimap )
+		{
+			file.ruiEHITable[arsenalEHI].minimapRui = rui
+			shouldBeVisible = file.ruiEHITable[arsenalEHI].visibleOnMinimap
+		}
+		else
+		{
+			file.ruiEHITable[arsenalEHI].fullmapRui = rui
+			shouldBeVisible = file.ruiEHITable[arsenalEHI].visibleOnFullmap
+		}
+	}
+	else
+	{
+		RuiLocationData ruiLocationData
+		ruiLocationData.pos = pos
+
+		if ( isMinimap )
+		{
+			ruiLocationData.minimapRui = rui
+			shouldBeVisible = ruiLocationData.visibleOnMinimap
+		}
+		else
+		{
+			ruiLocationData.fullmapRui = rui
+			shouldBeVisible = ruiLocationData.visibleOnFullmap
+		}
+
+		file.ruiEHITable[arsenalEHI] <- ruiLocationData
+	}
+
+	RuiSetBool( rui, "isVisible", shouldBeVisible )
+}
+
+void function TrackClosestArsenalsToPlayerOnMinimap_Thread()
+{
+	int numArsenalsToShowOnMinimap, numArsenalsToShowOnFullmap
+
+	while ( true )
+	{
+		array < int > numArsenals = Arsenals_GetNumArsenalsArrayForMaps()
+		numArsenalsToShowOnMinimap = numArsenals[MINIMAP_ARRAY_INDEX]
+		numArsenalsToShowOnFullmap = numArsenals[FULLMAP_ARRAY_INDEX]
+
+		array< EHI > sortedArsenalEHI = GetSortedArsenalEHIArrayNearLocalPlayer()
+		int count = 0
+		foreach ( arsenalEHI in sortedArsenalEHI )
+		{
+			if ( !(arsenalEHI in file.ruiEHITable) )
+				continue
+
+			bool isPinged = file.pingedArsenals.contains( arsenalEHI )
+			bool visibleOnMinimap = isPinged || count < numArsenalsToShowOnMinimap
+			bool visibleOnFullmap = isPinged || count < numArsenalsToShowOnFullmap
+			SetMapRuiVisibleForArsenal( arsenalEHI, visibleOnMinimap, visibleOnFullmap )
+			file.ruiEHITable[arsenalEHI].proximityCount = count
+			count++
+		}
+
+		wait 1
+	}
+}
+
+void function SetMapRuiVisibleForArsenal( EHI arsenalEHI, bool visibleOnMinimap, bool visibleOnFullmap )
+{
+	if ( !( arsenalEHI in file.ruiEHITable ) )
+		return
+
+	if ( Arsenals_GetActivationTimeGateDuration() > 0.0 && Time() <= GetGlobalNetTime( ARSENAL_ACTIVATION_TIME ) )
+	{
+		visibleOnMinimap = false
+		visibleOnFullmap = false
+	}
+
+	RuiLocationData ruiLocationData = file.ruiEHITable[arsenalEHI]
+
+	ruiLocationData.visibleOnMinimap = visibleOnMinimap
+	ruiLocationData.visibleOnFullmap = visibleOnFullmap
+
+	if ( ruiLocationData.minimapRui != null && RuiIsAlive( ruiLocationData.minimapRui ) )
+	{
+		RuiSetBool( ruiLocationData.minimapRui, "isVisible", visibleOnMinimap )
+	}
+
+	if ( ruiLocationData.fullmapRui != null && RuiIsAlive( ruiLocationData.fullmapRui ) )
+	{
+		RuiSetBool( ruiLocationData.fullmapRui, "isVisible", visibleOnFullmap )
+	}
+
+	file.ruiEHITable[arsenalEHI] = ruiLocationData
+}
+
+
+void function Arsenals_SetHighlightedArsenalIcon( entity ent )
+{
+	if( file.highlightedPingEntEHI == ToEHI( ent ) )
+		return
+
+	entity oldEnt = FromEHI( file.highlightedPingEntEHI )
+
+	if( IsValid( oldEnt ) )
+	{
+		RuiSetBool( file.arsenalToWorldspaceRui[file.highlightedPingEntEHI], "isHighlighted", false )
+	}
+	file.highlightedPingEntEHI = ToEHI( ent )
+	if( ent )
+	{
+		RuiSetBool( file.arsenalToWorldspaceRui[file.highlightedPingEntEHI], "isHighlighted", true )
+	}
+}
+
+
+void function Arsenals_HighlightArsenalInRangeMap()
+{
+	if ( !Arsenals_ShowHudDisplay() )
+		return
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return
+
+	array< entity > nearbyArsenalEnts = GetArsenalEntitiesNearLocalPlayer( Arsenals_ArsenalMapMaxDisplayDistance() )
+	foreach ( arsenalEnt in nearbyArsenalEnts )
+	{
+		EHI arsenalEHI = ToEHI( arsenalEnt )
+		if ( !(arsenalEHI in file.ruiEHITable) )
+			continue
+
+		if ( Arsenals_OnlyShowClosestOnMinimap() )
+		{
+			RuiSetGameTimeIfExists( file.ruiEHITable[arsenalEHI].minimapRui, "pulseAnimationStartime", ClientTime() )
+		}
+		if ( Arsenals_OnlyShowClosestOnFullmap() )
+		{
+			RuiSetGameTimeIfExists( file.ruiEHITable[arsenalEHI].fullmapRui, "pulseAnimationStartime", ClientTime() )
+		}
+	}
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+}
+
+
+
+var function Arsenals_CreateClientSideHudMarkerForArsenal( asset hudImage, vector pos, float upOffset )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	var rui = CreateFullscreenRui( PERK_IN_WORLD_HUD_OBJECT, RuiCalculateDistanceSortKey( localViewPlayer.EyePosition(), pos ) )
+	RuiSetImage( rui, "beaconImage", hudImage )
+	RuiSetGameTime( rui, "startTime", Time() )
+	RuiSetFloat3( rui, "pos", pos )
+	RuiSetFloat( rui, "upOffset", upOffset )
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+	RuiSetBool( rui, "isVisible", false )
+	RuiSetFloat3( rui, "iconColor", <1.0,1.0,1.0> )
+
+	RuiSetFloat( rui, "minAlphaDist", Arsenals_ArsenalMinHudDisplayDistance() * file.displayDistanceModifier )
+	RuiSetFloat( rui, "maxAlphaDist", Arsenals_ArsenalMaxHudDisplayDistance() * file.displayDistanceModifier )
+
+	return rui
+}
+
+void function Arsenals_WorldspaceUseIconThink_Thread( EHI entEHI, var rui )
+{
+	Assert( IsNewThread() )
+
+	entity ent = FromEHI( entEHI )
+	if ( !IsValid( ent ) )
+		return
+
+	ent.EndSignal( "OnDestroy" )
+
+	RuiSetString( rui, "descriptiveTextLocString", GetPromptPingForArsenalEnt( ent ) )
+	RuiSetBool( rui, "isVisible", true )
+
+	file.worldspaceArsenalIconVisibility[entEHI] <- true
+
+	thread ListenForArsenalPinged( entEHI, rui )
+
+	OnThreadEnd( void function() : ( entEHI, rui ) {
+		RuiDestroyIfAlive( rui )
+		if ( entEHI in file.arsenalToWorldspaceRui )
+		{
+			delete file.arsenalToWorldspaceRui[entEHI]
+		}
+
+		if ( entEHI in file.worldspaceArsenalIconVisibility )
+		{
+			delete file.worldspaceArsenalIconVisibility[entEHI]
+		}
+
+		if( file.highlightedPingEntEHI == entEHI )
+		{
+			file.highlightedPingEntEHI = 0
+		}
+	} )
+
+	WaitForever()
+}
+
+void function Arsenals_OnLocalPlayerPickedUpLoot( entity pickupEnt, LootData lootData, int pickupAction )
+{
+	if ( !file.arsenalsSpawned )
+		return
+
+	if ( lootData.lootType != eLootType.MAINWEAPON && lootData.lootType != eLootType.ATTACHMENT )
+		return
+
+	entity player = GetLocalViewPlayer()
+
+	if ( lootData.lootType == eLootType.ATTACHMENT ) 
+	{
+		bool updatedValues = false
+		for ( int i = 0; i < 2; i++ )
+		{
+			entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+			string ammoTypeRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+			if( ammoTypeRef != "" && ammoTypeRef != NOT_ON_ARSENAL_STR && Arsenals_IsWeaponMaxed( weapon, true ) )
+			{
+				int ammoType = AmmoType_GetTypeFromRef( ammoTypeRef )
+				file.showArsenalHudIconsOfAmmoType[ammoType] = false
+
+				CheckShowHudIconsForWeaponCar( weapon, false )
+
+				updatedValues = true
+			}
+		}
+
+		if ( !updatedValues )
+			return
+	}
+	else if ( !PlayerHasAllWeapons( player ) ) 
+	{
+		foreach( ammoType in file.showArsenalHudIconsOfAmmoType.clonekeys() )
+		{
+			file.showArsenalHudIconsOfAmmoType[ammoType] = true
+		}
+	}
+	else 
+	{
+		foreach( ammoType in file.showArsenalHudIconsOfAmmoType.clonekeys() )
+		{
+			file.showArsenalHudIconsOfAmmoType[ammoType] = false
+		}
+
+		for ( int i = 0; i < 2; i++ )
+		{
+			entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+			string ammoTypeRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+			if( ammoTypeRef != "" && ammoTypeRef != NOT_ON_ARSENAL_STR && !Arsenals_IsWeaponMaxed( weapon, true ) )
+			{
+				int ammoType = AmmoType_GetTypeFromRef( ammoTypeRef )
+				file.showArsenalHudIconsOfAmmoType[ammoType] = true
+
+				CheckShowHudIconsForWeaponCar( weapon, true )
+			}
+		}
+	}
+
+	UpdateWorldspaceIconsShown_Internal()
+}
+
+void function Arsenals_OnLocalPlayerDroppedLoot( entity droppedEnt, LootData lootData )
+{
+	if ( !file.arsenalsSpawned )
+		return
+
+	if ( lootData.lootType != eLootType.MAINWEAPON && lootData.lootType != eLootType.ATTACHMENT )
+		return
+
+	if ( lootData.lootType == eLootType.ATTACHMENT ) 
+	{
+		bool updatedValues = false
+		entity player = GetLocalViewPlayer()
+		for ( int i = 0; i < 2; i++ )
+		{
+			entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+			string ammoTypeRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+			if( ammoTypeRef != "" && ammoTypeRef != NOT_ON_ARSENAL_STR && !Arsenals_IsWeaponMaxed( weapon, true ) )
+			{
+				int ammoType = AmmoType_GetTypeFromRef( ammoTypeRef )
+				file.showArsenalHudIconsOfAmmoType[ammoType] = true
+
+				CheckShowHudIconsForWeaponCar( weapon, true )
+
+				updatedValues = true
+			}
+		}
+
+		if ( !updatedValues )
+			return
+	}
+	else
+	{
+		
+		foreach( ammoType in file.showArsenalHudIconsOfAmmoType.clonekeys() )
+		{
+			file.showArsenalHudIconsOfAmmoType[ammoType] = true
+		}
+	}
+
+	UpdateWorldspaceIconsShown_Internal()
+}
+
+void function Arsenals_CheckInventoryChanged()
+{
+	if ( !file.arsenalsSpawned )
+		return
+
+	bool updatedValues = false
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	for ( int i = 0; i < 2; i++ )
+	{
+		entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+		if ( !IsValid( weapon ) )
+		{
+			foreach( ammoType in file.showArsenalHudIconsOfAmmoType.clonekeys() )
+			{
+				file.showArsenalHudIconsOfAmmoType[ammoType] = true
+			}
+
+			updatedValues = true
+			break
+		}
+
+		string ammoTypeRef = Arsenals_GetAmmoTypeForWeaponEnt( weapon )
+		if ( ammoTypeRef == "" || ammoTypeRef == NOT_ON_ARSENAL_STR )
+			continue
+
+		bool isMaxed = Arsenals_IsWeaponMaxed( weapon, true )
+		int ammoType = AmmoType_GetTypeFromRef( ammoTypeRef )
+		if ( !( ammoType in file.showArsenalHudIconsOfAmmoType ) )
+			continue
+
+		if( isMaxed && file.showArsenalHudIconsOfAmmoType[ammoType] )
+		{
+			file.showArsenalHudIconsOfAmmoType[ammoType] = false
+
+			CheckShowHudIconsForWeaponCar( weapon, false )
+
+			updatedValues = true
+		}
+		else if ( !isMaxed && !file.showArsenalHudIconsOfAmmoType[ammoType] )
+		{
+			file.showArsenalHudIconsOfAmmoType[ammoType] = true
+
+			CheckShowHudIconsForWeaponCar( weapon, true )
+
+			updatedValues = true
+		}
+	}
+
+	if ( updatedValues )
+	{
+		UpdateWorldspaceIconsShown_Internal()
+	}
+}
+
+void function UpdateWorldspaceIconsShown_Internal()
+{
+	foreach ( EHI ehi in file.spawnedArsenals )
+	{
+		entity arsenalEnt = FromEHI( ehi )
+		if ( !IsValid( arsenalEnt ) )
+			continue
+
+		if ( file.mapHudIdentifierSettings == eArsenalIdentifierSettings.MINIMAL || Arsenals_HideUnneededWorldIcons() )
+		{
+			SetWorldspaceIconIsHidden( arsenalEnt, !file.showArsenalHudIconsOfAmmoType[arsenalEnt.GetAmmoType()] )
+		}
+		else if ( Arsenals_GetActivationTimeGateDuration() > 0.0 && Time() <= GetGlobalNetTime( ARSENAL_ACTIVATION_TIME ) )
+		{
+			SetWorldspaceIconIsHidden( arsenalEnt, !file.showArsenalHudIconsOfAmmoType[arsenalEnt.GetAmmoType()] )
+		}
+		else if ( file.showArsenalHudIconsOfAmmoType[arsenalEnt.GetAmmoType()] )
+		{
+			SetWorldspaceIconIsHidden( arsenalEnt, false )
+			SetWorldspaceIconFadeDistance( arsenalEnt, Arsenals_ArsenalMinHudDisplayDistance() * file.displayDistanceModifier, Arsenals_ArsenalMaxHudDisplayDistance() * file.displayDistanceModifier )
+			SetWorldspaceIconPingDistance( arsenalEnt, Arsenals_ArsenalMinHudDisplayDistance() * file.displayDistanceModifier )
+		}
+		else
+		{
+			SetWorldspaceIconIsHidden( arsenalEnt, false )
+			SetWorldspaceIconFadeDistance( arsenalEnt, Arsenals_ArsenalMinHudDisplayDistance_Small() * file.displayDistanceModifier, Arsenals_ArsenalMaxHudDisplayDistance_Small() * file.displayDistanceModifier )
+			SetWorldspaceIconPingDistance( arsenalEnt, Arsenals_ArsenalMinHudDisplayDistance_Small() * file.displayDistanceModifier )
+		}
+	}
+}
+
+void function UIToClient_Arsenals_SetMapHudIdentifierSettings()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	SetMapHudIdentifierSettings_Internal()
+}
+
+void function SetMapHudIdentifierSettings_Internal()
+{
+	file.mapHudIdentifierSettings = GetConVarInt( "player_setting_arsenals_maphudidentifiers" )
+
+	switch( file.mapHudIdentifierSettings )
+	{
+		case eArsenalIdentifierSettings.MINIMAL:
+			file.displayDistanceModifier = Arsenals_ArsenalHudDisplayDistanceModifier_Minimal()
+			break
+		case eArsenalIdentifierSettings.MODERATE:
+			file.displayDistanceModifier = Arsenals_ArsenalHudDisplayDistanceModifier_Moderate()
+			break
+		default:
+			file.displayDistanceModifier = 1.0
+			break
+	}
+
+	UpdateWorldspaceIconsShown_Internal()
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________UTILITY___________________________()
+{}
+#endif
+
+array< int > function Arsenals_GetAmmoIdxsAtArsenal( ArsenalData arsenalData )
+{
+	array < int > idxs
+	int blocksToSpawn = Arsenals_GetAmmoBlocksPerArsenal()
+	entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return idxs
+
+	if ( blocksToSpawn == 2 )
+	{
+		idxs.append( 1 )
+		idxs.append( arsenalEnt.GetItemCount() - 1 - ((arsenalEnt.GetItemCount() + 1) % 2) )
+	}
+	else
+	{
+		for ( int i = 0; i < blocksToSpawn; i++ )
+		{
+			idxs.append( arsenalEnt.GetItemCount() - 1 - i )
+		}
+	}
+
+	return idxs
+}
+
+vector function Arsenals_GetOriginForWeaponIdxAtArsenal( int i, ArsenalData arsenalData, int ammoType = -1 )
+{
+	entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return ZERO_VECTOR
+
+
+
+
+
+
+
+
+
+
+		int numWeapons = arsenalEnt.GetItemCount()
+
+
+	return GetWeaponPositionForIdx_Internal( i, arsenalEnt, numWeapons )
+}
+
+const float WEAPON_POS_DISTANCE_BUFFER = 5 * 5
+int function Arsenals_GetWeaponIdxForOriginAtArsenal( vector origin, ArsenalData arsenalData, int ammoType = -1 )
+{
+	entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return -1
+
+
+
+
+
+
+
+
+
+
+		int numWeapons = arsenalEnt.GetItemCount()
+
+
+	bool isEven = DotProduct( arsenalEnt.GetForwardVector(), ( origin - arsenalEnt.GetOrigin() ) ) > 0
+	int startIdx = isEven ? 0 : 1
+	for ( int i = startIdx; i < numWeapons; i+=2 )
+	{
+		vector testPos = GetWeaponPositionForIdx_Internal( i, arsenalEnt, numWeapons )
+		if ( DistanceSqr( testPos, origin ) < WEAPON_POS_DISTANCE_BUFFER )
+			return i
+	}
+
+	return -1
+}
+
+const float ARSENALS_FORWARD_SCALAR = 32
+const float ARSENALS_UP_SCALAR = 27
+const float ARSENALS_RIGHT_SCALAR = -30
+const float ARSENALS_LENGTH = 50
+vector function GetWeaponPositionForIdx_Internal( int idx, entity arsenalEnt, int numWeapons )
+{
+	vector rackAngles = AnglesCompose( arsenalEnt.GetAngles(), < 0, 360.0 / 2 * (idx % 2), 0 > )
+	vector weaponForward = AnglesToForward( rackAngles ) * ARSENALS_FORWARD_SCALAR
+
+	vector upAdjustment = arsenalEnt.GetUpVector() * ARSENALS_UP_SCALAR
+	
+	
+	int countPerSide = int( floor( (numWeapons + ((idx + 1) % 2)) / 2.0 ) )
+	float rightMultiplier = ARSENALS_LENGTH / ( countPerSide - 1 ) * ( floor( idx / 2 ) - ( countPerSide - 1 ) / 2.0 )
+	vector rightAdjustment = rightMultiplier * arsenalEnt.GetRightVector()
+
+	return arsenalEnt.GetOrigin() + upAdjustment + weaponForward + rightAdjustment
+}
+
+const float ARSENAL_ROTATION = 48
+vector function Arsenals_GetWeaponAngleForIdxAtArsenal( int idx, entity arsenalEnt, bool isAmmo )
+{
+	if ( !IsValid( arsenalEnt ) )
+		return ZERO_VECTOR
+
+	vector rackAngles = AnglesCompose( arsenalEnt.GetAngles(), < 0, 180.0 * (idx % 2), 0 > )
+	if ( isAmmo )
+		return AnglesCompose( rackAngles, < 90 - ARSENAL_ROTATION, 0, 0 > )
+
+	return AnglesCompose( AnglesCompose( rackAngles, < -90, 90, 0 > ), < 0, ARSENAL_ROTATION, 0> )
+}
+
+vector function Arsenals_GetRespawnTimerAngleForIdxAtArsenal( int idx, entity arsenalEnt )
+{
+	if ( !IsValid( arsenalEnt ) )
+		return ZERO_VECTOR
+
+	vector rackAngles = AnglesCompose( arsenalEnt.GetAngles(), < 0, 180.0 * ((idx + 1) % 2), 0 > )
+
+	return AnglesCompose( rackAngles, < 58, 0, 0 > )
+}
+
+bool function Arsenals_PlayerCanUseArsenalConsole( entity player, ArsenalData arsenalData )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( player.p.isInExtendedUse )
+		return false
+
+
+
+
+
+
+		if ( file.arsenalsUsed.contains( arsenalData.arsenalEHI ) )
+			return false
+
+
+	entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+	if ( !IsValid( arsenalEnt ) )
+		return false
+
+	string ammoTypeStr = AmmoType_GetRefFromIndex( arsenalEnt.GetAmmoType() )
+	return DoesPlayerHaveUpgradableWeaponOfAmmoType( player, ammoTypeStr )
+}
+
+bool function DoesPlayerHaveUpgradableWeaponOfAmmoType( entity player, string ammoType )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( !SURVIVAL_Loot_IsRefValid( ammoType ) )
+		return false
+
+	for ( int i = 0; i < 2; i++ )
+	{
+		entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 + i )
+		if( IsWeaponUpgradableOfAmmoType( weapon, ammoType ) )
+			return true
+	}
+
+	return false
+}
+
+bool function PlayerHasAllWeapons( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	bool hasSlingOrNotBallistic = !DoesPlayerHaveWeaponSling( player ) || IsValid( GetPlayerSlingWeapon( player ) )
+	return IsValid( player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 ) ) && IsValid( player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 ) ) && hasSlingOrNotBallistic
+}
+
+
+
+string function Arsenals_GetWeaponSetStringForTier( int tier )
+{
+	return ARSENALS_WEAPON_SET_STRINGS_FOR_TIER[tier]
+}
+
+string function GetParticleWeaponRef( string baseWeaponRef )
+{
+	if ( IsLootRefAmmo( baseWeaponRef ) )
+		return baseWeaponRef
+
+	
+	if ( ARSENALS_PARTICLE_REF_EXCEPTIONS.contains( baseWeaponRef ) )
+		return baseWeaponRef
+
+	return Weapon_GetBaseClassName( baseWeaponRef )
+}
+
+int function Arsenals_GetStackCount( string ref )
+{
+	LootData data = SURVIVAL_Loot_GetLootDataByRef( ref )
+
+	if ( data.lootType == eLootType.MAINWEAPON )
+		return 1
+
+	bool isShotgunOrSniper = ref == SHOTGUN_AMMO || ref == SNIPER_AMMO
+
+	bool giveFullAmmo = Arsenals_AmmoSpawnsFullStacks() || ( Arsenals_ArsenalResetResetsAmmo() && file.arsenalsReset )
+	if ( giveFullAmmo && isShotgunOrSniper )
+		return 2 * data.countPerDrop
+	else if ( giveFullAmmo )
+		return 3 * data.countPerDrop
+	else if ( isShotgunOrSniper )
+		return int( data.countPerDrop * Arsenals_ShotgunSniperAmmoMultiplier() )
+
+	return int( data.countPerDrop * Arsenals_LightHeavyEnergyAmmoMultiplier() )
+}
+
+bool function SpawnDataHasPresetAmmoSpawning( ArsenalSpawnData arsenalSpawnData )
+{
+	if ( !arsenalSpawnData.canSpawnLight )
+		return true
+
+	if ( !arsenalSpawnData.canSpawnHeavy )
+		return true
+
+	if ( !arsenalSpawnData.canSpawnEnergy )
+		return true
+
+	if ( !arsenalSpawnData.canSpawnShotgun )
+		return true
+
+	if ( !arsenalSpawnData.canSpawnSniper )
+		return true
+
+	return false
+}
+
+array< string > function GetPresetAmmoTypesFromArsenalSpawnData( ArsenalSpawnData arsenalSpawnData, array< string > possibleAmmoTypes )
+{
+	array< string > allowedAmmoTypes
+	if ( arsenalSpawnData.canSpawnLight && possibleAmmoTypes.contains( BULLET_AMMO ) )
+	{
+		allowedAmmoTypes.append( BULLET_AMMO )
+	}
+	if ( arsenalSpawnData.canSpawnHeavy && possibleAmmoTypes.contains( HIGHCAL_AMMO ) )
+	{
+		allowedAmmoTypes.append( HIGHCAL_AMMO )
+	}
+	if ( arsenalSpawnData.canSpawnEnergy && possibleAmmoTypes.contains( SPECIAL_AMMO ) )
+	{
+		allowedAmmoTypes.append( SPECIAL_AMMO )
+	}
+	if ( arsenalSpawnData.canSpawnShotgun && possibleAmmoTypes.contains( SHOTGUN_AMMO ) )
+	{
+		allowedAmmoTypes.append( SHOTGUN_AMMO )
+	}
+	if ( arsenalSpawnData.canSpawnSniper && possibleAmmoTypes.contains( SNIPER_AMMO ) )
+	{
+		allowedAmmoTypes.append( SNIPER_AMMO )
+	}
+
+	Assert( allowedAmmoTypes.len() > 0, "We tried to spawn an Arsenal while preventing it from being any ammo type. This breaks shit. Send to BR Systems" )
+	return allowedAmmoTypes
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_Arsenals_SetGroupParentLocation( int groupID, vector pos )
+{
+	if ( groupID in file.arsenalGroupParentLocations )
+		return
+
+	file.arsenalGroupParentLocations[groupID] <- pos
+}
+
+
+const float ARSENAL_POI_LABEL_MAX_DISTANCE = 5000.0
+const float ARSENAL_POI_LABEL_MAX_DISTANCE_SQR = ARSENAL_POI_LABEL_MAX_DISTANCE * ARSENAL_POI_LABEL_MAX_DISTANCE
+void function Arsenals_LoadPOINameData( table< int, vector > zonePositions )
+{
+	
+	table< int, array< EHI > > groupToArsenalEHIMap
+	foreach ( arsenalData in file.arsenalEHIToArsenalDataMap )
+	{
+		entity arsenalEnt = FromEHI( arsenalData.arsenalEHI )
+		if ( !IsValid( arsenalEnt ) )
+			continue
+
+		int group = arsenalEnt.GetGroupNumber()
+		if ( group in groupToArsenalEHIMap )
+		{
+			groupToArsenalEHIMap[group].append( arsenalData.arsenalEHI )
+		}
+		else
+		{
+			groupToArsenalEHIMap[group] <- [ arsenalData.arsenalEHI ]
+		}
+	}
+
+	
+	table < int, string > zoneIdMapNames = clone ZoneSkyWriting_GetZoneIdMapNamesToDisplay()
+	foreach ( zoneId in zonePositions.clonekeys() )
+	{
+		if ( !( zoneId in zoneIdMapNames ) )
+		{
+			delete zonePositions[zoneId]
+		}
+	}
+
+	
+	
+	
+	table< EHI, int > arsenalEHIToPOIZoneIdMap
+	foreach ( zoneId, zonePosition in zonePositions )
+	{
+		vector zonePosition2D = FlattenVec( zonePosition )
+		array< EHI > nearbyArsenalEHIs = GetClosestArsenalEHIArrayWithinRangeOfLocation( zonePosition2D, ARSENAL_POI_LABEL_MAX_DISTANCE, Arsenals_MaxDisplayedPerPOI() )
+
+		
+		
+		
+		foreach ( groupId, pos in file.arsenalGroupParentLocations )
+		{
+			if ( Distance2DSqr( pos, zonePosition2D ) < ARSENAL_POI_LABEL_MAX_DISTANCE_SQR )
+			{
+				foreach ( groupedArsenalEHI in groupToArsenalEHIMap[groupId] )
+				{
+					if ( !nearbyArsenalEHIs.contains( groupedArsenalEHI ) )
+					{
+						nearbyArsenalEHIs.append( groupedArsenalEHI )
+					}
+				}
+			}
+		}
+
+		int i = 0;
+		while ( i < nearbyArsenalEHIs.len() )
+		{
+			EHI arsenalEHI = nearbyArsenalEHIs[i]
+			entity arsenalEnt = FromEHI( arsenalEHI )
+			if ( !IsValid( arsenalEnt ) )
+				continue
+
+			array < EHI > arsenalsInGroup = groupToArsenalEHIMap[arsenalEnt.GetGroupNumber()]
+			foreach ( groupedArsenalEHI in arsenalsInGroup )
+			{
+				if ( !nearbyArsenalEHIs.contains( groupedArsenalEHI ) )
+				{
+					nearbyArsenalEHIs.append( groupedArsenalEHI )
+				}
+			}
+
+			if ( !( arsenalEHI in arsenalEHIToPOIZoneIdMap ) )
+			{
+				arsenalEHIToPOIZoneIdMap[arsenalEHI] <- zoneId
+			}
+			else if ( Distance2DSqr( zonePositions[arsenalEHIToPOIZoneIdMap[arsenalEHI]], arsenalEnt.GetOrigin() ) > Distance2DSqr( zonePosition2D, arsenalEnt.GetOrigin() ) )
+			{
+				arsenalEHIToPOIZoneIdMap[arsenalEHI] = zoneId
+			}
+
+			i++
+		}
+	}
+
+	
+	foreach ( arsenalEHI, zoneId in arsenalEHIToPOIZoneIdMap )
+	{
+		entity arsenalEnt = FromEHI( arsenalEHI )
+		if ( !IsValid( arsenalEHI ) )
+			continue
+
+		if ( zoneId in file.zoneIdToArsenalsMap )
+		{
+			file.zoneIdToArsenalsMap[zoneId].append( file.arsenalEHIToArsenalDataMap[arsenalEHI] )
+		}
+		else
+		{
+			file.zoneIdToArsenalsMap[zoneId] <- [ file.arsenalEHIToArsenalDataMap[arsenalEHI] ]
+		}
+	}
+}
+
+array< ArsenalData > function Arsenals_GetArsenalsWithinRangeOfPOIZone( int zoneId )
+{
+	if ( zoneId in file.zoneIdToArsenalsMap )
+	{
+		return file.zoneIdToArsenalsMap[zoneId]
+	}
+
+	array< ArsenalData > emptyArray
+	return emptyArray
+}
+
+
+void function AddNewWeaponRespawnRUI()
+{
+	var topo = CreateRUITopology_Worldspace( ZERO_VECTOR, ZERO_VECTOR, 95, 95 )
+	var rui = RuiCreate( $"ui/arsenal_item_respawn_timer.rpak", topo, RUI_DRAW_WORLD, 0 )
+	file.weaponRespawnTopos.append( topo )
+	file.weaponRespawnRuis.append( rui )
+}
+
+asset function Arsenals_GetArsenalIcon( entity arsenalEnt )
+{
+	if ( !IsValid( arsenalEnt ) )
+		return $""
+
+	if ( arsenalEnt.GetScriptName() != ARSENAL_SCRIPTNAME )
+		return $""
+
+	int ammoType = arsenalEnt.GetAmmoType()
+	asset hudAsset = $""
+	switch( ammoType )
+	{
+		case eAmmoPoolType.bullet:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_light_icon"
+			break
+		case eAmmoPoolType.highcal:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_heavy_icon"
+			break
+		case eAmmoPoolType.special:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_energy_icon"
+			break
+		case eAmmoPoolType.shotgun:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_shotgun_icon"
+			break
+		case eAmmoPoolType.sniper:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_sniper_icon"
+			break
+		default:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_icon"
+			break
+	}
+
+	return hudAsset
+}
+
+asset function Arsenals_GetArsenalMapIcon( entity arsenalEnt )
+{
+	if ( !IsValid( arsenalEnt ) )
+		return $""
+
+	if ( arsenalEnt.GetScriptName() != ARSENAL_SCRIPTNAME )
+		return $""
+
+	int ammoType = arsenalEnt.GetAmmoType()
+
+	asset hudAsset = $""
+	switch( ammoType )
+	{
+		case eAmmoPoolType.bullet:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_light_map_icon"
+			break
+		case eAmmoPoolType.highcal:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_heavy_map_icon"
+			break
+		case eAmmoPoolType.special:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_energy_map_icon"
+			break
+		case eAmmoPoolType.shotgun:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_shotgun_map_icon"
+			break
+		case eAmmoPoolType.sniper:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_sniper_map_icon"
+			break
+		default:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_icon"
+			break
+	}
+
+	return hudAsset
+}
+
+asset function Arsenals_GetArsenalIconFromWeaponData( LootData weaponData )
+{
+	string ammoType = weaponData.ammoType
+
+	asset hudAsset = $""
+	switch( ammoType )
+	{
+		case "bullet":
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_light_icon"
+			break
+		case "highcal":
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_heavy_icon"
+			break
+		case "special":
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_energy_icon"
+			break
+		case "shotgun":
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_shotgun_icon"
+			break
+		case "sniper":
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_sniper_icon"
+			break
+		case "arrows":
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_sniper_icon"
+			break
+		default:
+			hudAsset = $"rui/hud/gametype_icons/survival/arsenals_icon"
+			break
+	}
+
+	return hudAsset
+}
+
+asset function Arsenals_GetArsenalBGIcon()
+{
+	return ARSENALS_ICON_BG
+}
+
+array< int > function Arsenals_GetNumArsenalsArrayForMaps()
+{
+	switch( file.mapHudIdentifierSettings )
+	{
+		case eArsenalIdentifierSettings.MINIMAL:
+			return [ Arsenals_NumArsenalsToShowOnMinimap_Minimal(), Arsenals_NumArsenalsToShowOnFullmap_Minimal() ]
+		case eArsenalIdentifierSettings.MODERATE:
+			return [ Arsenals_NumArsenalsToShowOnMinimap_Moderate(), Arsenals_NumArsenalsToShowOnFullmap_Moderate() ]
+		case eArsenalIdentifierSettings.MAXIMUM:
+			return [ Arsenals_NumArsenalsToShowOnMinimap(), Arsenals_NumArsenalsToShowOnFullmap() ]
+	}
+
+	return [ 0, 0 ]
+}
+
+void function CheckShowHudIconsForWeaponCar( entity weapon, bool newVal )
+{
+	if ( GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( weapon ) ) == "mp_weapon_car" )
+	{
+		ShowHudIconsForWeaponCar( newVal )
+	}
+}
+
+void function ShowHudIconsForWeaponCar( bool newVal )
+{
+	int ammoType = AmmoType_GetTypeFromRef( BULLET_AMMO )
+	file.showArsenalHudIconsOfAmmoType[ammoType] = newVal
+}
+
+
+array < vector > function Arsenals_GetAllArsenalLocations()
+{
+	array < vector > arsenalOrigins
+	foreach ( arsenalEHI in file.arsenalEHIToArsenalDataMap.clonekeys() )
+	{
+		entity arsenalEnt = FromEHI( arsenalEHI )
+		if ( !IsValid( arsenalEnt ) )
+			continue
+
+		arsenalOrigins.append( arsenalEnt.GetOrigin() )
+	}
+
+	return arsenalOrigins
+}
+
+int function Arsenals_GetPingTypeForEnt( entity arsenalEnt )
+{
+	Assert( IsValid( arsenalEnt ), "The ping ent for an arsenal must be valid, send this to BR Systems" )
+
+	int ammoType = arsenalEnt.GetAmmoType()
+	int pingType
+	switch( ammoType )
+	{
+		case eAmmoPoolType.bullet:
+			pingType = ePingType.ARSENAL_LIGHT
+			break
+
+
+
+		case eAmmoPoolType.highcal:
+			pingType = ePingType.ARSENAL_HEAVY
+			break
+		case eAmmoPoolType.special:
+			pingType = ePingType.ARSENAL_ENERGY
+			break
+		case eAmmoPoolType.shotgun:
+			pingType = ePingType.ARSENAL_SHOTGUN
+			break
+		case eAmmoPoolType.sniper:
+			pingType = ePingType.ARSENAL_SNIPER
+			break
+		default:
+			Warning( "entity " + arsenalEnt + " has unknown ammo type " + ammoType + ". Returning a default value." )
+			pingType = ePingType.ARSENAL_LIGHT
+			break
+	}
+
+#if DEV
+		printt( FUNC_NAME() + "(): Arsenal Ping Type == " + GetEnumStringSlow( ePingType, pingType ) )
+#endif
+	return pingType
+}
+
+int function Arsenals_GetPingTypeForEnt_FromInventory( entity arsenalEnt )
+{
+	Assert( IsValid( arsenalEnt ), "The ping ent for an arsenal must be valid, send this to BR Systems" )
+	int ammoType = arsenalEnt.GetAmmoType()
+	int pingType
+	switch( ammoType )
+	{
+		case eAmmoPoolType.bullet:
+			pingType = ePingType.ARSENAL_LIGHT_FROM_INVENTORY
+			break
+
+
+
+		case eAmmoPoolType.highcal:
+			pingType = ePingType.ARSENAL_HEAVY_FROM_INVENTORY
+			break
+		case eAmmoPoolType.special:
+			pingType = ePingType.ARSENAL_ENERGY_FROM_INVENTORY
+			break
+		case eAmmoPoolType.shotgun:
+			pingType = ePingType.ARSENAL_SHOTGUN_FROM_INVENTORY
+			break
+		case eAmmoPoolType.sniper:
+			pingType = ePingType.ARSENAL_SNIPER_FROM_INVENTORY
+			break
+		default:
+			Warning( "entity " + arsenalEnt + " has unknown ammo type " + ammoType + ". Returning a default value." )
+			pingType = ePingType.ARSENAL_LIGHT_FROM_INVENTORY
+			break
+	}
+
+#if DEV
+		printt( FUNC_NAME() + "(): Arsenal Ping Type from Inventory == " + GetEnumStringSlow( ePingType, pingType ) )
+#endif
+	return pingType
+}
+
+string function GetPromptPingForArsenalEnt( entity arsenalEnt )
+{
+	if ( !IsValid( arsenalEnt ) )
+		return ""
+
+	string returnString = ""
+	switch ( arsenalEnt.GetAmmoType() )
+	{
+		case eAmmoPoolType.bullet:
+			returnString = "#PROMPT_PING_ARSENAL_LIGHT"
+			break
+
+
+
+		case eAmmoPoolType.highcal:
+			returnString = "#PROMPT_PING_ARSENAL_HEAVY"
+			break
+		case eAmmoPoolType.special:
+			returnString = "#PROMPT_PING_ARSENAL_ENERGY"
+			break
+		case eAmmoPoolType.shotgun:
+			returnString = "#PROMPT_PING_ARSENAL_SHOTGUN"
+			break
+		case eAmmoPoolType.sniper:
+			returnString = "#PROMPT_PING_ARSENAL_SNIPER"
+			break
+		default:
+			returnString = "#PROMPT_PING_ARSENAL"
+			break
+	}
+
+	return returnString
+}
+
+bool function IsLootRefAmmo( string lootRef )
+{
+
+
+
+	return lootRef == SHOTGUN_AMMO || lootRef == SNIPER_AMMO || lootRef == BULLET_AMMO || lootRef == HIGHCAL_AMMO || lootRef == SPECIAL_AMMO
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PLAYLIST_VARS___________________________()
+{}
+#endif
+
+bool function Arsenals_Enabled()
+{
+	if ( !file.hasCheckedIfEnabled )
+	{
+		file.hasCheckedIfEnabled = true
+
+
+
+
+		file.arsenalsEnabled = GetCurrentPlaylistVarBool( "arsenals_enabled", true ) && GameMode_IsActive( eGameModes.SURVIVAL ) && !GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_TRAINING )
+
+	}
+
+	return file.arsenalsEnabled
+}
+
+int function Arsenals_MaxSpawnsPerPOI()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_max_spawn_per_poi", 4 )
+}
+
+int function Arsenals_MaxDisplayedPerPOI()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_max_displayed_per_poi", 4 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function Arsenals_GetActivationTimeGateDuration()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_timegate_activation_time", ARSENAL_ACTIVATION_TIME_GATE )
+}
+
+bool function Arsenals_EnableUpgradingLockedSets()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_enable_upgrading_locked_sets", false )
+}
+
+bool function Arsenals_ArsenalsReplenish()
+{
+	return Arsenals_Enabled() && GetCurrentPlaylistVarBool( "arsenals_replenish", true )
+}
+
+float function Arsenals_ArsenalWeaponReplenishTime()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_weapon_replenish_time", WEAPON_RESPAWN_TIME )
+}
+
+float function Arsenals_ArsenalAkimboWeaponReplenishTime()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_akimbo_weapon_replenish_time", AKIMBO_WEAPON_RESPAWN_TIME )
+}
+
+float function Arsenals_ArsenalAmmoReplenishTime()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_ammo_replenish_time", AMMO_RESPAWN_TIME )
+}
+
+float function Arsenals_ArsenalAmmoReplenishTime_PostReset()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_ammo_replenish_time", AMMO_RESPAWN_TIME_POST_RESET )
+}
+
+bool function Arsenals_ShowArsenalWeaponHolosWhileRespawning()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_weapon_holos_while_respawning", true )
+}
+
+bool function Arsenals_ShowArsenalWeaponHolosWhileUpgrading()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_weapon_holos_while_upgrading", true )
+}
+
+bool function Arsenals_ArsenalShowWeaponRespawnTime()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_show_weapon_respawn_time", true )
+}
+
+bool function Arsenals_AmmoSpawnsWithWeapons()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_have_ammo_spot", true )
+}
+
+int function Arsenals_GetAmmoBlocksPerArsenal()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_ammo_blocks_per_arsenal", 2 )
+}
+
+bool function Arsenals_AmmoSpawnsFullStacks()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_ammo_spawns_full_stacks", true )
+}
+
+float function Arsenals_LightHeavyEnergyAmmoMultiplier()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_light_heavy_energy_ammo_stack_base", 2.0 )
+}
+
+float function Arsenals_ShotgunSniperAmmoMultiplier()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_shotgun_sniper_ammo_stack_base", 1.0 )
+}
+
+bool function Arsenals_CentralWindowEnabled()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_central_window_enabled", true )
+}
+
+bool function Arsenals_ArsenalConsolesUpgradeWeapon()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_consoles_upgrade_weapon", true )
+}
+
+float function Arsenals_ArsenalExtendedUseDuration()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_extended_use_duration", 3.0 )
+}
+
+int function Arsenals_GetUpgradeConsoleUpgradeCount()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_upgrade_attachment_count", 1 )
+}
+
+int function Arsenals_GetUpgradeConsoleUpgradeCount_PostBinReset()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_upgrade_attachment_count", 2 )
+}
+
+bool function Arsenals_PreventGoldUpgradeBeforeBinResets()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_prevent_gold_upgrades_before_bin_reset", true )
+}
+
+bool function Arsenals_BetterUpgradesAfterBinReset()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_better_upgrades_after_bin_reset", true )
+}
+
+int function Arsenals_GetUpgradeConsoleUpgradeCount_WhenUnderleveled()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_upgrade_attachment_count_underleveled", 3 )
+}
+
+int function Arsenals_UnderleveledTier()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_underleveled_tier", 1 )
+}
+
+int function Arsenals_GetMinAttachmentUpgradeTier()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_min_upgrade_tier", 2 )
+}
+
+int function Arsenals_GetMaxAttachmentUpgradeTier()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_max_upgrade_tier", 10 )
+}
+
+bool function Arsenals_AllowSightUpgrades()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_upgrade_sights", false )
+}
+
+bool function Arsenals_FreeUpgradeEmptySniperSight()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_free_upgrade_empty_sniper_sight", true )
+}
+
+bool function Arsenals_FreeUpgradeEmpty1xSight()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_free_upgrade_empty_1x_sight", true )
+}
+
+bool function Arsenals_OnlyUpgradeMinAttachments()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_only_upgrade_min_attachments", true )
+}
+
+bool function Arsenals_LootBinResetEnabled()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_reset_enabled", true )
+}
+
+bool function Arsenals_ArsenalResetResestUpgradeConsole()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_reset_reset_upgrade_console", true )
+}
+
+bool function Arsenals_ArsenalResetResetsAmmo()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_reset_reset_ammo", true )
+}
+
+bool function Arsenals_ChangeSkinOnReset()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_reset_changes_skin", true )
+}
+
+float function Arsenals_GetExclusionRadiusOverride()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_exclusion_radius_override", ARSENAL_SAME_TYPE_EXCLUSION_RADIUS_SQR )
+}
+
+bool function Arsenals_PingNearestArsenalOnInventoryEvent()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_ping_nearest_arsenal_on_inv_event", true )
+}
+
+bool function Arsenals_AllowPingingForAttachmentRequests()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_allow_pinging_for_attachment_requests", true )
+}
+
+bool function Arsenals_AllowPingingForAllSightRequests()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_allow_pinging_for_all_sight_requests", false )
+}
+
+bool function Arsenals_AllowPingingForSniperSightRequests()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_allow_pinging_for_sniper_sight_requests", false )
+}
+
+bool function Arsenals_PingArsenalNotWeaponAtDistance()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_ping_arsenal_not_weapon_at_distance", true )
+}
+
+bool function Arsenals_PromptAllCraftersDisabled()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_prompt_all_crafters_disabled", false )
+}
+
+bool function Arsenals_ShowArsenalsInSkydive()
+{
+	return Arsenals_Enabled() && GetCurrentPlaylistVarBool( "arsenals_show_arsenals_in_skydive", true )
+}
+
+float function Arsenals_GetMaxBeaconDisplayDistance()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_max_beacon_display_dist", 0 )
+}
+
+bool function Arsenals_FadePOINameArsenalIconAtDifferentHeight()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_fade_poi_name_arsenal_icon_at_diff_height", true )
+}
+
+float function Arsenals_AdditionalHeightForPOINameArsenalIconFade()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_additional_height_for_arsenal_icon_fade", 7000 )
+}
+
+bool function Arsenals_ArsenalsShowOnMap()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_show_on_map", true )
+}
+
+bool function Arsenals_OnlyShowClosestOnMinimap()
+{
+	return Arsenals_ArsenalsShowOnMap() && GetCurrentPlaylistVarBool( "arsenals_only_show_closest_on_minimap", true )
+}
+
+bool function Arsenals_OnlyShowClosestOnFullmap()
+{
+	return Arsenals_ArsenalsShowOnMap() && GetCurrentPlaylistVarBool( "arsenals_only_show_closest_on_fullmap", true )
+}
+
+int function Arsenals_NumArsenalsToShowOnMinimap()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_num_to_show_on_minimap", 4 )
+}
+
+int function Arsenals_NumArsenalsToShowOnFullmap()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_num_to_show_on_fullmap", 15 )
+}
+
+int function Arsenals_NumArsenalsToShowOnMinimap_Moderate()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_num_to_show_on_minimap_moderate", 2 )
+}
+
+int function Arsenals_NumArsenalsToShowOnFullmap_Moderate()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_num_to_show_on_fullmap_moderate", 10 )
+}
+
+int function Arsenals_NumArsenalsToShowOnMinimap_Minimal()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_num_to_show_on_minimap_minimal", 0 )
+}
+
+int function Arsenals_NumArsenalsToShowOnFullmap_Minimal()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_num_to_show_on_fullmap_minimal", 5 )
+}
+
+float function Arsenals_ArsenalMapMaxDisplayDistance()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_map_max_disp_distance", ARSENAL_MAP_MAX_DISPLAY_DISTANCE )
+}
+
+bool function Arsenals_ArsenalsShowHighlight()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_show_highlight", true )
+}
+
+bool function Arsenals_ShowHudDisplay()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_show_hud_display", true )
+}
+
+bool function Arsenals_HideUnneededWorldIcons()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_hide_unneeded_world_icons", false )
+}
+
+float function Arsenals_ArsenalMinHudDisplayDistance()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_min_hud_disp_distance", ARSENAL_MIN_DISPLAY_DISTANCE_DEFAULT )
+}
+
+float function Arsenals_ArsenalMaxHudDisplayDistance()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_max_hud_disp_distance", ARSENAL_MAX_DISPLAY_DISTANCE_DEFAULT )
+}
+
+float function Arsenals_ArsenalHudDisplayDistanceModifier_Moderate()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_min_hud_disp_distance_modifier_moderate", ARSENAL_MIN_DISPLAY_DISTANCE_MODERATE_MODIFIER )
+}
+
+float function Arsenals_ArsenalHudDisplayDistanceModifier_Minimal()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_min_hud_disp_distance_modifier_minimal", ARSENAL_MIN_DISPLAY_DISTANCE_MINIMAL_MODIFIER )
+}
+
+float function Arsenals_ArsenalMinHudDisplayDistance_Small()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_min_hud_disp_distance_small", ARSENAL_MIN_DISPLAY_DISTANCE_SMALL )
+}
+
+float function Arsenals_ArsenalMaxHudDisplayDistance_Small()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_min_hud_disp_distance_small", ARSENAL_MAX_DISPLAY_DISTANCE_SMALL )
+}
+
+float function Arsenals_ArsenalCloseUpFadeMinHudDisplayDistance()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_close_up_min_hud_disp_distance", ARSENAL_CLOSE_UP_MIN_DISPLAY_DISTANCE_DEFAULT )
+}
+
+float function Arsenals_ArsenalCloseUpFadeMaxHudDisplayDistance()
+{
+	return GetCurrentPlaylistVarFloat( "arsenals_close_up_max_hud_disp_distance", ARSENAL_CLOSE_UP_MAX_DISPLAY_DISTANCE_DEFAULT )
+}
+
+int function Arsenals_GetArsenalWeaponStartingTier()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_weapon_starting_tier", 0 )
+}
+
+bool function Arsenals_BaseWeaponsUpgradeToKitted()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_base_upgrade_to_kitted", false )
+}
+
+bool function Arsenals_RemoveAmmoFromCrafter()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_remove_ammo_from_crafter", false )
+}
+
+int function Arsenals_SeededValue()
+{
+	return GetCurrentPlaylistVarInt( "arsenals_seed_value", 123456 )
+}
+
+bool function Arsenals_RemoveSpawnsOutsideRing()
+{
+	return GetCurrentPlaylistVarBool( "arsenals_remove_spawns_outside_ring", false )
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DEV_FUNCS___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

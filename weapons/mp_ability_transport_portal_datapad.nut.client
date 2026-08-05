@@ -1,0 +1,720 @@
+global function MpAbilityTransportPortalDatapad_Init
+
+global function OnWeaponActivate_ability_transport_portal_datapad
+global function OnWeaponDeactivate_ability_transport_portal_datapad
+global function OnWeaponPrimaryAttack_ability_transport_portal_datapad
+
+global function TransportPortalDatapad_UseSpecialKnockedAnims
+
+
+
+
+
+
+
+
+global function TransportPortal_CancelUse
+global function TransportPortalDatapad_SetupFxAndSound
+global function TransportPortal_GetSummonEndTime
+global function TransportPortal_IsBeingSummoned
+
+
+global const string  TRANSPORT_PORTAL_DATAPAD_WEAPON_NAME = "mp_ability_transport_portal_datapad"
+
+
+
+
+global const string TRANSPORT_PORTAL_CANCEL_CHANNEL_SIGNAL = "alter_ult_cancel_channel"
+global const string TRANSPORT_PORTAL_INTERRUPT_CHANNEL_SIGNAL = "alter_ult_interrupt_channel"
+global const string TRANSPORT_PORTAL_FINISHED_CHANNEL_SIGNAL = "alter_ult_finish_channel"
+
+const string TRANSPORT_PORTAL_SPECTATOR_TARGET_CHANGED = "alter_ult_spectator_changed"
+
+
+
+const asset TRANSPORT_PORTAL_PRE_TRAVEL_FX = $"P_alter_ulti_portal_channeling"
+const asset TRANSPORT_PORTAL_WARP_1P = $"P_alter_ulti_portal_warp_FP"
+const asset TRANSPORT_PORTAL_ROPE_FRIENDLY = $"P_alter_ulti_portal_dir_friendly"
+const asset TRANSPORT_PORTAL_ROPE_ENEMY = $"P_alter_ulti_portal_dir_enemy"
+
+
+const string TRANSPORT_PORTAL_TELEPORT_CONFIRM_1P = "Alter_Ult_UI_Teleport_Confirm_1p"
+const string TRANSPORT_PORTAL_START_CHANNEL_SOUND_1P = "Alter_Ult_Teleport_Buildup_1p"
+const string TRANSPORT_PORTAL_START_CHANNEL_SOUND_3P = "Alter_Ult_Teleport_Buildup_3p"
+const string TRANSPORT_PORTAL_START_CHANNEL_KNOCKED_SOUND_1P = "Alter_Ult_Teleport_Buildup_Downed_1p"
+const string TRANSPORT_PORTAL_BEING_SUMMONED_SOUND_1P = "Alter_Ult_Teleport_Buildup_Downed_1p"
+const string TRANSPORT_PORTAL_START_CHANNEL_KNOCKED_SOUND_3P = "Alter_Ult_Teleport_Buildup_Downed_3p"
+const string TRANSPORT_PORTAL_START_CHANNEL_TRANSLOCATOR_SOUND_3P = "Alter_Ult_Base_Alert_RemotelyUsed_3p"
+
+const bool TRANSPORT_PORTAL_DATAPAD_DEBUG = false
+
+struct{
+
+	float warpDelayAfterUse = 3.0
+
+
+
+	float warpDelayAfterUseAdditionalWhenKnocked = 1.0
+
+	bool canCancel = true
+	bool cancelOnDamage = false
+	bool cancelOnNonBulletDamage = false
+
+	bool allySummonAllowInterruption = false
+}tuning
+
+struct
+{
+	table < entity, bool > userToChannelCompletedMap
+
+
+
+
+
+	float summonEndTime = 0.0
+
+}file
+
+void function MpAbilityTransportPortalDatapad_Init()
+{
+	SetupTuning()
+
+	PrecacheWeapon( TRANSPORT_PORTAL_DATAPAD_WEAPON_NAME )
+
+	PrecacheParticleSystem( TRANSPORT_PORTAL_PRE_TRAVEL_FX )
+	PrecacheParticleSystem( TRANSPORT_PORTAL_WARP_1P )
+	PrecacheParticleSystem( TRANSPORT_PORTAL_ROPE_FRIENDLY )
+	PrecacheParticleSystem( TRANSPORT_PORTAL_ROPE_ENEMY )
+
+	RegisterSignal( TRANSPORT_PORTAL_CANCEL_CHANNEL_SIGNAL )
+	RegisterSignal( TRANSPORT_PORTAL_INTERRUPT_CHANNEL_SIGNAL )
+	RegisterSignal( TRANSPORT_PORTAL_FINISHED_CHANNEL_SIGNAL )
+
+
+	RegisterSignal( TRANSPORT_PORTAL_SPECTATOR_TARGET_CHANGED )
+
+	AddOnSpectatorTargetChangedCallback( OnSpectatorTargetChanged )
+
+	RegisterNetVarTimeChangeCallback( TRANSPORT_PORTAL_SUMMON_END_TIME_NETVAR, SummonTimeNetvarChangedCallback )
+
+}
+
+void function SetupTuning()
+{
+	tuning.warpDelayAfterUse = 						GetCurrentPlaylistVarFloat	( "alter_ult_warpDelayAfterUse", tuning.warpDelayAfterUse )
+	tuning.warpDelayAfterUseAdditionalWhenKnocked = GetCurrentPlaylistVarFloat	( "alter_ult_warpDelayAfterUseKnocked", tuning.warpDelayAfterUseAdditionalWhenKnocked )
+
+	tuning.cancelOnDamage =							GetCurrentPlaylistVarBool	( "alter_ult_cancelOnDamage", tuning.cancelOnDamage )
+	tuning.cancelOnNonBulletDamage =				GetCurrentPlaylistVarBool	( "alter_ult_cancelOnNonBulletDamage", tuning.cancelOnNonBulletDamage )
+
+	tuning.allySummonAllowInterruption =			GetCurrentPlaylistVarBool	( "alter_ult_allySummonAllowInterruption", tuning.allySummonAllowInterruption )
+}
+
+bool function TransportPortalDatapad_UseSpecialKnockedAnims()
+{
+	return tuning.warpDelayAfterUseAdditionalWhenKnocked > 0
+}
+
+
+void function OnSpectatorTargetChanged( entity player, entity prevTarget, entity newTarget )
+{
+	if ( IsValid( prevTarget ) && prevTarget.IsPlayer() )
+	{
+		entity weapon = prevTarget.GetOffhandWeapon( eOffhandInv.EQUIPMENT )
+		if ( IsValid( weapon ) && weapon.GetWeaponClassName() == TRANSPORT_PORTAL_DATAPAD_WEAPON_NAME )
+		{
+			if ( prevTarget in file.userToChannelCompletedMap )
+			{
+				delete file.userToChannelCompletedMap[prevTarget]
+			}
+
+			prevTarget.Signal( TRANSPORT_PORTAL_SPECTATOR_TARGET_CHANGED )
+		}
+	}
+
+	if ( IsValid( newTarget ) && newTarget.IsPlayer() )
+	{
+		entity weapon = newTarget.GetOffhandWeapon( eOffhandInv.EQUIPMENT )
+		if ( IsValid( weapon ) && weapon.GetWeaponClassName() == TRANSPORT_PORTAL_DATAPAD_WEAPON_NAME )
+		{
+			file.userToChannelCompletedMap[newTarget] <- false
+
+			bool playerIsKnocked = Bleedout_IsBleedingOut( newTarget )
+			
+			TransportPortalDatapad_SetupFxAndSound( newTarget, weapon.GetWeaponChargeFraction(), false, playerIsKnocked )
+		}
+	}
+}
+
+
+void function OnWeaponActivate_ability_transport_portal_datapad( entity weapon )
+{
+
+		if ( weapon.GetOwner() != GetLocalViewPlayer() )
+			return
+
+
+#if TRANSPORT_PORTAL_DATAPAD_DEBUG
+	printt( "Alter - " + weapon.GetOwner() + ": ACTIVATE portal datapad" )
+#endif
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid(player) )
+		return
+
+	file.userToChannelCompletedMap[player] <- false
+
+	bool playerIsKnocked = Bleedout_IsBleedingOut( player )
+
+
+
+
+
+
+
+
+
+
+	EmitSoundOnEntity( player, TRANSPORT_PORTAL_TELEPORT_CONFIRM_1P )
+	TransportPortalDatapad_SetupFxAndSound( player, weapon.GetWeaponChargeFraction(), true, playerIsKnocked )
+
+}
+
+void function OnWeaponDeactivate_ability_transport_portal_datapad( entity weapon )
+{
+
+	if ( weapon.GetOwner() != GetLocalViewPlayer() )
+		return
+
+
+#if TRANSPORT_PORTAL_DATAPAD_DEBUG
+	printt( "Alter - " + weapon.GetOwner() + ": Data pad DEACTIVATE" )
+#endif
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid(player) )
+		return
+
+	if ( !( player in file.userToChannelCompletedMap ) || !file.userToChannelCompletedMap[player]  )
+	{
+		player.Signal( TRANSPORT_PORTAL_CANCEL_CHANNEL_SIGNAL )
+#if TRANSPORT_PORTAL_DATAPAD_DEBUG
+		printt("Alter - " + weapon.GetOwner() + ": datapad WAS CANCELLED " + weapon.GetWeaponChargeFraction() )
+#endif
+	}
+	else
+	{
+		player.Signal( TRANSPORT_PORTAL_FINISHED_CHANNEL_SIGNAL )
+
+		TransportPortal_SetChannelCompletedTime()
+
+	}
+
+	if ( player in file.userToChannelCompletedMap  )
+	{
+		delete file.userToChannelCompletedMap[player]
+	}
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+var function OnWeaponPrimaryAttack_ability_transport_portal_datapad( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return 0
+
+	if ( weapon.GetWeaponChargeFraction() < 1.0 )
+		return 0
+
+	file.userToChannelCompletedMap[player] <- true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	return 1
+}
+
+string function GetChannelSFX( bool isKnocked, bool get1pSound )
+{
+
+	if ( TransportPortal_IsBeingSummoned() && get1pSound )
+		return TRANSPORT_PORTAL_BEING_SUMMONED_SOUND_1P
+
+
+	if ( isKnocked && TransportPortalDatapad_UseSpecialKnockedAnims() )
+	{
+		return get1pSound ? TRANSPORT_PORTAL_START_CHANNEL_KNOCKED_SOUND_1P : TRANSPORT_PORTAL_START_CHANNEL_KNOCKED_SOUND_3P
+	}
+
+	return get1pSound ? TRANSPORT_PORTAL_START_CHANNEL_SOUND_1P : TRANSPORT_PORTAL_START_CHANNEL_SOUND_3P
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function SummonTimeNetvarChangedCallback( entity player, float summonEndTime )
+{
+	if ( summonEndTime != file.summonEndTime )
+	{
+		file.summonEndTime = summonEndTime
+		if ( summonEndTime > 0.0 )
+		{
+			TransportPortalDatapad_SetupFxAndSound( player, 0.0, true, true, TransportPortalGetSummonAllyChannelTime() )
+		}
+		else
+		{
+			Signal( player, TRANSPORT_PORTAL_CANCEL_CHANNEL_SIGNAL )
+		}
+	}
+}
+
+float function TransportPortal_GetSummonEndTime()
+{
+	return file.summonEndTime
+}
+
+bool function TransportPortal_IsBeingSummoned()
+{
+	return file.summonEndTime > 0.0
+}
+
+
+
+void function TransportPortalDatapad_SetupFxAndSound( entity player, float chargeFrac, bool forceSoundFromStart, bool playerIsKnocked, float channelTimeOverride = -1.0 )
+{
+	float channelTime = channelTimeOverride >= 0.0 ? channelTimeOverride : (tuning.warpDelayAfterUse + (playerIsKnocked ? tuning.warpDelayAfterUseAdditionalWhenKnocked : 0.0))
+	float channelTimeElapsed = chargeFrac * channelTime
+	float soundTotalTime = channelTime
+	string sound = GetChannelSFX( playerIsKnocked, true )
+
+	if ( forceSoundFromStart )
+	{
+		EmitSoundOnEntity( player, sound )
+	}
+	else
+	{
+		soundTotalTime -= channelTimeElapsed
+		EmitSoundOnEntityWithSeek( player, sound, channelTimeElapsed )
+	}
+
+	thread CleanupChannelSound_Thread( player, soundTotalTime, sound )
+	thread PlayScreenFXWarpJumpTransportPortal_Thread( player, channelTime )
+	TransportPortal_SetChannelUseTime( channelTime, channelTimeElapsed )
+}
+
+
+
+void function CleanupChannelSound_Thread( entity player, float delay, string sound )
+{
+	player.EndSignal( "OnDeath", "OnDestroy", "BleedOut_OnStartDying", TRANSPORT_PORTAL_CANCEL_CHANNEL_SIGNAL, TRANSPORT_PORTAL_SPECTATOR_TARGET_CHANGED )
+
+	OnThreadEnd(
+		function() : ( player, sound )
+		{
+			StopSoundOnEntity( player, sound )
+		}
+	)
+
+	wait delay
+}
+
+
+
+void function PlayScreenFXWarpJumpTransportPortal_Thread( entity player, float channelTime )
+{
+	Assert ( IsNewThread(), "Must be started as new thread" )
+
+	player.EndSignal( "OnDeath", "OnDestroy", "BleedOut_OnStartDying", TRANSPORT_PORTAL_CANCEL_CHANNEL_SIGNAL, TRANSPORT_PORTAL_SPECTATOR_TARGET_CHANGED )
+
+	int fxHandle = -1
+	if ( IsValid( player.GetCockpit() ) )
+	{
+		fxHandle = StartParticleEffectOnEntity( player, GetParticleSystemIndex( TRANSPORT_PORTAL_WARP_1P ), FX_PATTACH_POINT_FOLLOW, player.GetCockpit().LookupAttachment( "CAMERA" ) )
+		EffectSetIsWithCockpit( fxHandle, true )
+	}
+	else
+	{
+		return
+	}
+
+	OnThreadEnd(
+		function() : ( player, fxHandle )
+		{
+			printt("ALTER - FX Done Portal " + Time())
+			if ( fxHandle > -1 )
+				EffectStop( fxHandle, true, false )
+		}
+	)
+
+	
+	float maxTime = channelTime + 2.0
+	float endTime = Time() + maxTime
+
+	
+	while( Time() < endTime )
+	{
+		WaitFrame()
+
+		if ( Bleedout_IsBleedingOut( player ) && !TransportPortal_IsBeingSummoned() && player.ContextAction_IsActive() )
+		{
+			break
+		}
+
+		if ( player.IsPhaseShifted() )
+			break
+	}
+
+#if TRANSPORT_PORTAL_DATAPAD_DEBUG
+	printt("ALTER - " + player + " - wait done " + Time())
+#endif
+}
+
+
+
+
+void function TransportPortal_CancelUse( )
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	entity datapadWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( IsValid( datapadWeapon ) && datapadWeapon.GetWeaponClassName() == TRANSPORT_PORTAL_DATAPAD_WEAPON_NAME )
+	{
+#if TRANSPORT_PORTAL_DATAPAD_DEBUG
+		printt("Alter - " + player + ": TransportPortal_CancelUse - doing cancel")
+#endif
+		player.ClientCommand( "invnext" )
+	}
+}
+
+ 

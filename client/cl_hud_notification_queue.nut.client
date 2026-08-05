@@ -1,0 +1,1979 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function HudNotificationQueue_Init
+
+
+global function HudNotificationQueue_CreateAndRegisterQueue
+
+
+global function HudNotificationQueue_CreateEmptyItem			
+global function HudNotificationQueue_QueueItem					
+global function HudNotificationQueue_UpdateItem					
+
+
+global function HudNotificationQueue_GetConfigure
+global function HudNotificationQueue_Configure
+
+
+global function HudNotificationQueue_AddQueueBlocker			
+
+
+global function HudNotificationQueue_CreateRuiArg				
+global function HudNotificationQueue_SetRuiArgs					
+global function HudNotificationQueue_GetQueueItemCount
+global function HudNotificationQueue_GetVisibleQueueItemCount
+
+
+global function HudNotificationQueue_OnCreateRuiShell_Base		
+global function HudNotificationQueue_OnCreateVisual_Base
+global function HudNotificationQueue_OnIntro_Base
+global function HudNotificationQueue_OnOutro_Base
+global function HudNotificationQueue_OnDestroyVisual_Base
+global function HudNotificationQueue_OnUpdate_Base
+
+
+
+
+
+
+
+
+
+
+global function HudNotificationQueue_GetVisibleItems
+
+
+global function DONOTUSE_HudNotificationQueue_AllowClearItemsOnQueue
+
+global typedef QueueBlockerFunc bool functionref()
+
+
+
+
+
+
+
+
+
+
+
+
+global enum eHudNotificationQueuePriority
+{
+	TRIVIAL = 0,
+	LOW = 10,
+	MEDIUM = 25,
+	HIGH = 50,
+	CRITICAL = 100,
+	MAX = 150
+}
+
+global enum eHudNotificationQueueStackDirection
+{
+	NONE,
+	TOP_TO_BOTTOM,
+	BOTTOM_TO_TOP,
+	LEFT_TO_RIGHT,
+	RIGHT_TO_LEFT,
+}
+
+global enum eHudNotificationQueueBacklogPreservationStyle
+{
+	FIRST_IN,	
+	LAST_IN,	
+	PRIORITY,	
+}
+
+
+
+global enum ePersistenceContext
+{
+	INVALID = -1, 		
+	PLAYER,				
+	GLOBAL = 100,		
+}
+
+
+global struct HudNotificationQueue_ItemPositionEntry
+{
+	int index
+	vector startPosition
+	vector endPosition
+	vector currentPosition
+}
+
+
+global struct HudNotificationQueueRuiArg
+{
+	string 		argName
+	var			argValue
+	array<var>	addlArgValues	
+	int			argType = -1
+}
+
+
+global struct HudNotificationQueueItem
+{
+	
+
+
+
+
+
+	string key							
+	bool isValid						= true		
+	bool allowIndirectUpdates			= false		
+
+	int persistenceContext				= ePersistenceContext.INVALID			
+	int priority 						= eHudNotificationQueuePriority.LOW		
+	float stuckInQueueTimeOutDuration 	= 30.0	 								
+	float duration						= 4.0									
+	float outroDuration					= 0.5									
+	vector size							= <1920, 1080, 0>						
+
+	asset ruiAsset 						= $""									
+	table< string, HudNotificationQueueRuiArg > ruiArgs							
+
+	array< asset > nestedRuiAssets												
+	array< table< string, HudNotificationQueueRuiArg > > nestedRuiArgs			
+	bool drawOverScreenFade				= false									
+	vector offset						= <0, 0, 0>
+
+	var ruiShell																
+	var ruiInstance																
+	array< var > nestedRuiInstances												
+	int uiDrawStage						= eUIDrawStage.POSTEFFECTS
+
+	array< string > soundAliases			
+	array< string > speakerDialogueLines	
+
+
+	
+	vector scenePosition				= <0, 0, 0>
+	vector sceneAngles					= <0, 0, 0>
+
+	table miscArgs	
+
+	
+
+
+
+
+	array<bool functionref( HudNotificationQueueItem )> onPreIntro						
+
+	void functionref( HudNotificationQueueItem ) onCreateVisual					
+	var functionref( HudNotificationQueueItem ) onCreateVisualOverride			
+
+	void functionref( HudNotificationQueueItem ) onIntro						
+	void functionref( HudNotificationQueueItem ) onIntroOverride				
+
+	bool functionref( HudNotificationQueueItem ) onPreOutro						
+
+	void functionref( HudNotificationQueueItem ) onOutro						
+	void functionref( HudNotificationQueueItem ) onOutroOverride				
+
+	void functionref( HudNotificationQueueItem ) onDestroyVisual				
+	void functionref( HudNotificationQueueItem ) onDestroyVisualOverride		
+																					
+
+	void functionref( HudNotificationQueueItem ) onComplete						
+
+	void functionref( bool, HudNotificationQueueItem ) onUpdate					
+	void functionref( bool, HudNotificationQueueItem, HudNotificationQueueItem ornull ) onUpdateOverride			
+
+	
+	int queueId	
+	float enteredQueueTime = -1
+	table signalDummy = {}
+	float timeToStartOutro = -1
+
+	
+	AnnouncementData& deprecatedAnnouncementData
+}
+
+
+global struct HudNotificationQueueConfiguration
+{
+	
+	bool allowDirectUpdates
+	bool allowIndirectUpdates
+	bool allowDuplicates
+	bool itemUpdatesRefreshDuration
+	int backlogMaxCount
+	int backlogMaxCountWhenBlocked
+	int backlogPreservationStyle
+
+	
+	int maxVisibleItems
+	UISize maxTotalSize
+	bool pauseOnLocalPlayerDeath
+
+	
+	int sortKey
+
+	
+	bool itemPositioningEnabled
+	int stackDirection
+	float moveDuration
+	float padding
+	vector screenSpacePin
+	vector itemAnchorPin
+	vector startPosition
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct HudNotificationQueue_Receiver
+{
+	bool allowDirectUpdates 		= true		
+	bool allowIndirectUpdates 		= false		
+	bool allowDuplicates 			= true		
+	bool itemUpdatesRefreshDuration = false		
+
+	int backlogMaxCount				= -1		
+	int backlogMaxCountWhenBlocked	= -1		
+	int backlogPreservationStyle	= eHudNotificationQueueBacklogPreservationStyle.LAST_IN
+}
+
+struct HudNotificationQueue_Dispatcher
+{
+	int maxVisibleItems				= 1			
+	UISize maxTotalSize							
+
+	
+	bool hasInitialized				= false		
+	bool isActivelyProcessing 		= false		
+
+	array<QueueBlockerFunc> queueBlockers
+	bool isQueueBlockerRunning 		= false
+	float queueBlockerEvaluationFrequency = 0.1	
+}
+
+struct HudNotificationQueue_VisibleItemInterface
+{
+	int sortKey = 0
+}
+
+struct HudNotificationQueue_ItemPositioning
+{
+	bool enabled				= true					
+	int stackDirection 			= eHudNotificationQueueStackDirection.TOP_TO_BOTTOM
+	float moveDuration 			= 0.2
+	float padding				= 0.0					
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	vector screenSpacePin		= <0.5, 0.5, 0>
+	vector itemAnchorPin		= <0.5, 0.5, 0>
+	vector startPosition 		= <0, 0, 0>
+
+
+	
+	float moveStartTime 		= -1
+	float moveFrac				= 0.0
+	table< HudNotificationQueueItem, HudNotificationQueue_ItemPositionEntry > itemPositionData
+}
+
+struct HudNotificationQueue
+{
+	string key	
+	int    id	
+
+	
+	HudNotificationQueue_Receiver&           	receiver
+	HudNotificationQueue_Dispatcher&         	dispatcher
+	HudNotificationQueue_VisibleItemInterface& 	visibleItemInterface
+	HudNotificationQueue_ItemPositioning&    	itemPositioning
+
+
+	
+	array< HudNotificationQueueItem > queuedItems		
+	array< HudNotificationQueueItem > preVisibleItems	
+	array< HudNotificationQueueItem > visibleItems		
+
+	table signalDummy = {}		
+
+	
+	bool allowClearItems
+	bool pauseOnLocalPlayerDeath = true		
+}
+
+
+struct {
+	
+	table< string, int > hudNotificationQueueKeyToIdMap
+	table< int, HudNotificationQueue > hudNotificationQueues
+
+	
+	int uniqueQueueId = 0	
+
+	
+	float localPlayerKilledTime = 0
+
+} file
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SYSTEM_SETUP___________________________(){}
+#endif
+
+void function HudNotificationQueue_Init()
+{
+	HudNotificationQueue_RegisterSignals()
+	AddCallback_OnGameStateChanged( HudNotificationQueue_OnGameStateChanged )
+	AddCallback_OnViewPlayerChanged( HudNotificationQueue_OnViewPlayerChanged )
+	AddOnDeathCallback( "player", HudNotificationQueue_OnPlayerKilled )
+}
+
+void function HudNotificationQueue_RegisterSignals()
+{
+	RegisterSignal( "HudNotificationQueue_QueueBlockerStarted" )
+	RegisterSignal( "HudNotificationQueue_QueueBlockersReleased" )
+	RegisterSignal( "HudNotificationQueue_Dispatcher_ItemSlotReleased" )		
+	RegisterSignal( "ItemPositioning_UpdatePositions" )							
+	RegisterSignal( "ItemPositioning_OnBeginUpdatePositions" )					
+	RegisterSignal( "ItemPositioning_ForceEndPositionThread" )					
+
+	
+	RegisterSignal( "Internal_HudNotificationQueue_ClearItem" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________QUEUE_SETUP___________________________(){}
+#endif
+
+int function HudNotificationQueue_CreateAndRegisterQueue( string notificationQueueKey )
+{
+	Assert( !(notificationQueueKey in file.hudNotificationQueueKeyToIdMap), format( "Tried to register a new HUD Notification Queue with a duplicate key of %s", notificationQueueKey ) )
+
+	HudNotificationQueue queue
+	queue.key = notificationQueueKey
+	queue.id = HudNotificationQueue_GetNewUniqueQueueId()
+
+	Assert( !(queue.id in file.hudNotificationQueues), format( "Tried to register a new HUD Notification Queue with a duplicate ID of %s", queue.id ) )
+
+	file.hudNotificationQueueKeyToIdMap[ queue.key ] <- queue.id
+	file.hudNotificationQueues[ queue.id ] <- queue
+
+	HudNotificationQueue_InitializeQueue( queue )
+
+	return queue.id
+}
+
+void function HudNotificationQueue_InitializeQueue( HudNotificationQueue queue )
+{
+	QueueDispatcher_Init( queue )
+	ItemPositioning_Init( queue )
+}
+
+int function HudNotificationQueue_GetNewUniqueQueueId()
+{
+	return ++file.uniqueQueueId
+}
+
+
+HudNotificationQueue function HudNotificationQueue_GetQueueById( int queueId )
+{
+	Assert( queueId in file.hudNotificationQueues, format( "Unable to find a queue with the id %s", queueId ) )
+	return file.hudNotificationQueues[ queueId ]
+}
+
+int function HudNotificationQueue_GetQueueIdByKey( string queueKey )
+{
+	Assert( queueKey in file.hudNotificationQueueKeyToIdMap, format( "Unable to find a queue with the key %s", queueKey ) )
+	return file.hudNotificationQueueKeyToIdMap[ queueKey ]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________QUEUE_HELPERS___________________________(){}
+#endif
+
+HudNotificationQueueConfiguration function HudNotificationQueue_GetConfigure( int queueId )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+	HudNotificationQueueConfiguration configuration
+
+	
+	configuration.allowDirectUpdates = queue.receiver.allowDirectUpdates
+	configuration.allowIndirectUpdates = queue.receiver.allowIndirectUpdates
+	configuration.allowDuplicates = queue.receiver.allowDuplicates
+	configuration.itemUpdatesRefreshDuration = queue.receiver.itemUpdatesRefreshDuration
+	configuration.backlogMaxCount = queue.receiver.backlogMaxCount
+	configuration.backlogMaxCountWhenBlocked = queue.receiver.backlogMaxCountWhenBlocked
+	configuration.backlogPreservationStyle = queue.receiver.backlogPreservationStyle
+
+	
+	configuration.maxVisibleItems = queue.dispatcher.maxVisibleItems
+	configuration.maxTotalSize.width = queue.dispatcher.maxTotalSize.width
+	configuration.maxTotalSize.height = queue.dispatcher.maxTotalSize.height
+	configuration.pauseOnLocalPlayerDeath = queue.pauseOnLocalPlayerDeath
+
+	
+	configuration.sortKey = queue.visibleItemInterface.sortKey
+
+	
+	configuration.itemPositioningEnabled = queue.itemPositioning.enabled
+	configuration.stackDirection = queue.itemPositioning.stackDirection
+	configuration.moveDuration = queue.itemPositioning.moveDuration
+	configuration.padding = queue.itemPositioning.padding
+	configuration.screenSpacePin = queue.itemPositioning.screenSpacePin
+	configuration.itemAnchorPin = queue.itemPositioning.itemAnchorPin
+	configuration.startPosition = queue.itemPositioning.startPosition
+
+	return configuration
+}
+
+void function HudNotificationQueue_Configure( int queueId, HudNotificationQueueConfiguration configuration )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+
+	
+	queue.receiver.allowDirectUpdates = configuration.allowDirectUpdates
+	queue.receiver.allowIndirectUpdates = configuration.allowIndirectUpdates
+	queue.receiver.allowDuplicates = configuration.allowDuplicates
+	queue.receiver.itemUpdatesRefreshDuration = configuration.itemUpdatesRefreshDuration
+	queue.receiver.backlogMaxCount = configuration.backlogMaxCount
+	queue.receiver.backlogMaxCountWhenBlocked = configuration.backlogMaxCountWhenBlocked
+	queue.receiver.backlogPreservationStyle = configuration.backlogPreservationStyle
+
+	
+#if DEV
+		if ( configuration.maxVisibleItems == 0 )
+		{
+			Warning( format( "The max number of visible items for queue %s was set to 0. If you're trying to hide a queue, you should use QueueBlockers to temporarily suspend processing of the queue.", queue.key ) )
+		}
+#endif
+	queue.dispatcher.maxVisibleItems = configuration.maxVisibleItems
+	queue.dispatcher.maxTotalSize.width = configuration.maxTotalSize.width
+	queue.dispatcher.maxTotalSize.height = configuration.maxTotalSize.height
+	queue.pauseOnLocalPlayerDeath = configuration.pauseOnLocalPlayerDeath
+
+	
+	queue.visibleItemInterface.sortKey = configuration.sortKey
+
+	
+	bool hasItemPositioningBecomeDisabled = false
+	bool hasAnyPositioningSettingChanged = false
+
+	if ( queue.itemPositioning.enabled && !configuration.itemPositioningEnabled )
+	{
+		hasItemPositioningBecomeDisabled = true
+	}
+	queue.itemPositioning.enabled = configuration.itemPositioningEnabled
+
+	if ( queue.itemPositioning.stackDirection != configuration.stackDirection )
+	{
+		queue.itemPositioning.stackDirection = configuration.stackDirection
+		hasAnyPositioningSettingChanged = true
+	}
+
+	if ( queue.itemPositioning.moveDuration != configuration.moveDuration )
+	{
+		queue.itemPositioning.moveDuration = configuration.moveDuration
+		hasAnyPositioningSettingChanged = true
+	}
+
+	if ( queue.itemPositioning.padding != configuration.padding )
+	{
+		queue.itemPositioning.padding = configuration.padding
+		hasAnyPositioningSettingChanged = true
+	}
+
+	
+	queue.itemPositioning.itemAnchorPin = configuration.itemAnchorPin
+	queue.itemPositioning.screenSpacePin = configuration.screenSpacePin
+	queue.itemPositioning.startPosition = configuration.startPosition
+
+	if ( hasItemPositioningBecomeDisabled )
+	{
+		
+		Signal( queue.signalDummy, "ItemPositioning_ForceEndPositionThread" )
+
+		
+		queue.itemPositioning.itemPositionData.clear()
+	}
+	else if ( queue.itemPositioning.enabled && hasAnyPositioningSettingChanged ) 
+	{
+		Signal( queue.signalDummy, "ItemPositioning_UpdatePositions" )
+	}
+}
+
+HudNotificationQueueItem function HudNotificationQueue_CreateEmptyItem()
+{
+	HudNotificationQueueItem item
+	return item
+}
+
+void function HudNotificationQueue_QueueItem( int queueId, HudNotificationQueueItem incomingQueueItem, int persistenceContext )
+{
+	
+	Assert( persistenceContext > ePersistenceContext.INVALID, "Cannot queue an item with an invalid persistence context." )
+
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+	incomingQueueItem.queueId = queueId		
+	incomingQueueItem.persistenceContext = persistenceContext
+	QueueReceiver_EvaluateIncomingItem( queue, incomingQueueItem )
+}
+
+void function HudNotificationQueue_UpdateItem( HudNotificationQueueItem updatedItem )
+{
+	
+	PassByReferenceBool isVisibleRef = { value = false }
+	HudNotificationQueueItem ornull existingQueueItem = QueueReceiver_FindExistingItemOrNullAndCheckIfVisible( updatedItem, isVisibleRef )
+	VisibleItemInterface_UpdateQueueItem( isVisibleRef.value, updatedItem )
+}
+
+HudNotificationQueueRuiArg function HudNotificationQueue_CreateRuiArg( string argName, var argValue, int argType = -1, array<var> addlArgValues = [] )
+{
+	HudNotificationQueueRuiArg arg
+	arg.argName = argName
+	arg.argValue = argValue
+	arg.addlArgValues = addlArgValues
+	arg.argType = argType
+	return arg
+}
+
+
+void function HudNotificationQueue_SetRuiArgs( var rui, table< string, HudNotificationQueueRuiArg > ruiArgsTable )
+{
+	VisibleItemInterface_SetRuiArgs( rui, ruiArgsTable )
+}
+
+int function HudNotificationQueue_GetQueueItemCount( int queueId )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+	return queue.queuedItems.len()
+}
+
+int function HudNotificationQueue_GetVisibleQueueItemCount( int queueId )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+	return queue.queuedItems.len()
+}
+
+
+
+
+
+
+
+array<HudNotificationQueueItem> function HudNotificationQueue_GetVisibleItems( int queueId )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+	return queue.visibleItems
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________RECEIVER_COMPONENT___________________________(){}
+#endif
+
+void function QueueReceiver_EvaluateIncomingItem( HudNotificationQueue queue, HudNotificationQueueItem incomingQueueItem )
+{
+	PassByReferenceBool isExistingItemVisible = { value = false }
+	HudNotificationQueueItem ornull existingQueueItem = QueueReceiver_FindExistingItemOrNullAndCheckIfVisible( incomingQueueItem, isExistingItemVisible )
+
+	if ( existingQueueItem != null )
+	{
+		expect HudNotificationQueueItem( existingQueueItem )
+
+		
+		bool allowUpdate = queue.receiver.allowIndirectUpdates || existingQueueItem.allowIndirectUpdates
+		if ( allowUpdate )
+		{
+			VisibleItemInterface_UpdateQueueItem( isExistingItemVisible.value, existingQueueItem, incomingQueueItem )
+		}
+		else if ( queue.receiver.allowDuplicates )
+		{
+			QueueReceiver_AddItem( queue, incomingQueueItem )
+		}
+		else
+		{
+			Warning( format( "Found duplicate QueueItem with key %s, but updates and duplicates aren't allowed on queue %s.", incomingQueueItem.key, queue.key ) )
+		}
+	}
+	else
+	{
+		QueueReceiver_AddItem( queue, incomingQueueItem )
+	}
+}
+
+void function QueueReceiver_AddItem( HudNotificationQueue queue, HudNotificationQueueItem queueItem )
+{
+	if ( queue.queuedItems.len() > 0 )
+	{
+		
+		for ( int idx = queue.queuedItems.len() - 1; idx >= 0; idx-- )
+		{
+			HudNotificationQueueItem itemToCheck = queue.queuedItems[idx]
+
+			
+			if ( itemToCheck.priority >= queueItem.priority )
+			{
+				queueItem.enteredQueueTime = ClientTime()
+				queue.queuedItems.insert( idx + 1, queueItem )
+
+				QueueReceiver_ResolveBacklog( queue )
+				QueueBlockers_ResolveBacklogOfBlockedItems( queue )
+				break
+			}
+			else if ( idx == 0 ) 
+			{
+				queueItem.enteredQueueTime = ClientTime()
+				queue.queuedItems.insert( idx, queueItem )
+
+				QueueReceiver_ResolveBacklog( queue )
+				QueueBlockers_ResolveBacklogOfBlockedItems( queue )
+				break
+			}
+		}
+	}
+	else
+	{
+		
+		queueItem.enteredQueueTime = ClientTime()
+		queue.queuedItems.insert( 0, queueItem )
+
+		QueueReceiver_ResolveBacklog( queue )
+		QueueBlockers_ResolveBacklogOfBlockedItems( queue )
+
+		QueueDispatcher_ProcessQueue( queue )
+	}
+}
+
+HudNotificationQueueItem ornull function QueueReceiver_FindExistingItemOrNullAndCheckIfVisible( HudNotificationQueueItem queueItem, PassByReferenceBool isVisibleRefToUpdate )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueItem.queueId )
+
+	
+	if ( queueItem.key != "" )
+	{
+		
+		foreach ( visibleItem in queue.visibleItems )
+		{
+			if ( visibleItem.key == queueItem.key )
+			{
+				isVisibleRefToUpdate.value = true
+				return visibleItem
+			}
+		}
+
+		
+		foreach ( preVisibleItem in queue.preVisibleItems )
+		{
+			if ( preVisibleItem.key == queueItem.key )
+			{
+				isVisibleRefToUpdate.value = false
+				return preVisibleItem
+			}
+		}
+
+		
+		foreach ( queuedItem in queue.queuedItems )
+		{
+			if ( queuedItem.key == queueItem.key )
+			{
+				isVisibleRefToUpdate.value = false
+				return queuedItem
+			}
+		}
+	}
+
+	return null
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DISPATCHER_COMPONENT___________________________(){}
+#endif
+
+void function QueueDispatcher_Init( HudNotificationQueue queue )
+{
+	if ( !queue.dispatcher.hasInitialized )
+	{
+		thread QueueDispatcher_MonitorForSlotRelease( queue )
+	}
+}
+
+void function QueueDispatcher_ProcessQueue( HudNotificationQueue queue )
+{
+	
+	if ( queue.dispatcher.isActivelyProcessing )
+		return
+
+	if ( queue.queuedItems.len() == 0 )
+		return
+
+	QueueDispatcher_RemoveTimedOutItems( queue )
+
+	
+	if ( queue.queuedItems.len() == 0 )
+		return
+
+	
+	if ( queue.dispatcher.queueBlockers.len() > 0 )
+		return
+
+	queue.dispatcher.isActivelyProcessing = true
+
+	thread QueueDispatcher_ProcessingWorker_Thread( queue )
+}
+
+void function QueueDispatcher_RemoveTimedOutItems( HudNotificationQueue queue )
+{
+	foreach ( HudNotificationQueueItem item in queue.queuedItems )
+	{
+		if ( item.stuckInQueueTimeOutDuration > 0 )
+		{
+			float timeSinceEnteredQueue = ClientTime() - item.enteredQueueTime
+			if ( timeSinceEnteredQueue >= item.stuckInQueueTimeOutDuration )
+			{
+				queue.queuedItems.removebyvalue( item ) 
+			}
+		}
+	}
+
+	
+	foreach ( HudNotificationQueueItem item in queue.preVisibleItems )
+	{
+		if ( item.stuckInQueueTimeOutDuration > 0 )
+		{
+			float timeSinceEnteredQueue = ClientTime() - item.enteredQueueTime
+			if ( timeSinceEnteredQueue >= item.stuckInQueueTimeOutDuration )
+			{
+				queue.preVisibleItems.removebyvalue( item ) 
+			}
+		}
+	}
+}
+
+void function QueueDispatcher_MonitorForSlotRelease( HudNotificationQueue queue )
+{
+	
+	if ( queue.dispatcher.hasInitialized )
+		return
+
+	
+	while ( true )
+	{
+		WaitSignal( queue.signalDummy, "HudNotificationQueue_Dispatcher_ItemSlotReleased", "HudNotificationQueue_QueueBlockersReleased" )
+		QueueDispatcher_ProcessQueue( queue )
+	}
+}
+
+void function QueueDispatcher_ProcessingWorker_Thread( HudNotificationQueue queue )
+{
+	EndSignal( queue.signalDummy, "HudNotificationQueue_QueueBlockerStarted" ) 
+
+	OnThreadEnd(
+		function() : ( queue )
+		{
+			QueueDispatcher_ProcessingComplete( queue )
+		}
+	)
+
+	queue.dispatcher.isActivelyProcessing = true
+
+	
+	WaitFrame()
+
+	bool canAddItems = true
+	while ( canAddItems )
+	{
+		
+		int visibleAndSoonToBeVisibleItemCount = queue.visibleItems.len() + queue.preVisibleItems.len()
+		bool areVisibleSlotsAvailable = visibleAndSoonToBeVisibleItemCount < queue.dispatcher.maxVisibleItems
+
+		
+		bool shouldCheckMaxCount = queue.dispatcher.maxVisibleItems >= 0
+		bool withinCountLimit = shouldCheckMaxCount ? areVisibleSlotsAvailable : true
+
+		
+		bool shouldCheckSizeLimit = queue.dispatcher.maxTotalSize.width > 0 || queue.dispatcher.maxTotalSize.height > 0
+		bool withinSizeLimit = shouldCheckSizeLimit ? true : true 
+
+		canAddItems = withinCountLimit && withinSizeLimit && queue.queuedItems.len() > 0
+
+		if ( canAddItems )
+		{
+			HudNotificationQueueItem queueItem = queue.queuedItems[0]
+
+			queue.queuedItems.remove( 0 ) 
+
+			
+			thread VisibleItemInterface_Thread( queue, queueItem )
+		}
+		else	
+		{
+			if ( !withinCountLimit )
+				printt( format( "HNQ_D - Unable to add  more items (max item count of %s).", string( queue.dispatcher.maxVisibleItems ) ) )
+
+			if ( !withinSizeLimit )
+				printt( format( "HNQ_D - Unable to add more items (max total screenspace size of <%s, %s>).", string( queue.dispatcher.maxTotalSize.width ), string( queue.dispatcher.maxTotalSize.height ) ) )
+		}
+
+		
+		if ( queue.queuedItems.len() == 0 )
+		{
+			canAddItems = false
+		}
+	}
+}
+
+void function QueueDispatcher_ProcessingComplete( HudNotificationQueue queue )
+{
+	queue.dispatcher.isActivelyProcessing = false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________QUEUE_BLOCKERS_COMPONENT___________________________(){}
+#endif
+
+void function HudNotificationQueue_AddQueueBlocker( int queueId, QueueBlockerFunc queueBlocker )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+
+	
+	if ( queue.dispatcher.queueBlockers.contains( queueBlocker ) )
+		return
+
+	queue.dispatcher.queueBlockers.append( queueBlocker )
+
+	if ( !queue.dispatcher.isQueueBlockerRunning )
+	{
+		queue.dispatcher.isQueueBlockerRunning = true
+
+		
+		
+		QueueBlockers_ResolveBacklogOfBlockedItems( queue )
+
+		thread QueueBlockers_ProcessBlockers_Thread( queue )
+	}
+}
+
+void function QueueBlockers_ProcessBlockers_Thread( HudNotificationQueue queue )
+{
+	AssertIsNewThread()
+
+	Signal( queue.signalDummy, "HudNotificationQueue_QueueBlockerStarted" )
+	EndSignal( queue.signalDummy, "HudNotificationQueue_QueueBlockerStarted" )
+
+	OnThreadEnd(
+		function() : ( queue )
+		{
+			queue.dispatcher.isQueueBlockerRunning = false
+			Signal( queue.signalDummy, "HudNotificationQueue_QueueBlockersReleased" )
+		}
+	)
+
+	while ( queue.dispatcher.queueBlockers.len() > 0 )
+	{
+		foreach ( QueueBlockerFunc func in queue.dispatcher.queueBlockers )
+		{
+			if ( func() )
+			{
+				queue.dispatcher.queueBlockers.fastremovebyvalue( func )
+			}
+		}
+
+		Assert( queue.dispatcher.queueBlockerEvaluationFrequency > 0, "Can't set a wait interval of 0 for notification queue blockers.")
+		wait max( queue.dispatcher.queueBlockerEvaluationFrequency, 0.016 ) 
+	}
+}
+
+void function QueueBlockers_ResolveBacklogOfBlockedItems( HudNotificationQueue queue )
+{
+	
+	if ( !queue.dispatcher.isQueueBlockerRunning )
+		return
+
+	
+	if ( queue.receiver.backlogMaxCountWhenBlocked < 0 )
+		return
+
+	
+	QueueDispatcher_RemoveTimedOutItems( queue )
+
+	
+	array< HudNotificationQueueItem > sortedItems = QueueBlockers_SortBacklogForPreservationStyle( queue.queuedItems, queue.receiver.backlogPreservationStyle )
+
+	foreach ( idx, HudNotificationQueueItem item in sortedItems )
+	{
+		
+		if ( idx < queue.receiver.backlogMaxCountWhenBlocked )
+			continue
+
+		
+		queue.queuedItems.removebyvalue( item )
+	}
+}
+
+
+void function QueueReceiver_ResolveBacklog( HudNotificationQueue queue )
+{
+	if ( queue.receiver.backlogMaxCount < 0 )
+		return
+
+	if ( queue.queuedItems.len() <= queue.receiver.backlogMaxCount )
+		return
+
+	array< HudNotificationQueueItem > sortedItems = QueueBlockers_SortBacklogForPreservationStyle( queue.queuedItems, queue.receiver.backlogPreservationStyle )
+
+	foreach ( idx, HudNotificationQueueItem item in sortedItems )
+	{
+		if ( idx < queue.receiver.backlogMaxCount )
+			continue
+
+		queue.queuedItems.removebyvalue( item )
+	}
+}
+
+array< HudNotificationQueueItem > function QueueBlockers_SortBacklogForPreservationStyle( array< HudNotificationQueueItem > originalItems, int backlogPreservationStyle )
+{
+	array< HudNotificationQueueItem > clonedItems = clone originalItems
+
+	clonedItems.sort( int function( HudNotificationQueueItem a, HudNotificationQueueItem b ) : ( backlogPreservationStyle ) {
+		switch ( backlogPreservationStyle )
+		{
+			
+			case eHudNotificationQueueBacklogPreservationStyle.FIRST_IN:
+
+				if ( a.enteredQueueTime < b.enteredQueueTime )
+					return -1
+				else if ( a.enteredQueueTime > b.enteredQueueTime )
+					return 1
+
+				return 0
+
+				break
+
+				
+			case eHudNotificationQueueBacklogPreservationStyle.LAST_IN:
+
+				if ( a.enteredQueueTime > b.enteredQueueTime )
+					return -1
+				else if ( a.enteredQueueTime < b.enteredQueueTime )
+					return 1
+
+				return 0
+
+				break
+
+				
+			case eHudNotificationQueueBacklogPreservationStyle.PRIORITY:
+
+				if ( a.priority > b.priority )
+					return -1
+				else if ( a.priority < b.priority )
+					return 1
+
+				return 0
+
+				break
+		}
+
+		return 0
+	} )
+
+	return clonedItems
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________VISIBLE_ITEM_INTERFACE_COMPONENT___________________________(){}
+#endif
+
+void function VisibleItemInterface_Thread( HudNotificationQueue queue, HudNotificationQueueItem queueItem )
+{
+	EndSignal( queueItem.signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+
+	OnThreadEnd(
+		function() : ( queue, queueItem )
+		{
+			
+			if ( queueItem.onDestroyVisualOverride != null )
+			{
+				queueItem.onDestroyVisualOverride( queueItem )
+			}
+			else
+			{
+				HudNotificationQueue_OnDestroyVisual_Base( queueItem )
+			}
+
+			queueItem.ruiInstance = null
+			queueItem.ruiShell = null
+
+			
+			queue.visibleItems.removebyvalue( queueItem )	
+			ItemPositioning_RemoveItem( queueItem )	
+
+			
+			if ( queueItem.onComplete != null )
+			{
+				queueItem.onComplete( queueItem )
+			}
+
+			
+			Signal( queue.signalDummy, "HudNotificationQueue_Dispatcher_ItemSlotReleased" )
+		}
+	)
+
+#if DEV
+		
+		if ( queueItem.onCreateVisualOverride != null && queueItem.onDestroyVisualOverride == null )
+		{
+			Assert( false, "Hud Notification Queue Item imlpements onCreateVisualOverride, but does not implement onDestroyVisualOverride. To prevent potential RUI leaks, custom visual creation must be accompanied by custom clean up." )
+		}
+#endif
+
+	
+	queue.preVisibleItems.append( queueItem )
+
+	
+	bool canProceedPastPreIntro = true
+	if ( queueItem.onPreIntro.len() > 0)
+	{
+		foreach ( bool functionref( HudNotificationQueueItem ) preIntroFunc in queueItem.onPreIntro )
+		{
+			if ( !preIntroFunc( queueItem ) )
+			{
+				canProceedPastPreIntro = false
+				break
+			}
+		}
+	}
+
+	if ( !canProceedPastPreIntro )
+	{
+		queue.preVisibleItems.fastremovebyvalue( queueItem )
+		Signal( queue.signalDummy, "HudNotificationQueue_Dispatcher_ItemSlotReleased" )
+		return
+	}
+
+	
+	queue.preVisibleItems.removebyvalue( queueItem )
+	queue.visibleItems.insert( 0, queueItem )
+
+
+	
+	if ( queueItem.onCreateVisualOverride != null )
+	{
+		queueItem.ruiInstance = queueItem.onCreateVisualOverride( queueItem )
+	}
+	else
+	{
+		HudNotificationQueue_OnCreateRuiShell_Base( queueItem ) 
+		HudNotificationQueue_OnCreateVisual_Base( queueItem )
+	}
+
+	if ( queueItem.soundAliases.len() > 0 )
+	{
+		entity player = GetLocalViewPlayer()
+
+		foreach ( string soundAlias in queueItem.soundAliases )
+		{
+			if ( soundAlias.len() != 0 )
+			{
+				EmitSoundOnEntity( player, soundAlias )
+			}
+		}
+	}
+
+	if ( queueItem.speakerDialogueLines.len() > 0 )
+	{
+		foreach ( string soundAlias in queueItem.speakerDialogueLines )
+		{
+			if ( soundAlias.len() != 0 )
+			{
+				int aliasID = GetAnyAliasIdForName( soundAlias )
+				if ( aliasID >= 0 )
+				{
+					SCB_PlayDialogueOnEnvironmentSpeakers( aliasID, NUM_NEARBY_SPEAKERS_TO_PLAY_FROM, 0, -1, null, -1 )
+				}
+				else
+				{
+					Warning( "Dialogue line " + soundAlias + " is not registered" )
+				}
+			}
+		}
+	}
+
+	
+	if ( queue.itemPositioning.enabled )
+	{
+		Signal( queue.signalDummy, "ItemPositioning_UpdatePositions" )
+	}
+
+	
+	if ( queueItem.onIntroOverride != null )
+	{
+		queueItem.onIntroOverride( queueItem )
+	}
+	else
+	{
+		HudNotificationQueue_OnIntro_Base( queueItem )
+	}
+
+	
+	queueItem.timeToStartOutro = Time() + queueItem.duration
+	while ( Time() < queueItem.timeToStartOutro )
+	{
+		WaitFrame()
+	}
+
+	if ( queueItem.onPreOutro != null )
+	{
+		
+		bool canProceedPastPreOutro = queueItem.onPreOutro( queueItem )
+
+		
+		while ( !canProceedPastPreOutro )
+		{
+			canProceedPastPreOutro = queueItem.onPreOutro( queueItem )
+			WaitFrame()
+		}
+	}
+
+	
+	if ( queueItem.onOutroOverride != null )
+	{
+		queueItem.onOutroOverride( queueItem )
+	}
+	else
+	{
+		HudNotificationQueue_OnOutro_Base( queueItem )
+	}
+
+	
+	wait queueItem.outroDuration
+
+	
+}
+
+void function VisibleItemInterface_SetRuiArgs( var rui, table< string, HudNotificationQueueRuiArg > ruiArgsTable )
+{
+	if ( !RuiIsAlive( rui ) )
+		return
+
+	foreach ( argName, ruiArg in ruiArgsTable )
+	{
+		
+		var argValue = ruiArg.argValue
+
+		
+		if ( ruiArg.argType < 0 )
+		{
+			switch ( type( argValue ) )
+			{
+				case "string":
+					ruiArg.argType = eRuiArgType.STRING
+					break
+
+				case "float":
+					ruiArg.argType = eRuiArgType.FLOAT
+					break
+
+				case "int":
+					ruiArg.argType = eRuiArgType.INT
+					break
+
+				case "bool":
+					ruiArg.argType = eRuiArgType.BOOL
+					break
+
+				case "vector":
+					ruiArg.argType = eRuiArgType.VECTOR
+					break
+
+				case "asset":
+					ruiArg.argType = eRuiArgType.ASSET
+					break
+
+				default:
+					Assert( false, format( "Couldn't infer RUI arg type: %s. You may need to explicitly define the argument type with HudNotificationQueueRuiArg.argType.", type( argValue ) ) )
+			}
+		}
+
+		switch ( ruiArg.argType )
+		{
+			case eRuiArgType.STRING:
+				expect string( argValue )
+				RuiSetStringIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.FLOAT:
+				expect float( argValue )
+				RuiSetFloatIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.INT:
+				expect int( argValue )
+				RuiSetIntIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.BOOL:
+				expect bool( argValue )
+				RuiSetBoolIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.FLOAT2:
+				expect vector( argValue )
+				RuiSetFloat2IfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.VECTOR:
+				expect vector( argValue )
+				RuiSetFloat3IfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.COLOR:
+				expect vector( argValue )
+
+				float alpha = 1.0
+
+				
+				array<var> addlArgValues = ruiArg.addlArgValues
+				if ( addlArgValues.len() > 0 )
+				{
+					var addlArgValue = addlArgValues[0]
+					if ( addlArgValue != null && type( addlArgValue ) == "float" )
+					{
+						expect float( addlArgValue )
+						alpha = addlArgValue
+					}
+				}
+
+				RuiSetColorAlphaIfExists( rui, ruiArg.argName, SrgbToLinear( argValue ), alpha )
+				break
+
+			case eRuiArgType.ASSET:
+				expect asset( argValue )
+				RuiSetAssetIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.IMAGE:
+				expect asset( argValue )
+				RuiSetImageIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			case eRuiArgType.WALLTIME:
+			case eRuiArgType.GAMETIME:
+				expect float( argValue )
+				RuiSetGameTimeIfExists( rui, ruiArg.argName, argValue )
+				break
+
+			default:
+				Assert( false, format( "Couldn't infer RUI arg type: %s. You may need to explicitly define the argument type with HudNotificationQueueRuiArg.argType.", type( argValue ) ) )
+		}
+
+	}
+}
+
+void function VisibleItemInterface_UpdateQueueItem( bool isItemVisible, HudNotificationQueueItem oldItem, HudNotificationQueueItem ornull newItem = null )
+{
+	if ( oldItem.onUpdateOverride != null )
+	{
+		oldItem.onUpdateOverride( isItemVisible, oldItem, newItem )
+	}
+	else
+	{
+		HudNotificationQueue_OnUpdate_Base( isItemVisible, oldItem, newItem )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________BASE_FUNCTIONS___________________________(){}
+#endif
+
+
+void function HudNotificationQueue_OnCreateRuiShell_Base( HudNotificationQueueItem queueItem )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueItem.queueId )
+
+	
+	HudNotificationQueue_CreateRui( queueItem, $"ui/hud_notification_queue_item.rpak", null )
+
+	Assert( queueItem.ruiShell != null, "Something went wrong during the creation of the RUI Shell for a HUD Notification Queue Item and the shell returned null." )
+
+	
+	RuiSetFloat2IfExists( queueItem.ruiShell, "ruiSize", queueItem.size )
+	RuiSetFloat2IfExists( queueItem.ruiShell, "screenSpacePin", queue.itemPositioning.screenSpacePin )
+	RuiSetFloat2IfExists( queueItem.ruiShell, "itemAnchorPin", queue.itemPositioning.itemAnchorPin )
+	RuiSetFloat2IfExists( queueItem.ruiShell, "startPosition", PixelsToScreenFrac( ScalePixelsForScreenSize( queue.itemPositioning.startPosition ) ) )
+	RuiSetFloat2IfExists( queueItem.ruiShell, "offset", PixelsToScreenFrac( ScalePixelsForScreenSize( queueItem.offset ) ) )
+}
+
+void function HudNotificationQueue_OnCreateVisual_Base( HudNotificationQueueItem queueItem )
+{
+	Assert( queueItem.ruiAsset != $"" , "HUD Notification Queue item cannot create a null RUI Asset. Please provide a 'ruiAsset' for the queue item to use." )
+
+	HudNotificationQueue_CreateRui( queueItem, queueItem.ruiAsset, queueItem.ruiShell )
+	VisibleItemInterface_SetRuiArgs( queueItem.ruiInstance, queueItem.ruiArgs )
+
+	if ( queueItem.nestedRuiAssets.len () > 0 )
+	{
+		int childCount = 0
+		foreach ( asset nestedRuiAsset in queueItem.nestedRuiAssets )
+		{
+			var rui = HudNotificationQueue_CreateRui( queueItem, nestedRuiAsset, queueItem.ruiInstance, childCount )
+
+			if ( queueItem.nestedRuiArgs.len() > childCount )
+			{
+				VisibleItemInterface_SetRuiArgs( rui, queueItem.nestedRuiArgs[childCount]  )
+			}
+
+			childCount++
+		}
+	}
+
+	if ( queueItem.onCreateVisual != null )
+	{
+		queueItem.onCreateVisual( queueItem )
+	}
+}
+
+void function HudNotificationQueue_OnIntro_Base( HudNotificationQueueItem queueItem )
+{
+	if ( RuiIsAlive( queueItem.ruiInstance ) )
+	{
+		RuiSetGameTimeIfExists( queueItem.ruiInstance, "startTime", ClientTime() )
+	}
+
+	if ( queueItem.nestedRuiInstances.len() > 0 )
+	{
+		foreach ( var nestedRui in queueItem.nestedRuiInstances )
+		{
+			if ( RuiIsAlive( nestedRui ) )
+			{
+				RuiSetGameTimeIfExists( nestedRui, "startTime", ClientTime() )
+			}
+		}
+	}
+
+	if ( queueItem.onIntro != null )
+	{
+		queueItem.onIntro( queueItem )
+	}
+}
+
+void function HudNotificationQueue_OnOutro_Base( HudNotificationQueueItem queueItem )
+{
+	if ( RuiIsAlive( queueItem.ruiInstance ) )
+	{
+		RuiSetGameTimeIfExists( queueItem.ruiInstance, "outroTime", ClientTime() )
+	}
+
+
+	if ( queueItem.nestedRuiInstances.len() > 0 )
+	{
+		foreach ( var nestedRui in queueItem.nestedRuiInstances )
+		{
+			if ( RuiIsAlive( nestedRui ) )
+			{
+				RuiSetGameTimeIfExists( nestedRui, "outroTime", ClientTime() )
+			}
+		}
+	}
+
+	if ( queueItem.onOutro != null )
+	{
+		queueItem.onOutro( queueItem )
+	}
+}
+
+void function HudNotificationQueue_OnDestroyVisual_Base( HudNotificationQueueItem queueItem )
+{
+	if ( queueItem.ruiShell != null )
+	{
+		RuiDestroyIfAlive( queueItem.ruiShell )
+	}
+	else if ( queueItem.ruiInstance != null ) 
+	{
+		RuiDestroyIfAlive( queueItem.ruiInstance )
+	}
+	
+}
+
+void function HudNotificationQueue_OnUpdate_Base( bool isItemVisible, HudNotificationQueueItem oldItem, HudNotificationQueueItem ornull newItem )
+{
+	if ( newItem != null )
+	{
+		expect HudNotificationQueueItem( newItem )
+
+		
+		oldItem.ruiArgs = newItem.ruiArgs
+		oldItem.miscArgs = newItem.miscArgs
+		oldItem.duration = newItem.duration
+	}
+
+	if ( isItemVisible )
+	{
+		if ( oldItem.ruiInstance != null && RuiIsAlive( oldItem.ruiInstance ) )
+		{
+			VisibleItemInterface_SetRuiArgs( oldItem.ruiInstance, oldItem.ruiArgs )
+			RuiSetGameTimeIfExists( oldItem.ruiInstance, "updateTime", ClientTime() )
+		}
+
+		if ( oldItem.nestedRuiInstances.len() > 0 )
+		{
+			int childCount = 0
+			foreach ( var nestedRui in oldItem.nestedRuiInstances )
+			{
+				if ( RuiIsAlive( nestedRui ) )
+				{
+					RuiSetGameTimeIfExists( nestedRui, "updateTime", ClientTime() )
+
+					if ( oldItem.nestedRuiArgs.len() > childCount )
+					{
+						VisibleItemInterface_SetRuiArgs( nestedRui, oldItem.nestedRuiArgs[childCount]  )
+					}
+				}
+
+				childCount++
+			}
+		}
+
+		HudNotificationQueue queue = HudNotificationQueue_GetQueueById( oldItem.queueId )
+		if ( queue.receiver.itemUpdatesRefreshDuration )
+		{
+			oldItem.timeToStartOutro = Time() + oldItem.duration
+		}
+	}
+
+	if ( oldItem.onUpdate != null )
+	{
+		oldItem.onUpdate( isItemVisible, oldItem )
+	}
+}
+
+
+var function HudNotificationQueue_CreateRui( HudNotificationQueueItem queueItem, asset ruiAsset, var parentRui, int ruiChildIndex = -1 )
+{
+	var rui
+
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueItem.queueId )
+
+	bool isNestedChild = ruiChildIndex >= 0
+
+	
+	if ( parentRui != null && RuiIsAlive( parentRui ) )
+	{
+		if ( isNestedChild )
+		{
+			rui = RuiCreateNested( parentRui, "ruiHandle" + ruiChildIndex, ruiAsset )
+			queueItem.nestedRuiInstances.append( rui )
+			return rui
+		}
+		else
+		{
+			rui = RuiCreateNested( parentRui, "ruiHandle", ruiAsset )
+			queueItem.ruiInstance = rui
+			return rui
+		}
+
+		return rui
+	}
+
+	switch ( queueItem.uiDrawStage )
+	{
+		case eUIDrawStage.POSTEFFECTS:
+			if ( parentRui == null )
+			{
+				rui = CreateFullscreenRui( ruiAsset, queueItem.drawOverScreenFade ? RUI_SORT_SCREENFADE + 1 : queue.visibleItemInterface.sortKey )
+				queueItem.ruiShell = rui
+			}
+			else
+			{
+				rui = CreateFullscreenRui( ruiAsset, queueItem.drawOverScreenFade ? RUI_SORT_SCREENFADE + 1 : queue.visibleItemInterface.sortKey )
+				queueItem.ruiInstance = rui
+			}
+			break
+
+		case eUIDrawStage.HUD:
+			if ( parentRui == null )
+			{
+				rui = CreatePermanentCockpitRui( ruiAsset, queueItem.drawOverScreenFade ? RUI_SORT_SCREENFADE + 1 : queue.visibleItemInterface.sortKey )
+				queueItem.ruiShell = rui
+			}
+			else
+			{
+				rui = CreatePermanentCockpitRui( ruiAsset, queueItem.drawOverScreenFade ? RUI_SORT_SCREENFADE + 1 : queue.visibleItemInterface.sortKey )
+				queueItem.ruiInstance = rui
+			}
+			break
+
+		case eUIDrawStage.COCKPIT:
+			
+			Assert( false, "RUI_DRAW_COCKPIT stage is not supported by the HUD Notification Queue system. Please use a different stage, or implement support for it." )
+			break
+
+		case eUIDrawStage.VIEW_MODEL:
+		case eUIDrawStage.WORLD:
+			Warning( "VIEW_MODEL and WORLD stages have not been tested in the HUD Notification Queue. Be extra sure to test if you intend on using this stage." )
+
+			vector angles = VectorToAngles( AnglesToForward( queueItem.sceneAngles ) * -1 )
+			var topo = CreateRUITopology_Worldspace( queueItem.scenePosition, angles, queueItem.size.x, queueItem.size.y )
+
+			if ( parentRui == null )
+			{
+				rui = RuiCreate( ruiAsset, topo, queueItem.uiDrawStage, queueItem.drawOverScreenFade ? RUI_SORT_SCREENFADE + 1 : queue.visibleItemInterface.sortKey  )
+				queueItem.ruiShell = rui
+			}
+			else
+			{
+				rui = RuiCreate( ruiAsset, topo, queueItem.uiDrawStage, queueItem.drawOverScreenFade ? RUI_SORT_SCREENFADE + 1 : queue.visibleItemInterface.sortKey  )
+				queueItem.ruiInstance = rui
+			}
+			break
+
+		default:
+			Assert( false, format( "HUD Notification Queue system received an unrecognized UI Draw Stage of %s.", queueItem.uiDrawStage ) )
+			break
+	}
+
+	return rui
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ITEM_POSITIONING___________________________(){}
+#endif
+
+void function ItemPositioning_Init( HudNotificationQueue queue )
+{
+	
+	thread ItemPositioning_Think( queue )
+}
+
+void function ItemPositioning_Think( HudNotificationQueue queue )
+{
+	while ( true )
+	{
+		WaitSignal( queue.signalDummy, "ItemPositioning_UpdatePositions" )
+		thread ItemPositioning_BeginNewPositionUpdateOperation( queue )
+	}
+}
+
+
+void function ItemPositioning_BeginNewPositionUpdateOperation( HudNotificationQueue queue )
+{
+	
+	Signal( queue.signalDummy, "ItemPositioning_OnBeginUpdatePositions" )
+	EndSignal( queue.signalDummy, "ItemPositioning_OnBeginUpdatePositions" )
+
+	
+	if ( queue.visibleItems.len() == 0 )
+		return
+
+	vector scaledItemPadding = ScalePixelsForScreenSize( < queue.itemPositioning.padding, queue.itemPositioning.padding, 0.0 > ) 
+
+	
+	vector totalItemPosition = <0, 0, 0>
+	for ( int idx = 0; idx < queue.visibleItems.len(); idx++ )
+	{
+		HudNotificationQueueItem queueItem = queue.visibleItems[idx]
+
+		vector targetPosition = totalItemPosition
+		vector scaledItemSize = ScalePixelsForScreenSize( queueItem.size )
+
+		
+		switch ( queue.itemPositioning.stackDirection )
+		{
+			case eHudNotificationQueueStackDirection.TOP_TO_BOTTOM:
+				totalItemPosition += < 0, scaledItemSize.y + scaledItemPadding.y, 0 >
+				break
+
+			case eHudNotificationQueueStackDirection.BOTTOM_TO_TOP:
+				totalItemPosition -= < 0, scaledItemSize.y + scaledItemPadding.y, 0 >
+				break
+
+			case eHudNotificationQueueStackDirection.LEFT_TO_RIGHT:
+				totalItemPosition += < scaledItemSize.x + scaledItemPadding.x, 0, 0 >
+				break
+
+			case eHudNotificationQueueStackDirection.RIGHT_TO_LEFT:
+				totalItemPosition -= < scaledItemSize.x + scaledItemPadding.x, 0, 0 >
+				break
+		}
+
+		
+		if ( queueItem in queue.itemPositioning.itemPositionData )
+		{
+			
+			HudNotificationQueue_ItemPositionEntry positionEntry = queue.itemPositioning.itemPositionData[queueItem]
+			positionEntry.index = idx 
+			positionEntry.startPosition = positionEntry.currentPosition
+			positionEntry.endPosition = PixelsToScreenFrac( targetPosition )
+		}
+		else
+		{
+			HudNotificationQueue_ItemPositionEntry positionEntry
+			positionEntry.index = idx
+			positionEntry.startPosition = <0, 0, 0>
+			positionEntry.endPosition = PixelsToScreenFrac( targetPosition )
+
+			queue.itemPositioning.itemPositionData[queueItem] <- positionEntry
+		}
+	}
+
+	queue.itemPositioning.moveStartTime = ClientTime()
+	thread ItemPositioning_Positioning_Thread( queue )
+}
+
+void function ItemPositioning_Positioning_Thread( HudNotificationQueue queue )
+{
+	EndSignal( queue.signalDummy, "ItemPositioning_OnBeginUpdatePositions" )
+	EndSignal( queue.signalDummy, "ItemPositioning_ForceEndPositionThread" )
+
+	OnThreadEnd(
+		function() : ( queue )
+		{
+			queue.itemPositioning.moveStartTime = -1
+		}
+	)
+
+	float frac = 0.0
+	while ( frac < 1.0 )
+	{
+		float elapsedTime = ClientTime() - queue.itemPositioning.moveStartTime
+
+		
+		if ( queue.itemPositioning.moveDuration > 0 )
+		{
+			frac = elapsedTime / queue.itemPositioning.moveDuration
+		}
+		else
+		{
+			frac = 1.0
+		}
+
+		foreach ( item, positionData in queue.itemPositioning.itemPositionData )
+		{
+			vector position = LerpVector( positionData.startPosition, positionData.endPosition, frac )
+			positionData.currentPosition = position
+
+			if ( item.ruiShell != null && RuiIsAlive( item.ruiShell ) )
+			{
+				RuiSetFloat2IfExists( item.ruiShell, "position", position )
+			}
+			else if ( item.ruiInstance != null && RuiIsAlive( item.ruiInstance ) )	
+			{
+				RuiSetFloat2IfExists( item.ruiInstance, "position", position )
+			}
+		}
+
+		WaitFrame()
+	}
+
+	queue.itemPositioning.moveStartTime = -1
+}
+
+void function ItemPositioning_RemoveItem( HudNotificationQueueItem queueItem )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueItem.queueId )
+
+	if ( queueItem in queue.itemPositioning.itemPositionData )
+	{
+		delete queue.itemPositioning.itemPositionData[queueItem]
+	}
+
+	if ( queue.itemPositioning.itemPositionData.len() == 0 )
+	{
+		Signal( queue.signalDummy, "ItemPositioning_ForceEndPositionThread" )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function HudNotificationQueue_OnGameStateChanged( int newGameState )
+{
+	if ( newGameState >= eGameState.WinnerDetermined )
+	{
+		foreach ( id, queue in file.hudNotificationQueues )
+		{
+			if ( queue.allowClearItems )
+			{
+				DONOTUSE_HudNotificationQueue_ClearItems( queue, ePersistenceContext.GLOBAL, true )
+			}
+		}
+	}
+}
+
+void function HudNotificationQueue_OnViewPlayerChanged( entity player )
+{
+	foreach ( id, queue in file.hudNotificationQueues )
+	{
+		if ( queue.allowClearItems )
+		{
+			DONOTUSE_HudNotificationQueue_ClearItems( queue, ePersistenceContext.PLAYER, true )
+		}
+	}
+}
+
+void function HudNotificationQueue_OnPlayerKilled( entity player )
+{
+	entity localPlayer = GetLocalViewPlayer()
+	if ( localPlayer != player || !IsValid( localPlayer ) )
+		return
+
+	file.localPlayerKilledTime = ClientTime()
+
+	foreach ( id, queue in file.hudNotificationQueues )
+	{
+		if ( queue.pauseOnLocalPlayerDeath )
+		{
+			HudNotificationQueue_AddQueueBlocker( id, HudNotificationQueue_QueueBlocker_PauseIfJustKilled )
+		}
+
+		if ( queue.allowClearItems )
+		{
+			DONOTUSE_HudNotificationQueue_ClearItems( queue, ePersistenceContext.PLAYER, true )
+		}
+	}
+}
+
+bool function HudNotificationQueue_QueueBlocker_PauseIfJustKilled()
+{
+	const float JUST_KILLED_QUEUE_BLOCKER_DURATION = 5.0
+
+	if ( file.localPlayerKilledTime <= 0 )
+		return true
+
+	float timeSinceLocalPlayerKilled = ClientTime() - file.localPlayerKilledTime
+	if ( timeSinceLocalPlayerKilled >= JUST_KILLED_QUEUE_BLOCKER_DURATION )
+	{
+		file.localPlayerKilledTime = 0
+		return true
+	}
+
+	return false
+}
+
+void function DONOTUSE_HudNotificationQueue_AllowClearItemsOnQueue( int queueId )
+{
+	HudNotificationQueue queue = HudNotificationQueue_GetQueueById( queueId )
+	queue.allowClearItems = true
+}
+
+void function DONOTUSE_HudNotificationQueue_ClearItems( HudNotificationQueue queue, int persistenceContextThreshold, bool killCurrent )
+{
+	
+
+
+
+
+
+
+
+
+	Assert( queue.allowClearItems, "Attempted to clear a HUD Notification Queue that is not approved for clearing." )
+	Assert( persistenceContextThreshold > ePersistenceContext.INVALID, "Cannot clear a HUD Notification Queue with an invalid persistence context level." )
+
+	array< HudNotificationQueueItem > queuedItems = clone queue.queuedItems
+	foreach ( queueItem in queuedItems )
+	{
+		if ( queueItem.persistenceContext <= persistenceContextThreshold )
+		{
+			
+			queue.queuedItems.removebyvalue( queueItem )
+		}
+	}
+
+	if ( killCurrent )
+	{
+		array< HudNotificationQueueItem > preVisibleItems = clone queue.preVisibleItems
+		foreach ( queueItem in preVisibleItems )
+		{
+			if ( queueItem.persistenceContext <= persistenceContextThreshold )
+			{
+				
+				queue.preVisibleItems.removebyvalue( queueItem )
+			}
+		}
+
+		foreach ( queueItem in queue.visibleItems )
+		{
+			if ( queueItem.persistenceContext <= persistenceContextThreshold )
+			{
+				Signal( queueItem.signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+			}
+		}
+	}
+} 

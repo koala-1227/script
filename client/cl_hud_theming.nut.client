@@ -1,0 +1,666 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ClHudTheming_Init
+
+global function HudTheming_RegisterWidget
+global function HudTheming_UnregisterWidget
+global function HudTheming_RegisterState
+global function HudTheming_ActivateState
+global function HudTheming_DeactivateState
+global function HudTheming_ActivateStateOnWidget
+global function HudTheming_DeactivateStateOnWidget
+global function HudTheming_IsStateActive
+global function HudTheming_Reapply
+
+#if DEV
+global function DEV_HudTheming_ToggleState
+global function DEV_HudTheming_ListStates
+#endif
+
+
+global const string THEME_WIDGET_PLAYER_INFO           = "playerInfo"
+global const string THEME_WIDGET_UNITFRAME             = "unitframe"
+global const string THEME_WIDGET_INVENTORY_PLAYER_INFO = "inventoryPlayerInfo"
+global const string THEME_WIDGET_INVENTORY_UNITFRAME   = "inventoryUnitframe"
+global const string THEME_WIDGET_FULLMAP_PLAYER_INFO   = "fullmapPlayerInfo"
+global const string THEME_WIDGET_FULLMAP_UNITFRAME     = "fullmapUnitframe"
+
+global struct ThemeFrameArgs
+{
+	asset  frameImage                = $""
+	asset  topImage                  = $""
+	asset  bottomImage               = $""
+	asset  endorsementsFrameImage    = $""
+	vector color                     = <1.0, 1.0, 1.0>
+	float  alpha                     = 1.0
+	vector bgColor                   = <0.0, 0.0, 0.0>
+	float  bgAlpha                   = 0.0
+	vector topImageSize              = <0.0, 0.0, 0.0>
+	vector bottomImageSize           = <0.0, 0.0, 0.0>
+	bool   healthBarOverride         = false
+	vector healthBarFillColor        = <1.0, 1.0, 1.0>
+	vector healthBarBgColor          = <0.0, 0.0, 0.0>
+	asset  effectRui                 = $""
+}
+
+global struct ThemeState
+{
+	int    stateIndex = -1
+	table<string, ThemeFrameArgs> widgetArgs
+}
+
+struct ThemeableWidget
+{
+	string           id
+	var              rui
+	table<int, bool> perWidgetStates
+	var              activeEffectRui  = null
+	asset            activeEffectAsset = $""
+}
+
+struct
+{
+	table<string, array<ThemeableWidget> > widgetRegistry
+	table<int, ThemeState>               registeredStates
+	table<int, bool>                     globalActiveStates
+
+#if DEV
+		bool                             devOverrideActive = false
+		table<int, bool>                 devOverrideStates
+#endif
+} file
+
+
+
+
+
+void function ClHudTheming_Init()
+{
+	if ( IsMenuLevel() )
+		return
+}
+
+
+
+
+
+void function HudTheming_RegisterWidget( string id, var rui )
+{
+	if ( !( id in file.widgetRegistry ) )
+		file.widgetRegistry[id] <- []
+
+	
+	foreach ( widget in file.widgetRegistry[id] )
+	{
+		if ( widget.rui == rui )
+			return
+	}
+
+	ThemeableWidget widget
+	widget.id  = id
+	widget.rui = rui
+
+	file.widgetRegistry[id].append( widget )
+
+	
+	ResolveWidget( widget )
+}
+
+void function HudTheming_UnregisterWidget( string id, var rui = null )
+{
+	if ( !( id in file.widgetRegistry ) )
+		return
+
+	for ( int i = file.widgetRegistry[id].len() - 1; i >= 0; i-- )
+	{
+		ThemeableWidget widget = file.widgetRegistry[id][i]
+		if ( rui == null || widget.rui == rui )
+			file.widgetRegistry[id].remove( i )
+	}
+}
+
+
+
+
+
+void function HudTheming_RegisterState( ThemeState state )
+{
+	Assert( state.stateIndex >= 0, "HudTheming: stateIndex must be >= 0" )
+	file.registeredStates[state.stateIndex] <- state
+}
+
+
+
+
+
+void function HudTheming_ActivateState( int stateIndex )
+{
+	Assert( stateIndex in file.registeredStates, "HudTheming: state " + stateIndex + " not registered" )
+
+	if ( stateIndex in file.globalActiveStates )
+		return
+
+	file.globalActiveStates[stateIndex] <- true
+
+	
+	ThemeState state = file.registeredStates[stateIndex]
+	foreach ( widgetId, _ in state.widgetArgs )
+	{
+		ResolveWidgetsById( widgetId )
+	}
+}
+
+void function HudTheming_DeactivateState( int stateIndex )
+{
+	if ( !( stateIndex in file.globalActiveStates ) )
+		return
+
+	delete file.globalActiveStates[stateIndex]
+
+	
+	if ( stateIndex in file.registeredStates )
+	{
+		ThemeState state = file.registeredStates[stateIndex]
+		foreach ( widgetId, _ in state.widgetArgs )
+		{
+			ResolveWidgetsById( widgetId )
+		}
+	}
+}
+
+bool function HudTheming_IsStateActive( int stateIndex )
+{
+	return stateIndex in file.globalActiveStates
+}
+
+
+
+
+
+void function HudTheming_ActivateStateOnWidget( int stateIndex, string widgetId, var rui )
+{
+	Assert( stateIndex in file.registeredStates, "HudTheming: state " + stateIndex + " not registered" )
+
+	ThemeableWidget ornull found = FindWidget( widgetId, rui )
+	if ( found == null )
+		return
+
+	expect ThemeableWidget( found )
+	if ( stateIndex in found.perWidgetStates )
+		return
+
+	found.perWidgetStates[stateIndex] <- true
+	ResolveWidget( found )
+}
+
+void function HudTheming_DeactivateStateOnWidget( int stateIndex, string widgetId, var rui )
+{
+	ThemeableWidget ornull found = FindWidget( widgetId, rui )
+	if ( found == null )
+		return
+
+	expect ThemeableWidget( found )
+	if ( !( stateIndex in found.perWidgetStates ) )
+		return
+
+	delete found.perWidgetStates[stateIndex]
+	ResolveWidget( found )
+}
+
+
+
+
+
+void function HudTheming_Reapply()
+{
+	ResolveAllWidgets()
+}
+
+
+
+
+
+ThemeableWidget ornull function FindWidget( string widgetId, var rui )
+{
+	if ( !( widgetId in file.widgetRegistry ) )
+		return null
+
+	foreach ( widget in file.widgetRegistry[widgetId] )
+	{
+		if ( widget.rui == rui )
+			return widget
+	}
+	return null
+}
+
+void function ResolveAllWidgets()
+{
+	foreach ( id, widgets in file.widgetRegistry )
+	{
+		for ( int i = widgets.len() - 1; i >= 0; i-- )
+		{
+			if ( widgets[i].rui == null )
+			{
+				widgets.remove( i )
+				continue
+			}
+			ResolveWidget( widgets[i] )
+		}
+	}
+}
+
+void function ResolveWidgetsById( string widgetId )
+{
+	if ( !( widgetId in file.widgetRegistry ) )
+		return
+
+	array<ThemeableWidget> widgets = file.widgetRegistry[widgetId]
+	for ( int i = widgets.len() - 1; i >= 0; i-- )
+	{
+		if ( widgets[i].rui == null )
+		{
+			widgets.remove( i )
+			continue
+		}
+		ResolveWidget( widgets[i] )
+	}
+}
+
+void function ResolveWidget( ThemeableWidget widget )
+{
+	if ( widget.rui == null )
+		return
+
+	
+	
+	ThemeState ornull winningState = null
+	int winningStateIndex = -1
+
+#if DEV
+		
+		if ( file.devOverrideActive )
+		{
+			foreach ( stateIndex, _ in file.devOverrideStates )
+			{
+				if ( !( stateIndex in file.registeredStates ) )
+					continue
+
+				ThemeState state = file.registeredStates[stateIndex]
+				if ( !( widget.id in state.widgetArgs ) )
+					continue
+
+				if ( stateIndex > winningStateIndex )
+				{
+					winningState = state
+					winningStateIndex = stateIndex
+				}
+			}
+
+			if ( winningState != null )
+			{
+				expect ThemeState( winningState )
+				SetFrameValuesOnWidgetRui( widget, winningState.widgetArgs[widget.id] )
+			}
+			else
+			{
+				ClearFrameOnRui( widget )
+			}
+			return
+		}
+#endif
+
+	
+	foreach ( stateIndex, _ in file.globalActiveStates )
+	{
+		if ( !( stateIndex in file.registeredStates ) )
+			continue
+
+		ThemeState state = file.registeredStates[stateIndex]
+		if ( !( widget.id in state.widgetArgs ) )
+			continue
+
+		if ( stateIndex > winningStateIndex )
+		{
+			winningState = state
+			winningStateIndex = stateIndex
+		}
+	}
+
+	
+	foreach ( stateIndex, _ in widget.perWidgetStates )
+	{
+		if ( !( stateIndex in file.registeredStates ) )
+			continue
+
+		ThemeState state = file.registeredStates[stateIndex]
+		if ( !( widget.id in state.widgetArgs ) )
+			continue
+
+		if ( stateIndex > winningStateIndex )
+		{
+			winningState = state
+			winningStateIndex = stateIndex
+		}
+	}
+
+	
+	if ( winningState != null )
+	{
+		expect ThemeState( winningState )
+		SetFrameValuesOnWidgetRui( widget, winningState.widgetArgs[widget.id] )
+	}
+	else
+	{
+		ClearFrameOnRui( widget )
+	}
+}
+
+
+
+
+
+void function SetFrameValuesOnWidgetRui( ThemeableWidget widget, ThemeFrameArgs args )
+{
+	var rui = widget.rui
+	RuiSetBoolIfExists( rui, "themeFrameEnabled", true )
+	RuiSetFloatIfExists( rui, "themeFrameAlpha", args.alpha )
+	RuiSetFloat3IfExists( rui, "themeFrameColor", args.color )
+	RuiSetFloat3IfExists( rui, "themeFrameBgColor", args.bgColor )
+	RuiSetFloatIfExists( rui, "themeFrameBgAlpha", args.bgAlpha )
+	RuiSetImageIfExists( rui, "themeFrameImage", args.frameImage )
+	RuiSetImageIfExists( rui, "themeFrameTopImage", args.topImage )
+	RuiSetImageIfExists( rui, "themeFrameBottomImage", args.bottomImage )
+	RuiSetImageIfExists( rui, "themeFrameEndorsementsImage", args.endorsementsFrameImage )
+	if ( args.topImageSize.x > 0 )
+	{
+		RuiSetFloat2IfExists( rui, "themeFrameTopSize", args.topImageSize )
+	}
+	if ( args.bottomImageSize.x > 0 )
+	{
+		RuiSetFloat2IfExists( rui, "themeFrameBottomSize", args.bottomImageSize )
+	}
+	RuiSetBoolIfExists( rui, "themeHealthEnabled", args.healthBarOverride )
+	RuiSetFloat3IfExists( rui, "themeHealthFillColor", args.healthBarFillColor )
+	RuiSetFloat3IfExists( rui, "themeHealthBgColor", args.healthBarBgColor )
+
+	
+	if ( args.effectRui != $"" )
+	{
+		if ( widget.activeEffectAsset != args.effectRui )
+		{
+			if ( widget.activeEffectRui != null )
+				RuiDestroyNestedIfAlive( rui, "themeEffectHandle" )
+
+			try
+			{
+				widget.activeEffectRui = RuiCreateNested( rui, "themeEffectHandle", args.effectRui )
+				widget.activeEffectAsset = args.effectRui
+			}
+			catch ( exception )
+			{
+				printt( "[HudTheming] Failed to create nested effect RUI: " + string( args.effectRui ) )
+				widget.activeEffectRui = null
+				widget.activeEffectAsset = $""
+			}
+		}
+	}
+	else
+	{
+		ClearEffect( widget )
+	}
+}
+
+void function ClearFrameOnRui( ThemeableWidget widget )
+{
+	var rui = widget.rui
+	RuiSetBoolIfExists( rui, "themeFrameEnabled", false )
+	RuiSetFloatIfExists( rui, "themeFrameBgAlpha", 0.0 )
+	RuiSetBoolIfExists( rui, "themeHealthEnabled", false )
+	ClearEffect( widget )
+}
+
+void function ClearEffect( ThemeableWidget widget )
+{
+	if ( widget.activeEffectRui != null )
+	{
+		RuiDestroyNestedIfAlive( widget.rui, "themeEffectHandle" )
+		widget.activeEffectRui = null
+		widget.activeEffectAsset = $""
+	}
+}
+
+
+
+
+
+#if DEV
+void function DEV_HudTheming_ToggleState( array<int> stateIndices = [] )
+{
+	file.devOverrideStates = {}
+
+	if ( stateIndices.len() == 0 )
+	{
+		file.devOverrideActive = false
+		ResolveAllWidgets()
+		printt( "[HudTheming] Dev override cleared - back to gameplay states" )
+		return
+	}
+
+	string activated = ""
+	foreach ( stateIndex in stateIndices )
+	{
+		if ( !( stateIndex in file.registeredStates ) )
+		{
+			printt( "[HudTheming] State " + stateIndex + " is not registered, skipping." )
+			continue
+		}
+
+		file.devOverrideStates[stateIndex] <- true
+
+		if ( activated != "" )
+			activated += ", "
+		activated += "" + stateIndex
+	}
+
+	file.devOverrideActive = true
+	ResolveAllWidgets()
+
+	if ( activated != "" )
+		printt( "[HudTheming] Dev override active - states: " + activated )
+}
+
+void function DEV_HudTheming_ListStates()
+{
+	
+	int totalWidgets = 0
+	foreach ( id, widgets in file.widgetRegistry )
+		totalWidgets += widgets.len()
+
+	printt( "[HudTheming] Widgets: " + totalWidgets )
+	foreach ( id, widgets in file.widgetRegistry )
+	{
+		foreach ( widget in widgets )
+		{
+			string ruiStatus = widget.rui != null ? "OK" : "NULL"
+			string perWidget = ""
+			foreach ( stateIndex, _ in widget.perWidgetStates )
+			{
+				if ( perWidget != "" )
+					perWidget += ", "
+				perWidget += "" + stateIndex
+			}
+			if ( perWidget != "" )
+				perWidget = " perWidget=[" + perWidget + "]"
+			printt( "[HudTheming]   " + widget.id + " rui=" + ruiStatus + perWidget )
+		}
+	}
+
+	
+	if ( file.registeredStates.len() == 0 )
+	{
+		printt( "[HudTheming] No states registered." )
+		return
+	}
+
+	printt( "[HudTheming] States: " + file.registeredStates.len() )
+	foreach ( stateIndex, state in file.registeredStates )
+	{
+		bool isActive = stateIndex in file.globalActiveStates
+		bool isDevOverride = file.devOverrideActive && stateIndex in file.devOverrideStates
+
+		string flags = ""
+		if ( isActive )
+			flags += " [ACTIVE]"
+		if ( isDevOverride )
+			flags += " [DEV]"
+
+		string widgets = ""
+		foreach ( widgetId, _ in state.widgetArgs )
+		{
+			if ( widgets != "" )
+				widgets += ", "
+			widgets += widgetId
+		}
+
+		printt( "[HudTheming]   stateIndex=" + stateIndex + "  widgets=[" + widgets + "]" + flags )
+	}
+
+	if ( file.devOverrideActive )
+		printt( "[HudTheming] Dev override is ACTIVE - gameplay states suppressed" )
+}
+#endif
+ 

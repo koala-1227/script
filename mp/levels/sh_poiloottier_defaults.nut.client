@@ -1,0 +1,279 @@
+
+global function POILootTierDefaults_Init
+global function POILootTier_Set
+global function POILootTierDefault_Get
+
+const bool POI_LOOT_TIER_DEBUG = false
+
+struct {
+		table< string, int > poiTiers_Default
+} file
+
+
+void function POILootTierDefaults_Init()
+{
+#if POI_LOOT_TIER_DEBUG
+		printt( FUNC_NAME() + "(): >>> Called!!!" )
+#endif
+
+	
+	
+	
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_CAUSTIC_TREATMENT", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_RELIC", 					ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_OBSERVATORY", 			ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_OBSERVATORY_SHORT", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_SWAMPLAND", 				ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_SWAMPLAND_SHORT", 		ePOITier.HIGH ) 
+
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_SLUM_LAKES", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_CRASH_SITE", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_RIG", 					ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_RIG_SHORT", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_THE_ARENA", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_LABS_TOWN", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_EXCAVATION", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_EXCAVATION_SHORT", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_HIGH_DESERT", 			ePOITier.MED ) 
+
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_BASIN", 					ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_RUNOFF", 					ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_OCTANE_TT", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_OCTANE_TT_SHORT", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_REPULSOR_STATION", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_REPULSOR_STATION_SHORT", 	ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_HYDRO_DAM", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ARTILLERY_BATTERY", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ARTILLERY_BATTERY_SHORT", ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_WATCHTOWER_SOUTH", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_AIRBASE", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_FARM", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_BUNKER_PASS", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_BUNKER_PASS_SHORT", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_CAGE_SHORT", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_CAGE", 					ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_MARKETPLACE", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_MARKETPLACE_SHORT", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_CONTAINMENT_SHORT", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_CONTAINMENT", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_WATCHTOWER_NORTH", 		ePOITier.LOW ) 
+
+	
+	
+	
+	
+	POILootTier_Set_IfUndefined( "DES_ZONE_1_BLOOD_SHORT", 			ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_8_MIRAGE", 				ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_16_MT", 					ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_12_RESEARCH_STATION_ALPHA", ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_5_LAVA_FISSURE", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_9_HARVESTER", 			ePOITier.HIGH ) 
+
+	
+	POILootTier_Set_IfUndefined( "DES_ZONE_3_SURVEY", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_8_STAGING", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_15_STACKS", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "PROMPT_PING_GEYSER", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "PROMPT_PING_GEYSER_SHORT", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_15_RAMPART_TT_SHORT", 	ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_15_RAMPART_TT", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_5_LANDSLIDE", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_2_CAP_CITY", 			ePOITier.MED ) 
+
+	
+	POILootTier_Set_IfUndefined( "DES_ZONE_4_GROUND_ZERO", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_4_CLIMATIZER", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_1_COUNTDOWN", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_16_LAUNCH_SITE", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_7_SNOW_FIELD", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_6_MONUMENT", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_11_THERMAL_STATION", 	ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_13_LAVA_SIPHON", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "DES_ZONE_6_FRAGMENT_EAST", 		ePOITier.LOW ) 
+
+	
+	
+	
+	
+	POILootTier_Set_IfUndefined( "DIST_ZONE_2_VIADUCT", 			ePOITier.HIGH )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_11_RESORT", 			ePOITier.HIGH )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_13_BOARDWALK", 			ePOITier.HIGH )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_5_OLD_TOWN", 			ePOITier.HIGH )
+
+	
+	POILootTier_Set_IfUndefined( "DIST_ZONE_8_ELECTRO_DAM", 		ePOITier.MED )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_2_SHIPYARD_ARCADE", 	ePOITier.MED )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_14_BLOSSOM_DRIVE", 		ePOITier.MED )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_7_HEIGHTS", 			ePOITier.MED )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_4_HUMBERT_LABS", 		ePOITier.MED )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_9_GALLERIA", 			ePOITier.MED )
+
+	
+	POILootTier_Set_IfUndefined( "DIST_ZONE_1_STREET_MARKET", 		ePOITier.LOW )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_3_DRAFT_POINT", 		ePOITier.LOW )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_6_STADIUM", 			ePOITier.LOW )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_10_THE_LOTUS", 			ePOITier.LOW )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_12_CITY_HALL", 			ePOITier.LOW )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_15_NEON_SQUARE", 		ePOITier.LOW )
+	POILootTier_Set_IfUndefined( "DIST_ZONE_16_ENERGY_BANK", 		ePOITier.LOW )
+
+	
+	
+	
+	
+	POILootTier_Set_IfUndefined( "MOON_ZONE_3_PRODUCTION_YARD", 	ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_14_THE_DIVIDE", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_4_THE_FOUNDRY", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_9_ALPHA_BASE", 			ePOITier.HIGH ) 
+
+	
+	POILootTier_Set_IfUndefined( "MOON_ZONE_9_ALPHA_BASE", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_13_BIONOMICS", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_2_DRY_GULCH", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_1_SPACE_PORT", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_4A_EXPERIMENTAL_LABS", 	ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_10_STASIS_ARRAY", 		ePOITier.MED ) 
+
+	
+	POILootTier_Set_IfUndefined( "MOON_ZONE_8_THE_CORE", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_12_TERRAFORMER", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_10B_CLIFF_SIDE", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_5_CULTIVATION", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_6_ATMOSTATION", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_4C_SOLAR_PODS", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_3B_UNDERPASS", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_1_BREAKER_WHARF", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_7_QUARANTINE_ZONE",		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MOON_ZONE_7B_HAZMAT_TUNNEL", 		ePOITier.LOW ) 
+
+	
+	
+	
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_RING", 				ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_RING_SHORT", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_MARINA", 			ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_INFECTION", 			ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_PHASEDRIVER", 		ePOITier.HIGH ) 
+
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_HYDROPONICS", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_OASIS", 					ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_SHIP", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_SHIP_SHORT", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_DOCKS", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_UNDERBELLY", 		ePOITier.MED ) 
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_RIFT", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_RIFT_SHORT", 		ePOITier.MED ) 
+
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_DOWNTOWN", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_TURBINE", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_TURBINE_SHORT", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_SOLARWAVE", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_GROWTOWERS", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_GRID", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_GRID_SHORT", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_GRID_B", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_GARDENS", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_GARDENS_SHORT", 		ePOITier.LOW ) 
+	
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_RND", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_RND_SHORT", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "FREEDM_MAP_NAME_ESTATES", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "FREEDM_MAP_NAME_ESTATES_NIGHT", 	ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_TERMINAL", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_TERMINAL_SHORT", 	ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "MAPZONE_ZONE_LABS", 				ePOITier.LOW ) 
+
+	
+	
+	
+	
+	POILootTier_Set_IfUndefined( "TRO_ZONE_15_ECHOHQ", 				ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_1_DOWNED_BEAST", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_11_CENOTE", 				ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_7_LIGHTNING_ROD", 		ePOITier.HIGH ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_1_MILL", 				ePOITier.HIGH ) 
+
+	
+	POILootTier_Set_IfUndefined( "TRO_ZONE_6_AMP_STATION_A", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_6_AMP_STATION_A_SHORT", 	ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_8_THUNDERWATCH", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_16_PYLON", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_16_PYLON_SHORT", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_1_COAST", 				ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_16_LAUNCHPAD", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_2_CHECKPOINT", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_2_NORTHPAD", 			ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_6_AMP_STATION_B", 		ePOITier.MED ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_6_AMP_STATION_B_SHORT", 	ePOITier.MED ) 
+
+	
+	POILootTier_Set_IfUndefined( "TRO_ZONE_14_ECHO", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_2_CHECKPOINT", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_12_BAROMETER", 			ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_1_FINGERS", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_6_WALL", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_6_COMMANDCENTER", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_8_STORMCATCHER", 		ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_4_CASCADE", 				ePOITier.LOW ) 
+	POILootTier_Set_IfUndefined( "TRO_ZONE_15_ISLAND", 				ePOITier.LOW ) 
+
+	
+
+	
+}
+
+void function POILootTier_Set( string poi, int tier = 1 )
+{
+	
+
+
+
+	
+#if POI_LOOT_TIER_DEBUG
+		printt( "%s(): >>>--- %s loot tier set: %s", FUNC_NAME(), poi, tier )
+#endif
+	file.poiTiers_Default[ poi ] <- tier
+}
+
+void function POILootTier_Set_IfUndefined( string poi, int defaultTier = 1 )
+{
+	string poiKey = "#" + poi
+	bool alreadySet = (( poi in file.poiTiers_Default ) && ( file.poiTiers_Default[ poi ] != INVALID_RETURNINT ))
+	if( alreadySet )
+	{
+#if POI_LOOT_TIER_DEBUG
+			printf( "%s(): >>>--- %s loot tier already set. Skipping...", FUNC_NAME(), poi )
+#endif
+		return
+	}
+
+	string poiPlaylistVar = poi + "_LootTier"
+	int tier = GetCurrentPlaylistVarInt( poiPlaylistVar, defaultTier )
+
+#if POI_LOOT_TIER_DEBUG
+		printf( "%s(): >>>--- %s loot tier undefined, setting: %s", FUNC_NAME(), poiKey, tier )
+#endif
+	file.poiTiers_Default[ poiKey ] <- tier
+}
+
+int function POILootTierDefault_Get( string poi )
+{
+	if( !( poi in file.poiTiers_Default ))
+	{
+#if POI_LOOT_TIER_DEBUG
+			printf( "%s(): >>>--- POI %s does not have a default Tier.", FUNC_NAME(), poi )
+#endif
+		return -1
+	}
+
+	return file.poiTiers_Default[ poi ]
+}
+
+ 

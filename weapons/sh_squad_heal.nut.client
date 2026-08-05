@@ -1,0 +1,913 @@
+
+global function SquadHeal_Init
+global function SquadHeal_InitMain
+global function SquadHeal_InitRpcs
+
+global function SquadHeal_CanHealSquad
+global function SquadHeal_IsPlayerInRange
+
+
+
+
+
+
+
+
+
+
+
+global function ServerToClient_SquadHeal_StartHeal
+global function ServerToClient_SquadHeal_StopHeal
+
+
+
+const string PVAR_SQUAD_HEAL_ENABLED = "squad_heal_enabled"
+const string PVAR_SQUAD_HEAL_TOGETHER_DISTANCE = "squad_heal_together_dist"
+const string PVAR_SQUAD_HEAL_TOGETHER_DISTANCE_IS_2D = "squad_heal_together_2d"
+const string PVAR_SQUAD_HEAL_TOGETHER_DISTANCE_Z_CLAMP = "squad_heal_together_z_height"
+const string PVAR_SQUAD_HEAL_HEALING_FX_ONLY_ON_HEAL = "squad_heal_fx_only_heal"
+
+
+global const string SQUAD_HEAL_SUCCESS_SIGNAL = "SquadHealSuccess"
+global const string SQUAD_HEAL_CANCELED_SIGNAL = "SquadHealCancel"
+global const string SQUAD_HEAL_STOP_1P_FX_SIGNAL = "SquadHealStop1P"
+
+
+const float SQUAD_HEAL_TOGETHER_DISTANCE = 12 * METERS_TO_INCHES
+const float SQUAD_HEAL_AR_EFFECT_SIZE = 768.0 
+
+
+const asset VFX_SQUAD_HEAL_COCKPIT_HEAL = $"P_heal_loop_screen"
+const asset VFX_SQUAD_HEAL_SHIELD_CHARGING = $"P_armor_FP_charging_CP"
+const asset VFX_SQUAD_HEAL_ULT_ACCEL_CONT = $"P_UltAcc_screenSpace_cont"
+const asset VFX_SQUAD_HEAL_RANGE_RADIUS_REMINDER = $"P_ar_edge_ring_mid"
+
+enum SquadHealConsumableType
+{
+	Phoenix,
+	Health,
+	Shields,
+	Ult
+}
+
+struct StatusEffectHandles
+{
+	int shieldHealHandle
+	int healthHealHandle
+	int ultChargeHandle
+}
+
+struct TeammateHealData
+{
+	int  shieldHealAmount
+	int  healthHealAmount
+	bool wasInRange
+}
+
+struct
+{
+
+		table<entity, TeammateHealData> teammatesHealing
+		bool                            healingThread
+
+
+	float togetherSquareDist
+	float togetherDist
+} file
+
+bool function SquadHeal_IsEnabled()
+{
+
+
+
+
+
+
+
+
+
+
+	if ( Endorsements_IsActive() )
+		return true
+
+	return GetCurrentPlaylistVarBool( PVAR_SQUAD_HEAL_ENABLED, false )
+}
+
+bool function SquadHeal_CanHealSquad( entity player )
+{
+
+
+
+
+
+
+
+	return SquadHeal_IsEnabled() && player.HasPassive( ePassives.PAS_HEAL_RADIUS )
+}
+
+void function SquadHeal_InitMain()
+{
+	PrecacheParticleSystem( VFX_SQUAD_HEAL_RANGE_RADIUS_REMINDER )
+	PrecacheParticleSystem( VFX_SQUAD_HEAL_ULT_ACCEL_CONT )
+
+	float togetherDist = GetCurrentPlaylistVarFloat( PVAR_SQUAD_HEAL_TOGETHER_DISTANCE, SQUAD_HEAL_TOGETHER_DISTANCE )
+	file.togetherDist       = togetherDist
+	file.togetherSquareDist = togetherDist * togetherDist
+
+	RegisterSignal( SQUAD_HEAL_SUCCESS_SIGNAL )
+	RegisterSignal( SQUAD_HEAL_CANCELED_SIGNAL )
+	RegisterSignal( SQUAD_HEAL_STOP_1P_FX_SIGNAL )
+}
+
+void function SquadHeal_InitRpcs()
+{
+	Remote_RegisterClientFunction( "ServerToClient_SquadHeal_StartHeal", "entity", "int", 0, 126, "int", 0, 101 )
+	Remote_RegisterClientFunction( "ServerToClient_SquadHeal_StopHeal", "entity" )
+}
+
+void function SquadHeal_Init()
+{
+	if ( !SquadHeal_IsEnabled() )
+		return
+
+	SquadHeal_InitMain()
+	SquadHeal_InitRpcs()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function SquadHeal_IsPlayerInRange( entity healer, entity player )
+{
+	if ( !SquadHeal_IsEnabled() )
+		return false
+
+	if ( !IsValid( healer ) )
+		return false
+
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return false
+
+	if ( player.IsShadowForm() )
+		return false
+
+	if ( player.IsPhaseShifted() )
+		return false
+
+	
+	if ( Bleedout_IsBleedingOut( player ) )
+		return false
+
+	return IsPairInRangeForProximityBuff( healer, player )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsPairInRangeForProximityBuff( entity player1, entity player2 )
+{
+	if ( !IsValid( player1 ) || !IsValid( player2 ) )
+	{
+		Assert( false, "invalid player player1:" + player1 + " player2:" + player2 )
+		return false
+	}
+
+	vector from1To2 = player2.GetOrigin() - player1.GetOrigin()
+
+	float maxZHeight = 0.0
+	float zHeight    = 0.0
+	if ( GetCurrentPlaylistVarBool( PVAR_SQUAD_HEAL_TOGETHER_DISTANCE_IS_2D, true ) )
+	{
+		maxZHeight = GetCurrentPlaylistVarFloat( PVAR_SQUAD_HEAL_TOGETHER_DISTANCE_Z_CLAMP, file.togetherDist )
+		if ( maxZHeight != 0.0 )
+		{
+			zHeight = fabs( from1To2.z )
+		}
+		from1To2 = FlattenVec( from1To2 )
+	}
+
+	if ( LengthSqr( from1To2 ) < file.togetherSquareDist )
+	{
+		if ( zHeight <= maxZHeight )
+		{
+			return true
+		}
+	}
+
+	return false
+}
+
+bool function WillBenefitFromUltAccel( entity ent )
+{
+	entity ultimateAbility = ent.GetOffhandWeapon( eOffhandInv.ULTIMATE )
+	if ( IsValid( ultimateAbility ) )
+	{
+		int ammo    = ultimateAbility.GetWeaponPrimaryClipCount()
+		int maxAmmo = ultimateAbility.GetWeaponPrimaryClipCountMax()
+		if ( ammo < maxAmmo && ultimateAbility.IsReadyToFire() && !ultimateAbility.HasMod( MOBILE_HMG_ACTIVE_MOD ) && !ultimateAbility.HasMod( ULTIMATE_ACTIVE_MOD_STRING ) )
+			return true
+	}
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_SquadHeal_StartHeal( entity teammate, int shieldHealAmount, int healthHealAmount )
+{
+	Assert( !(teammate in file.teammatesHealing), "Teammate already present in Squad Heal" )
+
+	TeammateHealData data
+	data.wasInRange       = false
+	data.shieldHealAmount = shieldHealAmount
+	data.healthHealAmount = healthHealAmount
+	file.teammatesHealing[teammate] <-  data
+
+	thread SquadHeal_Add1pVFX_Thread()
+}
+
+void function ServerToClient_SquadHeal_StopHeal( entity teammate )
+{
+	if ( teammate in file.teammatesHealing )
+		delete file.teammatesHealing[teammate]
+
+	if ( file.teammatesHealing.len() == 0 )
+	{
+		entity self = GetLocalClientPlayer()
+		if ( !IsValid( self ) )
+			return
+
+		Signal( self, SQUAD_HEAL_STOP_1P_FX_SIGNAL )
+	}
+}
+
+void function SquadHeal_Add1pVFX_Thread()
+{
+	entity self = GetLocalClientPlayer()
+	if ( !IsValid( self ) )
+		return
+
+	entity cockpit = self.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	if ( IsSpectating() )
+		return
+
+	if ( file.healingThread )
+		return
+
+	file.healingThread = true
+
+	EndSignal( self, "OnDeath", "OnDestroy", SQUAD_HEAL_STOP_1P_FX_SIGNAL )
+
+	StatusEffectHandles effectHandles
+	effectHandles.healthHealHandle = 0
+	effectHandles.shieldHealHandle = 0
+	effectHandles.ultChargeHandle  = 0
+
+	int healthFxID = GetParticleSystemIndex( VFX_SQUAD_HEAL_COCKPIT_HEAL )
+	int shieldFxID = GetParticleSystemIndex( VFX_SQUAD_HEAL_SHIELD_CHARGING )
+	int ultFxID    = GetParticleSystemIndex( VFX_SQUAD_HEAL_ULT_ACCEL_CONT )
+
+	OnThreadEnd(
+		function() : ( effectHandles )
+		{
+			file.healingThread = false
+			if ( EffectDoesExist( effectHandles.healthHealHandle ) )
+				EffectStop( effectHandles.healthHealHandle, false, true )
+			if ( EffectDoesExist( effectHandles.shieldHealHandle ) )
+				EffectStop( effectHandles.shieldHealHandle, false, true )
+			if ( EffectDoesExist( effectHandles.ultChargeHandle ) )
+				EffectStop( effectHandles.ultChargeHandle, false, true )
+		}
+	)
+
+	float fxRestartTime  = 0
+	int shieldHealAmount = 0
+	int healthHealAmount = 0
+
+	while ( file.teammatesHealing.len() > 0 )
+	{
+		bool gettingHealth   = false
+		bool gettingShields  = false
+		bool gettingUlt      = false
+		bool teammateInRange = false
+
+		foreach ( entity teammate, TeammateHealData data in file.teammatesHealing )
+		{
+			bool inRange = SquadHeal_IsPlayerInRange( teammate, self )
+
+			if ( inRange )
+			{
+				teammateInRange = true
+
+				if ( !data.wasInRange )
+				{
+					shieldHealAmount += data.shieldHealAmount
+					healthHealAmount += data.healthHealAmount
+					data.wasInRange = true
+				}
+			}
+			else if ( !inRange && data.wasInRange )
+			{
+				shieldHealAmount -= data.shieldHealAmount
+				healthHealAmount -= data.healthHealAmount
+				data.wasInRange = false
+			}
+		}
+
+		if ( shieldHealAmount > 0 )
+		{
+			int currentShields  = self.GetShieldHealth()
+			int shieldHealthMax = self.GetShieldHealthMax()
+			if ( shieldHealthMax > 0 && currentShields < shieldHealthMax )
+			{
+				gettingShields = true
+			}
+		}
+
+		if ( healthHealAmount > 0 )
+		{
+			int currentHealth = self.GetHealth()
+			int healthMax     = self.GetMaxHealth()
+			if ( currentHealth < healthMax )
+			{
+				gettingHealth = true
+			}
+		}
+
+		if ( healthHealAmount == 0 && shieldHealAmount == 0 )
+		{
+			gettingUlt = WillBenefitFromUltAccel( self )
+		}
+
+		bool showHealthFX = teammateInRange && gettingHealth && !gettingShields
+		bool showShieldFX = teammateInRange && gettingShields
+		bool showUltFX    = teammateInRange && gettingUlt
+
+		if ( !showUltFX )
+		{
+			if ( EffectDoesExist( effectHandles.ultChargeHandle ) )
+				EffectStop( effectHandles.ultChargeHandle, false, true )
+		}
+		else
+		{
+			if ( !EffectDoesExist( effectHandles.ultChargeHandle ) )
+			{
+				effectHandles.ultChargeHandle = StartParticleEffectOnEntity( cockpit, ultFxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+				EffectSetIsWithCockpit( effectHandles.ultChargeHandle, true )
+				EffectSetControlPointVector( effectHandles.ultChargeHandle, 1, <255, 208, 56> )
+			}
+		}
+
+		if ( !showHealthFX )
+		{
+			if ( EffectDoesExist( effectHandles.healthHealHandle ) )
+				EffectStop( effectHandles.healthHealHandle, false, true )
+		}
+		else
+		{
+			if ( !EffectDoesExist( effectHandles.healthHealHandle ) )
+			{
+				effectHandles.healthHealHandle = StartParticleEffectOnEntity( self, healthFxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+				EffectSetIsWithCockpit( effectHandles.healthHealHandle, true )
+			}
+		}
+
+		if ( !showShieldFX )
+		{
+			if ( EffectDoesExist( effectHandles.shieldHealHandle ) )
+			{
+				EffectStop( effectHandles.shieldHealHandle, false, true )
+			}
+			fxRestartTime = FLT_MAX
+		}
+		else
+		{
+			if ( fxRestartTime == FLT_MAX )
+			{
+				fxRestartTime = 0
+			}
+			if ( Time() >= fxRestartTime )
+			{
+				int armorTier      = EquipmentSlot_GetEquipmentTier( self, "armor" )
+				vector shieldColor = GetFXRarityColorForTier( armorTier )
+
+				if ( EffectDoesExist( effectHandles.shieldHealHandle ) )
+				{
+					EffectStop( effectHandles.shieldHealHandle, false, true )
+				}
+				effectHandles.shieldHealHandle = StartParticleEffectOnEntity( cockpit, shieldFxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+				EffectSetIsWithCockpit( effectHandles.shieldHealHandle, true )
+				EffectSetControlPointVector( effectHandles.shieldHealHandle, 1, shieldColor )
+
+				fxRestartTime = Time() + .23
+			}
+		}
+
+		WaitFrame()
+	}
+}
+
+
+       

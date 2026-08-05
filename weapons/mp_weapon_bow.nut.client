@@ -1,0 +1,1602 @@
+
+global function MpWeaponBow_spicey_Init
+global function OnWeaponActivate_weapon_bow_spicey
+global function OnWeaponDeactivate_weapon_bow_spicey
+global function OnWeaponPrimaryAttack_weapon_bow_spicey
+global function OnProjectileCollision_weapon_bow_spicey
+global function OnWeaponChargeBegin_weapon_bow_spicey
+global function OnWeaponChargeEnd_weapon_bow_spicey
+global function OnWeaponChargeLevelIncreased_weapon_bow_spicey
+global function OnWeaponCustomActivityStart_weapon_bow_spicey
+global function OnWeaponCustomActivityEnd_weapon_bow_spicey
+global function OnWeaponEnergizedStart_weapon_bow_spicey
+global function OnWeaponStartEnergizing_weapon_bow_spicey
+global function OnWeaponEnergizedEnd_weapon_bow_spicey
+global function WeaponBow_spicey_GetPlayerBowWeaponWithLowestArrowCount
+global function WeaponBow_GetArrowFragForce
+
+
+global function AttemptCancelCharge_spicey
+
+
+
+
+
+
+
+
+
+global function ArrowsCanBePickedUp_spicey
+global function ArrowsAutofillWeapon_spicey
+global function ArrowsIsAutoLootableArrow
+
+global const string BOW_WEAPON_NAME = "mp_weapon_bow"
+global const string BOW_WEAPON_NAME_CRATE = "mp_weapon_bow_crate"
+global const string ARROW_SCRIPTNAME = "mp_weapon_bow_arrow"
+global const string ARROW_BUNDLE_NAME = "arrowsBundle"
+
+
+global const string BOW_SPICEY_ENERGIZED_MOD = "energized"
+global const string BOW_SPICEY_FRAG_MOD = "energized_with_frag"
+global const string BOW_FRAG_EXPLOSIVE_MOD = "energized_charge_dmg_lv5"
+
+
+
+
+
+const string BOW_ENERGIZED_CONSUMABLE_DEFAULT = "mp_weapon_frag_grenade"
+const vector ENERGIZED_COLOR_VEC = <232, 113, 44>
+
+const string FRAG_ARROW_IMPACT_TABLE = "bow_spicey_frag_arrow"
+const string BOW_SPICEY_ENERGIZED_IMPACT_TABLE = "bow_spicey_energized"
+
+
+const string FX_BOW_LIGHT_PREFIX = "fx_bow_light_"
+const int FX_BOW_LIGHT_COUNT = 3
+
+const asset FX_ENERGIZED_BOW_ARROW_TIP_FULL_DRAW = $"P_bocek_chrg_knock"
+const string FX_ENERGIZED_BOW_ARROW_TIP_FULL_DRAW_ATTACHPOINT = "fx_reload"
+
+const asset FX_ENERGIZED_BOW_ARROW_FULL_DRAW = $"P_bocek_arrow_energized"
+const string FX_ENERGIZED_BOW_ARROW_FULL_DRAW_ATTACHPOINT = "fx_arrow_light"
+
+const asset BOW_FRAG_ARROW_CHARGEUP_FX = $"P_bocek_frag_chrg_up"
+const asset STUCK_ARROW_COCKPIT_FX = $"P_bocek_chrg_stuck_screen"
+
+
+const asset SINGLE_ARROW_MODEL = $"mdl/weapons/bullets/w_arrow_projectile.rmdl"
+const asset SINGLE_ARROW_MODEL_PICKUP = $"mdl/weapons_r5/loot/_master/w_loot_wep_arrow_single.rmdl"
+const asset BOW_1P_MODEL = $"mdl/techart/mshop/weapons/class/bow/compound/compound_base_v.rmdl"
+
+
+const asset ENERGIZED_CROSSHAIR_RUI = $"ui/crosshair_energize_status_sentinel.rpak"
+const asset AMMO_ENERGIZED_ICON = $"rui/hud/gametype_icons/survival/sur_ammo_arrows_charged"
+
+const string HELPER_DOT_RUI_ABORT_SIGNAL = "bow_helper_dot_rui_abort_spicey"
+const string HELPER_DOT_FIRE_ANIM = "fire_fullyCharged"
+const string HELPER_DOT_HIDE_ANIM_EVENT = "hide_helper_dot"
+
+
+const string CHARGING_SOUND_3P = "weapon_bow2_frag_primed_equip_3p"
+const string CHARGE_END_SOUND_FP = "weapon_bow2_frag_primed_equip"
+const string CHARGE_END_SOUND_SHOOTING_FP = "weapon_Bow_lower"
+const string EQUIPPED_WHILE_CHARGED = "weapon_bow2_frag_primed_equip"
+const string FRAG_ARROW_WINDUP_1P = "weapon_bow2_grenade_alert_1p"
+const string FRAG_ARROW_WINDUP_FRIENDLY = "weapon_bow2_grenade_alert_3p"
+const string FRAG_ARROW_WINDUP_ENEMY = "weapon_bow2_grenade_alert_3p_enemy"
+
+
+const string BOW_MOVER_SCRIPTNAME = "bow_mover"
+
+const array<int> STANDARD_ARROWS_AVAILABLE_DMG_LEVELS = [0, 1, 2, 3, 4, 5]
+
+const string CHARGE_MODS_BASE_STR = "charge_lv"
+const string STANDARD_CHARGE_DMG_MODS_BASE_STR = "std_charge_dmg_lv"
+const int CHARGE_MODS_MAX_LEVEL = 5
+const string CHARGE_COMPLETE_SOUND_SETTING = "charge_complete_sound_1p"
+
+const string CENTER_DOT_MIN_CHARGE_SETTING = "center_dot_helper_min_charge_level"
+
+const string BOW_DEACTIVATE_SIGNAL = "BowDeactivate_spicey"
+const string CHARGE_END = "BowChargeEnd"
+
+const string ARROW_COLOR_STANDARD_SETTING = "arrows_standard_color"
+const string ARROW_COLOR_ENERGIZED_SETTING = "arrows_energized_color"
+
+
+const table< string, array<string> > fxLightPointsForOptic =
+{
+	["ironsights"] = ["SIGHT_LIGHT_01", "SIGHT_LIGHT_02", "SIGHT_LIGHT_03"],
+	["optic_cq_hcog_classic"] = ["HCOG_OG_LIGHT_01", "HCOG_OG_LIGHT_02", "HCOG_OG_LIGHT_03"],
+	["optic_cq_hcog_bruiser"] = ["HCOG_OG_LIGHT_01", "HCOG_OG_LIGHT_02", "HCOG_OG_LIGHT_03"],
+	["optic_cq_holosight"] = ["HOLO_LIGHT_01", "HOLO_LIGHT_02", "HOLO_LIGHT_03"],
+	["optic_cq_holosight_variable"] = ["HOLOMAG_LIGHT_01", "HOLOMAG_LIGHT_02", "HOLOMAG_LIGHT_03"],
+	["optic_ranged_hcog"] = ["ACGS_LIGHT_01", "ACGS_LIGHT_02", "ACGS_LIGHT_03"],
+	["optic_ranged_aog_variable"] = ["AOG_LIGHT_01", "AOG_LIGHT_02", "AOG_LIGHT_03"]
+}
+
+const table<string, float> UI_OPTIC_CLAMP_OPTICS =
+{
+	["ironsights"] = 0.05,
+	["optic_cq_holosight"] = 0.1
+}
+
+enum eArrowTypes
+{
+	STANDARD,
+	ENERGIZED,
+
+	_count
+}
+
+struct
+{
+	bool fileStructInitialized = false
+
+	float fullChargeSpeed
+	float fullChargeSpeedSplit
+
+	string chargeCompleteSound
+	string energizeChargeCompleteSound
+
+	table<string, array<asset> > fxLightAssets1p
+
+	array<vector> arrowTypeColors
+
+	int centerDotHelperMinChargeLvl
+	int centerDotHelperMinChargeLvlOpticClamp
+
+	string bowEnergizedConsumable = BOW_ENERGIZED_CONSUMABLE_DEFAULT
+
+
+
+
+
+	int ammoStackSize
+
+	LootData& singleArrowLootData
+
+
+		bool inspectDOF
+
+
+} file
+
+struct Tuning
+{
+	float arrowsStickChance				= 1.0
+	int   arrowsStickMaxPlayer			= 4
+	int   arrowsStickMaxWorld			= 750
+	int   arrowsStickMaxZone			= 40
+	int   arrowsStickMaxUnknownZone		= 80
+	float arrowsStickIntoPlayerDist		= 9
+	float arrowsStickLifetimePlayer		= 90
+	float arrowsStickLifetimeWorld		= 90
+	float arrowsStickIntoAdjustDist		= 10
+	bool  arrowsCanBePickedUp			= true
+	bool  arrowsAutoFillWeapon			= true
+	float arrowsFragDelayTime			= 2.0
+	int   arrowsFragDamage				= 25
+	float arrowsFragRadiusInner			= 150.0
+	float arrowsFragRadiusOuter			= 200.0
+	float arrowsFragForce				= 10.0
+	bool  arrowsStickDisabled			= false
+	float arrowsAutoPickupDistance		= 24.0
+	bool  arrowsRefundNonSticky			= true
+}
+Tuning tunings
+
+
+void function MpWeaponBow_spicey_Init()
+{
+	MpWeaponBow_spicey_InitTuningValues()
+
+	PrecacheWeapon( $"mp_weapon_bow" )
+
+	RegisterSignal( BOW_DEACTIVATE_SIGNAL )
+	RegisterSignal( HELPER_DOT_RUI_ABORT_SIGNAL )
+	RegisterSignal( CHARGE_END )
+
+	PrecacheModel( SINGLE_ARROW_MODEL )
+	PrecacheModel( SINGLE_ARROW_MODEL_PICKUP )
+	PrecacheModel( BOW_1P_MODEL )
+
+	PrecacheParticleSystem( BOW_FRAG_ARROW_CHARGEUP_FX )
+	PrecacheParticleSystem( STUCK_ARROW_COCKPIT_FX )
+	PrecacheParticleSystem( FX_ENERGIZED_BOW_ARROW_TIP_FULL_DRAW )
+	PrecacheParticleSystem( FX_ENERGIZED_BOW_ARROW_FULL_DRAW )
+
+	PrecacheScriptString( ARROW_SCRIPTNAME )
+
+	PrecacheImpactEffectTable( BOW_SPICEY_ENERGIZED_IMPACT_TABLE )
+	PrecacheImpactEffectTable( FRAG_ARROW_IMPACT_TABLE )
+
+	file.fxLightAssets1p = {}
+	string settingStr
+	foreach ( string optic, array<string> attachments in fxLightPointsForOptic )
+	{
+		array<asset> fxLightArr = []
+		for ( int i = 0; i < FX_BOW_LIGHT_COUNT; i++ )
+		{
+			settingStr = format( "%s%s_%d_1p", FX_BOW_LIGHT_PREFIX, optic, i )
+			asset fx1p = GetWeaponInfoFileKeyFieldAsset_Global( BOW_WEAPON_NAME, settingStr )
+
+
+
+			fxLightArr.append( fx1p )
+		}
+		file.fxLightAssets1p[optic] <- fxLightArr
+	}
+
+
+
+
+
+
+	Remote_RegisterServerFunction( "Remote_CancelCharge_spicey" )
+	RegisterCustomItemPickupAction( ARROW_BUNDLE_NAME, WeaponBow_ArrowBundle_ItemPickup )
+
+
+		RegisterConCommandTriggeredCallback( "+weaponcycle", AttemptCancelCharge_spicey )
+		RegisterConCommandTriggeredCallback( "+reload", AttemptCancelCharge_spicey )
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.stuck_by_frag_arrow, StuckVisualsEnabled )
+
+
+
+		file.inspectDOF = GetCurrentPlaylistVarBool( "bow_inspect_dof", true )
+
+
+
+
+}
+
+void function MpWeaponBow_spicey_InitTuningValues()
+{
+	tunings.arrowsStickChance         	= GetCurrentPlaylistVarFloat( "spicey_arrows_stick_chance", tunings.arrowsStickChance )
+	tunings.arrowsStickMaxPlayer      	= GetCurrentPlaylistVarInt( "spicey_arrows_stick_max_player", tunings.arrowsStickMaxPlayer )
+	tunings.arrowsStickMaxWorld       	= GetCurrentPlaylistVarInt( "spicey_arrows_stick_max_world", tunings.arrowsStickMaxWorld )
+	tunings.arrowsStickMaxZone        	= GetCurrentPlaylistVarInt( "spicey_arrows_stick_max_per_zone", tunings.arrowsStickMaxZone )
+	tunings.arrowsStickMaxUnknownZone 	= GetCurrentPlaylistVarInt("spicey_arrows_stick_max_unknown_zone", tunings.arrowsStickMaxUnknownZone )
+	tunings.arrowsStickIntoPlayerDist 	= GetCurrentPlaylistVarFloat( "spicey_arrows_stick_into_player_dist", tunings.arrowsStickIntoPlayerDist )
+	tunings.arrowsStickIntoAdjustDist 	= GetCurrentPlaylistVarFloat( "spicey_arrows_stick_into_adjust_dist", tunings.arrowsStickIntoAdjustDist )
+	tunings.arrowsStickLifetimePlayer 	= GetCurrentPlaylistVarFloat( "spicey_arrows_stick_lifetime_player", tunings.arrowsStickLifetimePlayer )
+	tunings.arrowsStickLifetimeWorld  	= GetCurrentPlaylistVarFloat( "spicey_arrows_stick_lifetime_world", tunings.arrowsStickLifetimeWorld )
+	tunings.arrowsCanBePickedUp       	= GetCurrentPlaylistVarBool( "spicey_arrows_can_be_picked_up", tunings.arrowsCanBePickedUp )
+	tunings.arrowsAutoFillWeapon       	= GetCurrentPlaylistVarBool( "spicey_arrows_autofill_weapon", tunings.arrowsAutoFillWeapon )
+	tunings.arrowsFragDelayTime  		= GetCurrentPlaylistVarFloat( "spicey_arrows_frag_delay_time", tunings.arrowsFragDelayTime )
+	tunings.arrowsFragDamage	  		= GetCurrentPlaylistVarInt( "spicey_arrows_frag_damage", tunings.arrowsFragDamage )
+	tunings.arrowsFragRadiusInner	  	= GetCurrentPlaylistVarFloat( "spicey_arrows_frag_radius_inner", tunings.arrowsFragRadiusInner )
+	tunings.arrowsFragRadiusOuter	  	= GetCurrentPlaylistVarFloat( "spicey_arrows_frag_radius_outer", tunings.arrowsFragRadiusOuter )
+	tunings.arrowsFragForce	  			= GetCurrentPlaylistVarFloat( "spicey_arrows_frag_force", tunings.arrowsFragForce )
+	tunings.arrowsStickDisabled	  		= GetCurrentPlaylistVarBool( "arrows_stick_disable", tunings.arrowsStickDisabled )
+	tunings.arrowsAutoPickupDistance	= GetCurrentPlaylistVarFloat( "spicey_arrows_pickup_distance", tunings.arrowsAutoPickupDistance )
+	tunings.arrowsRefundNonSticky	  	= GetCurrentPlaylistVarBool( "arrows_refund_non_sticky", tunings.arrowsRefundNonSticky )
+}
+
+bool function ArrowsCanBePickedUp_spicey()
+{
+	return tunings.arrowsCanBePickedUp
+}
+
+bool function ArrowsAutofillWeapon_spicey()
+{
+	return tunings.arrowsAutoFillWeapon
+}
+
+asset function Bow_spicey_GetEnergizedIcon()
+{
+	if ( file.bowEnergizedConsumable == "mp_weapon_frag_grenade" )
+		return $"rui/ordnance_icons/grenade_frag"
+
+
+
+
+
+
+
+
+
+	return $""
+}
+
+bool function ArrowsIsAutoLootableArrow( LootData data )
+{
+	return data.lootType == eLootType.AMMO && data.ref == ARROWS_AMMO && ArrowsCanBePickedUp_spicey()
+}
+
+void function OnWeaponActivate_weapon_bow_spicey( entity weapon )
+{
+	
+	if ( !file.fileStructInitialized )
+	{
+		file.fileStructInitialized = true
+
+		file.fullChargeSpeed      = GetWeaponInfoFileKeyField_GlobalFloat( BOW_WEAPON_NAME, "projectile_launch_speed_full_charge" )
+
+		file.chargeCompleteSound = GetWeaponInfoFileKeyField_GlobalString( BOW_WEAPON_NAME, CHARGE_COMPLETE_SOUND_SETTING )
+		file.energizeChargeCompleteSound = GetWeaponInfoFileKeyField_GlobalString( BOW_WEAPON_NAME, "energize_charge_complete_sound_1p" )
+
+		file.centerDotHelperMinChargeLvl           = GetWeaponInfoFileKeyField_GlobalInt( BOW_WEAPON_NAME, CENTER_DOT_MIN_CHARGE_SETTING )
+		file.centerDotHelperMinChargeLvlOpticClamp = GetWeaponInfoFileKeyField_GlobalInt( BOW_WEAPON_NAME, CENTER_DOT_MIN_CHARGE_SETTING + "_optic_clamp" )
+
+		Assert( eArrowTypes._count == 2 )    
+		file.arrowTypeColors.append( GetWeaponInfoFileKeyField_GlobalVectorInt( BOW_WEAPON_NAME, ARROW_COLOR_STANDARD_SETTING ) )
+		file.arrowTypeColors.append( GetWeaponInfoFileKeyField_GlobalVectorInt( BOW_WEAPON_NAME, ARROW_COLOR_ENERGIZED_SETTING ) )
+
+		
+
+		file.singleArrowLootData = SURVIVAL_Loot_GetLootDataByRef( ARROWS_AMMO )
+
+		if ( ArrowsCanBePickedUp_spicey() )
+			SetCallback_LootTypeExtraCanUseFunction( file.singleArrowLootData, StuckArrow_ExtraCanUseFunction )
+
+
+
+
+
+
+
+
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	file.bowEnergizedConsumable = GetWeaponInfoFileKeyField_GlobalString ( BOW_WEAPON_NAME, "energized_consumable" )
+
+	if ( InPrediction() )
+
+	{
+		if ( file.bowEnergizedConsumable == "mp_weapon_frag_grenade" )
+		{
+			if ( !weapon.HasMod( BOW_SPICEY_FRAG_MOD ) )
+			{
+				weapon.AddMod( BOW_SPICEY_FRAG_MOD )
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+
+	WeaponBow_spicey_UpdateArrowColor( weapon )
+
+	entity player = weapon.GetWeaponOwner()
+
+		if ( IsValid( player ) )
+		{
+			int slot = GetSlotForWeapon( player, weapon )
+			if ( slot >= 0 )
+				weapon.w.activeOptic = SURVIVAL_GetWeaponAttachmentForPoint( player, slot, "sight" )
+			else
+				weapon.w.activeOptic = ""
+
+			thread UpdateWeaponEnergizeRui( player, weapon, Bow_spicey_GetEnergizedIcon(), ENERGIZED_CROSSHAIR_RUI,  AMMO_ENERGIZED_ICON )
+		}
+
+		if ( weapon.HasMod( BOW_SPICEY_ENERGIZED_MOD ) )
+		{
+			weapon.EmitWeaponSound_1p3p( EQUIPPED_WHILE_CHARGED, $"" )
+		}
+
+}
+
+void function OnWeaponDeactivate_weapon_bow_spicey( entity weapon )
+{
+	ClearChargeAndDmgLevelMods( weapon )
+
+		weapon.Signal( BOW_DEACTIVATE_SIGNAL )
+
+	weapon.Signal( ENERGIZED_WEAPON_DEACTIVATE_SIGNAL )
+	weapon.StopWeaponSound( EQUIPPED_WHILE_CHARGED )
+}
+
+var function OnWeaponPrimaryAttack_weapon_bow_spicey( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	if ( !IsValid( weapon ) )
+		return 0
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return 0
+
+
+		if ( !(InPrediction() && weapon.ShouldPredictProjectiles()) )
+			return 0
+
+
+	ApplyModsForChargeLevel( weapon, weapon.GetWeaponChargeLevel() )
+
+	weapon.SetSoundCodeControllerValue( 100.0 * weapon.GetWeaponChargeFractionCurved() )
+
+	
+	float adjustedChargeFrac = max( 0.0, min( weapon.GetWeaponChargeFractionCurved(), 1.0 ) )
+
+	float baseSpeed       = weapon.GetWeaponSettingFloat( eWeaponVar.projectile_launch_speed )
+	float speedMultiplier = 0.0
+	bool ignoreSpread     = false
+
+	if ( weapon.HasMod( SHATTER_ROUNDS_HIPFIRE_MOD ) )
+	{
+		speedMultiplier = GraphCapped( adjustedChargeFrac, 0.0, 1.0, baseSpeed, file.fullChargeSpeedSplit )
+		ignoreSpread    = true
+	}
+	else
+	{
+		speedMultiplier = GraphCapped( adjustedChargeFrac, 0.0, 1.0, baseSpeed, file.fullChargeSpeed )
+	}
+	speedMultiplier /= baseSpeed        
+
+
+	GoldenHorsePurple_OnWeaponPrimaryAttack( weapon, attackParams )
+	weapon.FireWeapon_Default( attackParams.pos, attackParams.dir, speedMultiplier, 1.0, ignoreSpread )
+	GoldenHorsePurple_PostFire( weapon )
+
+	WeaponBow_spicey_StopChargedArrowEffects( weapon )
+
+	thread ClearChargeAfterFrame( weapon )
+
+
+		if ( InPrediction() )
+		{
+			int slot     = GetSlotForWeapon( player, weapon )
+			string optic = ""
+			if ( slot >= 0 )
+			{
+				optic = SURVIVAL_GetWeaponAttachmentForPoint( player, slot, "sight" )
+			}
+			else
+			{
+				Warning( "Invalid weapon slot " + slot + " for bow on player " + player )
+				return weapon.GetWeaponSettingInt( eWeaponVar.ammo_per_shot )
+			}
+
+			if ( optic == "" )
+				optic = "ironsights"
+			bool isClampedOptic   = optic in UI_OPTIC_CLAMP_OPTICS
+			float clampOpticDelay = isClampedOptic ? UI_OPTIC_CLAMP_OPTICS[optic] : 0.0
+			int minChargeLevel    = isClampedOptic ? file.centerDotHelperMinChargeLvlOpticClamp : file.centerDotHelperMinChargeLvl
+			int chargeLvl         = weapon.GetWeaponChargeLevel() - 1
+			if ( chargeLvl >= minChargeLevel )
+			{
+				weapon.Signal( HELPER_DOT_RUI_ABORT_SIGNAL )
+				float seqDur   = weapon.GetSequenceDuration( HELPER_DOT_FIRE_ANIM )
+				float frac     = weapon.GetScriptedAnimEventCycleFrac( HELPER_DOT_FIRE_ANIM, HELPER_DOT_HIDE_ANIM_EVENT )
+				float duration = seqDur * frac
+				float delay    = 0.0
+				if ( isClampedOptic && chargeLvl < file.centerDotHelperMinChargeLvl && chargeLvl >= file.centerDotHelperMinChargeLvlOpticClamp )
+				{
+					duration -= clampOpticDelay
+					delay = clampOpticDelay
+				}
+				thread DisplayCenterDotRui( weapon, HELPER_DOT_RUI_ABORT_SIGNAL, delay, duration, 0.7, 0.05, 0.1 )
+			}
+		}
+
+
+	return weapon.GetWeaponSettingInt( eWeaponVar.ammo_per_shot )
+}
+
+void function OnWeaponCustomActivityStart_weapon_bow_spicey( entity weapon, int activity, int sequence )
+{
+
+		if ( !file.inspectDOF )
+			return
+
+		
+		if ( weapon.GetWeaponActivity() == ACT_VM_WEAPON_INSPECT )
+		{
+			DoF_LerpNearDepth( 0.5, 6.4, 0.3 )
+		}
+
+}
+
+void function OnWeaponCustomActivityEnd_weapon_bow_spicey( entity weapon, int activity )
+{
+
+		if ( !file.inspectDOF )
+			return
+
+		if ( activity == ACT_VM_WEAPON_INSPECT )
+		{
+			DoF_LerpNearDepthToDefault( 0.3 )
+		}
+
+}
+
+void function ClearChargeAfterFrame( entity weapon )
+{
+	
+	AssertIsNewThread()
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( BOW_DEACTIVATE_SIGNAL )
+
+	OnThreadEnd(
+		function() : ( weapon )
+		{
+			if ( IsValid( weapon ) )
+				ClearChargeAndDmgLevelMods( weapon )
+		}
+	)
+
+	WaitFrame()
+}
+
+bool function OnWeaponChargeBegin_weapon_bow_spicey( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return false
+
+
+		weapon.Signal( HELPER_DOT_RUI_ABORT_SIGNAL )
+		thread PlayChargeFX( player, weapon )
+
+
+	return true
+}
+
+void function OnWeaponChargeEnd_weapon_bow_spicey( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	weapon.Signal( CHARGE_END )
+	WeaponBow_spicey_StopChargedArrowEffects( weapon )
+
+	if ( weapon.HasMod( BOW_SPICEY_ENERGIZED_MOD ) )
+	{
+		if ( weapon.IsReadyToFire() )
+			weapon.EmitWeaponSound_1p3p( CHARGE_END_SOUND_FP, $"" )
+		else
+			weapon.EmitWeaponSound_1p3p( CHARGE_END_SOUND_SHOOTING_FP, $"" )
+	}
+
+
+		WeaponBow_spicey_UpdateArrowColor( weapon )
+
+}
+
+bool function OnWeaponChargeLevelIncreased_weapon_bow_spicey( entity weapon )
+{
+	if ( weapon.GetWeaponChargeLevel() == weapon.GetWeaponChargeLevelMax() )
+	{
+		entity player = weapon.GetWeaponOwner()
+		if ( !IsValid( player ) )
+			return true
+
+
+		if ( weapon.HasMod( BOW_SPICEY_ENERGIZED_MOD ) )
+			weapon.EmitWeaponSound_1p3p( file.energizeChargeCompleteSound, "" )
+		else
+			weapon.EmitWeaponSound_1p3p( file.chargeCompleteSound, "" )
+
+			if ( IsValid( player ) && IsLocalClientPlayer( player ) )
+			{
+				Rumble_Play( "rumble_bow_max_charge", {} )
+			}
+
+
+	}
+
+	
+	ApplyModsForChargeLevel( weapon, weapon.GetWeaponChargeLevel() )
+
+
+		WeaponBow_spicey_UpdateArrowColor( weapon )
+
+
+	return true
+}
+
+void function OnWeaponStartEnergizing_weapon_bow_spicey( entity weapon, entity player )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+
+	if ( InPrediction() )
+
+	{
+		weapon.ForceChargeEndNoAttack()
+	}
+
+	weapon.EmitWeaponSound_1p3p( $"", CHARGING_SOUND_3P )
+}
+
+void function OnWeaponEnergizedStart_weapon_bow_spicey( entity weapon, entity player, bool costConsumable )
+{
+	OnWeaponEnergizedStart( weapon, player, costConsumable )
+
+
+
+
+
+
+}
+
+void function OnWeaponEnergizedEnd_weapon_bow_spicey( entity weapon, entity player )
+{
+	weapon.StopWeaponSound( CHARGING_SOUND_3P )
+
+		WeaponBow_spicey_UpdateArrowColor( weapon )
+
+}
+
+
+
+
+
+
+
+void function OnProjectileCollision_weapon_bow_spicey( entity projectile, vector pos, vector normal, entity hitEnt, int hitBox, bool isCritical, bool isPassthrough )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	return
+}
+
+bool function StuckArrow_ExtraCanUseFunction( entity player, entity arrow, int useFlags )
+{
+	
+
+	if ( Bleedout_IsBleedingOut( player ) )
+		return false
+
+	if ( !ArrowsCanBePickedUp_spicey() )
+		return false
+
+	if ( player.GetRealms()[0] != arrow.GetRealms()[0] )
+		return false
+
+	if ( IsBitFlagSet( useFlags, USE_FLAG_AUTO ) )
+	{
+		
+		array<entity> weapons = player.GetMainWeapons()
+		foreach ( entity weapon in weapons )
+		{
+			if ( IsValid( weapon ) && weapon.GetWeaponClassName().find( BOW_WEAPON_NAME ) >= 0 )
+			{
+				int arrowCount = weapon.GetWeaponPrimaryAmmoCount( weapon.GetActiveAmmoSource() )
+				if ( arrowCount < weapon.GetWeaponSettingInt( eWeaponVar.ammo_stockpile_max ) )
+					return true
+			}
+		}
+	}
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function WeaponBow_ArrowBundle_ItemPickup( entity pickup, entity player, int pickupFlags, entity deathBox, int ornull desiredCount, LootData data )
+{
+
+
+
+
+
+
+
+
+	return true
+}
+
+entity function WeaponBow_spicey_GetPlayerBowWeaponWithLowestArrowCount( entity player )
+{
+	if ( !IsValid( player ) )
+		return null
+
+	array< entity > playerWeapons = player.GetMainWeapons()
+	playerWeapons.append( GetPlayerSlingWeapon( player ) )
+
+	entity bowWeapon = null
+	foreach ( weapon in playerWeapons )
+	{
+		LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+		if ( GetBaseWeaponRef( weaponData.ref ).find( BOW_WEAPON_NAME ) >= 0 )
+		{
+			int currentArrows = weapon.GetWeaponPrimaryAmmoCount( weapon.GetActiveAmmoSource() )
+			if ( bowWeapon == null || ( bowWeapon != null && ( currentArrows < bowWeapon.GetWeaponPrimaryAmmoCount( weapon.GetActiveAmmoSource() ) ) ))
+			{
+				bowWeapon = weapon
+			}
+		}
+	}
+
+	return bowWeapon
+}
+
+
+
+
+
+
+void function WeaponBow_spicey_UpdateArrowColor( entity weapon )
+{
+	if ( weapon.HasMod( BOW_SPICEY_ENERGIZED_MOD ) && weapon.HasMod( BOW_FRAG_EXPLOSIVE_MOD ))
+	{
+		
+		
+		weapon.kv.rendercolor = "255 255 255"
+		return
+	}
+	else
+	{
+		
+		weapon.kv.rendercolor = "255 255 255"
+	}
+}
+
+void function WeaponBow_spicey_StartChargedArrowEffects( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	weapon.PlayWeaponEffect( FX_ENERGIZED_BOW_ARROW_TIP_FULL_DRAW,  $"", FX_ENERGIZED_BOW_ARROW_TIP_FULL_DRAW_ATTACHPOINT )
+	weapon.PlayWeaponEffect( FX_ENERGIZED_BOW_ARROW_FULL_DRAW,  $"", FX_ENERGIZED_BOW_ARROW_FULL_DRAW_ATTACHPOINT )
+}
+
+void function WeaponBow_spicey_StopChargedArrowEffects( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	weapon.StopWeaponEffect( FX_ENERGIZED_BOW_ARROW_TIP_FULL_DRAW,  $"" )
+	weapon.StopWeaponEffect( FX_ENERGIZED_BOW_ARROW_FULL_DRAW, $"" )
+}
+
+
+
+
+
+
+void function ApplyModsForChargeLevel( entity weapon, int level )
+{
+
+		if ( !InPrediction() )
+			return
+
+
+	ClearChargeAndDmgLevelMods( weapon )
+
+	if ( level - 1 > 0 )
+		weapon.AddMod( CHARGE_MODS_BASE_STR + (level - 1) )
+
+	string baseDmgModStr = STANDARD_CHARGE_DMG_MODS_BASE_STR
+	int dmgModLevel   = GetBestAvailableModLevel( STANDARD_ARROWS_AVAILABLE_DMG_LEVELS, level - 1 )
+	
+	if ( dmgModLevel == 0 )
+		return
+
+	if ( dmgModLevel == 5 && weapon.HasMod( BOW_SPICEY_ENERGIZED_MOD ) )
+	{
+		weapon.AddMod( BOW_FRAG_EXPLOSIVE_MOD )
+		WeaponBow_spicey_StartChargedArrowEffects( weapon )
+		return
+	}
+
+	weapon.AddMod( baseDmgModStr + dmgModLevel )
+}
+
+void function ClearChargeAndDmgLevelMods( entity weapon )
+{
+
+		if ( !InPrediction() )
+			return
+
+
+	for ( int i = 0; i < CHARGE_MODS_MAX_LEVEL + 1; i++ )
+	{
+		weapon.RemoveMod( CHARGE_MODS_BASE_STR + i )
+
+		weapon.RemoveMod( STANDARD_CHARGE_DMG_MODS_BASE_STR + i )
+	}
+
+	if ( weapon.HasMod( BOW_FRAG_EXPLOSIVE_MOD ) )
+		weapon.RemoveMod( BOW_FRAG_EXPLOSIVE_MOD )
+
+
+		WeaponBow_spicey_UpdateArrowColor( weapon )
+
+}
+
+int function GetBestAvailableModLevel( array<int> availableLevels, int desiredLevel )
+{
+	if ( availableLevels[0] >= desiredLevel )
+		return availableLevels[0]
+
+	for ( int i = 0; i < availableLevels.len(); i++ )
+	{
+		if ( availableLevels[i] > desiredLevel )
+			return availableLevels[maxint( i - 1, 0 )]
+	}
+
+	return availableLevels[availableLevels.len() - 1]
+}
+
+
+void function AttemptCancelCharge_spicey( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( weapon.GetWeaponClassName() != BOW_WEAPON_NAME )
+		return
+
+	if ( !weapon.IsWeaponCharging() )
+		return
+
+	Remote_ServerCallFunction( "Remote_CancelCharge_spicey" )
+	ClearChargeAndDmgLevelMods( weapon )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PlayChargeFX( entity player, entity weapon )
+{
+	if ( !IsValid( weapon ) || !IsValid( player ) || !IsAlive( player ) )
+		return
+
+	weapon.EndSignal( CHARGE_END )
+	weapon.EndSignal( BOW_DEACTIVATE_SIGNAL )
+	weapon.EndSignal( "OnDestroy" )
+
+	entity vm = weapon.GetWeaponViewmodel()
+	if ( !IsValid( vm ) )
+		return
+
+	string opticAttachment = GetInstalledWeaponAttachmentForPoint( weapon, "sight" )
+	if ( opticAttachment == "" )
+		opticAttachment = "ironsights"
+	array<string> attachPoints = fxLightPointsForOptic[opticAttachment]
+	array<int> fxHandles = []
+	for ( int i = 0; i < FX_BOW_LIGHT_COUNT; i++ )
+	{
+		asset fx1p = file.fxLightAssets1p[opticAttachment][i]
+
+		
+
+		if ( fx1p == "" )
+			continue
+
+		int handle = weapon.PlayWeaponEffectNoCullReturnViewEffectHandle( fx1p, $"", attachPoints[i], true, FX_PATTACH_WEAPON_CHARGE_FRACTION_CURVED )
+		fxHandles.append( handle )
+
+		if ( weapon.HasMod( BOW_SPICEY_ENERGIZED_MOD ) )
+		{
+			EffectSetControlPointVector( handle, 2, ENERGIZED_COLOR_VEC )
+		}
+		else
+		{
+			EffectSetControlPointVector( handle, 2, file.arrowTypeColors[ weapon.GetScriptInt0() ] )
+		}
+	}
+
+	OnThreadEnd(
+		function() : ( fxHandles )
+		{
+			foreach ( handle in fxHandles )
+			{
+				if ( EffectDoesExist( handle ) )
+				{
+					EffectStop( handle, true, false )
+				}
+			}
+		}
+	)
+
+	WaitForever()
+}
+
+
+void function StopChargeFX( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	entity vm = weapon.GetWeaponViewmodel()
+	if ( !IsValid( vm ) )
+		return
+
+	string opticAttachment = GetInstalledWeaponAttachmentForPoint( weapon, "sight" )
+	if ( opticAttachment == "" )
+		opticAttachment = "ironsights"
+	string settingStr
+	for ( int i = 0; i < FX_BOW_LIGHT_COUNT; i++ )
+	{
+		settingStr = FX_BOW_LIGHT_PREFIX + opticAttachment + "_" + i
+		asset fx1p = weapon.GetWeaponInfoFileKeyFieldAsset( settingStr + "_1p" )
+
+		if ( fx1p == "" )
+			continue
+
+		weapon.StopWeaponEffect( fx1p, $"" )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function StuckVisualsEnabled( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	int fxHandle = StartParticleEffectOnEntity( cockpit, GetParticleSystemIndex( STUCK_ARROW_COCKPIT_FX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	thread StuckScreenFXThink( player, fxHandle, cockpit )
+}
+
+void function StuckScreenFXThink( entity player, int fxHandle, entity cockpit )
+{
+	player.EndSignal( "OnDeath" )
+	cockpit.EndSignal( "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( fxHandle )
+		{
+			if ( !EffectDoesExist( fxHandle ) )
+				return
+
+			EffectStop( fxHandle, false, true )
+		}
+	)
+
+	wait tunings.arrowsFragDelayTime
+}
+
+
+float function WeaponBow_GetArrowFragForce()
+{
+	return tunings.arrowsFragForce
+}
+       

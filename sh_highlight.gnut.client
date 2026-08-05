@@ -1,0 +1,2387 @@
+global function Highlight_Init
+
+global function GetHighlightContextForEnt
+global function Highlight_SetPureObserverHighlightParam
+global function GetSurvialPropColorFromRarity
+
+
+global function GetHighlightId
+
+global function Highlight_SetNeutralHighlight
+global function Highlight_ClearNeutralHighlight
+
+global function SetSurvivalPropHighlight
+global function ClearSurvivalPropHighlight
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ClInitHighlight
+global function ClientCodeCallback_HighlightUpdate
+global function ManageHighlightEntity
+
+global function FiringRangeSupplyBoxHighlight
+
+global function SpotViewModelHighlight
+global function SonarViewModelHighlight
+global function SonarViewModelClearHighlight
+global function SonarPlayerCloneHighlight
+global function DeployableModelHighlight
+global function DeployableModelInvalidHighlight
+global function DeployableModelHighlightNewcastle
+global function PlayWeaponEvolveHighlight
+global function PingViewModelHighlight
+global function PingViewModelClearHighlight
+global function ClHighlight_YouRespawned
+global function ClHighlight_YouDied
+global function ReconScan_ShowHudForSimpleEntity
+global function ReconScan_RemoveHudForSimpleEntity
+global function ReconScan_ShowHudForTarget
+global function ReconScan_RemoveHudForTarget
+
+global function GetTotalReconScansForEnemy
+global function GetTotalLOSRequiredReconScans
+global function GetTotalAlwaysVisibleReconScans
+global function GetTotalLOSRequiredHideNonPermReconScans
+global function GetTotalLOSRequiredNoRestoreReconScans
+global function GetActiveReconScanMode
+
+#if DEV
+global function DumpEntityHighlight
+#endif
+global function AddCallback_HighlightContextChanged
+global function Highlight_SetAllianceProximityDrawFunc
+
+
+global function ServerCallback_ManageHighlights
+global function ServerCallback_CreateSonarClone
+global function GetSonarCloneForEnt
+
+
+global function Highlight_SetGameModeEnemyHighlight
+global function Highlight_IsUsingGameModeEnemyVehicleHighlights
+global function Highlight_GetGameModeEnemyVehicleHighlightString
+global function Highlight_IsUsingGameModeFriendlyVehicleHighlights
+global function Highlight_GetGameModeFriendlyVehicleHighlightString
+
+const string NV_OBSERVER_HIGHLIGHT_ENABLED = "Highlight_ObserverHighlightEnabled"
+
+global const PVEMULTI_SQUAD_COLOR_0 = < 57.0 / 255.0, 181.0 / 255.0, 74.0 / 255.0 >
+global const PVEMULTI_SQUAD_COLOR_1 = < 242.0 / 255.0, 101.0 / 255.0, 34.0 / 255.0 >
+global const PVEMULTI_SQUAD_COLOR_2 = < 0 / 255.0, 191.0 / 255.0, 243.0 / 255.0 >
+global const PVEMULTI_SQUAD_COLOR_3 = < 255.0 / 255.0, 222.0 / 255.0, 0 / 255.0 >
+global const vector[4] SQUAD_TEAM_COLORVECS = [ PVEMULTI_SQUAD_COLOR_0, PVEMULTI_SQUAD_COLOR_1, PVEMULTI_SQUAD_COLOR_2, PVEMULTI_SQUAD_COLOR_3 ]
+global const string[4] SQUAD_TEAM_HIGHLIGHTS = ["PVE_multisquad_0", "PVE_multisquad_1", "PVE_multisquad_2", "PVE_multisquad_3"]
+
+global const HIGHLIGHT_COLOR_NEUTRAL = <1, 1, 1> 
+global const HIGHLIGHT_COLOR_FRIENDLY = <0.34, 0.59, 0.86> 
+global const HIGHLIGHT_COLOR_ENEMY = <1, 0.36, 0.12> 
+
+
+const float ENEMY_ASSIST_HIGHLIGHT_MAX_RADIUS = 8.0
+
+
+global string HIGHLIGHT_BLOODHOUND_SONAR = "bloodhound_sonar"
+global const string HIGHLIGHT_NOVA_BLACKHOLE_THREAT = "nova_blackhole_threat"
+global string HIGHLIGHT_ABILITY_REVEAL = "ability_reveal"
+global const string HIGHLIGHT_FRIENDLY_PLAYER_DECOY = "friendly_player_decoy"
+global const string HIGHLIGHT_REVEALED_FRIENDLY = "revealed_friendly"
+const string HIGHLIGHT_SONAR_CLONE_REFRESHED = "SonarCloneRefreshed"
+
+global enum eHighlightGenericType
+{
+	NEUTRAL
+	FRIENDLY
+	ENEMY
+	OWNED
+
+	_count
+}
+
+global enum eShowHealthbarMode
+{
+	ALWAYS,
+	REQUIRE_LOS,
+	REQUIRE_LOS_NO_RESTORE
+}
+
+
+struct HighlightContextResult
+{
+	int contextId = HIGHLIGHT_INVALID_ID
+	int genericType = -1
+}
+
+
+struct
+{
+	bool                                        registeringHighlights = false
+	int                                         colorblindMode
+	array<void functionref( entity, int, int )> highlightChangedCallbacks
+
+	table< entity, entity > localSonarTargetToCloneTable
+
+} file
+
+void function AddCallback_HighlightContextChanged( void functionref( entity, int, int ) callbackFunc )
+{
+	file.highlightChangedCallbacks.append( callbackFunc )
+}
+
+void function Highlight_Init()
+{
+	RegisterSignal( "ContextChanged" )
+	RegisterSignal( "ReconScan_HUDRemove" )
+
+	if ( IsLobby() )
+		return
+
+
+		HIGHLIGHT_BLOODHOUND_SONAR = "bloodhound_sonar_blockscan"
+		HIGHLIGHT_ABILITY_REVEAL = "ability_reveal_blockscan"
+
+
+
+		int contextId
+
+		contextId = HighlightContext_GetId( "enemy_ai" )
+		HighlightContext_SetFarFadeDistance( contextId, Nessie_GetHighlightDist() )
+
+
+			contextId = HighlightContext_GetId( "always_on_enemy_assist" )
+			HighlightContext_SetRadius( contextId, ENEMY_ASSIST_HIGHLIGHT_MAX_RADIUS )
+			HighlightContext_SetFarFadeDistance( contextId, GetEnemyAssistFarFadeDistance() )
+
+
+
+
+
+
+
+
+		contextId = HighlightContext_GetId( HIGHLIGHT_BLOODHOUND_SONAR )
+		HighlightContext_SetFlags( contextId, HIGHLIGHT_FLAG_TEAM_AGNOSTIC )
+
+		contextId = HighlightContext_GetId( "survival_item_gh_no_los_check" )
+		HighlightContext_SetFarFadeDistance( contextId, GetEyeForQualityRadius() )
+
+		contextId = HighlightContext_GetId( "survival_item_heirloom_no_los_check" )
+		HighlightContext_SetFarFadeDistance( contextId, GetEyeForQualityRadius() )
+
+		contextId = HighlightContext_GetId( "survival_item_epic_no_los_check" )
+		HighlightContext_SetFarFadeDistance( contextId, GetEyeForQualityRadius() )
+
+		contextId = HighlightContext_GetId( "survival_item_rare_no_los_check" )
+		HighlightContext_SetFarFadeDistance( contextId, GetEyeForQualityRadius() )
+
+		contextId = HighlightContext_GetId( "survival_item_common_no_los_check" )
+		HighlightContext_SetFarFadeDistance( contextId, GetEyeForQualityRadius() )
+
+		Highlight_ResetColorBlindHighlight()
+
+
+
+		AddCallback_PlayerClassChanged( ClHighlight_ClassChanged )
+		AddCallback_OnSettingsUpdated( OnSettingsUpdated )
+		file.colorblindMode = GetConVarInt( "colorblind_mode" )
+
+
+
+
+
+
+
+
+	
+	Remote_RegisterServerFunction( "ClientCallback_ToggleObserverHighlights" )
+	Remote_RegisterServerFunction( "ClientCallback_RefreshObserverHighlights" )
+
+	Remote_RegisterClientFunction( "ServerCallback_ManageHighlights" )
+	Remote_RegisterClientFunction( "ServerCallback_CreateSonarClone", "entity", "float", 0.0, 10.0, 16 )
+
+	RegisterSignal( HIGHLIGHT_SONAR_CLONE_REFRESHED )
+
+	RegisterNetworkedVariable( NV_OBSERVER_HIGHLIGHT_ENABLED, SNDC_PLAYER_GLOBAL, SNVT_BOOL, false )
+
+
+		RegisterConCommandTriggeredCallback( "toggle_obs_highlight", Highlight_ToggleObserverHighlights )
+		RegisterNetVarBoolChangeCallback( NV_OBSERVER_HIGHLIGHT_ENABLED, Highlight_ObserverHighlightEnableChanged )
+		AddOnSpectatorTargetChangedCallback( Highlight_OnSpectatorTargetChanged )
+
+
+
+
+
+}
+
+
+
+void function Highlight_ResetColorBlindHighlight()
+{
+	int contextId = HIGHLIGHT_INVALID_ID
+	contextId = HighlightContext_GetId( "survival_item_gh_no_los_check" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_HUD_LOOT_TIER_GH, 2.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_heirloom_no_los_check" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER5, 2.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_legendary_no_los_check" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER4, 2.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_epic_no_los_check" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER3, 2.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_rare_no_los_check" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER2, 2.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_common_no_los_check" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER1, 2.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_common" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER1, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_rare" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER2, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_epic" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER3, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_legendary" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER4, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_heirloom" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER5, 1.0 ) )
+
+
+	contextId = HighlightContext_GetId( "survival_item_gh" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_HUD_LOOT_TIER_GH, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_gh_longerHighlightDist" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_HUD_LOOT_TIER_GH, 1.0 ) )
+
+
+	contextId = HighlightContext_GetId( "survival_item_common_longerHighlightDist" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER1, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_rare_longerHighlightDist" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER2, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_epic_longerHighlightDist" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER3, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_legendary_longerHighlightDist" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER4, 1.0 ) )
+
+	contextId = HighlightContext_GetId( "survival_item_heirloom_longerHighlightDist" )
+	HighlightContext_SetRadius( contextId, GetSurvivalPropRadius( COLORID_LOOT_TIER5, 1.0 ) )
+}
+
+
+
+void function Highlight_BeginRegisteringHighlights()
+{
+	file.registeringHighlights = true
+}
+
+
+void function Highlight_EndRegisteringHighlights()
+{
+	file.registeringHighlights = false
+}
+
+
+void function InitHighlightSettings( entity ent )
+{
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GetHighlightId( string assetName )
+{
+	return HighlightContext_GetId( assetName )
+}
+
+void function Highlight_SetGenericHighlight( entity ent, string ornull assetName, int type, bool isFocused = false )
+{
+	if( assetName == null )
+	{
+		ent.Highlight_SetGenericHighlightContext( type, HIGHLIGHT_INVALID_ID, isFocused )
+	}
+	else
+	{
+		expect string( assetName )
+		int highlightID = GetHighlightId( assetName )
+		ent.Highlight_SetGenericHighlightContext( type, GetHighlightId( assetName ), isFocused )
+	}
+}
+
+
+void function Highlight_SetFriendlyHighlight( entity ent, string assetName )
+{
+	Highlight_SetGenericHighlight( ent, assetName, eHighlightGenericType.FRIENDLY )
+}
+
+
+void function Highlight_SetEnemyHighlight( entity ent, string assetName )
+{
+	Highlight_SetGenericHighlight( ent, assetName, eHighlightGenericType.ENEMY )
+	ent.e.enemyHighlight = assetName
+}
+
+void function Highlight_SetNeutralHighlight( entity ent, string assetName )
+{
+	Highlight_SetGenericHighlight( ent, assetName, eHighlightGenericType.NEUTRAL )
+}
+
+
+void function Highlight_SetOwnedHighlight( entity ent, string assetName )
+{
+	Highlight_SetGenericHighlight( ent, assetName, eHighlightGenericType.OWNED )
+}
+
+
+void function Highlight_SetPureObserverHighlightParam( entity ent )
+{
+	if ( ent.IsPlayer() )
+	{
+		vector param
+		if( AllianceProximity_IsUsingAlliances() )
+			param = AllianceProximity_GetAllianceColorFromTeam( ent.GetTeam() )
+		else
+			param = GetSkydiveSmokeColorForTeam( ent.GetTeam() ) / 255.0
+
+		ent.Highlight_OverrideParam( 0, param )
+	}
+}
+
+
+void function Highlight_ClearFriendlyHighlight( entity ent )
+{
+	Highlight_SetGenericHighlight( ent, null, eHighlightGenericType.FRIENDLY )
+}
+
+
+void function Highlight_ClearEnemyHighlight( entity ent )
+{
+	Highlight_SetGenericHighlight( ent, null, eHighlightGenericType.ENEMY )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function SetDefaultMPEnemyHighlight( entity ent )
+{
+	
+	
+	
+	
+
+	Highlight_SetGameModeEnemyHighlight( ent )
+
+	Highlight_ClearEnemyHighlight( ent )
+}
+
+
+void function Highlight_ClearOwnedHighlight( entity ent )
+{
+	Highlight_SetGenericHighlight( ent, null, eHighlightGenericType.OWNED )
+}
+
+
+void function Highlight_ClearNeutralHighlight( entity ent )
+{
+	Highlight_SetGenericHighlight( ent, null, eHighlightGenericType.NEUTRAL )
+}
+
+
+int function Highlight_GetEnemyHighlightId( entity ent )
+{
+	if ( ent.e.enemyHighlight == "" )
+		return HIGHLIGHT_INVALID_ID
+
+	return GetHighlightId( ent.e.enemyHighlight )
+}
+
+
+vector function GetSurvialPropColorFromRarity( int rarity )
+{
+	int colorID = COLORID_LOOT_TIER1
+	switch( rarity - 1 )
+	{
+		case eRarityTier.MYTHIC:
+			colorID = COLORID_LOOT_TIER5
+			break
+
+		case eRarityTier.LEGENDARY:
+			colorID = COLORID_LOOT_TIER4
+			break
+
+		case eRarityTier.EPIC:
+			colorID = COLORID_LOOT_TIER3
+			break
+
+		case eRarityTier.RARE:
+			colorID = COLORID_LOOT_TIER2
+	}
+	return GetSurvivalPropColor( colorID )
+}
+
+vector function GetSurvivalPropColor( int colorId )
+{
+	return GetKeyColor( colorId ) / 255.0
+}
+
+float function GetSurvivalPropRadius( int colorId, float baseRadius )
+{
+	if ( GetConVarInt( "colorblind_mode" ) == 0 )
+		return baseRadius
+
+	switch ( colorId )
+	{
+		case COLORID_LOOT_TIER0:
+		case COLORID_LOOT_TIER1:
+		case COLORID_LOOT_TIER2:
+			break
+
+		case COLORID_LOOT_TIER3:
+			baseRadius += 1
+			break
+
+		case COLORID_LOOT_TIER4:
+			baseRadius += 2
+			break
+	}
+	baseRadius = min( baseRadius, 8.0 )
+	return baseRadius
+}
+
+
+void function SetSurvivalPropHighlight( entity ent, string assetName, bool isFocused, int type = eHighlightGenericType.NEUTRAL )
+{
+	Highlight_SetGenericHighlight( ent, assetName, type, isFocused )
+}
+
+void function ClearSurvivalPropHighlight( entity ent, int type = eHighlightGenericType.NEUTRAL )
+{
+	Highlight_SetGenericHighlight( ent, null, type )
+}
+
+
+void function ClInitHighlight( entity ent )
+{
+	ManageHighlightEntity( ent )
+}
+
+void function ClientCodeCallback_HighlightUpdate( entity ent )
+{
+	ManageHighlightEntity( ent )
+}
+
+void function ClHighlight_YouRespawned()
+{
+	array<entity> players = GetPlayerArray()
+	foreach ( player in players )
+	{
+		ManageHighlightEntity( player )
+	}
+}
+
+void function ClHighlight_ClassChanged( entity attacker )
+{
+	ManageHighlightEntity( attacker )
+}
+
+void function ClHighlight_YouDied( entity attacker )
+{
+	ManageHighlightEntity( attacker )
+}
+
+void function OnSettingsUpdated()
+{
+	if ( GetConVarInt( "colorblind_mode" ) != file.colorblindMode )
+	{
+		Highlight_ResetColorBlindHighlight()
+		array<entity> loot = GetSurvivalLootNearbyPlayer( GetLocalClientPlayer(), 65536.0, false, false, false )
+		foreach ( ent in loot )
+		{
+			ApplyEquipmentColorAndFXOverrides( ent )
+		}
+	}
+
+	file.colorblindMode = GetConVarInt( "colorblind_mode" )
+}
+
+void function ManageHighlightEntity( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return
+
+	bool checkPureObserver = IsValid( GetLocalClientPlayer() ) && GetLocalClientPlayer().GetTeam() == TEAM_SPECTATOR
+
+	
+	if ( !IsValid( GetLocalViewPlayer() ) && !checkPureObserver )
+		return
+
+	HighlightContextResult result
+	if ( checkPureObserver )
+	{
+		result = GetHighlightContextForEnt( GetLocalClientPlayer(), ent )
+	}
+	else
+	{
+		result = GetHighlightContextForEnt( GetLocalViewPlayer(), ent )
+	}
+
+	if ( result.contextId != ent.Highlight_GetCurrentContext() )
+	{
+		foreach ( callbackFunc in file.highlightChangedCallbacks )
+			callbackFunc( ent, ent.Highlight_GetCurrentContext(), result.contextId )
+		ent.Signal( "ContextChanged" )
+	}
+
+	ClHighlight_UpdateHighlightFlags( ent, result.contextId, result.genericType )
+}
+
+void function ClHighlight_UpdateHighlightFlags( entity ent, int contextId, int type )
+{
+	ent.Highlight_SetCurrentContext( contextId )
+	ent.Highlight_ResetFlags()
+
+	if ( contextId == HIGHLIGHT_INVALID_ID )
+		return
+
+	if ( type == eHighlightGenericType.FRIENDLY )
+	{
+		ent.Highlight_SetFlag( HIGHLIGHT_FLAG_REQUIRE_FRIENDLY_TEAM, true )
+	}
+	else if ( type == eHighlightGenericType.ENEMY )
+	{
+		ent.Highlight_SetFlag( HIGHLIGHT_FLAG_REQUIRE_ENEMY_TEAM, true )
+	}
+
+	if ( ent.GetNetworkedClassName() == "prop_survival" )
+	{
+		ent.Highlight_OverrideParam( 1, <GetHighlightFillAlphaForLoot( ent ), 0, 0> )
+	}
+	else if (ent.GetNetworkedClassName() == "prop_death_box" )
+	{
+		ent.Highlight_OverrideParam( 1, <Deathbox_GetHighlightFillAlpha( ent ), 0, 0> )
+	}
+
+	int drawFuncId = HighlightContext_GetDrawFunc( contextId )
+
+	switch ( drawFuncId )
+	{
+		case eHighlightDrawFunc.ALWAYS:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+		}
+			break
+
+		case eHighlightDrawFunc.OCCLUDED:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_OCCLUDED )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+		}
+			break
+
+		case eHighlightDrawFunc.LOS:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_FULL_VIEW )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+		}
+			break
+
+		case eHighlightDrawFunc.LOS_LINE:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS )
+			ent.Highlight_SetFadeInTime( 0.0 )
+			ent.Highlight_SetFadeOutTime( 0.0 )
+		}
+			break
+
+		case eHighlightDrawFunc.LOS_LINE_FADE:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+		}
+			break
+
+		case eHighlightDrawFunc.LOS_LINE_LONGFADE:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.75 )
+		}
+			break
+
+		case eHighlightDrawFunc.REVENANT_ASSASSINS_INSTINCT:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS )
+			ent.Highlight_SetFlag( HIGHLIGHT_FLAG_CHECK_OFTEN, true )
+			ent.Highlight_SetFadeInTime( 0.0 )
+			ent.Highlight_SetFadeOutTime( 0.0 )
+			ent.Highlight_SetFlag( HIGHLIGHT_FLAG_ADDITIONAL_LOS_CHECKS, true )
+		}
+			break
+
+
+		case eHighlightDrawFunc.LOS_LINE_ENTSONLY_BLOCKSCAN:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS_ENTSONLY_BLOCKSCAN )
+			ent.Highlight_SetFlag( HIGHLIGHT_FLAG_CHECK_OFTEN, true )
+			ent.Highlight_SetFadeInTime( 0.0 )
+			ent.Highlight_SetFadeOutTime( 0.0 )
+		}
+			break
+
+
+		case eHighlightDrawFunc.ENT_APPEAR_EFFECT:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS )
+			ent.Highlight_SetFadeInTime( 0.1 )
+			ent.Highlight_SetFadeOutTime( 0.5 )
+			ent.Highlight_StartOn()
+			ent.Highlight_SetLifeTime( 0.75 )
+		}
+			break
+
+		case eHighlightDrawFunc.LOS_LINE_ENTSONLYCONTENTSBLOCK:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS_ENTSONLYCONTENTSBLOCK )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+		}
+			break
+
+		case eHighlightDrawFunc.CAUSTIC_THREAT:
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 1.0 )
+			ent.Highlight_SetFadeOutTime( 0.5 )
+			break
+
+		case eHighlightDrawFunc.SONAR_DETECTED:
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 0.0 )
+			ent.Highlight_SetFadeOutTime( 1.2 )
+			ent.Highlight_SetLifeTime( 0.1 )
+			break
+
+		case eHighlightDrawFunc.SPOT:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( SPOT_HIGHLIGHT_FADE_IN_TIME )
+			ent.Highlight_SetFadeOutTime( SPOT_HIGHLIGHT_FADE_OUT_TIME )
+			ent.Highlight_SetLifeTime( SPOT_HIGHLIGHT_TIME - SPOT_HIGHLIGHT_FADE_OUT_TIME )
+		}
+			break
+
+		case eHighlightDrawFunc.ALWAYS_LONG_FADE:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 0.07 )
+			ent.Highlight_SetFadeOutTime( 0.5 )
+			ent.Highlight_SetLifeTime( 0.57 )
+		}
+			break
+
+		case eHighlightDrawFunc.PICKUP:
+		{
+			
+			if ( !PlayerCanUseWeapon( GetLocalViewPlayer(), ent.GetWeaponClass() ) )
+				ent.Highlight_SetCurrentContext( ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.ENEMY ) )
+			else if ( IsCurrentlyFocusedUseEnt( ent ) )
+				ent.Highlight_SetCurrentContext( ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.OWNED ) )
+			else
+				ent.Highlight_SetCurrentContext( ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.NEUTRAL ) )
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+		}
+			break
+
+		case eHighlightDrawFunc.FORCE_ON:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_FORCE_ON )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+			break
+		}
+
+		case eHighlightDrawFunc.ABILITY_REVEAL:
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.5 )
+			break
+
+		case eHighlightDrawFunc.ALLIANCE_PROXIMITY:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+			ent.Highlight_SetFadeInTime( 0.15 )
+			ent.Highlight_SetFadeOutTime( 0.15 )
+			if ( AllianceProximity_IsUsingAllianceProximity() )
+				ent.Highlight_SetFarFadeDist( AllianceProximity_GetMaxDistForProximity() )
+		}
+			break
+
+
+		case eHighlightDrawFunc.ENEMY_ASSIST:
+		{
+			ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_LOS )
+			ent.Highlight_SetFlag( HIGHLIGHT_FLAG_ADDITIONAL_LOS_CHECKS, true )
+			ent.Highlight_SetFlag( HIGHLIGHT_FLAG_CHECK_START_SOLID, true )
+			ent.Highlight_SetFlag( HIGHLIGHT_FLAG_ENABLE_PER_ENTITY_CULLING, true )
+			ent.Highlight_SetFadeInTime( 0.1 )
+			ent.Highlight_SetFadeOutTime( 0.1 )
+		}
+			break
+
+	}
+}
+
+bool function PlayerCanPickupOrdnanace( entity player )
+{
+	entity weapon = player.GetOffhandWeapon( eOffhandInv.BOMBARDMENT )
+	if ( !IsValid( weapon ) )
+		return false
+
+	return weapon.GetWeaponPrimaryClipCount() < weapon.GetWeaponPrimaryClipCountMax()
+}
+
+bool function PlayerCanPickupClip( entity player )
+{
+	foreach ( weapon in player.GetMainWeapons() )
+	{
+		if ( weapon.GetWeaponPrimaryAmmoCount( AMMOSOURCE_STOCKPILE ) < weapon.GetWeaponSettingInt( eWeaponVar.ammo_stockpile_max ) )
+			return true
+	}
+
+	return false
+}
+
+float function GetHullTraceSizeForEnt( entity ent )
+{
+	float midHeight = GetMidpointHeight( ent ) - 3.0 
+	return min( midHeight, 10 )
+}
+
+float function GetMidpointHeight( entity ent )
+{
+	return (ent.GetBoundingMaxs().z - ent.GetBoundingMins().z) * 0.5
+}
+
+void function SpotViewModelHighlight( entity viewModelEntity, vector highlightColor = HIGHLIGHT_COLOR_ENEMY )
+{
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "spot_view_mode" ) )
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetFadeInTime( SPOT_HIGHLIGHT_FADE_IN_TIME )
+	viewModelEntity.Highlight_SetFadeOutTime( SPOT_HIGHLIGHT_FADE_OUT_TIME )
+	viewModelEntity.Highlight_SetLifeTime( SPOT_HIGHLIGHT_TIME - SPOT_HIGHLIGHT_FADE_OUT_TIME )
+	viewModelEntity.Highlight_StartOn()
+
+}
+
+void function FiringRangeSupplyBoxHighlight( entity viewModelEntity )
+{
+	float highlight_TotalTime = 5.0
+	float highlight_FadeInTime = 0.5
+	float highlight_FadeOutTime = 4.5
+	float highlight_LifeTime = highlight_TotalTime - highlight_FadeOutTime
+
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "firing_range_supply_box" ) )
+	viewModelEntity.Highlight_SetFadeInTime( highlight_FadeInTime )
+	viewModelEntity.Highlight_SetFadeOutTime( highlight_FadeOutTime )
+	viewModelEntity.Highlight_SetLifeTime( highlight_LifeTime )
+	viewModelEntity.Highlight_StartOn()
+}
+
+void function SonarViewModelHighlight( entity viewModelEntity, vector highlightColor = HIGHLIGHT_COLOR_ENEMY )
+{
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "sonar_view_model" ) )
+	viewModelEntity.Highlight_OverrideParam( 0, highlightColor )
+	viewModelEntity.Highlight_SetFadeInTime( 0.25 )
+	viewModelEntity.Highlight_SetFadeOutTime( 0.25 )
+	viewModelEntity.Highlight_SetFlag( HIGHLIGHT_FLAG_CHECK_OFTEN, true )
+	viewModelEntity.Highlight_StartOn()
+}
+
+void function SonarViewModelClearHighlight( entity viewModelEntity )
+{
+	viewModelEntity.Highlight_SetCurrentContext( HIGHLIGHT_INVALID_ID )
+}
+
+void function SonarPlayerCloneHighlight( entity ent, string highlightOverride = "" )
+{
+	ent.Highlight_SetCurrentContext( HighlightContext_GetId( highlightOverride == "" ?"sonar_player_clone" : highlightOverride ) )
+	ent.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	ent.Highlight_SetFadeInTime( 0.15 )
+	ent.Highlight_SetFadeOutTime( 0.15 )
+	ent.Highlight_SetFlag( HIGHLIGHT_FLAG_CHECK_OFTEN, true )
+	ent.Highlight_StartOn()
+}
+
+void function DeployableModelHighlight( entity viewModelEntity )
+{
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "deployable_model" ) )
+	
+	
+	viewModelEntity.Highlight_StartOn()
+}
+
+void function DeployableModelInvalidHighlight( entity viewModelEntity )
+{
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "deployable_model_invalid" ) )
+	
+	
+	viewModelEntity.Highlight_StartOn()
+}
+
+void function DeployableModelHighlightNewcastle( entity viewModelEntity )
+{
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "deployable_model_newcastle" ) )
+	
+	
+	viewModelEntity.Highlight_StartOn()
+}
+
+void function PlayWeaponEvolveHighlight( entity weaponModelEnt, int lootTier )
+{
+	entity player = GetLocalViewPlayer()
+	entity mainHandWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+	int akimboState = player.GetAkimboState()
+	float startTime = ClientTime()
+	float duration = 0.5;
+	float isADS = 0.0;
+
+	if ( IsValid( mainHandWeapon ) )
+	{
+		string mainHandWeaponName = GetBaseWeaponRef( GetWeaponClassNameWithLockedSet( mainHandWeapon ) )
+		bool canADS = mainHandWeapon.GetWeaponSettingBool( eWeaponVar.ads_anim_blend_enabled )
+		bool isAkimbo = akimboState == AKIMBO_STATE_ACTIVE
+		int isBow = mainHandWeaponName.find( "mp_weapon_bow" )
+
+		if ( PlayerIsInADS( player ) && canADS && !isAkimbo && isBow == -1 ) 
+		{
+			isADS = 1.0;
+		}
+	} 
+
+	weaponModelEnt.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	weaponModelEnt.Highlight_SetCurrentContext( HighlightContext_GetId( "weapon_evolve_highlight" ) )
+	
+	vector lootTierColor = lootTier == eLootTier.MYTHIC ? GetKeyColor( COLORID_MYTHIC_UPGRADE_WEAPON ) : GetKeyColor( COLORID_FX_LOOT_TIER0 + lootTier ) * 0.05
+	weaponModelEnt.Highlight_OverrideParam( 0, lootTierColor )
+	weaponModelEnt.Highlight_SetFadeInTime( 0.1 )
+	weaponModelEnt.Highlight_SetFadeOutTime( 0.1 )
+	weaponModelEnt.Highlight_SetLifeTime( duration )
+	weaponModelEnt.Highlight_OverrideParam( 1, <startTime, isADS, 0> )
+	weaponModelEnt.Highlight_StartOn()
+}
+
+void function PingViewModelHighlight( entity viewModelEntity, vector highlightColor = HIGHLIGHT_COLOR_FRIENDLY )
+{
+	viewModelEntity.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+	viewModelEntity.Highlight_SetCurrentContext( HighlightContext_GetId( "ping_view_model" ) )
+	viewModelEntity.Highlight_SetFadeInTime( 0.25 )
+	viewModelEntity.Highlight_SetFadeOutTime( 0.25 )
+	viewModelEntity.Highlight_StartOn()
+}
+
+void function PingViewModelClearHighlight( entity viewModelEntity )
+{
+	Highlight_ClearNeutralHighlight( viewModelEntity )
+	viewModelEntity.Highlight_SetLifeTime( 0.0 )
+}
+
+void function ShowEntityHighlight( entity ent, float duration )
+{
+	int contextId = ent.Highlight_GetCurrentContext()
+	if ( contextId < 0 )
+		return
+
+	if ( HighlightContext_GetInsideFunction( contextId ) > 0 )
+		ent.Highlight_ShowInside( duration )
+
+	if ( HighlightContext_GetOutlineFunction( contextId ) > 0 )
+		ent.Highlight_ShowOutline( duration )
+}
+
+void function HideEntityHighlight( entity ent, float duration )
+{
+	int contextId = ent.Highlight_GetCurrentContext()
+	if ( contextId < 0 )
+		return
+
+	if ( HighlightContext_GetInsideFunction( contextId ) > 0 )
+		ent.Highlight_HideInside( duration )
+
+	if ( HighlightContext_GetOutlineFunction( contextId ) > 0 )
+		ent.Highlight_HideOutline( duration )
+}
+
+#if DEV
+void function DumpEntityHighlight( entity ent )
+{
+	int currentContext = ent.Highlight_GetCurrentContext()
+	printt( "Highlight_GetCurrentContext:", ent.Highlight_GetCurrentContext() )
+	printt( "Highlight_GetCurrentInsideOpacity:", ent.Highlight_GetCurrentInsideOpacity() )
+	printt( "Highlight_GetCurrentOutlineOpacity:", ent.Highlight_GetCurrentOutlineOpacity() )
+	printt( "Highlight_GetInheritHighlight:", ent.Highlight_GetInheritHighlight() )
+	printt( "    Highlight_GetInsideFunction:", HighlightContext_GetInsideFunction( currentContext ) )
+	printt( "    Highlight_GetOutlineFunction:", HighlightContext_GetOutlineFunction( currentContext ) )
+	printt( "    Highlight_GetOutlineRadius:", HighlightContext_GetOutlineRadius( currentContext ) )
+	printt( "    Highlight_GetParam 0:", HighlightContext_GetParam( currentContext, 0 ) )
+	printt( "    Highlight_GetParam 1:", HighlightContext_GetParam( currentContext, 1 ) )
+	printt( "    Highlight_IsEntityVisible:", HighlightContext_IsEntityVisible( currentContext ) )
+	printt( "    Highlight_IsAfterPostProcess:", HighlightContext_IsAfterPostProcess( currentContext ) )
+	printt( "" )
+}
+#endif
+
+
+
+void function Highlight_SetAllianceProximityDrawFunc( entity ent, string highlightName )
+{
+	int id = GetHighlightId( highlightName )
+
+	ent.Highlight_SetFarFadeDist( AllianceProximity_GetMaxDistForProximity() )
+	HighlightContext_SetDrawFunc( id, eHighlightDrawFunc.ALLIANCE_PROXIMITY )
+}
+
+
+bool function UseDefaultOwnedHighlightBehavior( entity ent )
+{
+
+
+
+
+
+	return true
+}
+
+
+HighlightContextResult  function GetHighlightContextForEnt( entity viewPlayer, entity ent )
+{
+	HighlightContextResult result
+	int viewTeam = -1
+	if ( IsValid( viewPlayer ) && viewPlayer.IsPlayer() )
+		viewTeam = viewPlayer.GetTeam()
+
+	int entTeam = ent.GetTeam()
+
+	bool viewPlayerEmoting = viewPlayer == ent && viewPlayer.ContextAction_IsEmoting()
+	bool isDoor = IsCodeDoor( ent )
+	bool wantsFriendlyHighlight = !isDoor && ( (!viewPlayerEmoting) || viewPlayer.IsDrivingVehicle() )
+	bool entIsDecoy = ( ent.GetScriptName() == DECOY_SCRIPTNAME || ent.GetScriptName() == CONTROLLED_DECOY_SCRIPTNAME )
+
+
+
+
+
+	if ( ent.GetBossPlayer() == viewPlayer && UseDefaultOwnedHighlightBehavior( ent ) )
+	{
+		result.genericType = eHighlightGenericType.OWNED
+		result.contextId =  ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.OWNED )
+		return result
+	}
+	else if ( IsFriendlyTeam( entTeam, viewTeam ) && wantsFriendlyHighlight )
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( ent.IsPlayer() && Bleedout_IsBleedingOut( ent ) && Bleedout_GetRevivingPlayer( ent ) == viewPlayer )
+		{
+			result.genericType = eHighlightGenericType.NEUTRAL
+			result.contextId = ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.NEUTRAL )
+			return result
+		}
+		else if ( viewTeam == TEAM_SPECTATOR )
+		{
+			entity observerTarget = viewPlayer.GetObserverTarget()
+			if ( IsValid( observerTarget ) && observerTarget.IsPlayer() && ShouldCausticGasHighlight( observerTarget, ent ) )
+			{
+				result.contextId = GetHighlightId( "caustic_gas_threat" )
+				return result
+			}
+			if ( Highlight_ShouldObserverHighlight( viewPlayer, ent ) )
+			{
+				result.contextId = GetHighlightId( "pure_observer_highlight" )
+				Highlight_SetPureObserverHighlightParam( ent )
+				return result
+			}
+		}
+		else if ( ShouldCastleWallHighlight( viewPlayer, ent ) )
+		{
+			result.contextId = GetHighlightId( "castle_wall_focus" )
+			return result
+		}
+		else
+		{
+			result.genericType = eHighlightGenericType.FRIENDLY
+			result.contextId =  ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.FRIENDLY )
+			return result
+		}
+	}
+	else if ( entTeam != TEAM_SPECTATOR )
+	{
+		if ( IsValid( viewPlayer ) )
+		{
+			entity viewTarget = viewPlayer
+			if ( viewTeam == TEAM_SPECTATOR && IsValid( viewPlayer.GetObserverTarget() ) )
+				viewTarget = viewPlayer.GetObserverTarget()
+
+			if ( !ent.IsPlayer() && !isDoor && IsFriendlyTeam( viewTarget.GetTeam(), entTeam) ) 
+			{
+				result.genericType = eHighlightGenericType.FRIENDLY
+				result.contextId =  ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.FRIENDLY )
+				return result
+			}
+
+			if( !viewTarget.IsPlayer() )
+			{
+				if( Highlight_ShouldObserverHighlight( viewPlayer, ent ) )
+				{
+					result.contextId = GetHighlightId( "pure_observer_highlight" )
+					Highlight_SetPureObserverHighlightParam( ent )
+				}
+				else
+				{
+					result.genericType = eHighlightGenericType.NEUTRAL
+					result.contextId =  ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.NEUTRAL )
+				}
+				return result
+			}
+
+			int voidVisionHighlightMode = VoidVision_GetHighlightModeForPlayer( viewTarget, ent )
+			if ( (voidVisionHighlightMode != eVoidVisionHighlightMode.none) && viewTarget.IsPhaseShifted() )
+			{
+				result.contextId = (voidVisionHighlightMode == eVoidVisionHighlightMode.self) ? GetHighlightId( "void_vision_self" ) : GetHighlightId( "void_vision_structure" )
+				return result
+			}
+
+
+
+
+			if ( StatusEffect_HasSeverity( ent, eStatusEffect.sonar_detected ) && (viewPlayerEmoting || ent.IsHighlightEnabledForTeam( GetHighlightId( HIGHLIGHT_BLOODHOUND_SONAR ), viewTarget.GetTeam() )) )
+
+			{
+
+
+
+				{
+					result.contextId = GetHighlightId( HIGHLIGHT_BLOODHOUND_SONAR )
+					return result
+				}
+			}
+
+			if ( viewTarget.IsPhaseShifted() && viewTarget.GetPhaseShiftType() == PHASETYPE_CLOCKUP && Ability_ClockUp_DisruptingHack_Offhand_CanApplyHighlight( ent ) )
+			{
+				result.contextId = GetHighlightId( "disrupting_hack_vision" )
+				return result
+			}
+
+
+
+
+
+			else if ( StatusEffect_HasSeverity( ent, eStatusEffect.mortar_ring_reveal ) && ent.IsHighlightEnabledForTeam( GetHighlightId( HIGHLIGHT_ABILITY_REVEAL ), viewTarget.GetTeam() ) )
+
+			{
+				result.contextId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				return result
+			}
+
+			else if ( ShouldShowNovaBlackholeHighlight( viewTarget, ent ) )
+			{
+				int highlightId = GetHighlightId( HIGHLIGHT_NOVA_BLACKHOLE_THREAT )
+				if( ent.IsHighlightEnabledForTeam( highlightId, viewTarget.GetTeam() ) )
+				{
+					result.contextId = highlightId
+					return result
+				}
+			}
+			else if ( ShouldCausticGasHighlight( viewTarget, ent ) )
+			{
+				result.contextId = GetHighlightId( "caustic_gas_threat" )
+				return result
+			}
+
+
+
+			else if ( ShouldMaggieHighlight( viewTarget, ent ) )
+
+			{
+				result.contextId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				return result
+			}
+
+
+
+			else if ( ShouldValkTacHighlight( viewTarget, ent ) )
+
+			{
+				result.contextId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				return result
+			}
+
+
+
+
+			else if ( FragDrone_EntityShouldBeHighlighted( viewTarget, ent ) )
+
+			{
+				result.contextId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				return result
+			}
+
+
+
+
+			else if ( PhaseDoor_IsPlayerHighligted( viewTarget, ent ) )
+
+			{
+				result.contextId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				return result
+			}
+			else if ( BunkerBuster_ShouldHighlight( viewTarget, ent ) )
+			{
+				result.contextId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				return result
+			}
+			else if ( ShouldAssassinsInstinctHighlight( viewTarget, ent ) )
+			{
+				result.contextId = GetHighlightId( "revenant_assassins_instinct_passive" )
+				return result
+			}
+			else if ( ShouldSonicBlastThreatHighlight ( viewTarget, ent ) )
+			{
+				 result.contextId = GetHighlightId( HIGHLIGHT_NOVA_BLACKHOLE_THREAT )
+				 return result
+			}
+			else if ( BangSmoke_IsPlayerHighlighted( viewTarget, ent ) )
+			{
+				result.contextId = HighlightContext_GetId( "smoke_highlight_blockscan" )
+				return result
+			}
+			else if ( ShouldArmoredLeapThreatHighlight( viewTarget, ent ) )
+			{
+				result.contextId = GetHighlightId( "armored_leap_threat" )
+				return result
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			else if ( voidVisionHighlightMode != eVoidVisionHighlightMode.none )
+			{
+				result.contextId = GetHighlightId( "armored_leap_threat" )
+
+				return result
+			}
+
+			else if ( Perk_ShieldBreaker_ShouldShowTarget( ent ) )
+			{
+				int highlightId = GetHighlightId( HIGHLIGHT_ABILITY_REVEAL )
+				if( ent.IsHighlightEnabledForTeam( highlightId, viewTarget.GetTeam() ) )
+				{
+					result.contextId = highlightId
+					return result
+				}
+			}
+
+
+
+
+
+
+
+
+
+			else if ( IsEnemyAssistHighlightEnabled() && ( ent.IsPlayer() || entIsDecoy ) && IsEnemyTeam( viewPlayer.GetTeam(), ent.GetTeam() ))
+			{
+				result.contextId = GetHighlightId( "always_on_enemy_assist" )
+				return result
+			}
+
+
+			if ( Highlight_ShouldObserverHighlight( viewPlayer, ent ) )
+			{
+				result.contextId = GetHighlightId( "pure_observer_highlight" )
+				Highlight_SetPureObserverHighlightParam( ent )
+				return result
+			}
+			else if ( entTeam != TEAM_UNASSIGNED )
+			{
+				result.genericType = eHighlightGenericType.ENEMY
+				result.contextId =  ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.ENEMY )
+				return result
+			}
+		}
+	}
+
+	result.genericType = eHighlightGenericType.NEUTRAL
+	result.contextId =  ent.Highlight_GetGenericHighlightContext( eHighlightGenericType.NEUTRAL )
+	return result
+}
+
+var function ReconScan_ShowHudForSimpleEntity( entity player, entity enemy )
+{
+	asset ruiFile = $"ui/recon_scan_target.rpak"
+
+	
+
+	if ( !(enemy in player.p.reconScannedByThisPlayerRefCount) )
+	{
+		player.p.reconScannedByThisPlayerRefCount[enemy] <- 0
+		player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy] <- 0
+	}
+
+	player.p.reconScannedByThisPlayerRefCount[enemy]++
+	player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy]++
+
+	if ( player.p.reconScannedByThisPlayerRefCount[enemy] > 1 )
+	{
+		if ( !(enemy in player.p.reconScanRUIs) )
+		{
+			Assert( false, "Enemy isn't in rui table, which shouldn't be possible" )
+			return
+		}
+
+		return player.p.reconScanRUIs[enemy]
+	}
+
+	var rui = RuiCreate( ruiFile, clGlobal.topoFullScreen, RUI_DRAW_HUD, RuiCalculateDistanceSortKey( player.EyePosition(), enemy.GetOrigin() ) )
+	InitHUDRui( rui )
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "pinToEdge", false )
+	RuiSetBool( rui, "showClampArrow", true )
+	RuiSetString( rui, "hint", "" )
+
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	float shieldFrac = 0.0
+	float healthFrac = GetHealthFrac( enemy )
+	RuiSetFloat( rui, "shieldFrac", shieldFrac )
+	RuiSetFloat( rui, "healthFrac", healthFrac )
+
+	RuiTrackFloat( rui, "healthFrac", enemy, RUI_TRACK_HEALTH )
+	RuiTrackFloat3( rui, "pos", enemy, RUI_TRACK_OVERHEAD_FOLLOW )
+
+	player.p.reconScanRUIs[enemy] <- rui
+
+	thread ReconScan_TrackSimpleTargetData( player, enemy )
+
+	return rui
+}
+
+void function ReconScan_TrackSimpleTargetData( entity player, entity enemy  )
+{
+	enemy.EndSignal("ReconScan_HUDRemove")
+
+	enemy.EndSignal("OnDeath")
+	enemy.EndSignal("OnDestroy")
+
+	player.EndSignal("OnDeath")
+	player.EndSignal("OnDestroy")
+
+	while( true )
+	{
+		if ( !IsValid( player ) ||  !IsValid( enemy ) )
+			break
+
+		var rui = null
+
+		if ( enemy in player.p.reconScanRUIs )
+		{
+			rui = player.p.reconScanRUIs[enemy]
+		}
+
+		if ( rui != null && RuiIsAlive( rui ) )
+		{
+			Assert( GetTotalReconScansForEnemy( player, enemy ) == GetTotalLOSRequiredNoRestoreReconScans( player, enemy ), "This func only supports LOS Required (No restore) type recon scans." )
+
+			vector pos = enemy.EyePosition()
+			vector playerEyePos = player.EyePosition()
+			TraceResults losLow = TraceLine( playerEyePos, pos, [player, enemy], TRACE_MASK_BLOCKLOS, TRACE_COLLISION_GROUP_NONE )
+
+			if ( losLow.fraction < 1.0 || losLow.startSolid )
+			{
+				RuiSetBool( rui, "isVisible", false )
+				enemy.Signal( "EnemyHealthBarEnd" )
+				return
+			}
+		}
+		wait 0.1
+	}
+}
+
+void function ReconScan_RemoveHudForSimpleEntity( entity player, entity enemy )
+{
+	Assert( (enemy in player.p.reconScannedByThisPlayerRefCount) && (enemy in player.p.reconScannedByThisPlayerRequiresLOSRefCount) )
+	Assert( GetTotalReconScansForEnemy( player, enemy ) == GetTotalLOSRequiredNoRestoreReconScans( player, enemy ), "This func only supports LOS Required (No restore) type recon scans." )
+
+	if ( !(enemy in player.p.reconScannedByThisPlayerRefCount) || !(enemy in player.p.reconScannedByThisPlayerRequiresLOSRefCount) )
+	{
+		return
+	}
+
+	player.p.reconScannedByThisPlayerRefCount[enemy]--
+	player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy]--
+
+	if ( player.p.reconScannedByThisPlayerRefCount[enemy] > 0 )
+		return
+
+	if ( IsValid( enemy ) )
+	{
+		enemy.Signal("ReconScan_HUDRemove")
+	}
+
+	if ( enemy in player.p.reconScanRUIs )
+	{
+		if ( player.p.reconScanRUIs[enemy] != null )
+		{
+			RuiDestroyIfAlive( player.p.reconScanRUIs[enemy] )
+			player.p.reconScanRUIs[enemy] = null
+		}
+
+		delete player.p.reconScanRUIs[enemy]
+	}
+
+	if ( enemy in player.p.damageHealthBarStartTime )
+	{
+		delete player.p.damageHealthBarStartTime[enemy]
+	}
+
+	if ( enemy in player.p.reconScannedByThisPlayerRequiresLOSRefCount )
+	{
+		delete player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy]
+	}
+
+	if ( enemy in player.p.reconScannedByThisPlayerRefCount )
+	{
+		delete player.p.reconScannedByThisPlayerRefCount[enemy]
+	}
+}
+
+var function ReconScan_ShowHudForTarget( entity player, entity enemy, int mode, bool pinToEdge = false, asset ruiFile = $"ui/recon_scan_target.rpak", void functionref( var, entity, entity ) populateInfoCallback = null )
+{
+	entity refEntity = enemy
+	if (refEntity != null && refEntity.IsPlayerDecoy())
+		refEntity = enemy.GetOwner()
+
+	
+	if ( !IsValid( refEntity ) )
+	{
+		return null
+	}
+
+	if ( refEntity.IsNPC() )
+		return null
+
+	if ( !(enemy in player.p.reconScannedByThisPlayerRefCount) )
+	{
+		player.p.reconScannedByThisPlayerRefCount[enemy] <- 0
+		player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy] <- 0
+		player.p.reconScannedByThisPlayerRequiresLOSHideNonPermCount[enemy] <- 0
+	}
+
+	player.p.reconScannedByThisPlayerRefCount[enemy]++
+	if ( mode == eShowHealthbarMode.REQUIRE_LOS || mode == eShowHealthbarMode.REQUIRE_LOS_NO_RESTORE )
+	{
+		player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy]++
+
+		if ( mode == eShowHealthbarMode.REQUIRE_LOS )
+		{
+			player.p.reconScannedByThisPlayerRequiresLOSHideNonPermCount[enemy]++
+		}
+
+
+			if ( ExperimentalHealthBars_ProxyParticleEnabled() && GetConVarBool( "healthbar_particles_enabled" ) ) 
+			{
+				if ( IsValid( enemy ) && (!(enemy in player.p.proxyParticleFX) || !EffectDoesExist( player.p.proxyParticleFX[enemy].handle )) && !Bleedout_IsBleedingOut( enemy ) )
+				{
+					ExperimentalHealthBars_AddProxyParticleToEnemy( player, enemy )
+				}
+			}
+
+	}
+
+	if ( player.p.reconScannedByThisPlayerRefCount[enemy] > 1 )
+	{
+		if ( !(enemy in player.p.reconScanRUIs) )
+		{
+			Assert( false, "player isn't in rui table, which shouldn't be possible" )
+			return
+		}
+
+		return player.p.reconScanRUIs[enemy]
+	}
+
+	var rui = RuiCreate( ruiFile, clGlobal.topoFullScreen, RUI_DRAW_HUD, RuiCalculateDistanceSortKey( player.EyePosition(), enemy.GetOrigin() ) )
+	InitHUDRui( rui )
+
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetBool( rui, "pinToEdge", pinToEdge )
+	RuiSetBool( rui, "showClampArrow", true )
+	RuiSetString( rui, "hint", "" )
+
+	if (enemy.IsPlayer() && enemy.GetPlayerSettingsMods().contains( "targetinfo_ffa_squad" ) )
+		RuiSetFloat( rui, "yOffset", -40 )
+
+	if ( IsFriendlyTeam( player.GetTeam(), enemy.GetTeam() ) )
+	{
+		RuiSetFloat( rui, "yOffset", -40 )
+	}
+
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	if(populateInfoCallback != null)
+		populateInfoCallback( rui, player, enemy )
+
+	int armorTier = EquipmentSlot_GetEquipmentTier( refEntity, "armor" )
+	LootData data = EquipmentSlot_GetEquippedLootDataForSlot( refEntity, "armor" )
+	bool isEvolving = data.lootType == eLootType.ARMOR && EvolvingArmor_IsEquipmentEvolvingArmor( data.ref )
+
+	RuiTrackInt( rui, "extraShield", refEntity, RUI_TRACK_EXTRA_SHIELD_INT )
+	RuiTrackInt( rui, "extraShieldTier", refEntity, RUI_TRACK_EXTRA_SHIELD_TIER_INT )
+	RuiSetInt( rui, "shieldHealthMax", refEntity.GetShieldHealthMax() )
+	if( data.lootType == eLootType.ARMOR && UpgradeCore_IsEquipmentArmorCore( data.ref ) )
+	{
+		isEvolving = true
+		armorTier = UpgradeCore_GetPlayerArmorTier( refEntity )
+	}
+
+
+
+
+
+
+
+
+
+	RuiSetInt( rui, "armorTier", armorTier )
+	RuiSetBool( rui, "isEvolvingShield", isEvolving )
+
+	float shieldFrac = GetShieldHealthFrac( refEntity )
+	float healthFrac = GetHealthFrac( refEntity )
+	RuiSetFloat( rui, "shieldFrac", shieldFrac )
+	RuiSetFloat( rui, "healthFrac", healthFrac )
+
+	bool isShadowForm = ( refEntity.IsShadowForm() && !IsInForgedShadows( refEntity ) ) ? true : false
+	RuiSetBool( rui, "useShadowFormFrame", isShadowForm )
+
+	RuiTrackFloat( rui, "shieldFrac", refEntity, RUI_TRACK_SHIELD_FRACTION )
+	RuiTrackInt( rui, "overshield", refEntity, RUI_TRACK_TEMP_SHIELD_INT )
+	RuiTrackFloat( rui, "healthFrac", refEntity, RUI_TRACK_HEALTH )
+	RuiTrackFloat3( rui, "pos", enemy, RUI_TRACK_OVERHEAD_FOLLOW )
+
+	bool isChampion = GradeFlagsHas( enemy, eTargetGrade.CHAMPION )
+	bool isKillLeader = GradeFlagsHas( enemy, eTargetGrade.CHAMP_KILLLEADER )
+	RuiSetBool( rui, "isChampion", isChampion )
+	RuiSetBool( rui, "isKillLeader", isKillLeader )
+
+	if ( enemy.IsPlayer() )
+	{
+		RuiTrackFloat( rui, "bleedoutEndTime", enemy, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "bleedoutEndTime" ) )
+	}
+
+
+		if ( GameMode_IsActive( eGameModes.CONTROL ) )
+		{
+			bool isEXPLeader = GradeFlagsHas( enemy, eTargetGrade.EXP_LEADER )
+			RuiSetBool( rui, "isEXPLeader", isEXPLeader )
+		}
+
+
+	player.p.reconScanRUIs[enemy] <- rui
+
+	
+	thread ReconScan_TrackTargetData( refEntity, enemy, player )
+
+	return rui
+}
+
+void function ReconScan_TrackTargetData( entity refEntity, entity enemy, entity player )
+{
+	refEntity.EndSignal("ReconScan_HUDRemove")
+
+	
+	if ( refEntity != enemy )
+		enemy.EndSignal( "ReconScan_HUDRemove" )
+
+	refEntity.EndSignal("OnDeath")
+	refEntity.EndSignal("OnDestroy")
+
+	player.EndSignal("OnDeath")
+	player.EndSignal("OnDestroy")
+
+	int curArmorTier = EquipmentSlot_GetEquipmentTier( refEntity, "armor" )
+	int newArmorTier = 0
+
+	LootData data = EquipmentSlot_GetEquippedLootDataForSlot( refEntity, "armor" )
+	bool curIsEvolving =  data.lootType == eLootType.ARMOR && EvolvingArmor_IsEquipmentEvolvingArmor( data.ref )
+
+
+	int prevShieldHealthMax = refEntity.GetShieldHealthMax()
+	if( data.lootType == eLootType.ARMOR && UpgradeCore_IsEquipmentArmorCore( data.ref ) )
+	{
+		curIsEvolving = true
+		curArmorTier = UpgradeCore_GetPlayerArmorTier( refEntity )
+	}
+
+
+	bool newIsEvolving = false
+
+	bool curIsShadowForm =   refEntity.IsShadowForm()
+	bool newIsShadowForm = false
+
+
+		float proxyParticleVisibilityThreshold = ExperimentalHealthBars_GetProxyParticleVisibilityThreshold()
+		bool prevIsVisible = true
+
+
+	while( true )
+	{
+		if ( !IsValid( player ) || !IsValid( refEntity ) || !IsValid( enemy ) )
+			break
+
+		var rui = null
+
+		if ( enemy in player.p.reconScanRUIs )
+		{
+			 rui = player.p.reconScanRUIs[enemy]
+		}
+
+		
+		if( rui != null
+				&& enemy in player.p.reconScannedByThisPlayerRefCount
+				&& enemy in player.p.reconScannedByThisPlayerRequiresLOSRefCount )
+		{
+			newArmorTier = EquipmentSlot_GetEquipmentTier( refEntity, "armor" )
+
+			
+			data          = EquipmentSlot_GetEquippedLootDataForSlot( refEntity, "armor" )
+			newIsEvolving = data.lootType == eLootType.ARMOR && EvolvingArmor_IsEquipmentEvolvingArmor( data.ref )
+
+
+
+				if( data.lootType == eLootType.ARMOR && UpgradeCore_IsEquipmentArmorCore( data.ref ) )
+				{
+					newIsEvolving = true
+					newArmorTier =  UpgradeCore_GetPlayerArmorTier( refEntity )
+				}
+
+				int newShieldHealth = refEntity.GetShieldHealthMax()
+				if( newShieldHealth != prevShieldHealthMax )
+				{
+					RuiSetInt( rui, "shieldHealthMax", newShieldHealth )
+				}
+
+
+			if ( newArmorTier != curArmorTier )
+			{
+				curArmorTier = newArmorTier
+				RuiSetInt( rui, "armorTier", curArmorTier )
+			}
+
+			if ( newIsEvolving != curIsEvolving )
+			{
+				curIsEvolving = newIsEvolving
+				RuiSetBool( rui, "isEvolvingShield", curIsEvolving )
+			}
+
+			
+			newIsShadowForm = refEntity.IsShadowForm()
+			if ( newIsShadowForm != curIsShadowForm)
+			{
+				curIsShadowForm = newIsShadowForm
+				RuiSetBool( rui, "useShadowFormFrame", curIsShadowForm )
+			}
+
+
+
+				if ( Augments_Enabled() )
+					RuiSetImageIfExists( rui, "augmentImage", Augments_GetPlayerAugmentIcon( refEntity ) )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			Assert( player.p.reconScannedByThisPlayerRefCount[enemy] >= player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy],
+				"Ref count of total scans (" + player.p.reconScannedByThisPlayerRefCount[enemy] + ") below los scans (" + player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy] + ")")
+
+
+#if DEV
+					if ( ExperimentalHealthBars_DEV_DebugProxyParticle()  )
+					{
+						RuiSetInt( rui, "showHealthBarMode", GetActiveReconScanMode( player, enemy ) )
+					}
+#endif
+
+
+			if ( player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy] == player.p.reconScannedByThisPlayerRefCount[enemy] )
+			{
+
+				if( ShouldHideHealthForPlayer( enemy ) )
+				{
+					RuiSetBool( rui, "isVisible", false )
+				}
+				else
+				{
+					vector pos = enemy.EyePosition()
+					vector playerEyePos = player.EyePosition()
+					TraceResults losLow = TraceLine( playerEyePos, pos, [player, enemy], TRACE_MASK_BLOCKLOS, TRACE_COLLISION_GROUP_NONE )
+
+					if ( losLow.fraction == 1.0 && !losLow.startSolid )
+					{
+
+						if ( ExperimentalHealthBars_ProxyParticleEnabled() )
+						{
+							bool isVisible = true
+							int fx = ExperimentalHealthBars_GetProxyParticleHandleForEnemy( player, enemy )
+							if ( fx >= 0 && EntityInPlayerFOV( player, enemy, 1.1 ) && ExperimentalHealthBars_DoParticleVisibilityCheck( player ) )
+							
+							{
+								if ( GetTotalLOSRequiredHideNonPermReconScans( player, enemy ) <= 0 && player.p.proxyParticleFX[enemy].hasFailedVisibilityTest )
+								{
+									isVisible = false
+								}
+								else
+								{
+
+									float vis = ExperimentalHealthBars_GetProxyParticleVisibilityForEnemy( player, enemy )
+									float threshold = proxyParticleVisibilityThreshold
+									if ( GetTotalLOSRequiredHideNonPermReconScans( player, enemy ) > 0 )
+									{
+										
+										threshold = prevIsVisible ? threshold - 0.02 : threshold
+									}
+
+									if ( vis > threshold )
+									{
+										player.p.proxyParticleFX[enemy].lastTimeAboveVisibilityThreshold = Time()
+									}
+
+									float timeBelowThreshold = Time() - player.p.proxyParticleFX[enemy].lastTimeAboveVisibilityThreshold
+
+									float fadeOutTime = ExperimentalHealthBars_GetProxyParticleFadeOutTime()
+									float alpha = GraphCapped( timeBelowThreshold, 0.0, fadeOutTime, 1.0, 0.0 )
+									RuiSetFloat( rui, "proxyParticleAlpha", alpha )
+
+									if ( timeBelowThreshold > fadeOutTime )
+									{
+										isVisible = false
+										player.p.proxyParticleFX[enemy].hasFailedVisibilityTest = true
+									}
+								}
+								prevIsVisible = isVisible
+#if DEV
+									if ( ExperimentalHealthBars_DEV_DebugProxyParticle()  )
+									{
+										fx = player.p.proxyParticleFX[enemy].handle
+										vector origin = GetParticleEffectOrigin( fx )
+										string txt = format( "%d Viz: %g", fx, ExperimentalHealthBars_GetProxyParticleVisibilityForEnemy( player, enemy ) )
+										DebugDrawText( origin, txt, false, 0.1 )
+									}
+#endif
+							}
+							RuiSetBool( rui, "isVisible", isVisible )
+						}
+						else
+
+						{
+						RuiSetBool( rui, "isVisible", true )
+						}
+					}
+					else
+					{
+						if ( GetTotalLOSRequiredHideNonPermReconScans( player, enemy ) > 0 )
+						{
+							RuiSetBool( rui, "isVisible", false )
+						}
+						else
+						{
+							
+							TraceResults losHi = TraceLineHighDetail( playerEyePos, pos, [player, enemy], TRACE_MASK_BLOCKLOS, TRACE_COLLISION_GROUP_NONE )
+							if ( losHi.fraction < 1.0 || losHi.startSolid )
+							{
+								RuiSetBool( rui, "isVisible", false )
+								enemy.Signal( "EnemyHealthBarEnd" )
+								return
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				if( ShouldHideHealthForPlayer( enemy ) )
+				{
+					RuiSetBool( rui, "isVisible", false )
+				}
+				else
+				{
+					RuiSetBool( rui, "isVisible", true )
+				}
+
+
+
+					if ( ExperimentalHealthBars_ProxyParticleEnabled() )
+					{
+						RuiSetFloat( rui, "proxyParticleAlpha", 1.0 )
+					}
+
+			}
+		}
+		wait 0.1
+	}
+}
+
+void function ReconScan_RemoveHudForTarget( entity player, entity enemy, int mode )
+{
+	if (!(enemy in player.p.reconScannedByThisPlayerRefCount))
+	{
+		return
+	}
+
+	Assert( (enemy in player.p.reconScannedByThisPlayerRefCount), "uh oh spagettios. This can't happen" )
+	Assert( player.p.reconScannedByThisPlayerRefCount[enemy] > 0, "Trying to remove health bar from someone who doesn't have it!" )
+	Assert( mode == eShowHealthbarMode.ALWAYS || player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy] > 0, "Trying to remove health bar from someone who doesn't have it!" )
+
+	player.p.reconScannedByThisPlayerRefCount[enemy]--
+	if ( mode == eShowHealthbarMode.REQUIRE_LOS || mode == eShowHealthbarMode.REQUIRE_LOS_NO_RESTORE )
+	{
+		player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy]--
+
+		if ( mode == eShowHealthbarMode.REQUIRE_LOS )
+		{
+			player.p.reconScannedByThisPlayerRequiresLOSHideNonPermCount[enemy]--
+		}
+	}
+
+	if ( player.p.reconScannedByThisPlayerRefCount[enemy] > 0 )
+		return
+
+	if ( IsValid( enemy ) )
+	{
+		enemy.Signal("ReconScan_HUDRemove")
+	}
+
+	if ( enemy in player.p.reconScanRUIs )
+	{
+		if ( player.p.reconScanRUIs[enemy] != null )
+		{
+			RuiDestroyIfAlive( player.p.reconScanRUIs[enemy] )
+			player.p.reconScanRUIs[enemy] = null
+		}
+		delete player.p.reconScanRUIs[enemy]
+	}
+
+	if ( enemy in player.p.damageHealthBarStartTime )
+	{
+		delete player.p.damageHealthBarStartTime[enemy]
+	}
+
+
+		if ( ExperimentalHealthBars_ProxyParticleEnabled() )
+		{
+			if ( enemy in player.p.proxyParticleFX )
+			{
+				player.p.proxyParticleFX[enemy].hasFailedVisibilityTest = false
+				player.p.proxyParticleFX[enemy].lastTimeAboveVisibilityThreshold = 0.0
+			}
+		}
+
+}
+
+int function GetTotalReconScansForEnemy( entity player, entity enemy )
+{
+	if ( !IsValid( player ) || !IsValid( enemy ) )
+		return 0
+
+	if ( !(enemy in player.p.reconScannedByThisPlayerRefCount) )
+		return 0
+
+	return player.p.reconScannedByThisPlayerRefCount[enemy]
+}
+
+int function GetTotalLOSRequiredReconScans( entity player, entity enemy )
+{
+	if ( !IsValid( player ) || !IsValid( enemy ) )
+		return 0
+
+	if ( !(enemy in player.p.reconScannedByThisPlayerRequiresLOSRefCount) )
+		return 0
+
+	return player.p.reconScannedByThisPlayerRequiresLOSRefCount[enemy]
+}
+
+int function GetTotalAlwaysVisibleReconScans( entity player, entity enemy )
+{
+	if ( !IsValid( player ) || !IsValid( enemy ) )
+		return 0
+
+	return GetTotalReconScansForEnemy( player, enemy ) - GetTotalLOSRequiredReconScans( player, enemy )
+}
+
+int function GetTotalLOSRequiredHideNonPermReconScans( entity player, entity enemy )
+{
+	if ( !IsValid( player ) || !IsValid( enemy ) )
+		return 0
+
+	if ( !(enemy in player.p.reconScannedByThisPlayerRequiresLOSHideNonPermCount) )
+		return 0
+
+	return player.p.reconScannedByThisPlayerRequiresLOSHideNonPermCount[enemy]
+}
+
+int function GetTotalLOSRequiredNoRestoreReconScans( entity player, entity enemy )
+{
+	if ( !IsValid( player ) || !IsValid( enemy ) )
+		return 0
+
+	return GetTotalLOSRequiredReconScans( player, enemy ) - GetTotalLOSRequiredHideNonPermReconScans( player, enemy )
+}
+
+int function GetActiveReconScanMode( entity player, entity enemy )
+{
+	if ( GetTotalAlwaysVisibleReconScans( player, enemy ) > 0 )
+		return eShowHealthbarMode.ALWAYS
+
+	if ( GetTotalLOSRequiredHideNonPermReconScans( player, enemy ) > 0 )
+		return eShowHealthbarMode.REQUIRE_LOS
+
+	if ( GetTotalLOSRequiredNoRestoreReconScans( player, enemy ) > 0 )
+		return eShowHealthbarMode.REQUIRE_LOS_NO_RESTORE
+
+	return -1
+}
+
+bool function ShouldCausticGasHighlight( entity viewPlayer, entity ent )
+{
+	if ( !viewPlayer.HasPassive( ePassives.PAS_GAS_GEAR ) && !viewPlayer.HasPassive( ePassives.PAS_GAS_PROTECTION ) )
+		return false
+
+	if ( ent.IsPlayer() && (ent.HasPassive( ePassives.PAS_GAS_GEAR ) ) )
+		return false
+
+
+
+
+
+
+	if ( !StatusEffect_HasSeverity( ent, eStatusEffect.gas_cloud ) )
+		return false
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ShouldMaggieHighlight( entity viewPlayer, entity ent )
+{
+	if ( !PlayerHasPassive( viewPlayer, ePassives.PAS_WARLORDS_IRE ) )
+		return false
+
+	return PassiveWarlordsIre_EntityShouldBeHighlighted( ent )
+}
+
+
+
+bool function ShouldValkTacHighlight( entity viewPlayer, entity ent )
+{
+	return ClusterMissile_EntityShouldBeHighlighted( viewPlayer, ent )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ShouldAssassinsInstinctHighlight( entity viewPlayer, entity ent )
+{
+	if ( !PlayerHasPassive( viewPlayer, ePassives.PAS_REVENANT_REWORK ) )
+		return false
+
+	return PassiveAssassinsInstinct_EntityShouldBeHighlighted( viewPlayer, ent )
+}
+
+bool function ShouldCastleWallHighlight( entity viewPlayer, entity ent )
+{
+	int viewTeam = viewPlayer.GetTeam()
+	int entTeam  = ent.GetTeam()
+
+	if ( viewTeam != entTeam )
+		return false
+
+	return CastleWall_EntityShouldBeHighlighted( ent )
+}
+
+bool function ShouldArmoredLeapThreatHighlight( entity viewPlayer, entity ent )
+{
+	if ( !PlayerHasPassive( viewPlayer, ePassives.PAS_AXIOM ) )
+		return false
+
+
+
+
+
+
+	return ArmoredLeap_TargetEntityShouldBeHighlighted( ent )
+}
+
+bool function ShouldSonicBlastThreatHighlight( entity viewPlayer, entity ent )
+{
+	return SonicBlast_TargetEntityShouldBeHighlighted( ent )
+}
+
+
+
+
+
+
+
+
+
+
+
+bool function ShouldShowNovaBlackholeHighlight( entity viewPlayer, entity ent )
+{
+	if ( !BlackHole_ShowHighlights() )
+		return false
+
+	if ( !StatusEffect_HasSeverity( ent, eStatusEffect.in_black_hole_field ) )
+		return false
+
+	return true
+}
+
+
+void function Highlight_SetGameModeEnemyHighlight( entity player )
+{
+	if ( !Highlight_IsUsingGameModeEnemyHighlights() )
+		return
+
+	if ( !IsValid( player ) )
+		return
+
+
+
+
+
+
+
+
+
+	
+	if ( AllianceProximity_IsUsingAlliances() )
+	{
+		int onlyAllianceToApplyEnemyHighlightTo = Highlight_GetExclusiveAllianceToApplyGameModeEnemyHighlightsTo()
+		if ( onlyAllianceToApplyEnemyHighlightTo != ALLIANCE_NONE )
+		{
+			if ( AllianceProximity_GetAllianceFromTeam( player.GetTeam() ) == onlyAllianceToApplyEnemyHighlightTo )
+				Highlight_SetEnemyHighlight( player, Highlight_GetGameModeEnemyHighlightString() )
+
+			return
+		}
+	}
+
+	Highlight_SetEnemyHighlight( player, Highlight_GetGameModeEnemyHighlightString() )
+}
+
+
+bool function Highlight_IsUsingGameModeEnemyHighlights()
+{
+	return GetCurrentPlaylistVarBool( "is_using_gamemode_enemy_highlights", false )
+}
+
+
+int function Highlight_GetExclusiveAllianceToApplyGameModeEnemyHighlightsTo()
+{
+	return GetCurrentPlaylistVarInt( "only_apply_gamemode_enemy_highlight_to_alliance", ALLIANCE_NONE )
+}
+
+
+string function Highlight_GetGameModeEnemyHighlightString()
+{
+	return GetCurrentPlaylistVarString( "gamemode_enemy_highlight_override", "enemy_los_highlight" )
+}
+
+
+bool function Highlight_IsUsingGameModeEnemyVehicleHighlights()
+{
+	return GetCurrentPlaylistVarBool( "is_using_gamemode_enemy_vehicle_highlights", false )
+}
+
+
+string function Highlight_GetGameModeEnemyVehicleHighlightString()
+{
+	return GetCurrentPlaylistVarString( "gamemode_enemy_vehicle_highlight_override", "vehicle_enemy_los_highlight" )
+}
+
+
+
+bool function Highlight_IsUsingGameModeFriendlyVehicleHighlights()
+{
+	return GetCurrentPlaylistVarBool( "is_using_gamemode_friendly_vehicle_highlights", false )
+}
+
+
+
+string function Highlight_GetGameModeFriendlyVehicleHighlightString()
+{
+	return GetCurrentPlaylistVarString( "gamemode_friendly_vehicle_highlight_override", "vehicle_friendly_los_highlight" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Highlight_ObserverHighlightEnableChanged( entity observer, bool newValue )
+{
+	int observerTeam = observer.GetTeam()
+	if ( observerTeam != TEAM_SPECTATOR )
+		return
+
+	if ( observer == GetLocalClientPlayer() )
+	{
+		if ( newValue )
+			Obituary_Print_Localized( Localize( "#TOURNAMENT_OBSERVER_HIGHLIGHT_ENABLED" ) )
+		else
+			Obituary_Print_Localized( Localize( "#TOURNAMENT_OBSERVER_HIGHLIGHT_DISABLED" ) )
+	}
+
+	array<entity> players = GetPlayerArray_Alive()
+	foreach ( player in players )
+	{
+		ManageHighlightEntity( player )
+	}
+}
+
+void function ServerCallback_ManageHighlights()
+{
+	printf( "ObserverHighlightDebug: Managing observer highlights for observer %s", GetLocalClientPlayer().GetPlayerName() )
+
+	array<entity> players = GetPlayerArray_Alive()
+	foreach ( player in players )
+	{
+		ManageHighlightEntity( player )
+	}
+}
+
+void function Highlight_OnSpectatorTargetChanged( entity observer, entity prevTarget, entity newTarget )
+{
+	int observerTeam = observer.GetTeam()
+	if ( observerTeam != TEAM_SPECTATOR )
+		return
+
+	Remote_ServerCallFunction( "ClientCallback_RefreshObserverHighlights" )
+}
+
+void function Highlight_ToggleObserverHighlights( entity observer )
+{
+	int observerTeam = observer.GetTeam()
+	if ( observerTeam != TEAM_SPECTATOR )
+		return
+
+	Remote_ServerCallFunction( "ClientCallback_ToggleObserverHighlights" )
+}
+
+
+bool function Highlight_IsHighlightEnabledForObserver( entity observer )
+{
+	return observer.GetPlayerNetBool( NV_OBSERVER_HIGHLIGHT_ENABLED )
+}
+
+bool function Highlight_ShouldObserverHighlight( entity viewPlayer, entity ent )
+{
+	int viewTeam = viewPlayer.GetTeam()
+	if ( viewTeam != TEAM_SPECTATOR )
+		return false
+
+	if ( !ent.IsPlayer() )
+		return false
+
+	if ( !Highlight_IsHighlightEnabledForObserver( viewPlayer ) )
+		return false
+
+	return true
+}
+
+
+void function ServerCallback_CreateSonarClone( entity sonarTarget, float duration )
+{
+	if ( !IsValid( sonarTarget ) )
+		return
+
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( IsValid( viewPlayer ) )
+	{
+		if ( sonarTarget in file.localSonarTargetToCloneTable )
+		{
+			entity entClone = file.localSonarTargetToCloneTable[ sonarTarget ]
+			if ( IsValid( entClone ) )
+				Signal( entClone, HIGHLIGHT_SONAR_CLONE_REFRESHED )
+		}
+
+		thread CreateSonarCloneForEnt( sonarTarget, duration )
+	}
+}
+
+void function CreateSonarCloneForEnt( entity sonarTarget, float duration )
+{
+	if ( PlayerCanSee( GetLocalViewPlayer(), sonarTarget, true, 90 ) )
+		return
+
+	entity entClone = CreateClientSidePropDynamicClone( sonarTarget, sonarTarget.GetModelName() )
+	if ( !IsValid( entClone ) ) 
+		return
+
+	file.localSonarTargetToCloneTable[ sonarTarget ] <- entClone
+
+	EndSignal( entClone, "OnDestroy" )
+	EndSignal( entClone, HIGHLIGHT_SONAR_CLONE_REFRESHED )
+	EndSignal( sonarTarget, "OnDestroy" )
+	SonarPlayerCloneHighlight( entClone )
+
+	OnThreadEnd(
+		function( string signalID ) : ( sonarTarget, entClone )
+		{
+			if ( IsValid( sonarTarget ) && signalID != HIGHLIGHT_SONAR_CLONE_REFRESHED )
+				delete file.localSonarTargetToCloneTable[ sonarTarget ]
+
+			if ( IsValid( entClone ) )
+				entClone.Destroy()
+		}
+	)
+
+	float endTime = Time() + duration
+	const float visCheckInterval = 0.25
+
+	while( Time() < endTime )
+	{
+		if( PlayerCanSee( GetLocalViewPlayer(), entClone, true, 90 ) )
+			break
+
+		if( PlayerCanSee( GetLocalViewPlayer(), sonarTarget, true, 90 ) )
+			break
+
+		wait visCheckInterval
+	}
+}
+
+entity function GetSonarCloneForEnt( entity sonarTarget )
+{
+	entity sonarClone
+
+	if( sonarTarget in file.localSonarTargetToCloneTable )
+	{
+		sonarClone = file.localSonarTargetToCloneTable[ sonarTarget ]
+	}
+
+	return sonarClone
+}
+
+ 

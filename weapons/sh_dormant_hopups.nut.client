@@ -1,0 +1,1618 @@
+
+global function DormantHopups_Init
+global function DormantHopups_IsEnabled
+global function DormantHopups_GetThresholdOfActivation
+global function DormantHopups_GetTotalPointsForHopUp
+global function DormantHopups_GetDormantHopupFromBaseMods
+global function DormantHopups_HopupIsDormantVersion
+global function DormantHopups_WeaponHasDormantHopupInBaseMods
+
+global function DormantHopups_GoldBinSpawnCacheChance
+global function DormantHopups_AssaultBinSpawnCacheChance
+global function DormantHopups_GetArsenalPoints
+global function DormantHopups_GetRespawnPercentageToGive
+global function DormantHopups_GetLockedHopupFromModList
+global function DormantHopups_GetPoints
+global function DormantHopups_GetNonDormantHopupFromString
+global function DormantHopups_GetBestDormantHopupWeapon
+global function DormantHopups_WeaponHasDormantHopupOnWeapon
+global function DormantHopups_CanGainPoints
+global function DormantHopups_IsHopupUnlocked
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ServerToClient_DormantHopups_UpdateCurrentWeaponHud
+global function ServerToClient_DoHopupUnlockFx
+global function ServerToClient_DormantHopups_DoProgressPresentation
+global function ServerToClient_DormantHopups_SlingWeaponSwitched
+global function DormantHopups_SetAttachmentCount
+
+
+
+#if DEV
+global function DormantHopups_PrintCurrentWeaponPoints
+global function DormantHopups_ResetCurrentWeaponPoints
+global function DormantHopups_UnlockCurrentWeaponHopup
+#endif
+
+
+#if DEV
+const bool SHOW_DEBUG = false
+#endif
+
+
+global const string HOPUP_POINTS_PICKUP = "hopup_points_pickup"
+const string SIGNAL_DORMANT_HOPUP_FORCE_END_VFX = "ForceEndPlayerDormantHopupVFX"
+
+
+const vector UNLOCK_EFFECT_COLOR = <255, 208, 56>
+const asset DORMANT_HOPUP_ACTIVATION_COCKPIT_FX = $"P_screen_hopups_dormant_charged"
+const asset DORMANT_HOPUP_ACTIVATION_WEAPON_FX = $"P_wpn_hopups_dormant_charged"
+
+
+const string DORMANT_HOPUP_ACTIVATION_SFX = "player_HopUp_Activation_1p"
+const string DORMANT_HOPUP_PROGRESS_SFX = "player_HopUp_Progress_T2"
+
+global enum eDormantHopupPointSources
+{
+	DAMAGE,
+	HOPUP_BOOSTER,
+	ARSENAL,
+	WEAPON_PICKUP,
+	SLING_SWAP,
+	RESPAWN,
+	DEV_TESTING,
+	AKIMBO_MERGE,
+}
+
+struct {
+	table< entity, table< entity, table< string, int > > > playerWeaponsPointSourceTable
+	table< int, string > hopupPointSourcesReferenceTable
+	table< string, int > hopupReversePointSourcesReferenceTable
+
+
+
+
+
+
+		var	 dormantHopupRui
+		var  dormantHopupNotifRui
+		int  dormantHopupScreenFxHandle
+		table< entity, bool >	dormantHopupWeaponPassedHalfwayPoint
+		bool dormantHopupJustPickedUpWeapon
+
+} file
+
+
+struct
+{
+	int dormantHopupThresholdDefault 						= 425
+	int dormantHopupThresholdOne 							= 300
+	int dormantHopupThresholdTwo 							= 375
+	int dormantHopupThresholdThree 							= 600
+	int dormantHopupThresholdFour							= 500
+
+	int dormantHopupArsenalPoints 							= 100
+	int dormantHopupPickupPoints 							= 100
+
+	float dormantHopupAssaultBinSpawnChance					= 0.5
+	float dormantHopupAssaultBinSpawnChance_PostReset		= 1.0
+	float dormantHopupGoldBinSpawnChance 					= 0.5
+
+	bool shouldDisplayToggleHint							= true
+
+	bool otherWeaponsGivePartial							= true
+	float partialPercentGain								= 0.25
+	float respawnPercentToGive								= 0.5
+} tuning
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Init_And_Disable___________________________(){}
+#endif
+
+void function DormantHopups_Init()
+{
+	RegisterTuningStruct( "tuning", "dormant_hopup_" )
+
+
+	SURVIVAL_AddCallback_PreWeaponAttachmentInit( DormantHopups_Switcheroo )
+	SURVIVAL_AddCallback_PostWeaponAttachmentInit( DormantHopups_Switcheroo_LockedSets )
+
+
+
+
+
+
+
+		
+		if ( EvoWeapons_IsEnabled() )
+			return
+
+
+	if ( !DormantHopups_IsEnabled() )
+		return
+
+
+		PrecacheParticleSystem( DORMANT_HOPUP_ACTIVATION_COCKPIT_FX )
+		PrecacheParticleSystem( DORMANT_HOPUP_ACTIVATION_WEAPON_FX )
+		RegisterSignal( SIGNAL_DORMANT_HOPUP_FORCE_END_VFX )
+
+		AddCallback_LocalPlayerPickedUpLoot( DormantHopups_PickedUpWeapon )
+		AddCallback_OnPlayerWeaponSwitched( DormantHopups_OnPlayerWeaponSwitched )
+		AddOnSpectatorTargetChangedCallback( OnSpectateTargetChanged )
+
+
+
+		DormantHopups_SetUpPointSourceReferenceTable()
+		Remote_RegisterClientFunction( "ServerToClient_DormantHopups_UpdateCurrentWeaponHud", "entity", "bool" )
+		Remote_RegisterClientFunction( "ServerToClient_DoHopupUnlockFx", "entity" )
+		Remote_RegisterClientFunction( "ServerToClient_DormantHopups_DoProgressPresentation", "entity", "int", 0, 2048, "bool" ) 
+		Remote_RegisterClientFunction( "ServerToClient_DormantHopups_SlingWeaponSwitched", "entity" )
+		RegisterCustomItemPickupAction( HOPUP_POINTS_PICKUP, DormantHopups_ItemPickup )
+
+}
+
+
+void function DormantHopups_Switcheroo( LootData wData )
+{
+	if ( DormantHopups_IsEnabled() )
+		return
+
+	DormantHopups_RemoveHopup( wData )
+}
+
+void function DormantHopups_Switcheroo_LockedSets( LootData wData )
+{
+	if ( DormantHopups_IsEnabled() )
+		return
+
+	if ( wData.baseWeapon == wData.ref )
+		return
+
+	bool isLocked = SURVIVAL_Weapon_IsAttachmentLocked( wData.ref )
+	if ( isLocked )
+		DormantHopups_RemoveHopup( wData )
+
+}
+
+void function DormantHopups_RemoveHopup( LootData wData )
+{
+	
+	
+
+	if ( DormantHopups_IsDormantHopupWeapon( wData ) )
+	{
+		if ( wData.supportedAttachments.contains( "hopup" ) )
+		{
+			wData.supportedAttachments.fastremovebyvalue( "hopup" )
+		}
+
+		if ( DormantHopups_WeaponHasDormantHopupInBaseMods( wData ) )
+		{
+			string dormantHopup = DormantHopups_GetDormantHopupFromBaseMods( wData )
+			if ( dormantHopup != "" )
+			{
+				if ( wData.baseMods.contains( dormantHopup ) )
+				{
+					wData.baseMods.fastremovebyvalue( dormantHopup )
+				}
+			}
+		}
+	}
+}
+
+bool function DormantHopups_IsDormantHopupWeapon( LootData data )
+{
+	if ( !WeaponHasLockedHopup( data ) )
+		return false
+
+	if ( DormantHopups_WeaponHasDormantHopupInBaseMods( data ) )
+		return false
+
+	if ( data.baseMods.contains( ULTIMATE_ACCELERATOR_WEAPON_MOD ) )
+		return true
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+
+void function _____________DormantHopups___________________________(){}
+#endif
+
+bool function DormantHopups_IsEnabled()
+{
+	return !GetCurrentPlaylistVarBool( "disable_dormant_hopups", false )
+}
+
+
+float function DormantHopups_GoldBinSpawnCacheChance()
+{
+	return tuning.dormantHopupGoldBinSpawnChance
+}
+
+float function DormantHopups_AssaultBinSpawnCacheChance( bool isBinReset = false )
+{
+	if ( isBinReset )
+		return tuning.dormantHopupAssaultBinSpawnChance_PostReset
+
+	return tuning.dormantHopupAssaultBinSpawnChance
+}
+
+int function DormantHopups_GetArsenalPoints()
+{
+	return tuning.dormantHopupArsenalPoints
+}
+
+float function DormantHopups_GetRespawnPercentageToGive()
+{
+	return tuning.respawnPercentToGive
+}
+
+
+int function DormantHopups_GetThresholdOfActivation( LootData weaponData, int checkVal = -1 )
+{
+	string perWeaponOverride = GetCurrentPlaylistVarString( weaponData.ref + "_dormant_hopup_point_override", "" )
+	if ( perWeaponOverride != "" )
+		return ConvertStringToInt(perWeaponOverride)
+
+	
+	string dormantHopup = DormantHopups_GetDormantHopupFromBaseMods( weaponData )
+
+	string perHopupOverride = GetCurrentPlaylistVarString( dormantHopup + "_dormant_hopup_point_override", "" )
+	if ( perHopupOverride != "" )
+		return ConvertStringToInt(perHopupOverride)
+
+	return DormantHopups_GetTotalPointsForHopUp( dormantHopup, checkVal )
+}
+
+int function DormantHopups_GetTotalPointsForHopUp( string dormantHopup, int checkVal = -1 )
+{
+	switch ( dormantHopup )
+	{
+		case "dormant_hopup_dual_loader":
+		case "dormant_hopup_ultimate_accelerator":
+			return tuning.dormantHopupThresholdOne
+
+		case "dormant_hopup_double_tap":
+		case "dormant_hopup_selectfire":
+		case "dormant_hopup_gunshield":
+
+		case "dormant_hopup_executioner":
+
+			return tuning.dormantHopupThresholdTwo
+
+		case "dormant_hopup_turbocharger":
+		case "dormant_hopup_headshot_dmg":
+			return tuning.dormantHopupThresholdThree
+
+		case "dormant_hopup_shield_breaker":
+			return tuning.dormantHopupThresholdFour
+
+		case "dormant_hopup_unshielded_dmg":
+		case "dormant_hopup_quickdraw_holster":
+		case "dormant_hopup_highcal_rounds":
+		case "dormant_hopup_paintball_elite":
+			return tuning.dormantHopupThresholdDefault
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		default:
+			return tuning.dormantHopupThresholdDefault
+	}
+
+	return tuning.dormantHopupThresholdDefault
+}
+
+
+string function DormantHopups_GetDormantHopupFromBaseMods( LootData wData )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return ""
+
+	string dormantHopup = ""
+	foreach ( mod in wData.baseMods )
+	{
+		if ( !SURVIVAL_Loot_IsRefValid( mod ) )
+			continue
+
+		if ( SURVIVAL_Loot_GetLootDataByRef( mod ).lootType != eLootType.ATTACHMENT )
+			continue
+
+		if ( SURVIVAL_Loot_GetLootDataByRef( mod ).lootTags.contains( "DormantHopup" ) )
+		{
+			dormantHopup = mod
+			break
+		}
+	}
+
+	return dormantHopup
+}
+
+bool function DormantHopups_HopupIsDormantVersion( string hopup )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return false
+
+	if ( !SURVIVAL_Loot_IsRefValid( hopup ) )
+		return false
+
+	if ( SURVIVAL_Loot_GetLootDataByRef( hopup ).lootType != eLootType.ATTACHMENT )
+		return false
+
+	if ( SURVIVAL_Loot_GetLootDataByRef( hopup ).lootTags.contains( "DormantHopup" ) )
+		return true
+
+	return false
+}
+
+bool function DormantHopups_WeaponHasDormantHopupInBaseMods( LootData weaponData )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return false
+
+	foreach ( mod in weaponData.baseMods )
+	{
+		if ( !SURVIVAL_Loot_IsRefValid( mod ) )
+			continue
+
+		LootData refData = SURVIVAL_Loot_GetLootDataByRef( mod )
+
+		if ( refData.lootType != eLootType.ATTACHMENT )
+			continue
+
+		if ( refData.lootTags.contains( "DormantHopup" ) )
+			return true
+	}
+
+	return false
+}
+
+
+
+string function DormantHopups_GetNonDormantHopupFromString( string dormantHopup )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return ""
+
+	if ( dormantHopup == "" )
+		return ""
+
+	array<string> tokens = split( dormantHopup, "_" )
+	string finalString = tokens[1]
+
+	if ( ! (tokens.contains( "dormant" )) )
+		return ""
+
+	for( int i = 2; i < tokens.len(); ++i )
+	{
+		finalString += "_" + tokens[i]
+	}
+
+	if( !SURVIVAL_Loot_IsRefValid( finalString ) )
+		return ""
+
+	return finalString
+}
+
+string function DormantHopups_GetLockedHopupFromModList( array<string> mods )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return ""
+
+	string lockedHopup = ""
+	foreach ( mod in mods )
+	{
+		if ( !SURVIVAL_Loot_IsRefValid( mod ) )
+			continue
+
+		if ( SURVIVAL_Loot_GetLootDataByRef( mod ).lootType != eLootType.ATTACHMENT )
+			continue
+
+		if ( SURVIVAL_Loot_GetLootDataByRef( mod ).lootTags.contains( "LockedHopup" ) )
+		{
+			lockedHopup = mod
+		}
+	}
+
+	return lockedHopup
+}
+
+int function DormantHopups_GetPoints( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return 0
+
+	if ( !DormantHopups_IsEnabled() )
+		return 0
+
+	return weapon.GetLockedHopupPoints()
+}
+
+bool function DormantHopups_CanGainPoints( entity weapon, bool isSlingWeapon = false )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( !DormantHopups_IsEnabled() )
+		return false
+
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+	if ( !DormantHopups_WeaponHasDormantHopupInBaseMods( weaponData ) )
+		return false
+
+	
+	if ( DormantHopups_IsHopupUnlocked( weapon, weaponData ) )
+		return false
+
+	return true
+}
+
+bool function DormantHopups_IsHopupUnlocked( entity weapon, LootData weaponData )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return false
+
+	if ( !IsValid( weapon ) )
+		return false
+
+	if( DormantHopups_WeaponHasDormantHopupInBaseMods( weaponData ) )
+	{
+		string hopupMod = DormantHopups_GetNonDormantHopupFromString( DormantHopups_GetDormantHopupFromBaseMods( weaponData ) )
+
+		if ( hopupMod == "" )
+			return false
+
+		if ( weapon.HasMod( hopupMod ) )
+			return true
+	}
+
+	return false
+}
+
+bool function DormantHopups_WeaponHasDormantHopupOnWeapon( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( !DormantHopups_IsEnabled() )
+		return false
+
+	if ( DormantHopups_GetPoints( weapon ) > 0 )
+		return true
+
+	return false
+}
+
+entity function DormantHopups_GetBestDormantHopupWeapon( entity player )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return null
+
+	if ( !IsValid( player ) )
+		return null
+
+	array< entity > playerWeapons = SURVIVAL_GetPrimaryWeapons( player ) 
+	entity hopupWeapon
+	foreach ( entity weapon in playerWeapons )
+	{
+		if ( DormantHopups_WeaponHasDormantHopupOnWeapon( weapon ) )
+		{
+			hopupWeapon = weapon
+
+			if ( player.GetActiveWeapon( eActiveInventorySlot.mainHand ) == weapon )
+			{
+				break
+			}
+			else if ( GetSlotForWeapon( player, weapon ) == player.GetLastCycleSlot() )
+			{
+				break
+			}
+		}
+	}
+
+	return hopupWeapon
+}
+
+bool function DormantHopups_ItemPickup( entity pickup, entity player, int pickupFlags, entity deathBox, int ornull desiredCount, LootData data )
+{
+
+
+
+
+
+
+
+
+
+	return true
+}
+
+void function DormantHopups_SetUpPointSourceReferenceTable()
+{
+	foreach( key, val in eDormantHopupPointSources )
+	{
+		file.hopupPointSourcesReferenceTable[val] <- key
+	}
+
+	foreach( key, val in eDormantHopupPointSources )
+	{
+		file.hopupReversePointSourcesReferenceTable[key] <- val
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ______________DormantHopups_ServerOnly_____________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ______________DormantHopups_ClientOnly_____________(){}
+#endif
+
+
+void function ServerToClient_DormantHopups_UpdateCurrentWeaponHud( entity weapon, bool dormantHopupActive )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) || !IsValid( weapon ) )
+		return
+
+	if ( tuning.shouldDisplayToggleHint && dormantHopupActive )
+		DormantHopups_DisplayToggleHintIfAble( weapon )
+
+	DormantHopups_UpdateProgressRui( player, false, true )
+
+	UpdateHudDataForMainWeapons( player, weapon )
+}
+
+void function ServerToClient_DormantHopups_DoProgressPresentation( entity weapon, int evoXp, bool forcePlayOnly )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return
+
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( forcePlayOnly )
+	{
+		EmitSoundOnEntity( weapon, DORMANT_HOPUP_PROGRESS_SFX )
+
+
+
+
+
+
+
+
+		return
+	}
+
+
+
+
+
+
+	if ( ( weapon in file.dormantHopupWeaponPassedHalfwayPoint ) && file.dormantHopupWeaponPassedHalfwayPoint[ weapon ] )
+		return
+
+	bool isHalfway = evoXp <= DormantHopups_GetThresholdOfActivation( SURVIVAL_GetLootDataFromWeapon( weapon ) ) / 2
+	if ( isHalfway )
+	{
+		file.dormantHopupWeaponPassedHalfwayPoint[ weapon ] <- true
+		EmitSoundOnEntity( weapon, DORMANT_HOPUP_PROGRESS_SFX )
+	}
+}
+
+void function ServerToClient_DormantHopups_SlingWeaponSwitched( entity player )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return
+
+	if ( !IsValid( player ) )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	DormantHopups_UpdateProgressRui( player, true, false, false, true )
+}
+
+void function ServerToClient_DoHopupUnlockFx( entity weapon )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return
+
+	entity player = GetLocalViewPlayer()
+
+	if ( !IsValid( player ) || !IsValid( weapon ) )
+		return
+
+	EmitSoundOnEntity( weapon, DORMANT_HOPUP_ACTIVATION_SFX )
+
+	if ( player.GetActiveWeapon( eActiveInventorySlot.mainHand ) == weapon )
+	{
+
+
+
+
+
+
+
+		thread DormantHopups_PlayCockpitVFX_Thread( player, DORMANT_HOPUP_ACTIVATION_COCKPIT_FX )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function DormantHopups_UpdateProgressRui( entity player, bool weaponChanged = false, bool justActivated = false, bool weaponPickedUp = false, bool isSlingWeapon = false )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return
+
+	if ( !IsValid( player ) )
+		return
+
+	var weaponRui = ClWeaponStatus_GetWeaponHudRui( player )
+
+	if ( weaponRui == null || !RuiIsAlive( weaponRui ) )
+		return
+
+	bool finalProgressBarVisible = false
+	bool finalNotifVisible = false
+
+	
+	if ( file.dormantHopupRui == null || !RuiIsAlive( file.dormantHopupRui ) )
+	{
+		RuiDestroyNestedIfAlive( weaponRui, "hopupProgressHandle" )
+
+
+
+
+
+
+
+		{
+			file.dormantHopupRui = RuiCreateNested( weaponRui, "hopupProgressHandle", $"ui/weapon_hopup_progress_bar.rpak" )
+		}
+	}
+
+	
+	if ( file.dormantHopupNotifRui == null || !RuiIsAlive( file.dormantHopupNotifRui ) )
+	{
+		RuiDestroyNestedIfAlive( weaponRui, "hopupNotifHandle" )
+		file.dormantHopupNotifRui = RuiCreateNested( weaponRui, "hopupNotifHandle", $"ui/weapon_hopup_notification.rpak" )
+	}
+
+	entity weapon = DormantHopups_IsActiveWeaponADormantHopupWeapon() ? player.GetActiveWeapon( eActiveInventorySlot.mainHand ) : null
+	int evoXp = DormantHopups_GetPoints( weapon )
+
+	
+	
+	
+	RuiSetBoolIfExists( file.dormantHopupRui, "weaponPickedUp", weaponPickedUp )
+	RuiSetBoolIfExists( file.dormantHopupRui, "weaponChangedFlag", weaponChanged )
+
+	RuiSetBoolIfExists( file.dormantHopupNotifRui, "weaponPickedUp", weaponPickedUp )
+	RuiSetBoolIfExists( file.dormantHopupNotifRui, "weaponChangedFlag", weaponChanged )
+
+	if( isSlingWeapon || !IsValid( weapon ) || (weapon.GetWeaponClassName() == "") )
+	{
+		RuiSetBoolIfExists( file.dormantHopupRui, "showHopupProgressBar", false )
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "showHopupProgressBar", false )
+
+		RuiSetIntIfExists(  file.dormantHopupRui, "hopupTier", 0 )
+		RuiSetIntIfExists(  file.dormantHopupNotifRui, "hopupTier", 0 )
+
+		RuiSetBoolIfExists( file.dormantHopupRui, "justActivated", false )
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "justActivated", false )
+
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "notifSettingOn", false )
+
+		HopupPopupQueue_SetDormantHopupProgress( false )
+		HopupPopupQueue_SetDormantHopupNotif( false )
+
+		return
+	}
+
+	LootData data = SURVIVAL_GetLootDataFromWeapon( weapon )
+	bool isUnlocked = DormantHopups_IsHopupUnlocked( weapon, data )
+	int hopupTier = DormantHopups_GetHopupTier( data, isUnlocked )
+	asset icon = DormantHopups_GetHopupIcon( data )
+	asset arsenalIcon = Arsenals_GetArsenalIconFromWeaponData( data )
+	string hopupName = Localize( DormantHopups_GetHopupTitle( data  ) )
+	string hopupDesc = Localize( DormantHopups_GetHopupDescription( data, isUnlocked  ) )
+
+	bool notifSettingOn = DisplayHopupPopup()
+
+	if ( !DormantHopups_IsEnabled() || evoXp == 0 || isUnlocked )
+	{
+		RuiSetBoolIfExists( file.dormantHopupRui, "showHopupProgressBar", false )
+		RuiSetIntIfExists(  file.dormantHopupRui, "hopupTier", hopupTier )
+
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "showHopupProgressBar", false )
+		RuiSetIntIfExists(  file.dormantHopupNotifRui, "hopupTier", hopupTier )
+
+		RuiSetBoolIfExists( file.dormantHopupRui, "justActivated", justActivated )
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "justActivated", justActivated )
+
+		
+		RuiSetStringIfExists( file.dormantHopupNotifRui, "hopupDesc", hopupDesc )
+
+		
+		RuiSetImageIfExists( file.dormantHopupNotifRui, "hopupIcon", icon )
+		RuiSetStringIfExists( file.dormantHopupNotifRui, "hopupName", hopupName )
+		RuiSetImageIfExists( file.dormantHopupNotifRui, "arsenalIcon", arsenalIcon )
+
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "notifSettingOn", notifSettingOn )
+
+		finalProgressBarVisible = false
+		finalNotifVisible = false
+	}
+	else
+	{
+
+
+
+		int totalDamageToEvolve =  DormantHopups_GetThresholdOfActivation( data )
+
+		int currentTierExp =  totalDamageToEvolve - evoXp
+
+		
+		RuiSetBoolIfExists( file.dormantHopupRui, "showHopupProgressBar", true )
+		RuiSetIntIfExists( file.dormantHopupRui, "numPoints", currentTierExp )
+		RuiSetIntIfExists( file.dormantHopupRui, "numPointsNeeded", totalDamageToEvolve )
+		RuiSetImageIfExists( file.dormantHopupRui, "hopupIcon", icon )
+		RuiSetIntIfExists(  file.dormantHopupRui, "hopupTier", hopupTier )
+
+		
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "showHopupProgressBar", true )
+		RuiSetImageIfExists( file.dormantHopupNotifRui, "hopupIcon", icon )
+		RuiSetIntIfExists(  file.dormantHopupNotifRui, "hopupTier", hopupTier )
+		RuiSetStringIfExists( file.dormantHopupNotifRui, "hopupName", hopupName )
+		RuiSetStringIfExists( file.dormantHopupNotifRui, "hopupDesc", hopupDesc )
+		RuiSetImageIfExists( file.dormantHopupNotifRui, "arsenalIcon", arsenalIcon )
+
+		RuiSetBoolIfExists( file.dormantHopupNotifRui, "notifSettingOn", notifSettingOn )
+
+		finalProgressBarVisible = true
+		finalNotifVisible = true
+
+
+
+
+
+
+
+
+
+		if ( !isUnlocked && weaponChanged && !weaponPickedUp )
+		{
+			RuiSetBoolIfExists( file.dormantHopupNotifRui, "showHopupProgressBar", false )
+			finalNotifVisible = false
+		}
+
+	}
+
+	HopupPopupQueue_SetDormantHopupProgress( finalProgressBarVisible )
+	HopupPopupQueue_SetDormantHopupNotif( finalNotifVisible )
+}
+
+void function DormantHopups_DisplayToggleHintIfAble( entity weapon )
+{
+	if ( DormantHopups_WeaponHasFireModeSelect( weapon ) )
+		AddPlayerHint( 3.0, 0.25, $"", "#WPN_HOPUP_SELECTFIRE_POPUP_DESC" )
+}
+
+bool function DormantHopups_WeaponHasFireModeSelect( entity weapon )
+{
+	if ( DoesModExist( weapon, "hopup_selectfire" ) && IsModActive( weapon, "hopup_selectfire" ) )
+		return true
+
+
+
+
+	else if ( DoesModExist( weapon, "hopup_double_tap" ) && IsModActive( weapon, "hopup_double_tap" ) )
+		return true
+
+	return false
+}
+
+void function DormantHopups_PlayCockpitVFX_Thread( entity player, asset cockpitFx )
+{
+	if ( !IsValid( player ) )
+		return
+
+	Signal ( player, SIGNAL_DORMANT_HOPUP_FORCE_END_VFX )
+
+	EndSignal( player, "OnDeath", "OnDestroy", SIGNAL_DORMANT_HOPUP_FORCE_END_VFX )
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	if ( EffectDoesExist( file.dormantHopupScreenFxHandle ) )
+		return
+
+	int fxID = GetParticleSystemIndex( cockpitFx )
+	file.dormantHopupScreenFxHandle = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( file.dormantHopupScreenFxHandle, true )
+	EffectSetControlPointVector( file.dormantHopupScreenFxHandle, 1, UNLOCK_EFFECT_COLOR )
+
+	OnThreadEnd( function() {
+		if ( EffectDoesExist( file.dormantHopupScreenFxHandle ) )
+			EffectStop( file.dormantHopupScreenFxHandle, false, true )
+	} )
+
+	wait 2
+}
+
+void function DormantHopups_PickedUpWeapon( entity player, LootData data, int lootAction )
+{
+	if ( data.lootType != eLootType.MAINWEAPON )
+		return
+
+	if ( !DormantHopups_WeaponHasDormantHopupInBaseMods( data ) )
+		return
+
+	file.dormantHopupJustPickedUpWeapon = true
+}
+
+void function DormantHopups_OnPlayerWeaponSwitched( entity player, entity newWeapon, entity oldWeapon )
+{
+	if ( !IsValid( player ) )
+		return
+
+	entity localPlayer = GetLocalViewPlayer()
+	if ( !IsValid( localPlayer ) || localPlayer != player )
+		return
+
+	bool wasPickedUp = file.dormantHopupJustPickedUpWeapon
+	file.dormantHopupJustPickedUpWeapon = false
+	DormantHopups_UpdateProgressRui( player, true, false, wasPickedUp )
+}
+
+int function DormantHopups_GetHopupTier( LootData weaponData, bool isActive  )
+{
+	string hopup = DormantHopups_GetDormantHopupFromBaseMods( weaponData )
+
+	if( hopup == "" )
+		return 0
+
+	if( isActive )
+	{
+		string hopupActive = DormantHopups_GetNonDormantHopupFromString( hopup )
+		LootData hopupDataActive = SURVIVAL_Loot_GetLootDataByRef( hopupActive )
+		return hopupDataActive.tier
+	}
+
+	LootData hopupDataBase = SURVIVAL_Loot_GetLootDataByRef( hopup )
+	return hopupDataBase.tier
+}
+
+asset function DormantHopups_GetHopupIcon( LootData weaponData  )
+{
+	string hopup = DormantHopups_GetDormantHopupFromBaseMods( weaponData )
+
+	if( hopup == "" )
+		return $""
+
+	LootData hopupData = SURVIVAL_Loot_GetLootDataByRef( hopup )
+
+	return hopupData.hudIcon
+}
+
+string function DormantHopups_GetHopupTitle( LootData weaponData  )
+{
+	string hopup = DormantHopups_GetDormantHopupFromBaseMods( weaponData )
+
+	if( hopup == "" )
+		return ""
+
+	LootData hopupData = SURVIVAL_Loot_GetLootDataByRef( hopup )
+
+	return hopupData.pickupString
+}
+
+string function DormantHopups_GetHopupDescription( LootData weaponData, bool isActive  )
+{
+	string hopup = DormantHopups_GetDormantHopupFromBaseMods( weaponData )
+
+	if( hopup == "" )
+		return ""
+
+	if( isActive )
+	{
+		string hopupActive = DormantHopups_GetNonDormantHopupFromString( hopup )
+		LootData hopupDataActive = SURVIVAL_Loot_GetLootDataByRef( hopupActive )
+		return hopupDataActive.hopupPopupDesc
+	}
+
+	LootData hopupDataBase = SURVIVAL_Loot_GetLootDataByRef( hopup )
+	return hopupDataBase.hopupPopupDesc
+}
+
+bool function DormantHopups_SetAttachmentCount( var rui, LootData attachData, int attachmentCount, string ruiArgName = "hopupAttachmentCount" )
+{
+	if ( !DormantHopups_IsEnabled() )
+		return false
+
+	if ( attachData.lootTags.contains( "LockedHopup" ) )
+	{
+		RuiSetIntIfExists( rui, ruiArgName, attachmentCount )
+		return true
+	}
+	return false
+}
+
+bool function DormantHopups_IsActiveWeaponADormantHopupWeapon()
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return false
+
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+	if ( !IsValid( activeWeapon ) )
+		return false
+
+	bool isSlingWeapon = GetSlotForWeapon( player, activeWeapon ) == SLING_WEAPON_SLOT
+	if ( isSlingWeapon )
+		return false
+
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( activeWeapon )
+	if ( DormantHopups_GetPoints( activeWeapon ) > 0 || DormantHopups_IsHopupUnlocked( activeWeapon, weaponData ) )
+		return true
+
+	return false
+
+}
+
+void function OnSpectateTargetChanged( entity spectatingPlayer, entity oldSpectatorTarget, entity newSpectatorTarget )
+{
+	if ( !IsValid( newSpectatorTarget ) )
+		return
+
+	DormantHopups_UpdateProgressRui( newSpectatorTarget, true, false, false, false )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________________Analytics_____________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________________DEV_Only_____________________(){}
+#endif
+
+#if DEV
+void function DormantHopups_DEVPrintCurrentWeaponAnalytics()
+{
+	if ( !SHOW_DEBUG )
+		return
+
+	entity player = gp()[0]
+	entity latestWeapon = player.GetLatestPrimaryWeapon( eActiveInventorySlot.mainHand )
+
+	if ( !( player in file.playerWeaponsPointSourceTable ) )
+	{
+		printt( "PLAYER NOT IN TABLE" )
+		return
+	}
+
+	if ( !( latestWeapon in file.playerWeaponsPointSourceTable[player] ) )
+	{
+		printt( "WEAPON NOT IN PLAYER TABLE" )
+		return
+	}
+
+	foreach( val, key in file.playerWeaponsPointSourceTable[player][latestWeapon] )
+	{
+		printt( "FINAL SOURCE:" + val + " has " + key + " points." )
+	}
+}
+void function DormantHopups_PrintCurrentWeaponPoints()
+{
+	entity latestWeapon = gp()[0].GetLatestPrimaryWeapon( eActiveInventorySlot.mainHand )
+	printt ( "DORMANT HOPUPS: " + latestWeapon + " points are currently " + latestWeapon.GetLockedHopupPoints() )
+}
+
+void function DormantHopups_ResetCurrentWeaponPoints()
+{
+	entity latestWeapon = gp()[0].GetLatestPrimaryWeapon( eActiveInventorySlot.mainHand )
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( latestWeapon )
+	if ( DormantHopups_IsHopupUnlocked( latestWeapon, weaponData ) )
+	{
+		printt ( "DORMANT HOPUPS: Can't unlock hop-up on " + latestWeapon + " because it is already unlocked."  )
+		return
+	}
+
+
+
+
+
+
+
+	printt ( "DORMANT HOPUPS: " + latestWeapon + " points reset." )
+}
+
+void function DormantHopups_UnlockCurrentWeaponHopup()
+{
+	entity latestWeapon = gp()[0].GetLatestPrimaryWeapon( eActiveInventorySlot.mainHand )
+
+
+
+
+
+	printt ( "DORMANT HOPUPS: " + latestWeapon + " hop-up enabled." )
+}
+#endif
+
+       

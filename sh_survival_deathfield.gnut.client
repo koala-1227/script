@@ -1,0 +1,6814 @@
+global function Sh_ArenaDeathField_Init
+
+
+
+
+
+
+global function TeamShouldSeeBeaconMarker
+
+global function GetRingTuningOverrideVar
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Cl_Deathfield_GetRadiusScale
+global function Cl_Deathfield_GetFXIDForRadius
+global function Cl_Deathfield_GetFXIDForOuterRadius
+#if DEV
+global function Cl_Deathfield_SetOpacityOverride
+#endif
+global function Cl_GetDeathFieldStage
+global function Cl_SURVIVAL_GetDeathField
+global function Cl_SURVIVAL_GetDeathFieldCurrentRadius
+global function Cl_SURVIVAL_GetDeathFieldCenter
+global function Cl_SURVIVAL_GetSafeZoneCenter
+global function Cl_SURVIVAL_PosInsideRing
+global function Cl_SURVIVAL_PosInSafeZone
+global function ServerCallback_UpdateSurveyBeaconHUDVisibility
+global function ServerCallback_SurveyBeaconNotifications
+global function SURVIVAL_Deathfield_GetStartRadius
+global function SURVIVAL_AddCallback_OnDeathFieldStartShrink
+global function SURVIVAL_AddCallback_OnDeathFieldStopShrink
+global function UpdateSurveyBeaconHint
+global function SurveyBeacon_ShowSquadInfo
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function HasDeathFieldImmunity
+global function Deathfield_GetDoesDeathfieldStartEnabled
+global function SURVIVAL_GetCurrentDeathFieldStage
+global function SURVIVAL_GetCurrentRoundString
+global function SURVIVAL_IsFinalDeathFieldStage
+global function Survival_GetNumDeathfieldStages
+
+global function AddCallback_OnSurvivalDeathFieldStageChanged
+global function ContainsCallback_OnSurvivalDeathFieldStageChanged
+global function RemoveCallback_OnSurvivalDeathFieldStageChanged
+
+
+
+
+
+global function HasActiveSurveyZone
+global function GetActiveSurveyZone
+global function TeamHasActiveSurveyZone
+
+
+
+
+
+
+
+
+
+
+
+
+global function SurvivalDeathfield_SetDeathfieldFXSettings
+
+
+
+table < float, string > distanceToSound =
+{
+	[ 17000.0 ] = "Survival_Circle_Edge_Large",
+	[ 4000.0 ] = "Survival_Circle_Edge_Medium",
+	[ 0.0 ] = "Survival_Circle_Edge_Small",
+}
+
+
+const asset DEATHFIELD_EFFECT = $"P_ring_FP_hit_01"
+const string COLOR_CORRECTION = "materials/correction/outside_ring.raw_hdr"
+const asset OBSERVER_DEATHFIELD_EFFECT = $"P_Observer_outside_heat_1p"
+
+const string DESIGNER_PLACED_CIRCLE_END_SCRIPT_NAME = "circle_end_location_override"
+const string DESIGNER_PLACED_CIRCLE_END_RADIUS_NAME = "selection_radius"
+
+const string DESIGNER_PLACED_CIRCLE_END_PLAYLIST_VAR = "sur_circle_end_on_designer_placed_node"
+const string DESIGNER_PLACED_TARGET_END_PLAYLIST_VAR = "sur_circle_end_on_target_name"
+const string CIRCLE_END_OVERRIDE_PLAYLIST_VAR = "sur_circle_end_override"
+
+global const float REALBIG_CIRCLE_END_RADIUS = 85000
+global const float REALBIG_CIRCLE_END_RADIUS_SQ = REALBIG_CIRCLE_END_RADIUS * REALBIG_CIRCLE_END_RADIUS
+
+global const float REALBIG_CIRCLE_END_RADIUS_SMALL_INNER = 30000
+global const float REALBIG_CIRCLE_END_RADIUS_SMALL_OUTER = 40000
+
+global const float DEATHFIELD_DAMAGE_CHECK_STEP_TIME = 1.5
+global const string FINAL_ROUND_ALIAS_SUFFIX = "Final"
+
+global const float PERSIST_TIME_OUTSIDE_CIRCLE_DEFAULT = 30.0
+global const float PERSIST_TIME_OUTSIDE_CIRCLE_LONG = 9999.0
+global const float LOOT_CLEANUP_BUFFER_RADIUS = 6000 
+
+global const string NV_OBSERVER_SURVERY_RING_ENABLED = "PrivateMatch_Observer_SurveyRingEnabled"
+
+global enum ePathfinderNotifications
+{
+	TEAM_SUCCESS
+	NOT_PATHFINDER
+	ALREADY_USED
+	ALREADY_ACTIVE
+}
+
+
+
+
+
+
+
+
+
+
+const int ID_INVALID = -1
+global const float RING_START_WAIT_TIME = 5.0
+global const float MARGIN_WAIT_TIME = 5.0
+global const float END_MARGIN_WAIT_TIME = 4.0
+const asset SURVEY_BEACON_MODEL = $"mdl/props/pathfinder_beacon_radar/pathfinder_beacon_radar_animated.rmdl"
+const asset NEXT_ZONE_SURVEY_BEACON_MODEL = $"mdl/communication/terminal_usable_imc_01.rmdl"
+
+#if DEV
+const string DUMMY_ZONE_WP_NAME = "dev_dummy_circle"
+#endif
+
+global struct DeathFieldStageData
+{
+	float  endRadius
+	float  shrinkDuration
+	float  preShrinkDuration
+	float  percentDamagePerTick = 0.2
+	float  circleDeviation = 1.0
+	float  minimapZoomScale = -1.0
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global struct SurvivalDeathfieldFXSettings
+{
+	string colorCorrection														= ""
+	asset deathfieldEffect														= $""
+	asset observerDeathfieldEffect												= $""
+	array<int> deathfieldInnerOpacityFxIdx										= []
+	array<int> deathfieldOuterOpacityFxIdx										= []
+	array<int> deathfieldInnerPreciseFxIdx										= []
+	array<int> deathfieldOuterPreciseFxIdx										= []
+	array<int> deathfieldInnerFxIdx												= []
+	array<int> deathfieldOuterFxIdx												= []
+	float fxTransitionTime														= 0.0
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	array<DeathFieldStageData> deathFieldStageData
+
+	float					   	overrideStartRadius = -1
+	array<float>			   	deathFieldStagesOverrideRadius
+	array<float>			   	deathFieldStagesOverrideMinimapZoom
+	int                        	deathFieldStartStage
+	array<entity>               surveyMinimapEnts
+	entity                      observerSurveyMinimapEnt
+	array<entity>               surveyBeacons
+
+
+		entity deathField
+		entity safeZone
+		array< void functionref ( DeathFieldStageData ) > ClientCallbacks_OnDeathFieldStartShrink
+		array< void functionref ( DeathFieldStageData ) > ClientCallbacks_OnDeathFieldStopShrink
+		int                                               colorCorrection
+		float                                             nextHolsterHintTime
+		bool											  trackingObserverDeathfield
+		int												  fieldEffectHandle
+		float 											  ringOpacityOverrideValue
+		array< int > 									  deathFieldFxIdx
+		array< int > 									  deathFieldFxOuterIdx
+
+		float 											  observer_1p_deathFieldTintStrength
+		float											  observer_3p_deathFieldTintStrength
+
+
+	array<void functionref( int stage, float nextCircleStartTime )> onSurvivalDeathFieldStageChangedCallbacks
+
+	bool usePreciseRingFx
+	bool ringOpacityOverrideEnabled
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	SurvivalDeathfieldFXSettings customDeathfieldFXSettings
+
+} file
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Sh_ArenaDeathField_Init()
+{
+	PrecacheScriptString( "deathField" )
+
+
+	PrecacheScriptString( ENEMY_SURVEY_BEACON_SCRIPTNAME )
+	PrecacheScriptString( NEXT_ZONE_SURVEY_BEACON_SCRIPTNAME )
+
+
+
+
+	PrecacheParticleSystem( $"P_sort_survival_radius_CP_1x1" )
+	PrecacheParticleSystem( $"P_sort_survival_radius_CP_1x5" )
+	PrecacheParticleSystem( $"P_sort_survival_radius_CP_1x100" )
+
+	PrecacheParticleSystem( $"P_sort_survival_radius_CP_1k_x_1k" )
+	PrecacheParticleSystem( $"P_sort_survival_radius_CP_1k_x_5k" )
+	PrecacheParticleSystem( $"P_sort_survival_radius_CP_1k_x_100k" )
+
+	PrecacheParticleSystem( $"P_sort_ring_radCP1_opaCP2_1k_x_1k" )
+	PrecacheParticleSystem( $"P_sort_ring_radCP1_opaCP2_1k_x_5k" )
+	PrecacheParticleSystem( $"P_sort_ring_radCP1_opaCP2_1k_x_100k" )
+
+	PrecacheParticleSystem( $"outside_survival_radius_CP_1x1" )
+	PrecacheParticleSystem( $"outside_survival_radius_CP_1x5" )
+	PrecacheParticleSystem( $"outside_survival_radius_CP_1x100" )
+
+	PrecacheParticleSystem( $"outside_survival_radius_CP_1k_x_1k" )
+	PrecacheParticleSystem( $"outside_survival_radius_CP_1k_x_5k" )
+	PrecacheParticleSystem( $"outside_survival_radius_CP_1k_x_100k" )
+
+	PrecacheParticleSystem( $"outside_ring_radCP1_opaCP2_1k_x_1k" )
+	PrecacheParticleSystem( $"outside_ring_radCP1_opaCP2_1k_x_5k" )
+	PrecacheParticleSystem( $"outside_ring_radCP1_opaCP2_1k_x_100k" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	file.usePreciseRingFx = GetCurrentPlaylistVarBool( "deathfield_usePreciseRingFx", true )
+
+	RegisterNetworkedVariable( "hasDeathFieldImmunity", SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL, false )
+	RegisterNetworkedVariable( "currentDeathFieldStage", SNDC_GLOBAL, SNVT_INT, -1 )
+	RegisterNetworkedVariable( "nextCircleStartTime", SNDC_GLOBAL, SNVT_TIME, -1 )
+	RegisterNetworkedVariable( "circleCloseTime", SNDC_GLOBAL, SNVT_TIME, -1 )
+
+	Remote_RegisterClientFunction( "ServerCallback_AnnounceCircleClosing" )
+	Remote_RegisterClientFunction( "ServerCallback_SurveyBeaconNotifications", "entity", "int", 0, 8 )
+	Remote_RegisterClientFunction( "ServerCallback_UpdateSurveyBeaconHUDVisibility" )
+
+	file.ringOpacityOverrideEnabled = GetCurrentPlaylistVarBool( "deathfield_ringOpacityOverrideEnabled", true )
+	if ( file.ringOpacityOverrideEnabled )
+	{
+		RegisterNetworkedVariable( "ringOpacityOverride", SNDC_GLOBAL, SNVT_FLOAT_RANGE, 1.0, 0.0, 1.0 )
+	}
+
+	PrecacheParticleSystem( DEATHFIELD_EFFECT )
+	PrecacheParticleSystem( OBSERVER_DEATHFIELD_EFFECT )
+
+	RegisterSignal( "NewDeathFieldStarting" )
+	RegisterSignal( "UpdateSurveyBeaconVisibility" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if( Deathfield_EnforcedRingLethality_Enabled() )
+		{
+			Sh_DeathField_EnforcedRingLethality_Init()
+		}
+
+
+
+
+
+
+
+
+
+
+	InitDeathFieldDataAndStageData()
+
+
+		string colorCorrectionString = (file.customDeathfieldFXSettings.colorCorrection.len() == 0) ? COLOR_CORRECTION : file.customDeathfieldFXSettings.colorCorrection
+		file.colorCorrection = ColorCorrection_Register( colorCorrectionString )
+
+		file.observer_1p_deathFieldTintStrength = GetCurrentPlaylistVarFloat( "observer_1p_deathFieldTintStrength", 0.4 )
+		file.observer_3p_deathFieldTintStrength = GetCurrentPlaylistVarFloat( "observer_3p_deathFieldTintStrength", 0.6 )
+
+		FlagInit( "DeathFieldStartClient", false )
+
+		AddCreateCallback( "prop_per_team_networked", OnPropScriptCreated )
+		AddCreateCallback( "script_mover", OnPropScriptCreated )
+		AddCreateCallback( "prop_script", OnPropScriptCreated )
+		AddCreateCallback( "prop_dynamic", OnPropDynamicCreated )
+		AddCallback_PlayerClassChanged( SurveyBeaon_ClassChanged )
+
+		AddCallback_OnViewPlayerChanged( OnViewPlayerChanged )
+
+		AddCreatePilotCockpitCallback( TrackDeathfieldDistance )
+		AddLocalPlayerTookDamageTypeCallback( eDamageSourceId.deathField, Callback_OnPlayerTakeDeathFieldDamage )
+#if DEV
+			Waypoints_RegisterCustomType( DUMMY_ZONE_WP_NAME, DEV_OnDummyCircleWpInstanced )
+#endif
+
+		SurveyBeacon_AddSurveyBeaconMinimapPackage()
+
+		if ( GetCurrentPlaylistVarBool( "deathfield_sound_override", false ) )
+		{
+			distanceToSound.clear()
+			int idx = 0
+			float lastDist = 0
+			while ( GetCurrentPlaylistVarString( "deathfield_sound_override_stage_" + idx, "" ) != "" )
+			{
+				string override = GetCurrentPlaylistVarString( "deathfield_sound_override_stage_" + idx, "" )
+				array<string> tokens = split( override, ":" )
+
+				Assert( tokens.len() == 2 )
+				float dist = float( tokens[0] )
+				string audio = tokens[1]
+
+				if ( idx > 0 )
+				{
+					Assert( dist < lastDist )
+				}
+
+				lastDist = dist
+				distanceToSound[ dist ] <- audio
+				idx++
+			}
+
+			Assert( distanceToSound.len() > 0 )
+		}
+
+		if ( GetCurrentPlaylistVarBool( "deathfield_opacity_override", true ) )
+		{
+			if ( GetCurrentPlaylistVarFloat( "deathfield_ringOpacityOverrideValue", 1.0 ) != 1.0 )
+			{
+				file.ringOpacityOverrideValue = GetCurrentPlaylistVarFloat( "deathfield_ringOpacityOverrideValue", 1.0 )
+			}
+			else
+			{
+				RegisterNetVarFloatChangeCallback( "ringOpacityOverride", Cl_Deathfield_SetOpacityOverride )
+			}
+		}
+
+		if ( file.ringOpacityOverrideEnabled )
+		{
+			if ( file.customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx.len() > 0 )
+			{
+				file.deathFieldFxIdx.clear()
+				file.deathFieldFxIdx.extend( file.customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx )
+			}
+			else
+			{
+				file.deathFieldFxIdx = [ GetParticleSystemIndex( $"P_sort_ring_radCP1_opaCP2_1k_x_1k" ), GetParticleSystemIndex( $"P_sort_ring_radCP1_opaCP2_1k_x_5k" ), GetParticleSystemIndex( $"P_sort_ring_radCP1_opaCP2_1k_x_100k" ) ]
+			}
+
+			if ( file.customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx.len() > 0 )
+			{
+				file.deathFieldFxOuterIdx.clear()
+				file.deathFieldFxOuterIdx.extend( file.customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx )
+			}
+			else
+			{
+				file.deathFieldFxOuterIdx = [ GetParticleSystemIndex( $"outside_ring_radCP1_opaCP2_1k_x_1k" ), GetParticleSystemIndex( $"outside_ring_radCP1_opaCP2_1k_x_5k" ), GetParticleSystemIndex( $"outside_ring_radCP1_opaCP2_1k_x_100k" ) ]
+			}
+		}
+		else if ( file.usePreciseRingFx )
+		{
+			if ( file.customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx.len() > 0 )
+			{
+				file.deathFieldFxIdx.clear()
+				file.deathFieldFxIdx.extend( file.customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx )
+			}
+			else
+			{
+				file.deathFieldFxIdx = [ GetParticleSystemIndex( $"P_sort_survival_radius_CP_1k_x_1k" ), GetParticleSystemIndex( $"P_sort_survival_radius_CP_1k_x_5k" ), GetParticleSystemIndex( $"P_sort_survival_radius_CP_1k_x_100k" ) ]
+			}
+
+			if ( file.customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx.len() > 0 )
+			{
+				file.deathFieldFxOuterIdx.clear()
+				file.deathFieldFxOuterIdx.extend( file.customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx )
+			}
+			else
+			{
+				file.deathFieldFxOuterIdx = [ GetParticleSystemIndex( $"outside_survival_radius_CP_1k_x_1k" ), GetParticleSystemIndex( $"outside_survival_radius_CP_1k_x_5k" ), GetParticleSystemIndex( $"outside_survival_radius_CP_1k_x_100k" ) ]
+			}
+		}
+		else
+		{
+			if ( file.customDeathfieldFXSettings.deathfieldInnerFxIdx.len() > 0 )
+			{
+				file.deathFieldFxIdx.clear()
+				file.deathFieldFxIdx.extend( file.customDeathfieldFXSettings.deathfieldInnerFxIdx )
+			}
+			else
+			{
+				file.deathFieldFxIdx = [ GetParticleSystemIndex( $"P_sort_survival_radius_CP_1x1" ), GetParticleSystemIndex( $"P_sort_survival_radius_CP_1x5" ), GetParticleSystemIndex( $"P_sort_survival_radius_CP_1x100" ) ]
+			}
+
+			if ( file.customDeathfieldFXSettings.deathfieldOuterFxIdx.len() > 0 )
+			{
+				file.deathFieldFxOuterIdx.clear()
+				file.deathFieldFxOuterIdx.extend( file.customDeathfieldFXSettings.deathfieldOuterFxIdx )
+			}
+			else
+			{
+				file.deathFieldFxOuterIdx = [ GetParticleSystemIndex( $"outside_survival_radius_CP_1x1" ), GetParticleSystemIndex( $"outside_survival_radius_CP_1x5" ), GetParticleSystemIndex( $"outside_survival_radius_CP_1x100" ) ]
+			}
+		}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GenerateDeathFieldStageData()
+{
+	file.deathFieldStageData.clear()
+
+	int i = 0
+	while ( true )
+	{
+		float radius = GetRingTuningOverrideVar( "deathfield_radius_" + i, -1.0 )
+
+		bool allowMissingDefaults = false
+		if ( radius < 0 )
+		{
+			if ( file.deathFieldStageData.len() > 0 )
+			{
+				break
+			}
+			else
+			{
+				Warning( "Survival deathfield playlist vars are missing!" )
+				allowMissingDefaults = true
+			}
+		}
+
+		file.deathFieldStageData.append( CreateDeathFieldStageData( i++, allowMissingDefaults ) )
+	}
+}
+
+float function GetRingTuningOverrideVar( string varName, float defaultValue )
+{
+
+	if ( GetCurrentPlaylistVarBool ("deathfield_allows_override", true ) )
+	{
+		
+		const string NO_RING_TUNING_OVERRIDE = ""
+		string tuningOverridePlaylist = GetCurrentPlaylistVarString ( "playlist_ring_tuning_override", NO_RING_TUNING_OVERRIDE )
+
+		if ( tuningOverridePlaylist != NO_RING_TUNING_OVERRIDE )
+		{
+			
+			return GetPlaylistVarFloat( tuningOverridePlaylist, varName, defaultValue )
+		}
+	}
+	return GetCurrentPlaylistVarFloat( varName, defaultValue )
+
+}
+
+DeathFieldStageData function CreateDeathFieldStageData( int index, bool allowMissingDefaults )
+{
+	float lastRadius = SURVIVAL_Deathfield_GetStartRadius()
+
+	if ( file.deathFieldStageData.len() > 0 )
+	{
+		lastRadius = file.deathFieldStageData[ file.deathFieldStageData.len() - 1 ].endRadius
+	}
+
+	bool circleDebug = GetBugReproNum() == 1001
+
+	int currentIndex = file.deathFieldStageData.len()
+
+	float defaultSpeed     = GetRingTuningOverrideVar( "deathfield_default_shrinkSpeed", 140.0 )
+	float shrinkSpeed      = GetRingTuningOverrideVar( "deathfield_shrinkSpeed_" + index, -1.0 )
+	float circleCloseSpeed = shrinkSpeed > 0 ? shrinkSpeed : defaultSpeed 
+
+	DeathFieldStageData data
+	data.circleDeviation = GetRingTuningOverrideVar( "deathfield_circleDeviation_" + index, 1.0 )
+
+	if ( index < file.deathFieldStagesOverrideRadius.len() )
+		data.endRadius = file.deathFieldStagesOverrideRadius[ index ]
+	else
+		data.endRadius = GetRingTuningOverrideVar( "deathfield_radius_" + index, allowMissingDefaults ? 20000.0 : -1.0 )
+
+	if ( index < file.deathFieldStagesOverrideMinimapZoom.len() )
+		data.minimapZoomScale = file.deathFieldStagesOverrideMinimapZoom[ index ]
+	else if ( data.endRadius <= 600 )
+		data.minimapZoomScale = 0.1
+	else if ( data.endRadius <= 1000 )
+		data.minimapZoomScale = 0.7
+	else if ( data.endRadius <= 2000 )
+		data.minimapZoomScale = 1.5
+	else if ( data.endRadius <= 5000 )
+		data.minimapZoomScale =  3.0
+
+	data.preShrinkDuration = GetRingTuningOverrideVar( "deathfield_preShrinkDuration_" + index, allowMissingDefaults ? 240.0 : -1.0 )
+	data.shrinkDuration = ((lastRadius - data.endRadius) / circleCloseSpeed)
+	data.percentDamagePerTick = GetRingTuningOverrideVar( "deathfield_damagePercent_" + index, allowMissingDefaults ? 0.01 : -1.0 )
+
+
+
+
+	Assert( data.endRadius > 0 )
+	Assert( data.preShrinkDuration > 0 )
+	Assert( data.shrinkDuration > 0 )
+	Assert( data.percentDamagePerTick >= 0 )
+
+	if ( circleDebug )
+	{
+		data.preShrinkDuration = 10.0
+	}
+
+	return data
+}
+
+
+void function InitDeathFieldDataAndStageData()
+{
+	file.deathFieldStartStage = 0
+
+	GenerateDeathFieldStageData()
+
+	file.deathFieldStartStage = GetCurrentPlaylistVarInt( "survival_death_field_start_stage", 0 )
+	if ( file.deathFieldStartStage >= file.deathFieldStageData.len() )
+		file.deathFieldStartStage = file.deathFieldStageData.len()
+}
+
+
+float function SURVIVAL_Deathfield_GetStartRadius()
+{
+	float startRadius = GetRingTuningOverrideVar( "survival_death_field_start_radius", 65000 )
+
+	if ( file.deathFieldStartStage > 0 )
+	{
+		startRadius = file.deathFieldStageData[file.deathFieldStartStage - 1].endRadius
+	}
+	else if (file.overrideStartRadius > 0)
+	{
+		startRadius = file.overrideStartRadius
+	}
+
+	return startRadius
+}
+
+float function SURVIVAL_Deathfield_GetStartDamage()
+{
+	int startStage = maxint( file.deathFieldStartStage - 1, 0 )
+
+	return file.deathFieldStageData[startStage].percentDamagePerTick
+}
+
+bool function TeamShouldSeeBeaconMarker( int team, entity beacon )
+{
+	array<entity> players = GetPlayerArrayOfTeam( team )
+
+	bool shouldSee = false
+
+	foreach ( player in players )
+	{
+		if ( HasActiveSurveyZone( player ) )
+			return false
+
+		if ( PlayerShouldSeeSurveyBeaconMarkers( player, beacon ) && !HasActiveSurveyZone( player ) )
+			shouldSee = true
+	}
+
+	return shouldSee
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Deathfield_GetDoesDeathfieldStartEnabled()
+{
+	return GetCurrentPlaylistVarBool( "deathfield_start_enabled", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function SURVIVAL_AddCallback_OnDeathFieldStartShrink( void functionref( DeathFieldStageData ) callbackFunc )
+{
+	Assert( !file.ClientCallbacks_OnDeathFieldStartShrink.contains( callbackFunc ), "Already added " + string( callbackFunc ) + " with SURVIVAL_AddCallback_OnDeathFieldStartShrink" )
+	file.ClientCallbacks_OnDeathFieldStartShrink.append( callbackFunc )
+}
+
+void function SURVIVAL_AddCallback_OnDeathFieldStopShrink( void functionref( DeathFieldStageData ) callbackFunc )
+{
+	Assert( !file.ClientCallbacks_OnDeathFieldStopShrink.contains( callbackFunc ), "Already added " + string( callbackFunc ) + " with SURVIVAL_AddCallback_OnDeathFieldStopShrink" )
+	file.ClientCallbacks_OnDeathFieldStopShrink.append( callbackFunc )
+}
+
+
+void function UpdateSurveyBeaconHint()
+{
+	if ( GetCurrentPlaylistVarBool( "survey_beacons_enabled", true ) == false )
+		return
+
+	entity localClientPlayer = GetLocalClientPlayer()
+	entity player = localClientPlayer.GetTeam() == TEAM_SPECTATOR ? localClientPlayer : GetLocalViewPlayer()
+	if ( !PlayerShouldSeeSurveyBeaconMarkers( player, null ) )
+		RemoveMapFeatureItemByName( "#SURVEY_BEACON" )
+	else
+		SetMapFeatureItem( 100, "#SURVEY_BEACON", "#SURVEY_BEACON_DESC", $"rui/hud/gametype_icons/survival/survey_beacon_only_pathfinder" )
+}
+
+
+void function OnPropDynamicCreated( entity prop )
+{
+	string modelName = prop.GetModelName()
+	if ( modelName == "mdl/fx/bb_shield.rmdl" )
+	{
+		Chroma_OnBubbleShieldCreated( prop )
+	}
+}
+
+void function OnPropScriptCreated( entity prop )
+{
+	if ( prop.GetTargetName() == "surveyZone" )
+	{
+		file.surveyMinimapEnts.append( prop )
+		AddEntityDestroyedCallback( prop, SurveyZoneCleanupOnDestroy )
+
+		entity owner = prop.GetOwner()
+		entity localPlayer = GetLocalViewPlayer()
+		if ( IsValid( owner ) && owner.GetTeam() == localPlayer.GetTeam() )
+		{
+			string playerName  = localPlayer == owner ? Localize( "#OBITUARY_YOU" ) : owner.GetPlayerName()
+			Obituary_Print_Localized( Localize( "#PLAYER_REVEALED_NEXT_RING", playerName ) )
+		}
+	}
+
+	if ( prop.GetTargetName() == "deathField" )
+	{
+		file.deathField = prop
+
+		thread Cl_DeathFieldThink( prop )
+
+		var gamestateRui = ClGameState_GetRui()
+		array<var> ruis  = [gamestateRui]
+		var cameraRui    = GetCameraCircleStatusRui()
+		if ( IsValid( cameraRui ) )
+			ruis.append( cameraRui )
+
+		foreach ( rui in ruis )
+		{
+			RuiTrackFloat3( rui, "deathFieldOrigin", prop, RUI_TRACK_ABSORIGIN_FOLLOW )
+		}
+	}
+
+	if ( (prop.GetTargetName() == "safeZone") || (prop.GetTargetName() == "safeZone_noline") )
+	{
+		file.safeZone = prop
+
+		var gamestateRui = ClGameState_GetRui()
+		array<var> ruis  = [gamestateRui]
+		var cameraRui    = GetCameraCircleStatusRui()
+		if ( IsValid( cameraRui ) )
+			ruis.append( cameraRui )
+
+		foreach ( rui in ruis )
+		{
+			RuiTrackFloat3( rui, "safeZoneOrigin", prop, RUI_TRACK_ABSORIGIN_FOLLOW )
+		}
+	}
+
+	OnSurveyBeaconCreated( prop )
+}
+
+void function SurveyZoneCleanupOnDestroy( entity surveyZoneEnt )
+{
+	file.surveyMinimapEnts.fastremovebyvalue( surveyZoneEnt )
+}
+
+int function Cl_Deathfield_GetIndex( float radius )
+{
+	int idealIdx
+	if ( radius <= 3000 )
+	{
+		idealIdx = 2
+	}
+	else if ( radius <= 17000 )
+	{
+		idealIdx = 1
+	}
+	else
+	{
+		idealIdx = 0
+	}
+
+	return idealIdx
+}
+
+int function Cl_Deathfield_GetFXIDForRadius( float radius, bool allowExceptions = false )
+{
+	
+
+
+
+
+	
+
+	if( allowExceptions )
+	{
+		entity player = GetLocalViewPlayer()
+
+
+
+
+
+	}
+
+	int idealIdx = Cl_Deathfield_GetIndex( radius )
+	return file.deathFieldFxIdx[ idealIdx ]
+}
+
+int function Cl_Deathfield_GetFXIDForOuterRadius( float radius )
+{
+	int idealIdx = Cl_Deathfield_GetIndex( radius )
+	return file.deathFieldFxOuterIdx[ idealIdx ]
+}
+
+void function Cl_DeathFieldThink( entity deathField )
+{
+	deathField.SetDoDestroyCallback( true )
+	deathField.EndSignal( "OnDestroy" )
+
+	deathField.EnableClientFieldInterpolation( true )
+
+	int playerIndex = GetLocalViewPlayer().DeathFieldIndex()
+	bool deathFieldActive = DeathField_IsActive( playerIndex )
+	int curFxIdx = deathFieldActive ? Cl_Deathfield_GetIndex( DeathField_GetRadiusForNow( playerIndex ) ) : Cl_Deathfield_GetIndex( 64000.0 )
+
+	
+	
+	array< int > ringFXArr = []
+	array< int > ringFXArrOuter = []
+	for ( int i = 0; i < 3; i++ )
+	{
+		if ( deathFieldActive )
+		{
+			if ( i < curFxIdx )
+			{
+				ringFXArr.append( INVALID_RETURNINT )
+				ringFXArrOuter.append( INVALID_RETURNINT )
+				continue
+			}
+		}
+
+		ringFXArr.append( StartParticleEffectOnEntity( deathField, file.deathFieldFxIdx[i], FX_PATTACH_ABSORIGIN, ATTACHMENTID_INVALID ) )
+		ringFXArrOuter.append( StartParticleEffectOnEntity( deathField, file.deathFieldFxOuterIdx[i], FX_PATTACH_ABSORIGIN, ATTACHMENTID_INVALID ) )
+
+		Assert( EffectDoesExist( ringFXArr[i] ), "Failed to spawn initial ring FX!! id: " + string( ringFXArr[i] ) )
+		Assert( EffectDoesExist( ringFXArrOuter[i] ), "Failed to spawn initial ring FX!! id: " + string( ringFXArrOuter[i] ) )
+
+		if ( i != curFxIdx )
+		{
+			Effects_SetParticleFlag( ringFXArr[i], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+			Effects_SetParticleFlag( ringFXArrOuter[i], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+
+			
+			EffectSetControlPointVector( ringFXArr[i], 1, <0.0, 1.0, 0> )
+			EffectSetControlPointVector( ringFXArrOuter[i], 1, <0.0, 1.0, 0> )
+		}
+	}
+
+	table<string, int> e
+	e["fx"] <- ringFXArr[curFxIdx]
+	e["fxOuter"] <- ringFXArrOuter[curFxIdx]
+
+	entity deathfieldSoundEnt = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", deathField.GetOrigin(), <0, 0, 0> )
+
+	OnThreadEnd(
+		function() : ( ringFXArr, ringFXArrOuter, deathfieldSoundEnt )
+		{
+			deathfieldSoundEnt.Destroy()
+
+			for ( int i = 0; i < 3; i++ )
+			{
+				if ( EffectDoesExist( ringFXArr[i] ) )
+				{
+					EffectStop( ringFXArr[i], true, true )
+				}
+				if ( EffectDoesExist( ringFXArrOuter[i] ) )
+				{
+					EffectStop( ringFXArrOuter[i], true, true )
+				}
+			}
+		}
+	)
+
+	string currentSoundPlaying = ""
+	bool wasMoving             = false
+
+	int currentDeathFieldStage = -1
+	float lastStartTime        = 0.0
+	float lastEndTime          = 0.0
+
+	bool playSoundInPrematch = GetCurrentPlaylistVarBool( "deathfield_play_sound_in_prematch", true )
+	vector prevDeathFieldOrigin = deathField.GetOrigin()
+
+	float fxTransitionEndTime = 0.0
+	int fxIdxTransitioningOut = -1
+
+	FlagSet( "DeathFieldStartClient" )
+	while ( true )
+	{
+		entity clientPlayer = GetLocalClientPlayer()
+		if ( !file.trackingObserverDeathfield && clientPlayer.GetTeam() == TEAM_SPECTATOR && ( clientPlayer.GetObserverMode() == OBS_MODE_ROAMING || clientPlayer.GetObserverMode() == OBS_MODE_CHASE ) )
+		{
+			TrackDeathfieldDistance( clientPlayer, clientPlayer )
+			file.trackingObserverDeathfield = true
+		}
+
+		int dIndex 		= GetLocalViewPlayer().DeathFieldIndex()
+		int stage       = SURVIVAL_GetCurrentDeathFieldStage()
+		float startTime = GetGlobalNetTime( "nextCircleStartTime" ) + MARGIN_WAIT_TIME
+
+		if ( currentDeathFieldStage != stage )
+		{
+			currentDeathFieldStage = stage
+			foreach ( void functionref( int, float ) callback in file.onSurvivalDeathFieldStageChangedCallbacks )
+				thread callback( currentDeathFieldStage, startTime )
+		}
+
+		float duration  = GetGlobalNetTime( "circleCloseTime" ) - startTime
+		float unclampedFrac = -1
+		float frac          = 0
+
+		if ( Time() < startTime )
+		{
+			unclampedFrac = -1
+			frac          = 0
+		}
+		else if ( duration != 0 )
+		{
+			unclampedFrac = (Time() - startTime) / duration
+			frac          = clamp( unclampedFrac, 0.0, 1.0 )
+		}
+
+		float radius        = DeathField_GetRadiusForNow( dIndex )
+		float radiusScale   = Cl_Deathfield_GetRadiusScale()
+
+		DeathFieldStageData deathFieldData = file.deathFieldStageData[stage]
+		deathFieldData.shrinkDuration = duration
+
+		if ( Time() >= startTime && lastStartTime < startTime )
+		{
+			
+			
+			foreach ( void functionref( DeathFieldStageData ) callback in file.ClientCallbacks_OnDeathFieldStartShrink )
+				callback( deathFieldData )
+
+			lastStartTime = startTime
+		}
+
+		if ( Time() >= (startTime + duration) && (startTime + duration) != lastEndTime )
+		{
+			
+			
+			foreach ( void functionref( DeathFieldStageData ) callback in file.ClientCallbacks_OnDeathFieldStopShrink )
+				callback( deathFieldData )
+
+			lastEndTime = (startTime + duration)
+		}
+
+		int idealFxIdx = Cl_Deathfield_GetIndex( radius )
+		if ( idealFxIdx == INVALID_RETURNINT )
+		{
+			for ( int i = 0; i < 3; i++ )
+			{
+				if ( EffectDoesExist( ringFXArr[i] ) )
+				{
+					EffectStop( ringFXArr[i], true, true )
+				}
+				if ( EffectDoesExist( ringFXArrOuter[i] ) )
+				{
+					EffectStop( ringFXArrOuter[i], true, true )
+				}
+			}
+
+			e["fx"] = INVALID_RETURNINT
+			e["fxOuter"] = INVALID_RETURNINT
+			fxIdxTransitioningOut = -1
+
+			if ( currentSoundPlaying != "" )
+			{
+				StopSoundOnEntity( deathfieldSoundEnt, currentSoundPlaying )
+				currentSoundPlaying = ""
+			}
+		}
+		else
+		{
+			bool changedVFX = idealFxIdx != curFxIdx
+
+			if ( changedVFX )
+			{
+				if ( file.customDeathfieldFXSettings.fxTransitionTime < FLT_EPSILON )
+				{
+					Effects_SetParticleFlag( ringFXArr[curFxIdx], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+					Effects_SetParticleFlag( ringFXArrOuter[curFxIdx], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+				}
+				else
+				{
+					if ( fxIdxTransitioningOut >= 0 )
+					{
+						Effects_SetParticleFlag( ringFXArr[fxIdxTransitioningOut], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+						Effects_SetParticleFlag( ringFXArrOuter[fxIdxTransitioningOut], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+
+						fxIdxTransitioningOut = -1
+					}
+
+					fxTransitionEndTime = Time() + file.customDeathfieldFXSettings.fxTransitionTime
+					fxIdxTransitioningOut = curFxIdx
+				}
+
+				curFxIdx = idealFxIdx
+
+				Effects_SetParticleFlag( ringFXArr[curFxIdx], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, false )
+				Effects_SetParticleFlag( ringFXArrOuter[curFxIdx], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, false )
+
+				e["fx"]      = ringFXArr[curFxIdx]
+				e["fxOuter"] = ringFXArrOuter[curFxIdx]
+			}
+
+			entity player        = GetLocalViewPlayer()
+			vector fwdToPlayer   = Normalize( <player.GetOrigin().x, player.GetOrigin().y, 0> - <deathField.GetOrigin().x, deathField.GetOrigin().y, 0> )
+			vector circleEdgePos = deathField.GetOrigin() + (fwdToPlayer * radius)
+			circleEdgePos.z = player.EyePosition().z
+
+			if ( PositionIsInMapBounds( circleEdgePos ) && EffectDoesExist( e["fx"] ) && EffectDoesExist( e["fxOuter"] ) )
+			{
+				deathfieldSoundEnt.SetOrigin( circleEdgePos )
+				string soundToPlay = GetCircleSoundForSize( radius )
+
+				bool moving = unclampedFrac == frac
+
+				if ( moving )
+					soundToPlay = soundToPlay + "_Movement"
+
+				if ( !playSoundInPrematch && GetGameState() == eGameState.Prematch )
+				{
+					soundToPlay = ""
+				}
+
+
+
+
+
+
+
+
+
+
+
+
+				if ( (!moving || currentSoundPlaying == "" || wasMoving != moving) && currentSoundPlaying != soundToPlay )
+				{
+					if ( currentSoundPlaying != "" )
+						StopSoundOnEntity( deathfieldSoundEnt, currentSoundPlaying )
+					if ( soundToPlay != "" )
+						EmitSoundOnEntity( deathfieldSoundEnt, soundToPlay )
+
+					currentSoundPlaying = soundToPlay
+					wasMoving = moving
+				}
+			}
+
+			
+			{
+				EffectSetControlPointVector( e["fx"], 0, deathField.GetOrigin() )
+				EffectSetControlPointVector( e["fx"], 1, <radius / radiusScale, radius, 0> )
+				EffectSetControlPointVector( e["fxOuter"], 0, deathField.GetOrigin() )
+				EffectSetControlPointVector( e["fxOuter"], 1, <radius / radiusScale, radius, 0> )
+
+				
+				if ( fxIdxTransitioningOut >= 0 )
+				{
+					EffectSetControlPointVector( ringFXArr[fxIdxTransitioningOut], 0, deathField.GetOrigin() )
+					EffectSetControlPointVector( ringFXArr[fxIdxTransitioningOut], 1, <radius / radiusScale, radius, 0> )
+					EffectSetControlPointVector( ringFXArrOuter[fxIdxTransitioningOut], 0, deathField.GetOrigin() )
+					EffectSetControlPointVector( ringFXArrOuter[fxIdxTransitioningOut], 1, <radius / radiusScale, radius, 0> )
+				}
+			}
+
+			prevDeathFieldOrigin = deathField.GetOrigin()
+
+			if ( file.ringOpacityOverrideEnabled )
+			{
+				EffectSetControlPointVector( e["fx"], 2, < file.ringOpacityOverrideValue, 0, 0 > )
+				EffectSetControlPointVector( e["fxOuter"], 2, < file.ringOpacityOverrideValue, 0, 0 > )
+			}
+		}
+
+		if ( fxIdxTransitioningOut >= 0 )
+		{
+			float remainingTransitionTime = max( 0.0, (fxTransitionEndTime - Time()) )
+			float transitionOutOpacity = remainingTransitionTime / file.customDeathfieldFXSettings.fxTransitionTime
+			float transitionInOpacity = 1.0 - transitionOutOpacity
+
+			
+			if ( transitionOutOpacity < FLT_EPSILON )
+			{
+				Effects_SetParticleFlag( ringFXArr[fxIdxTransitioningOut], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+				Effects_SetParticleFlag( ringFXArrOuter[fxIdxTransitioningOut], PARTICLE_SCRIPT_FLAG_DISABLE_DRAW, true )
+
+				fxIdxTransitioningOut = -1
+			}
+			else
+			{
+				EffectSetControlPointVector( ringFXArr[fxIdxTransitioningOut], 2, < file.ringOpacityOverrideValue * transitionOutOpacity, 0, 0 > )
+				EffectSetControlPointVector( ringFXArrOuter[fxIdxTransitioningOut], 2, < file.ringOpacityOverrideValue * transitionOutOpacity, 0, 0 > )
+			}
+
+			
+			EffectSetControlPointVector( e["fx"], 2, < file.ringOpacityOverrideValue * transitionInOpacity, 0, 0 > )
+			EffectSetControlPointVector( e["fxOuter"], 2, < file.ringOpacityOverrideValue * transitionInOpacity, 0, 0 > )
+		}
+
+		
+		Minimap_SetDeathFieldRadius( radius )
+		FullMap_SetDeathFieldRadius( radius )
+
+		WaitFrame()
+	}
+}
+
+void function Cl_Deathfield_SetOpacityOverride( entity e, float newVal )
+{
+	file.ringOpacityOverrideValue = newVal
+}
+
+float function Cl_Deathfield_GetRadiusScale()
+{
+	return file.usePreciseRingFx ? 1000.0 : 1.0
+}
+
+string function GetCircleSoundForSize( float radius )
+{
+	foreach ( distance, sound in distanceToSound )
+	{
+		if ( distance < radius )
+		{
+			return sound
+		}
+	}
+
+	return ""
+}
+
+void function ServerCallback_SurveyBeaconNotifications( entity beacon, int notificationNumber )
+{
+	asset surveyBeaconIcon = SurveyBeacon_GetBeaconIcon( beacon )
+	switch ( notificationNumber )
+	{
+		case ePathfinderNotifications.TEAM_SUCCESS:
+			
+			entity localViewPlayer = GetLocalViewPlayer()
+			if ( IsValid( localViewPlayer ) && PlayerHasPassive( localViewPlayer, ePassives.PAS_PATHFINDER ) )
+			{
+
+
+
+				{
+					AddPlayerHint( 2.5, 0.25, $"rui/hud/ultimate_icons/ultimate_pathfinder", "#SURVEY_PATHFINDER_SUCCESS" )
+				}
+			}
+
+			UpdateSurveyBeaconHUDVisibility_Internal()
+			break
+
+		case ePathfinderNotifications.NOT_PATHFINDER:
+			AddPlayerHint( 1.25, 0.25, surveyBeaconIcon, "#SURVEY_NOT_PATHFINDER" )
+			break
+
+		case ePathfinderNotifications.ALREADY_ACTIVE:
+			AddPlayerHint( 1.25, 0.25, surveyBeaconIcon, "#SURVEY_ALREADY_ACTIVE" )
+			break
+
+		case ePathfinderNotifications.ALREADY_USED:
+			AddPlayerHint( 1.25, 0.25, surveyBeaconIcon, "#SURVEY_ALREADY_USED" )
+			break
+	}
+
+	bool showSquadInfo =  GetCurrentPlaylistVarBool( "beacon_show_squad_info", false )
+	if (showSquadInfo)
+		SurveyBeacon_ShowSquadInfo()
+}
+
+void function SurveyBeacon_ShowSquadInfo()
+{
+	thread SurveyBeacon_ShowSquadInfo_Thread()
+}
+
+void function  SurveyBeacon_ShowSquadInfo_Thread()
+{
+	var gamestateRui = ClGameState_GetRui()
+	float squadInfoShowtime = GetCurrentPlaylistVarFloat( "beacon_info_duration", 7.0 )
+	RuiSetFloat( gamestateRui, "scoreAlpha", 1 )
+	wait squadInfoShowtime
+	RuiSetFloat( gamestateRui, "scoreAlpha", 0 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerCallback_UpdateSurveyBeaconHUDVisibility()
+{
+	UpdateSurveyBeaconHUDVisibility_Internal()
+}
+
+void function UpdateSurveyBeaconHUDVisibility_Internal()
+{
+	clGlobal.levelEnt.Signal( "UpdateSurveyBeaconVisibility" )
+	if ( Perks_Enabled() )
+	{
+		clGlobal.levelEnt.Signal( "UpdatePerkMinimapReady" )
+	}
+}
+
+void function SurveyBeaon_ClassChanged( entity player )
+{
+	clGlobal.levelEnt.Signal( "UpdateSurveyBeaconVisibility" )
+}
+
+void function OnViewPlayerChanged( entity viewPlayer )
+{
+	entity localClientPlayer = GetLocalClientPlayer()
+	if ( GameMode_IsActive( eGameModes.SURVIVAL ) && localClientPlayer && localClientPlayer.GetTeam() == TEAM_SPECTATOR )
+	{
+		RuiSetBool( ClGameState_GetRui(), "hideDeathFieldWarning", ( localClientPlayer.GetObserverMode() == OBS_MODE_ROAMING ) )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+void function DEV_OnDummyCircleWpInstanced( entity wp )
+{
+	float startTime = wp.GetWaypointFloat( 0 )
+	float endTime = wp.GetWaypointFloat( 1 )
+	float endRadius = float( wp.GetWaypointInt( 0 ) )
+
+
+
+
+}
+#endif
+
+
+int function SURVIVAL_GetCurrentDeathFieldStage()
+{
+	return GetGlobalNetInt( "currentDeathFieldStage" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function SURVIVAL_GetCurrentRoundString()
+{
+	int curStage = SURVIVAL_GetCurrentDeathFieldStage()
+
+	
+	
+	if ( SURVIVAL_IsFinalDeathFieldStage() )
+		return FINAL_ROUND_ALIAS_SUFFIX
+	else
+		return string( curStage + 1 )
+
+	unreachable
+}
+
+
+bool function SURVIVAL_IsFinalDeathFieldStage()
+{
+	int curStage = SURVIVAL_GetCurrentDeathFieldStage()
+
+	return (curStage >= file.deathFieldStageData.len() - 1)
+}
+
+
+void function AddCallback_OnSurvivalDeathFieldStageChanged( void functionref( int stage, float nextCircleStartTime ) callback )
+{
+	Assert( !file.onSurvivalDeathFieldStageChangedCallbacks.contains( callback ), "Tried to add a callback that was already added" )
+
+	file.onSurvivalDeathFieldStageChangedCallbacks.append( callback )
+}
+
+bool function ContainsCallback_OnSurvivalDeathFieldStageChanged( void functionref( int stage, float nextCircleStartTime ) callback )
+{
+	return file.onSurvivalDeathFieldStageChangedCallbacks.contains( callback )
+}
+
+void function RemoveCallback_OnSurvivalDeathFieldStageChanged( void functionref( int stage, float nextCircleStartTime ) callback )
+{
+	Assert( file.onSurvivalDeathFieldStageChangedCallbacks.contains( callback ), "Tried to remove a callback that was not added" )
+
+	file.onSurvivalDeathFieldStageChangedCallbacks.fastremovebyvalue( callback )
+}
+
+
+bool function SURVIVAL_DeathFieldIsValid( int realm )
+{
+	if ( realm in file.deathField )
+		return IsValid( file.deathField[ realm ] )
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+bool function HasDeathFieldImmunity( entity player )
+{
+	return player.GetPlayerNetBool( "hasDeathFieldImmunity" )
+}
+
+
+
+
+
+
+
+
+
+
+vector function Cl_SURVIVAL_GetDeathFieldCenter()
+{
+	if ( IsValid( file.deathField ) )
+		return file.deathField.GetOrigin()
+	else
+		return <0, 0, 0>
+
+	unreachable
+}
+
+vector function Cl_SURVIVAL_GetSafeZoneCenter()
+{
+	if ( IsValid( file.safeZone ) )
+		return file.safeZone.GetOrigin()
+	else
+		return <0, 0, 0>
+
+	unreachable
+}
+
+
+
+
+float function Cl_SURVIVAL_GetDeathFieldCurrentRadius()
+{
+		float startRadius = SURVIVAL_Deathfield_GetStartRadius()
+
+		int i = SURVIVAL_GetCurrentDeathFieldStage()
+
+		if ( i == -1 )
+			return startRadius
+
+		float startTime = GetGlobalNetTime( "nextCircleStartTime" ) + MARGIN_WAIT_TIME
+		DeathFieldStageData data = file.deathFieldStageData[i]
+		if ( i > 0 )
+		{
+			DeathFieldStageData prevData = file.deathFieldStageData[i - 1]
+			startRadius = prevData.endRadius
+		}
+
+		float duration = data.shrinkDuration
+		float endRadius = data.endRadius
+
+		float frac = (Time() - startTime) / duration
+		frac = clamp( frac, 0.0, 1.0 )
+		return startRadius + ((endRadius - startRadius) * frac)
+}
+
+
+
+bool function Cl_SURVIVAL_PosInsideRing( vector position )
+{
+	int dIndex = GetLocalViewPlayer().DeathFieldIndex()
+	bool isInsideRing = DeathField_IsPointInsideRing( position, dIndex )
+	return isInsideRing
+}
+
+
+
+bool function Cl_SURVIVAL_PosInSafeZone( vector position )
+{
+	int i = SURVIVAL_GetCurrentDeathFieldStage()
+
+	if ( i == -1 )
+		return true
+
+	DeathFieldStageData data = file.deathFieldStageData[i]
+	float endRadius = data.endRadius
+	vector deathFieldCenter = Cl_SURVIVAL_GetSafeZoneCenter()
+
+	float distanceFromCenter = Distance2D( position, deathFieldCenter )
+	return distanceFromCenter < endRadius
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function HasActiveSurveyZone( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+	foreach ( surveyZone in file.surveyMinimapEnts )
+	{
+		entity owner = surveyZone.GetOwner()
+
+		if ( IsValid(owner) && owner.GetTeam() == player.GetTeam() ) 
+		{
+			if ( !player.HasPassive( ePassives.PAS_PATHFINDER ) ) 
+			{
+				return true
+			}
+			if ( owner == player) 
+			{
+				return true
+			}
+		}
+	}
+	return false  
+}
+
+entity function GetActiveSurveyZone( entity player )
+{
+	if ( !IsValid( player ) )
+		return null
+	foreach ( surveyZone in file.surveyMinimapEnts )
+	{
+		entity owner = surveyZone.GetOwner()
+
+		if ( IsValid(owner) && owner.GetTeam() == player.GetTeam() ) 
+		{
+			if ( owner == player)
+			{
+				return surveyZone
+			}
+		}
+	}
+	return null
+}
+
+bool function TeamHasActiveSurveyZone( int team )
+{
+	foreach ( surveyZone in file.surveyMinimapEnts )
+	{
+		entity owner = surveyZone.GetOwner()
+		if ( IsValid( owner ) && owner.GetTeam() == team )
+		{
+			return true
+		}
+	}
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function TrackDeathfieldDistance( entity cockpit, entity player )
+{
+	thread TrackDeathfieldDistance_Internal( cockpit, player )
+}
+
+
+void function TrackDeathfieldDistance_Internal( entity cockpit, entity player )
+{
+	player.EndSignal( "OnDestroy" )
+	cockpit.EndSignal( "OnDestroy" )
+
+	bool wasShowingDeathFieldFx = false
+	int screenFx
+
+	OnThreadEnd(
+		function() : ( screenFx, player )
+		{
+			
+			ColorCorrection_SetWeight( file.colorCorrection, 0.0 )
+			Chroma_EnteredRing()
+
+			if ( EffectDoesExist( file.fieldEffectHandle ) )
+			{
+				EffectStop( file.fieldEffectHandle, true, false )
+			}
+
+			if ( file.trackingObserverDeathfield && player.GetTeam() == TEAM_SPECTATOR )
+			{
+				file.trackingObserverDeathfield = false
+			}
+		}
+	)
+
+	ColorCorrection_SetExclusive( file.colorCorrection, true )
+
+	while ( true )
+	{
+		int blockReason = GetDeathFieldFXBlockReason( player )
+		bool shouldShowDeathFieldFx = ( blockReason == DeathFieldFXBlockReason.NONE )
+
+		float deathFieldColorCorrectionStrength = 0.0
+
+		if ( wasShowingDeathFieldFx != shouldShowDeathFieldFx )
+		{
+			if ( shouldShowDeathFieldFx )
+			{
+				entity clientPlayer = GetLocalClientPlayer()
+
+				if ( EffectDoesExist( screenFx ) )
+				{
+					printt( "DeathField ScreenFX already exist for player " + player.GetPlayerName() + ", skipping create" )
+				}
+				else if ( clientPlayer.GetTeam() != TEAM_SPECTATOR ) 
+				{
+					int deathfieldParticleEffectIndex = file.customDeathfieldFXSettings.deathfieldEffect == $"" ? GetParticleSystemIndex( DEATHFIELD_EFFECT ) : GetParticleSystemIndex( file.customDeathfieldFXSettings.deathfieldEffect )
+					screenFx = StartParticleEffectOnEntity( cockpit, deathfieldParticleEffectIndex, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+					file.fieldEffectHandle = screenFx
+
+					EffectSetIsWithCockpit( screenFx, true )
+
+					deathFieldColorCorrectionStrength = 1.0
+				}
+				else if ( clientPlayer.GetTeam() == TEAM_SPECTATOR )
+				{
+					if ( clientPlayer.GetObserverMode() == OBS_MODE_ROAMING || clientPlayer.GetObserverMode() == OBS_MODE_CHASE )
+					{
+						deathFieldColorCorrectionStrength = file.observer_3p_deathFieldTintStrength
+					}
+					else
+					{
+						deathFieldColorCorrectionStrength = file.observer_1p_deathFieldTintStrength
+						int observerDeathfieldParticleEffectIndex = file.customDeathfieldFXSettings.observerDeathfieldEffect == $"" ? GetParticleSystemIndex( OBSERVER_DEATHFIELD_EFFECT ) : GetParticleSystemIndex( file.customDeathfieldFXSettings.observerDeathfieldEffect )
+						screenFx = StartParticleEffectOnEntity( cockpit, observerDeathfieldParticleEffectIndex, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+						file.fieldEffectHandle = screenFx
+
+						EffectSetIsWithCockpit( screenFx, true )
+					}
+				}
+
+				ColorCorrection_SetWeight( file.colorCorrection, deathFieldColorCorrectionStrength )
+				Chroma_LeftRing()
+			}
+			else
+			{
+				printt( "Stopping DeathField ScreenFX for player " + player.GetPlayerName() + " for reason: " + blockReason )
+
+				if ( EffectDoesExist( screenFx ) )
+				{
+					EffectStop( screenFx, true, true )
+				}
+
+				ColorCorrection_SetWeight( file.colorCorrection, 0.0 )
+
+				Chroma_EnteredRing()
+			}
+			wasShowingDeathFieldFx = shouldShowDeathFieldFx
+		}
+
+		WaitFrame()
+	}
+}
+
+enum DeathFieldFXBlockReason
+{
+	NONE = 0, 
+	PLAYER_DEAD = 1,
+	TOO_FAR_FROM_FRONTIER = 2,
+	IN_PLANE = 3,
+	IN_SQUAD_SUMMARY = 4,
+	IN_DEATH_RECAP = 5,
+	RING_IMMUNE_STATUS = 6,
+	RING_IMMUNE_SCRIPT = 7,
+
+	CLOCKUP_CYBERFORM = 8,
+
+
+
+
+
+}
+
+
+int function GetDeathFieldFXBlockReason( entity player )
+{
+	int blockReason = DeathFieldFXBlockReason.NONE
+
+	if ( player.GetTeam() != TEAM_SPECTATOR && !IsAlive( player ) )
+	{
+		blockReason = DeathFieldFXBlockReason.PLAYER_DEAD
+	}
+
+
+
+
+
+
+
+
+	vector testPosition = PlayerDrone_IsPlayerInDroneView( player ) ? player.EyePosition() : player.GetOrigin()
+
+	if ( blockReason == DeathFieldFXBlockReason.NONE && DeathField_IsPointInsideRing( testPosition, player.DeathFieldIndex() ) )
+	{
+		blockReason = DeathFieldFXBlockReason.TOO_FAR_FROM_FRONTIER
+
+
+
+
+
+
+	}
+
+
+		if ( blockReason == DeathFieldFXBlockReason.NONE && Deathfield_GetDoesDeathfieldStartEnabled() && player.GetPlayerNetBool( "playerInPlane" ) )
+		{
+			blockReason = DeathFieldFXBlockReason.IN_PLANE
+		}
+
+
+	if ( blockReason == DeathFieldFXBlockReason.NONE && IsViewingSquadSummary() )
+		blockReason = DeathFieldFXBlockReason.IN_SQUAD_SUMMARY
+
+	if ( blockReason == DeathFieldFXBlockReason.NONE && IsViewingDeathRecap() )
+		blockReason = DeathFieldFXBlockReason.IN_DEATH_RECAP
+
+	if ( blockReason == DeathFieldFXBlockReason.NONE && StatusEffect_HasSeverity( player, eStatusEffect.ring_immunity ) )
+		blockReason = DeathFieldFXBlockReason.RING_IMMUNE_STATUS
+
+	
+	if ( blockReason == DeathFieldFXBlockReason.NONE && HasDeathFieldImmunity( player ) )
+		blockReason = DeathFieldFXBlockReason.RING_IMMUNE_SCRIPT
+
+
+	if ( ClockUp_Cyberform_IsPlayerInCyberform( player ) )
+	{
+		blockReason = DeathFieldFXBlockReason.CLOCKUP_CYBERFORM
+	}
+
+
+	return blockReason
+}
+
+
+void function Callback_OnPlayerTakeDeathFieldDamage( float damage, vector damageOrigin, int damageType, int damageSourceId, entity attacker )
+{
+	thread DisplayHolsterWeaponHint()
+}
+
+
+void function DisplayHolsterWeaponHint()
+{
+	const HINT_DURATION = 5.0
+	const HINT_FADEOUT = 0.5
+	const HINT_FIRST_DELAY = 3.0
+	const HINT_INTERVAL_TIME = HINT_DURATION + 10.0
+
+	if ( Time() - file.nextHolsterHintTime < HINT_INTERVAL_TIME )
+		return
+
+	entity viewPlayer   = GetLocalViewPlayer()
+	entity activeWeapon = viewPlayer.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( activeWeapon ) )
+		return
+
+	if ( activeWeapon.GetWeaponType() != WT_DEFAULT )
+		return
+
+	if ( activeWeapon == viewPlayer.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_2 ) )
+		return
+
+	if ( DeathField_IsPointInsideRing( viewPlayer.GetOrigin(), viewPlayer.DeathFieldIndex() ) )
+		return
+
+	if ( Bleedout_IsBleedingOut( viewPlayer ) )
+		return
+
+	if ( viewPlayer.GetPlayerNetBool( "isHealing" ) )
+		return
+
+	AddPlayerHint( HINT_DURATION, HINT_FADEOUT, $"", "#HINT_HOLSTER_WEAPON" )
+	file.nextHolsterHintTime = Time() + HINT_INTERVAL_TIME
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+entity function Cl_SURVIVAL_GetDeathField()
+{
+	return file.deathField
+}
+
+DeathFieldStageData function Cl_GetDeathFieldStage( int index )
+{
+	return file.deathFieldStageData[ index ]
+}
+
+
+int function Survival_GetNumDeathfieldStages()
+{
+	return file.deathFieldStageData.len()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function MinimapPackage_SurveyBeacon( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", $"rui/hud/gametype_icons/survival/survey_beacon_only_pathfinder" )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetBool( rui, "useTeamColor", false )
+}
+
+void function FullmapPackage_SurveyBeacon( entity ent, var rui )
+{
+	MinimapPackage_SurveyBeacon( ent, rui )
+	RuiSetFloat2( rui, "iconScale", <1.5,1.5,0.0> )
+	RuiSetFloat3( rui, "iconColor", <0.5,0.5,0.5> )
+}
+
+
+void function SurvivalDeathfield_SetDeathfieldFXSettings( SurvivalDeathfieldFXSettings customDeathfieldFXSettings )
+{
+	Assert( (file.customDeathfieldFXSettings.colorCorrection.len() == 0) && (customDeathfieldFXSettings.colorCorrection.len() != 0), "Color Correction needs to be provided for customDeathfieldFXSettings" )
+	file.customDeathfieldFXSettings.colorCorrection = customDeathfieldFXSettings.colorCorrection
+
+	Assert( (file.customDeathfieldFXSettings.deathfieldEffect == $"") && (customDeathfieldFXSettings.deathfieldEffect != $""), "Deathfield FX needs to be provided for customDeathfieldFXSettings" )
+	file.customDeathfieldFXSettings.deathfieldEffect = customDeathfieldFXSettings.deathfieldEffect
+
+	Assert( (file.customDeathfieldFXSettings.observerDeathfieldEffect == $"") && (customDeathfieldFXSettings.observerDeathfieldEffect != $""), "Observer Deathfield FX needs to be provided for customDeathfieldFXSettings" )
+	file.customDeathfieldFXSettings.observerDeathfieldEffect = customDeathfieldFXSettings.observerDeathfieldEffect
+
+	file.customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx.clear()
+	file.customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx.extend( customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx )
+	file.customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx.clear()
+	file.customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx.extend( customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx )
+
+	file.customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx.clear()
+	file.customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx.extend( customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx )
+	file.customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx.clear()
+	file.customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx.extend( customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx )
+
+	file.customDeathfieldFXSettings.deathfieldInnerFxIdx.clear()
+	file.customDeathfieldFXSettings.deathfieldInnerFxIdx.extend( customDeathfieldFXSettings.deathfieldInnerFxIdx )
+	file.customDeathfieldFXSettings.deathfieldOuterFxIdx.clear()
+	file.customDeathfieldFXSettings.deathfieldOuterFxIdx.extend( customDeathfieldFXSettings.deathfieldOuterFxIdx )
+
+	file.customDeathfieldFXSettings.fxTransitionTime = customDeathfieldFXSettings.fxTransitionTime
+
+
+		{
+			if ( file.ringOpacityOverrideEnabled )
+			{
+				if ( customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx.len() != 0 )
+				{
+					file.deathFieldFxIdx.clear()
+					file.deathFieldFxIdx.extend( customDeathfieldFXSettings.deathfieldInnerOpacityFxIdx )
+				}
+
+				if ( customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx.len() != 0 )
+				{
+					file.deathFieldFxOuterIdx.clear()
+					file.deathFieldFxOuterIdx.extend( customDeathfieldFXSettings.deathfieldOuterOpacityFxIdx )
+				}
+			}
+			else if ( file.usePreciseRingFx )
+			{
+				if ( customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx.len() != 0 )
+				{
+					file.deathFieldFxIdx.clear()
+					file.deathFieldFxIdx.extend( customDeathfieldFXSettings.deathfieldInnerPreciseFxIdx )
+				}
+
+				if ( customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx.len() != 0 )
+				{
+					file.deathFieldFxOuterIdx.clear()
+					file.deathFieldFxOuterIdx.extend( customDeathfieldFXSettings.deathfieldOuterPreciseFxIdx )
+				}
+			}
+			else
+			{
+				if ( customDeathfieldFXSettings.deathfieldInnerFxIdx.len() != 0 )
+				{
+					file.deathFieldFxIdx.clear()
+					file.deathFieldFxIdx.extend( customDeathfieldFXSettings.deathfieldInnerFxIdx )
+				}
+
+				if ( customDeathfieldFXSettings.deathfieldOuterFxIdx.len() != 0 )
+				{
+					file.deathFieldFxOuterIdx.clear()
+					file.deathFieldFxOuterIdx.extend( customDeathfieldFXSettings.deathfieldOuterFxIdx )
+				}
+			}
+		}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+       

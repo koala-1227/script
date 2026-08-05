@@ -1,0 +1,694 @@
+
+global function MpAbilityBoostKit_Init
+global function BoostKit_IsValidRef
+global function BoostKit_GetCooldown
+global function BoostKit_IsAutoTriggered
+global function BoostKit_IsReady
+global function BoostKit_TryActivate
+global function BoostKit_OverridesGadgetEquip
+global function BoostKit_ShowGadgetButton
+global function BoostKit_TryOverrideMelee
+global function BoostKit_TryOverrideGadget
+global function BoostKit_OverridesMelee
+global function BoostKit_IsValidOffhand
+global function BoostKit_ActivateOffhand
+global function BoostKit_RegisterOnMeleePressedFunctionOverride
+
+
+global function PROTO_BoostKitHUD_Think
+global function ServerToClient_BoostKit_OnPlayerInventoryChanged
+
+
+
+
+
+
+
+global const string BOOST_KIT_NAME = "mp_ability_boost_kit"
+global const string BOOST_KIT_MAGIC_PIXEL_NAME = BOOST_KIT_NAME + "_magic_pixel"
+
+const string BOOST_KIT_COOLDOWN = "boost_kit_cooldown"
+const string BOOST_KIT_ACTIVATION = "boost_kit_activation"
+
+
+const string SFX_BOOST_KIT_READY = "survival_ui_tactical_ready"
+
+enum eBoostKitActivation
+{
+	NONE = 0,
+	GADGET = 1,
+	MELEE = 2,
+}
+
+struct {
+
+	table< string, bool functionref( entity ) > boostKitToOnMeleePressedFunctionOverride
+
+
+
+
+
+
+		bool ruiActive = false
+
+} file
+
+void function MpAbilityBoostKit_Init()
+{
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.boost_kit_cooldown, BoostKit_OnStatusEffectEnabled )
+
+
+
+
+
+
+
+
+
+	Remote_RegisterClientFunction( "ServerToClient_BoostKit_OnPlayerInventoryChanged", "entity", "entity" )
+}
+
+bool function BoostKit_IsValidRef( string weaponRef )
+{
+	bool isValid = false
+
+	if ( ( weaponRef.find( "boost_kit" ) != -1 ) )
+	{
+		isValid = true
+	}
+
+
+
+
+
+
+
+	else if( ( weaponRef.find( "pilot_mode" ) != -1 ) )
+	{
+		isValid = true
+	}
+
+
+
+
+
+
+
+
+	else if ( Ability_ClockUp_DisruptingHack_IsValidRef( weaponRef ) )
+	{
+		isValid = true
+	}
+
+
+	else if ( Ability_ClockUp_EnhancedReflex_IsValidRef( weaponRef ) )
+	{
+		isValid = true
+	}
+
+
+
+
+
+
+
+
+	return isValid
+}
+
+int function BoostKit_GetActivationOverride( string weaponRef )
+{
+	var val = GetWeaponInfoFileKeyField_Global( weaponRef, BOOST_KIT_ACTIVATION )
+	if ( val == null )
+		return eBoostKitActivation.NONE
+
+	return expect int(val)
+}
+
+float function BoostKit_GetCooldown( string ref, entity player )
+{
+	
+	switch( ref )
+	{
+
+
+
+
+
+		case BOOST_KIT_PILOT_HOVER_NAME:
+			return PilotHover_GetCooldownTotal()
+
+		case BOOST_KIT_LIFESTEAL_KIT_NAME:
+			return LifestealKit_GetCooldownTotal()
+
+		case BOOST_KIT_NESSIE_SUMMON_NAME:
+			return NessieSummon_GetCooldownTotal()
+
+		case BOOST_KIT_HEAL_RADIUS_NAME:
+			return HealRadius_GetCooldownTotal()
+
+
+
+
+
+
+
+
+		case HOVERBOARD_SCRIPTNAME:
+			return Hoverboard_GetCooldownTotal( player )
+
+
+
+
+
+
+
+
+		case BOOST_KIT_THREAT_SMOKE_NAME:
+			return ThreatSmoke_GetCooldownTotal()
+
+		case BOOST_KIT_PHASE_REWIND_NAME:
+			return PhaseRewind_GetCooldownTotal()
+
+		case BOOST_KIT_GOLD_ARMOR_NAME:
+			return GoldArmor_GetCooldownTotal()
+
+		case BOOST_KIT_MAP_HACK_NAME:
+			return MapHack_GetCooldownTotal()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		default:
+			return 0.0
+	}
+
+	return 0.0
+}
+
+bool function BoostKit_IsAutoTriggered( entity player )
+{
+	if(!IsValid( player ))
+		return false
+
+	entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( weapon ) )
+		return false
+
+	string weaponRef = weapon.GetWeaponClassName()
+	switch( weaponRef )
+	{
+		case BOOST_KIT_MAGIC_PIXEL_NAME:
+		case BOOST_KIT_NESSIE_SUMMON_NAME:
+
+		case BOOST_KIT_THREAT_SMOKE_NAME:
+
+		case BOOST_KIT_MAP_HACK_NAME:
+			return true
+	}
+	return false
+}
+
+bool function BoostKit_OverridesGadgetEquip( string weaponRef )
+{
+	return true
+}
+
+bool function BoostKit_OverridesGadget( string weaponRef )
+{
+	return BoostKit_GetActivationOverride( weaponRef ) == eBoostKitActivation.GADGET
+}
+
+bool function BoostKit_OverridesMelee( string weaponRef )
+{
+	return BoostKit_GetActivationOverride( weaponRef ) == eBoostKitActivation.MELEE
+}
+
+bool function BoostKit_ShowGadgetButton( string weaponRef )
+{
+	if ( weaponRef == "" )
+		return true
+
+	return BoostKit_GetActivationOverride( weaponRef ) != eBoostKitActivation.NONE
+}
+
+bool function BoostKit_IsReady( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.boost_kit_cooldown ) )
+		return false
+
+	return true
+}
+
+void function BoostKit_RegisterOnMeleePressedFunctionOverride( string weaponRef, bool functionref( entity ) onMeleePressedFunctionOverride )
+{
+	Assert( !(weaponRef in file.boostKitToOnMeleePressedFunctionOverride), format( "%s already has a function override for OnMeleePressed", weaponRef ) )
+	file.boostKitToOnMeleePressedFunctionOverride[weaponRef] <- onMeleePressedFunctionOverride
+}
+
+bool function BoostKit_TryActivate( entity player, float cooldown )
+{
+	if ( !BoostKit_IsReady( player ) )
+		return false
+
+
+		if ( !InPrediction() )
+			return true
+
+
+	StatusEffect_AddTimed( player, eStatusEffect.boost_kit_cooldown, 1.0, cooldown, 0.0 )
+
+	return true
+}
+
+bool function BoostKit_TryOverrideMelee( entity player, entity meleeWeapon, int input )
+{
+	entity gadget = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( gadget ) )
+		return false
+
+	string weaponRef = gadget.GetWeaponClassName()
+	int inputBitMask = 1 << input
+	bool isMeleeInput = (inputBitMask & IN_MELEE) > 0
+
+	if ( BoostKit_OverridesMelee( weaponRef ) )
+	{
+		if ( !BoostKit_IsValidOffhandMelee( player, meleeWeapon ) )
+			return false
+
+		if ( BoostKit_TryActivateOffhand( player, gadget ) )
+			return true
+	}
+	else if ( isMeleeInput && (weaponRef in file.boostKitToOnMeleePressedFunctionOverride) )
+	{
+		return file.boostKitToOnMeleePressedFunctionOverride[weaponRef]( player )
+	}
+
+	return false
+}
+
+bool function BoostKit_TryOverrideGadget( entity player, string weaponRef )
+{
+	entity gadget = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( gadget ) )
+		return false
+
+	string gadgetRef = gadget.GetWeaponClassName()
+
+	if ( !BoostKit_OverridesGadget( weaponRef ) )
+		return false
+
+	if ( gadgetRef != weaponRef )
+		return false
+
+	if ( BoostKit_TryActivateOffhand( player, gadget ) )
+		return true
+
+	return false
+}
+
+bool function BoostKit_TryActivateOffhand( entity player, entity gadget )
+{
+
+
+
+
+
+
+
+
+		if ( PhaseRewind_TryActivate( player, gadget ) )
+			return true
+
+
+		if ( Hoverboard_TryActivate( player, gadget ) )
+			return true
+
+
+
+
+
+
+		if ( Ability_ClockUp_DisruptingHack_TryActivate( player, gadget ) )
+			return true
+
+
+		if ( Ability_ClockUp_EnhancedReflex_TryActivate( player, gadget ) )
+			return true
+
+
+
+
+
+
+	return false
+}
+
+bool function BoostKit_IsValidOffhandMelee( entity player, entity meleeWeapon )
+{
+
+		if ( TitanSword_WeaponIsTitanSword( meleeWeapon ) )
+			return false
+
+
+	entity offhandMelee = player.GetOffhandWeapon( eOffhandInv.MELEE )
+	if ( meleeWeapon != offhandMelee )
+		return false
+
+	return true
+}
+
+bool function BoostKit_IsValidOffhand( entity player, string offhandRef )
+{
+	entity offhand = player.GetOffhandWeapon( eOffhandInv.GENERIC )
+
+	if ( offhand.GetWeaponClassName() != offhandRef )
+		return false
+
+	return true
+}
+
+void function BoostKit_ActivateOffhand( entity player )
+{
+
+		if ( !InPrediction() )
+			return
+
+
+	player.TrySelectOffhand( eOffhandInv.GENERIC )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function BoostKit_OnStatusEffectEnabled( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( !actuallyChanged )
+		return
+
+	entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( weapon ) )
+		return
+
+	string weaponRef = weapon.GetWeaponClassName()
+	int cooldown     = int(BoostKit_GetCooldown( weaponRef, player ))
+
+	thread PROTO_BoostKitHUD_Think( player, cooldown, BoostKit_ShouldPlayReadySound( weaponRef ) )
+}
+
+bool function BoostKit_ShouldPlayReadySound( string weaponRef )
+{
+	return weaponRef != BOOST_KIT_MAP_HACK_NAME
+}
+
+void function PROTO_BoostKitHUD_Think( entity player, int cooldown, bool playReadySound )
+{
+	AssertIsNewThread()
+
+	if ( cooldown == 0 )
+		return
+
+	if ( file.ruiActive )
+		return
+
+	file.ruiActive = true
+
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ()
+		{
+			file.ruiActive = false
+		}
+	)
+
+	var dpadMenuRui = GetDpadMenuRui()
+
+	if ( !IsValid( player ) && dpadMenuRui != null )
+		return
+
+	
+
+
+
+
+
+	bool currentGadgetIsBoostkit
+	while( StatusEffect_HasSeverity( player, eStatusEffect.boost_kit_cooldown ) )
+	{
+		currentGadgetIsBoostkit = false
+		entity weapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+		if ( IsValid( weapon ) )
+		{
+			currentGadgetIsBoostkit = BoostKit_IsValidRef( weapon.GetWeaponClassName() )
+		}
+
+		if ( !currentGadgetIsBoostkit )
+		{
+			RuiSetString( dpadMenuRui, "gadgetChargePercent", Localize( "#N_PERCENT", 100 ) )
+			RuiSetFloat( dpadMenuRui, "gadgetChargeFrac", 1.0 )
+		}
+		else
+		{
+			float timeRemaining          = StatusEffect_GetTimeRemaining( player, eStatusEffect.boost_kit_cooldown )
+			float tier1ChargeTimePercent = 1.0 - (timeRemaining / cooldown)
+			int tier1roundedPercent      = int( tier1ChargeTimePercent * 100 )
+
+			RuiSetString( dpadMenuRui, "gadgetChargePercent", Localize( "#N_PERCENT", tier1roundedPercent ) )
+			RuiSetFloat( dpadMenuRui, "gadgetChargeFrac", tier1ChargeTimePercent )
+			RuiSetInt( dpadMenuRui, "ammoMinToFire", cooldown )
+			RuiSetFloat( dpadMenuRui, "ammoRefillRate", 1.0 )
+			RuiSetInt( dpadMenuRui, "gadgetCount", 1 )
+			RuiSetInt( dpadMenuRui, "maxGadgetCount", 1 )
+			
+			
+			
+			
+				RuiSetBool( dpadMenuRui, "gadgetUIEnabled", true )
+			
+			RuiSetBool( dpadMenuRui, "gadgetChargeUIEnabled", true )
+			RuiSetBool( dpadMenuRui, "isGadgetEmpty", false )
+		}
+
+
+
+
+
+
+
+
+
+
+		WaitFrame()
+	}
+	file.ruiActive = false
+
+
+
+
+
+
+
+
+	if ( playReadySound && currentGadgetIsBoostkit )
+		EmitSoundOnEntity( player, SFX_BOOST_KIT_READY )
+
+	RuiSetString( dpadMenuRui, "gadgetChargePercent", Localize( "#N_PERCENT", 100 ) )
+	RuiSetFloat( dpadMenuRui, "gadgetChargeFrac", 1.0 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_BoostKit_OnPlayerInventoryChanged( entity player, entity weapon )
+{
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	if ( !IsValid( weapon ) )
+		return
+
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+	if ( !BoostKit_IsValidRef( weaponData.ref ) )
+		return
+
+
+
+
+
+
+
+		if ( Hoverboard_IsHoverboardWeaponClass( weapon ) && !player.IsWeaponEnabled( weapon ) )
+			return
+
+
+
+		if ( Ability_ClockUp_DisruptingHack_IsValidRef( weaponData.ref ) )
+			return
+
+
+
+		if ( Ability_ClockUp_EnhancedReflex_IsValidRef( weaponData.ref ) )
+			return
+
+
+
+
+
+
+
+	UpdateHudDataForBoostKit( weapon )
+}
+
+       

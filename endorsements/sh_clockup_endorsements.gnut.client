@@ -1,0 +1,609 @@
+global function ClockUp_Endorsements_Init
+global function ClockUp_Endorsements_IsEnabled
+
+global function ClientToServer_ClockUp_Endorsements_EquipClockUpWildCard
+global function ServerToClient_ClockUp_Endorsements_ShowClockUpLandingUI
+
+global function ClockUp_PlayerHasClockUpEndorsement
+
+
+
+
+
+
+
+
+global function ClockUp_HandleEndorsementSlotPositioning
+global function ClockUp_Endorsements_Crafted_Announcement
+global function ClockUp_ShowEndorsementFirstUseHint
+global function ClockUp_HideEndorsementFirstUseHint
+global function ClockUp_Endorsements_GetClockUpGadgetOptions
+global function ClockUp_Endorsements_SelectClockUpGadgetOption
+global function ClockUp_Endorsements_IsPingNagVisible
+global function ClockUp_Endorsements_DismissAnnouncement
+
+
+const asset ASSET_CLOCKUP_ENDORSEMENTS_CRAFTER_MODEL = $"mdl/props/crafting_replicator/uh_endorsement_unit_02_clockup.rmdl"
+const asset ASSET_CLOCKUP_ENDORSEMENTS_PING_NAG_RUI = $"ui/endorsement_ping_nag.rpak"
+const float CLOCKUP_ENDORSEMENTS_ANNOUNCEMENT_DURATION = 10.0
+
+
+const string CLOCKUP_ENHANCED_REFLEX_HINT = "#CLOCKUP_ENHANCED_REFLEX_HINT"
+const string CLOCKUP_DISRUPTING_HACK_HINT = "#CLOCKUP_DISRUPTING_HACK_HINT"
+const asset CLOCKUP_ENDORSEMENT_CRAFT_VFX_1P = $"P_unH_upgrade_FP"
+
+
+
+const string SIG_CLOCKUP_ENDORSEMENTS_CLEAR_NAG															= "clockup_endorsements_clear_nag"
+global const string SIG_CLOCKUP_ENDORSEMENTS_DISENGAGE_GADGET											= "clockup_endorsements_disengage_gadget"
+
+
+struct ClockUpEndorsementsCraftingData
+{
+	bool showClockUpEndorsements																		= false
+}
+
+
+struct
+{
+
+		array< EndorsementOptionData > endorsementTypeDummyOptions										= []
+		array< EndorsementOptionData > clockUpGadgetOptions												= []
+		table< EHI, ClockUpEndorsementsCraftingData > playerEHIToClockUpEndorsementsCraftingData
+		bool hasShownLandingAnnouncement    															= false
+		bool hasShownClockUpEndorsementHint																= false
+		bool isNagVisible																				= false
+		HudNotificationQueueItem& announcementQueueItem
+
+} file
+
+void function ClockUp_Endorsements_Init()
+{
+	if ( !ClockUp_Endorsements_IsEnabled() )
+		return
+
+	
+	RegisterSignal( SIG_CLOCKUP_ENDORSEMENTS_CLEAR_NAG )
+	RegisterSignal( SIG_CLOCKUP_ENDORSEMENTS_DISENGAGE_GADGET )
+
+
+		EndorsementOptionData wildCardDummyEndorsementOption
+		wildCardDummyEndorsementOption.endorsementRef = "wildcarddummyendorsement"
+		wildCardDummyEndorsementOption.endorsementSponsorEnum = eEndorsementSponsor.ENDORSEMENT_SPONSOR_WILD_CARD
+		file.endorsementTypeDummyOptions.push( wildCardDummyEndorsementOption )
+
+		EndorsementOptionData clockUpDummyEndorsementOption
+		clockUpDummyEndorsementOption.endorsementRef = "clockupdummyendorsement"
+		clockUpDummyEndorsementOption.endorsementSponsorEnum = eEndorsementSponsor.ENDORSEMENT_SPONSOR_CLOCKUP
+		file.endorsementTypeDummyOptions.push( clockUpDummyEndorsementOption )
+
+		EndorsementOptionData disruptingHackEndorsementOption
+		disruptingHackEndorsementOption.endorsementRef = "disruptinghack"
+		disruptingHackEndorsementOption.endorsementSponsorEnum = eEndorsementSponsor.ENDORSEMENT_SPONSOR_CLOCKUP
+		file.clockUpGadgetOptions.push( disruptingHackEndorsementOption )
+
+		EndorsementOptionData enhancedReflexEndorsementOption
+		enhancedReflexEndorsementOption.endorsementRef = "enhancedreflex"
+		enhancedReflexEndorsementOption.endorsementSponsorEnum = eEndorsementSponsor.ENDORSEMENT_SPONSOR_CLOCKUP
+		file.clockUpGadgetOptions.push( enhancedReflexEndorsementOption )
+
+		AddCallback_OnInventoryOpened( ClockUp_UpdateEndorsementSlotVisibility )
+		Endorsements_AddCallback_OnEndorsementsChanged( ClockUp_Endorsements_UpdateLocalPlayerHUD )
+		AddCallback_LocalClientPlayerSpawned( ClockUp_Endorsements_OnLocalClientPlayerSpawned )
+
+		PrecacheParticleSystem( CLOCKUP_ENDORSEMENT_CRAFT_VFX_1P )
+
+
+
+
+
+
+
+
+
+
+
+	Remote_RegisterServerFunction( string( ClientToServer_ClockUp_Endorsements_EquipClockUpWildCard ), "int", ENDORSEMENT_INVALID, INT_MAX, "int", eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID, eEndorsementSponsor._COUNT )
+	Remote_RegisterClientFunction( string( ServerToClient_ClockUp_Endorsements_ShowClockUpLandingUI ) )
+
+	Endorsements_Crafting_SetCallback_OnSelectEndorsementForCrafting( ClockUp_Endorsements_OnSelectEndorsementForCrafting )
+	Endorsements_Crafting_SetCallback_GetChoiceDataOverride( ClockUp_Endorsements_GetChoiceDataOverride )
+
+	Endorsements_Delivery_SetCrafterModel( ASSET_CLOCKUP_ENDORSEMENTS_CRAFTER_MODEL )
+}
+
+bool function ClockUp_Endorsements_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "clockup_endorsements_is_enabled", false )
+}
+
+EndorsementChoiceData function ClockUp_Endorsements_GetChoiceDataOverride( entity player, EndorsementChoiceData endorsementChoiceData )
+{
+	EndorsementChoiceData resultingChoiceData
+	resultingChoiceData.choiceId = endorsementChoiceData.choiceId
+	resultingChoiceData.choiceString = endorsementChoiceData.choiceString
+	resultingChoiceData.endorsementOptions.extend( endorsementChoiceData.endorsementOptions )
+	resultingChoiceData.endorsementExclusionList.extend( endorsementChoiceData.endorsementExclusionList )
+
+
+		if ( player != GetLocalViewPlayer() )
+			return resultingChoiceData
+
+		EHI viewPlayerEHI = ToEHI( player )
+		if ( !(viewPlayerEHI in file.playerEHIToClockUpEndorsementsCraftingData) )
+		{
+			resultingChoiceData.endorsementOptions.clear()
+			resultingChoiceData.endorsementOptions.extend( file.endorsementTypeDummyOptions )
+		}
+		else if ( file.playerEHIToClockUpEndorsementsCraftingData[viewPlayerEHI].showClockUpEndorsements )
+		{
+			resultingChoiceData.endorsementOptions.clear()
+			resultingChoiceData.endorsementOptions.extend( file.clockUpGadgetOptions )
+		}
+
+
+	return resultingChoiceData
+}
+
+
+EndorsementChoiceData function ClockUp_Endorsements_GetClockUpGadgetOptions()
+{
+	EndorsementChoiceData resultingChoiceData
+	resultingChoiceData.endorsementOptions.clear()
+	resultingChoiceData.endorsementOptions.extend( file.clockUpGadgetOptions )
+
+	return resultingChoiceData
+}
+
+
+
+void function ClockUp_Endorsements_SelectClockUpGadgetOption( entity player, EndorsementDefinition selectedEndorsementDefinition )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	bool isValidClockUpEndorsement = false
+	foreach ( EndorsementOptionData currentEndorsementOptionData in file.clockUpGadgetOptions )
+	{
+		if ( currentEndorsementOptionData.endorsementRef.toupper() != selectedEndorsementDefinition.endorsementRef )
+			continue
+
+		isValidClockUpEndorsement = true
+		break
+	}
+
+	if ( !isValidClockUpEndorsement )
+		return
+
+	Remote_ServerCallFunction( string( ClientToServer_ClockUp_Endorsements_EquipClockUpWildCard ), selectedEndorsementDefinition.endorsementID, eEndorsementSponsor.ENDORSEMENT_SPONSOR_CLOCKUP )
+}
+
+
+EndorsementSelectionProcessingResults function ClockUp_Endorsements_OnSelectEndorsementForCrafting( entity player, EndorsementDefinition selectedEndorsementDefinition )
+{
+	EndorsementSelectionProcessingResults endorsementSelectionResults
+
+
+		if ( player != GetLocalViewPlayer() )
+			return endorsementSelectionResults
+
+		EHI viewPlayerEHI = ToEHI( player )
+		if ( !(viewPlayerEHI in file.playerEHIToClockUpEndorsementsCraftingData) )
+		{
+			ClockUpEndorsementsCraftingData clockUpCraftingData
+			clockUpCraftingData.showClockUpEndorsements = selectedEndorsementDefinition.endorsementRef == "CLOCKUPDUMMYENDORSEMENT"
+			file.playerEHIToClockUpEndorsementsCraftingData[viewPlayerEHI] <- clockUpCraftingData
+
+			endorsementSelectionResults.broadcastSelectionToServer = false
+			endorsementSelectionResults.updateEndorsementCount = false
+		}
+		else if ( file.playerEHIToClockUpEndorsementsCraftingData[viewPlayerEHI].showClockUpEndorsements )
+		{
+			Remote_ServerCallFunction( string( ClientToServer_ClockUp_Endorsements_EquipClockUpWildCard ), selectedEndorsementDefinition.endorsementID, eEndorsementSponsor.ENDORSEMENT_SPONSOR_CLOCKUP )
+			endorsementSelectionResults.broadcastSelectionToServer = false
+			endorsementSelectionResults.updateEndorsementCount = true
+		}
+
+
+	return endorsementSelectionResults
+}
+
+void function ClientToServer_ClockUp_Endorsements_EquipClockUpWildCard( entity player, int endorsementID, int sponsorType )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		Assert( false, "Called on wrong VM" )
+
+}
+
+void function ServerToClient_ClockUp_Endorsements_ShowClockUpLandingUI()
+{
+
+		entity player = GetLocalViewPlayer()
+		if ( !IsValid( player ) )
+			return
+
+		Signal( player, SIG_CLOCKUP_ENDORSEMENTS_CLEAR_NAG )
+		thread ClockUp_Endorsements_ShowNag_Thread( player )
+
+
+
+}
+
+bool function ClockUp_PlayerHasClockUpEndorsement( entity player )
+{
+
+		if ( !ClockUp_Endorsements_IsEnabled() )
+			return false
+
+
+		if ( !IsValid( player ) )
+			return false
+
+		array<int> playerEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+
+		foreach ( int endorsementID in playerEndorsements )
+		{
+			EndorsementDefinition def = Endorsements_GetEndorsementDefinitionFromID( endorsementID )
+			string lowerRef = def.endorsementRef.tolower()
+
+			if ( lowerRef == "disruptinghack" || lowerRef == "enhancedreflex" )
+				return true
+		}
+
+
+
+	return false
+}
+
+
+void function ClockUp_UpdateEndorsementSlotVisibility()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	bool isClockUpModeEnabled = ClockUp_Endorsements_IsEnabled()
+
+	RunUIScript( "UICallback_UpdateEndorsementFrameForClockUp", isClockUpModeEnabled )
+}
+
+
+
+void function ClockUp_HandleEndorsementSlotPositioning( var button, int buttonScriptId, entity player )
+{
+	bool isClockUpModeEnabled = ClockUp_Endorsements_IsEnabled()
+
+	if ( isClockUpModeEnabled && buttonScriptId > 0 )
+	{
+		
+		Hud_Hide( button )
+	}
+	else if ( isClockUpModeEnabled && buttonScriptId == 0 )
+	{
+		
+		Hud_Show( button )
+		Hud_SetPinSibling( button, "Endorsement1")
+		Hud_SetPinToSiblingCorner( button, ePinCorners.CENTER)
+		Hud_SetPinCornerToSibling( button, ePinCorners.CENTER)
+		Hud_SetX(button, 0)
+	}
+	else if ( !isClockUpModeEnabled && buttonScriptId == 0 )
+	{
+		
+		Hud_Show( button )
+		Hud_SetPinSibling( button, "Endorsement1" )
+		Hud_SetPinToSiblingCorner( button, ePinCorners.TOP_LEFT )
+		Hud_SetPinCornerToSibling( button, ePinCorners.TOP_RIGHT )
+		Hud_ReturnToBasePos( button )
+	}
+	else
+	{
+		
+		Hud_Show( button )
+	}
+}
+
+
+
+void function ClockUp_Endorsements_UpdateLocalPlayerHUD( entity player )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	UpdateLocalPlayerEndorsementSlots( player )
+
+	bool isClockUpModeEnabled = ClockUp_Endorsements_IsEnabled()
+	bool hasClockUpEndorsement = ClockUp_PlayerHasClockUpEndorsement( player )
+
+	RunUIScript( "UICallback_UpdateEndorsementFrameForClockUp", isClockUpModeEnabled )
+
+	if ( hasClockUpEndorsement )
+	{
+		Signal( player, SIG_CLOCKUP_ENDORSEMENTS_CLEAR_NAG )
+	}
+}
+
+
+
+void function ClockUp_Endorsements_Crafted_Announcement( entity player, EndorsementDefinition endorsementDef )
+{
+	CenterAnnouncementItem announcement = CenterAnnouncements_CreateBoxStyle()
+	announcement.mainText = Localize( "#CLOCKUP_CYBERWARE_READY_ANNOUNCE", Localize( endorsementDef.displayName ) )
+	announcement.mainTextColor = UNHINGED_COLOR_UI
+	announcement.announcementHeight = 45
+	announcement.contentVerticalPaddingTop = 10.0
+	announcement.contentVerticalPaddingBottom = 10.0
+
+	announcement.paddingTop = 100
+	announcement.leftEndPadding = 40
+	announcement.rightEndPadding = 40
+
+	announcement.frameColor = CLOCKUP_COLOR_RED_UI
+
+	announcement.priority = eHudNotificationQueuePriority.CRITICAL
+
+	announcement.mainIcon1 = $"rui/hud/unitframes/clockup/clockup_splash_topper_warning"
+	announcement.mainIcon1Color = CLOCKUP_COLOR_RED_UI
+	announcement.mainIcon1Size = <1.2, 1, 1>
+	announcement.imageContainerHeight = 42.0
+
+	announcement.scalar = 1.0
+
+	announcement.soundAliases = [ ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS ]
+	announcement.onIntro = ClockUp_Endorsements_Crafting_PlayVFX_On_Craft
+	CenterAnnouncements_QueueItem( announcement, ePersistenceContext.PLAYER )
+}
+
+
+
+void function ClockUp_Endorsements_Crafting_PlayVFX_On_Craft( HudNotificationQueueItem dummyHNQI )
+{
+	entity player = GetLocalClientPlayer()
+	int fxHandle = StartParticleEffectOnEntityWithPos( player, GetParticleSystemIndex( CLOCKUP_ENDORSEMENT_CRAFT_VFX_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+	EffectSetIsWithCockpit( fxHandle, true )
+	EffectSetControlPointVector( fxHandle, 5, <255, 50, 50> ) 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClockUp_Endorsements_OnLocalClientPlayerSpawned( entity player )
+{
+	if ( !player.IsOnGround() )
+		return
+
+	thread ClockUp_Endorsements_ShowNag_Thread( player )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClockUp_ShowEndorsementFirstUseHint( entity player )
+{
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	if ( file.hasShownClockUpEndorsementHint )
+		return
+
+	if ( player.ContextAction_IsMeleeExecution() )
+		return
+
+	
+	while ( IsValid( player ) && ( player.Player_IsSkydiving() || player.Player_IsSkywardLaunching() ) )
+	{
+		WaitFrame()
+	}
+
+	if ( !IsValid( player ) )
+		return
+
+	array<int> playerEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+	foreach ( int endorsementID in playerEndorsements )
+	{
+		EndorsementDefinition def = Endorsements_GetEndorsementDefinitionFromID( endorsementID )
+		string lowerRef = def.endorsementRef.tolower()
+
+		if ( lowerRef == "enhancedreflex" )
+		{
+			AddPlayerHint( 8.0, 0.5, $"", Localize( CLOCKUP_ENHANCED_REFLEX_HINT ) )
+			return
+		}
+		else if ( lowerRef == "disruptinghack" )
+		{
+			AddPlayerHint( 8.0, 0.5, $"", Localize( CLOCKUP_DISRUPTING_HACK_HINT ) )
+			return
+		}
+	}
+	file.hasShownClockUpEndorsementHint = true
+}
+
+
+
+void function ClockUp_HideEndorsementFirstUseHint()
+{
+	HidePlayerHint( Localize( CLOCKUP_ENHANCED_REFLEX_HINT ) )
+	HidePlayerHint( Localize( CLOCKUP_DISRUPTING_HACK_HINT ) )
+}
+
+
+
+void function ClockUp_Endorsements_ShowNag_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	if ( file.isNagVisible )
+		return
+
+	if ( ClockUp_PlayerHasClockUpEndorsement( player ) )
+		return
+
+	Signal( player, SIG_CLOCKUP_ENDORSEMENTS_CLEAR_NAG )
+	EndSignal( player, SIG_CLOCKUP_ENDORSEMENTS_CLEAR_NAG )
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	float nagStartTime = GetGlobalNetTime( "PlaneDoorsCloseTime" ) + MARGIN_WAIT_TIME + 1.0
+	while ( (nagStartTime - Time()) > 0.0 )
+	{
+		WaitFrame()
+	}
+
+	
+	while ( clGlobal.isAnnouncementActive )
+	{
+		WaitFrame()
+	}
+	wait 1.5
+
+	ClockUp_Endorsements_QueueCyberwareAvailableAnnouncement()
+	
+	while ( CenterAnnouncements_IsActivelyDisplaying() )
+	{
+		WaitFrame()
+	}
+
+	var rui = CreateCockpitPostFXRui( ASSET_CLOCKUP_ENDORSEMENTS_PING_NAG_RUI, HUD_Z_BASE )
+	ClockupGadgetPicker_ApplyEndorsementNagSkin( rui )
+	file.isNagVisible = true
+
+	OnThreadEnd( function() : ( rui )
+	{
+		if ( IsValid( rui ) || RuiIsAlive( rui ) )
+		{
+			RuiSetFloat( rui, "destroyAnimStartTime", Time() )
+		}
+
+		file.isNagVisible = false
+	})
+
+	while ( true )
+	{
+		if ( IsValid( rui ) || RuiIsAlive( rui ) )
+		{
+			RuiSetBool( rui, "isVisible", SURVIVAL_PlayerCanSwitchGadget( player ) )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+bool function ClockUp_Endorsements_IsPingNagVisible()
+{
+	return ClockUp_Endorsements_IsEnabled() && file.isNagVisible
+}
+
+
+
+void function ClockUp_Endorsements_DismissAnnouncement()
+{
+	if ( file.announcementQueueItem.isValid && IsValid( file.announcementQueueItem.signalDummy ) )
+	{
+		Signal( file.announcementQueueItem.signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+	}
+}
+
+
+
+void function ClockUp_Endorsements_QueueCyberwareAvailableAnnouncement()
+{
+	CenterAnnouncementItem announcement = CenterAnnouncements_CreateBoxStyle()
+	announcement.mainText = Localize( "#CLOCKUP_CYBERWARE_AVAILABLE" )
+	announcement.mainTextColor = UNHINGED_COLOR_UI
+	announcement.announcementHeight = 45
+	announcement.contentVerticalPaddingTop = 10.0
+	announcement.contentVerticalPaddingBottom = 10.0
+
+	announcement.paddingTop = 100
+	announcement.leftEndPadding = 40
+	announcement.rightEndPadding = 40
+
+	announcement.frameColor = CLOCKUP_COLOR_RED_UI
+
+	announcement.priority = eHudNotificationQueuePriority.CRITICAL
+
+	announcement.mainIcon1 = $"rui/hud/unitframes/clockup/clockup_splash_topper_warning"
+	announcement.mainIcon1Color = CLOCKUP_COLOR_RED_UI
+	announcement.mainIcon1Size = <1.2, 1, 1>
+	announcement.imageContainerHeight = 42.0
+
+	announcement.scalar = 1.0
+	announcement.duration = CLOCKUP_ENDORSEMENTS_ANNOUNCEMENT_DURATION
+
+	announcement.soundAliases = [ ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS ]
+	announcement.onIntro = ClockUp_Endorsements_Crafting_PlayVFX_On_Craft
+	file.announcementQueueItem = CenterAnnouncements_QueueItem( announcement, ePersistenceContext.PLAYER )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+       

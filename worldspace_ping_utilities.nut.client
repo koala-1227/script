@@ -1,0 +1,525 @@
+global function WorldspaceIcon_Init
+
+
+
+
+
+
+
+
+
+global function SetupWorldspaceIcon
+global function UpdateHighlightedWorldspaceIcons
+global function GetWorldspaceIconPing
+global function WorldspaceIconPinged
+global function SetWorldspaceIconColor
+global function SetWorldspaceIconFadeDistance
+global function SetWorldspaceIconPingDistance
+global function SetWorldspaceIconIsHidden
+global function SetWorldspaceIconIsInteractable
+
+#if DEV
+global function DEV_TestSetWorldspaceIconColor
+global function DEV_TestSetWorldspaceIconFadeDistance
+global function DEV_TestWorldspaceIconsToggleHidden
+#endif
+
+
+const asset DEFAULT_ICON_PARENT_RUI = $"ui/in_world_perk_icon_marker.rpak"
+const float NON_INTERACTABLE_MINIMAP_ICON_OPACITY = .8
+const vector MINIMAP_ICON_DEFAULT_NONINTERACTABLE_COLOR =  < .25, .25, .25 >
+const vector MINIMAP_ICON_DEFAULT_COLOR = < 1.0, 1.0, 1.0 >
+const float WORLDSPACE_ICON_DEFAULT_UPOFFSET = 50
+const float WORLDSPACE_ICON_DEFAULT_MAX_PING_DISTANCE = 3000
+const float WORLDSPACE_ICON_HIGHLIGHT_DEGREES = 3
+
+global struct WorldspaceIconData
+{
+	entity ent
+	asset imageAsset
+	asset ruiLayer = DEFAULT_ICON_PARENT_RUI
+	var rui
+
+	int pingType
+
+	bool hidden = false
+	bool isInteractable = true
+	bool trackEntityPosition = true
+
+	float upOffset = WORLDSPACE_ICON_DEFAULT_UPOFFSET
+	float pingDistance = WORLDSPACE_ICON_DEFAULT_MAX_PING_DISTANCE
+	float minAlphaDistance = WORLDSPACE_ICON_DEFAULT_MAX_PING_DISTANCE - 500
+	float maxAlphaDistance = WORLDSPACE_ICON_DEFAULT_MAX_PING_DISTANCE
+
+	float closeUpFadeMinAlphaDistance = -1
+	float closeUpFadeMaxAlphaDistance = -1
+	float closeUpFadeMinAlphaValue = 0.5
+
+	vector color = MINIMAP_ICON_DEFAULT_COLOR
+	vector nonInteractableColor = MINIMAP_ICON_DEFAULT_NONINTERACTABLE_COLOR
+
+	string descriptiveText = ""
+
+	void functionref( var rui, entity ent ) thinkThread = null
+	bool functionref( WorldspaceIconData data, vector worldPos, float worldRange ) mapPingFilterFunction = null
+}
+
+struct
+{
+
+		entity          					highlightedEnt
+		table< entity, WorldspaceIconData > worldSpaceIcons
+		array< entity > pingedIcons
+
+} file
+
+void function WorldspaceIcon_Init()
+{
+	RegisterSignal( "UpdateWorldSpaceIconMinimapVisibility" )
+	RegisterSignal( "HideWorldSpaceIconMinimapVisibility" )
+
+
+		Remote_RegisterServerFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropScript", "int", 0, ePingType._count - 1, "float", 0.0, 100.0, 32, "typed_entity", "prop_script" )
+		Remote_RegisterServerFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropDynamic", "int", 0, ePingType._count - 1, "float", 0.0, 100.0, 32, "typed_entity", "prop_dynamic" )
+		Remote_RegisterServerFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropMaterialHarvester", "int", 0, ePingType._count - 1, "float", 0.0, 100.0, 32, "typed_entity", "prop_material_harvester" )
+		Remote_RegisterServerFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropArsenal", "int", 0, ePingType._count - 1, "float", 0.0, 100.0, 32, "typed_entity", "prop_arsenal" )
+
+
+		AddCallback_OnFindFullMapAimEntity( WorldspaceIcons_GetEntityUnderAim, WorldspaceIcons_PingEntityUnderAim )
+
+		RegisterSignal( "WorldSpaceIconPinged" )
+		RegisterSignal( "WorldSpaceIconPingDestroyed" )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function SetupWorldspaceIcon( WorldspaceIconData settings )
+{
+	if ( !WorldspaceIconSettingsAreValid( settings ) )
+		return
+
+	if ( settings.ent in file.worldSpaceIcons )
+		settings.ent.Signal( "HideWorldSpaceIconMinimapVisibility" )
+
+	var rui = CreateClientSideHUDMarker( settings.imageAsset, settings.ruiLayer, settings.ent, settings.upOffset, settings.trackEntityPosition )
+	settings.rui = rui
+	file.worldSpaceIcons[settings.ent] <- settings
+
+	thread WorldspaceUseIconThink( settings )
+}
+
+bool function WorldspaceIconSettingsAreValid( WorldspaceIconData settings )
+{
+	bool entValid = IsValid( settings.ent )
+	Assert( entValid, "Invalid Worldspace Icon Settings! - Invalid entity" )
+
+	bool imageValid = ( settings.imageAsset != $"" )
+	Assert( imageValid, "Invalid Worldspace Icon Settings! - Invalid image asset" )
+
+	bool pingTypeValid = IsValidEnumValue( "ePingType", settings.pingType ) && settings.pingType < ePingType._count
+	Assert( pingTypeValid, "Invalid Worldspace Icon Settings! - Invalid ping type" )
+
+	return entValid && imageValid && pingTypeValid
+}
+
+var function CreateClientSideHUDMarker( asset imageAsset, asset ruiLayer, entity ent, float upOffset, bool trackEntityPosition )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	vector pos             = ent.GetOrigin()
+	var rui                = CreateFullscreenRui( ruiLayer, RuiCalculateDistanceSortKey( localViewPlayer.EyePosition(), pos ) )
+	RuiSetImageIfExists( rui, "beaconImage", imageAsset )
+	RuiSetGameTimeIfExists( rui, "startTime", Time() )
+	if( trackEntityPosition )
+	{
+		RuiTrackFloat3( rui, "pos", ent, RUI_TRACK_ABSORIGIN_FOLLOW  )
+	}
+	else
+	{
+		RuiSetFloat3IfExists( rui, "pos", pos )
+	}
+	RuiSetFloatIfExists( rui, "upOffset", upOffset )
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+	RuiSetBoolIfExists( rui, "isVisible", true )
+
+	return rui
+}
+
+void function WorldspaceUseIconThink( WorldspaceIconData data )
+{
+	data.ent.EndSignal( "OnDestroy" )
+	data.ent.EndSignal( "HideWorldSpaceIconMinimapVisibility" )
+	data.ent.EndSignal( "UpdateWorldSpaceIconMinimapVisibility" )
+
+	float alpha = data.isInteractable ? 1.0 : NON_INTERACTABLE_MINIMAP_ICON_OPACITY
+	RuiSetFloatIfExists( data.rui, "alphaMultiplier", alpha )
+	RuiSetFloatIfExists( data.rui, "minAlphaDist", data.minAlphaDistance )
+	RuiSetFloatIfExists( data.rui, "maxAlphaDist", data.maxAlphaDistance )
+	RuiSetFloatIfExists( data.rui, "closeUpFadeMinAlphaDist", data.closeUpFadeMinAlphaDistance )
+	RuiSetFloatIfExists( data.rui, "closeUpFadeMaxAlphaDist", data.closeUpFadeMaxAlphaDistance )
+	RuiSetFloatIfExists( data.rui, "closeUpFadeMinAlphaValue", data.closeUpFadeMinAlphaValue )
+
+	vector color = data.isInteractable ? file.worldSpaceIcons[data.ent].color : file.worldSpaceIcons[data.ent].nonInteractableColor
+	RuiSetFloat3IfExists( data.rui, "iconColor", color )
+
+	RuiSetStringIfExists( data.rui, "descriptiveTextLocString", data.descriptiveText )
+
+	if( data.isInteractable )
+	{
+		thread ListenForWorldspaceIconPinged( data.ent, data.rui )
+	}
+	else
+	{
+		thread UpdateNonInteractableWorldspaceMinimapIcons( data.ent, data.rui )
+	}
+
+	if( data.thinkThread != null )
+	{
+		thread data.thinkThread( data.rui, data.ent )
+	}
+
+	OnThreadEnd( void function() : ( data ) {
+		RuiDestroyIfAlive( data.rui )
+		if ( data.ent in file.worldSpaceIcons )
+		{
+			delete file.worldSpaceIcons[data.ent]
+		}
+	} )
+
+	WaitForever()
+}
+
+bool function UpdateHighlightedWorldspaceIcons()
+{
+	entity player = GetLocalClientPlayer()
+	vector playerEyePos = player.EyePosition()
+	vector viewVector = player.GetViewVector()
+	float minDot = deg_cos( WORLDSPACE_ICON_HIGHLIGHT_DEGREES  )
+	float bestDot = 0
+	entity bestEnt = null
+
+	foreach( entity ent, WorldspaceIconData data in file.worldSpaceIcons )
+	{
+		if( !IsValid( ent ) )
+			continue
+
+		if ( data.hidden )
+			continue
+
+		if( !data.isInteractable )
+			continue
+
+		vector iconPos = ent.GetOrigin() + < 0.0, 0.0, file.worldSpaceIcons[ent].upOffset >
+		if( DistanceSqr( iconPos, playerEyePos ) > data.pingDistance * data.pingDistance )
+			continue
+
+		vector eyeToIcon = iconPos - playerEyePos
+		vector eyeToIconNormalized = Normalize( eyeToIcon )
+		float dot = DotProduct( eyeToIconNormalized, viewVector )
+		if( dot < minDot || dot < bestDot )
+			continue
+
+		bestDot = dot
+		bestEnt = ent
+	}
+
+	SetHighlightedWorldspaceIcon( bestEnt )
+	return bestEnt != null
+}
+
+void function SetHighlightedWorldspaceIcon( entity ent )
+{
+	if ( file.highlightedEnt != null )
+	{
+		if ( file.highlightedEnt == ent )
+			return
+
+		if ( ( file.highlightedEnt in file.worldSpaceIcons ) && RuiIsAlive( file.worldSpaceIcons[file.highlightedEnt].rui ) )
+		{
+			RuiSetBoolIfExists( file.worldSpaceIcons[file.highlightedEnt].rui, "isHighlighted", false )
+		}
+	}
+
+	file.highlightedEnt = null
+
+	if ( ent in file.worldSpaceIcons )
+	{
+		file.highlightedEnt = ent
+		RuiSetBoolIfExists( file.worldSpaceIcons[file.highlightedEnt].rui, "isHighlighted", true )
+	}
+}
+
+entity function WorldspaceIcons_GetEntityUnderAim( vector worldPos, float worldRange )
+{
+	entity closestEnt = null
+	float closestDistSqr = FLT_MAX
+	float worldRangeSqr = worldRange * worldRange
+
+	if( MapPing_Modify_DistanceCheck_Enabled() )
+	{
+		float modifier = MapPing_DistanceCheck_GetModifier()
+
+		if( worldRange >= MapPing_DistanceCheck_GetDistanceRange() )
+			modifier *= 0.5
+
+		worldRangeSqr = ( worldRange * modifier ) * ( worldRange * modifier )
+	}
+
+	foreach( entity ent, WorldspaceIconData data in file.worldSpaceIcons )
+	{
+		if ( data.mapPingFilterFunction != null && !data.mapPingFilterFunction( data, worldPos, worldRange ) )
+			continue
+
+		vector entPos = ent.GetOrigin()
+		entPos.z = 0
+		float distSqr = Distance2DSqr( worldPos, entPos )
+		if( distSqr > worldRangeSqr )
+			continue
+		if( distSqr > closestDistSqr )
+			continue
+		closestDistSqr = distSqr
+		closestEnt = ent
+	}
+	return closestEnt
+}
+
+bool function WorldspaceIcons_PingEntityUnderAim( entity ent )
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return false
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return false
+
+	switch ( ent.GetNetworkedClassName() )
+	{
+		case "prop_script":
+			Remote_ServerCallFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropScript", file.worldSpaceIcons[ent].pingType, file.worldSpaceIcons[ent].upOffset, ent )
+			break
+		case "prop_dynamic":
+			Remote_ServerCallFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropDynamic", file.worldSpaceIcons[ent].pingType, file.worldSpaceIcons[ent].upOffset, ent )
+			break
+		case "prop_material_harvester":
+			Remote_ServerCallFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropMaterialHarvester", file.worldSpaceIcons[ent].pingType, file.worldSpaceIcons[ent].upOffset, ent )
+			break
+		case "prop_arsenal":
+			Remote_ServerCallFunction( "WorldspaceIcons_ClientToServer_WorldspaceIconPinged_PropArsenal", file.worldSpaceIcons[ent].pingType, file.worldSpaceIcons[ent].upOffset, ent )
+			break
+	}
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+
+	return true
+}
+
+WorldspaceIconData ornull function GetWorldspaceIconPing()
+{
+	return ( file.highlightedEnt in file.worldSpaceIcons ) ? file.worldSpaceIcons[ file.highlightedEnt ] : null
+}
+
+void function ListenForWorldspaceIconPinged( entity ent, var rui )
+{
+	ent.EndSignal( "OnDestroy" )
+	ent.EndSignal( "HideWorldSpaceIconMinimapVisibility" )
+	ent.EndSignal( "UpdateWorldSpaceIconMinimapVisibility" )
+
+	while( true )
+	{
+		if( !file.pingedIcons.contains( ent ) )
+			ent.WaitSignal( "WorldSpaceIconPinged" )
+		file.worldSpaceIcons[ent].hidden = true
+		RuiSetBoolIfExists( rui, "isVisible", false )
+		ent.WaitSignal( "WorldSpaceIconPingDestroyed" )
+		file.worldSpaceIcons[ent].hidden = false
+		RuiSetBoolIfExists( rui, "isVisible", true )
+	}
+}
+
+void function WorldspaceIconPinged( entity wp )
+{
+	entity ent = GetPingedEntForLocWaypoint( wp )
+
+	if ( !(ent in file.worldSpaceIcons) )
+		return
+
+	ent.Signal( "WorldSpaceIconPinged" )
+	file.pingedIcons.append( ent )
+	wp.WaitSignal( "OnDestroy" )
+	file.pingedIcons.fastremovebyvalue( ent )
+	ent.Signal( "WorldSpaceIconPingDestroyed" )
+}
+
+void function UpdateNonInteractableWorldspaceMinimapIcons( entity minimapEnt, var rui )
+{
+	minimapEnt.EndSignal( "OnDestroy" )
+	minimapEnt.EndSignal( "HideWorldSpaceIconMinimapVisibility" )
+	minimapEnt.EndSignal( "UpdateWorldSpaceIconMinimapVisibility" )
+
+	while( true )
+	{
+		entity localPlayer = GetLocalViewPlayer()
+		bool isHidden = true
+		if( localPlayer.IsEntAlive() && !file.pingedIcons.contains( minimapEnt ) )
+		{
+			vector vecToBox = localPlayer.GetOrigin() - minimapEnt.GetOrigin()
+			float distSquared = LengthSqr( vecToBox )
+			float maxDistSquared = file.worldSpaceIcons[ minimapEnt ].pingDistance * file.worldSpaceIcons[ minimapEnt ].pingDistance
+
+			isHidden = distSquared >= maxDistSquared || !PlayerCanSee( localPlayer, minimapEnt, true, 40, true )
+		}
+		file.worldSpaceIcons[minimapEnt].hidden = isHidden
+		RuiSetBoolIfExists( rui, "isVisible", !isHidden )
+
+		Wait( .5 )
+	}
+}
+
+void function SetWorldspaceIconColor( entity ent, vector newColor, vector newNonInteractableColor )
+{
+	if ( ent in file.worldSpaceIcons )
+	{
+		WorldspaceIconData data = file.worldSpaceIcons[ent]
+		data.color = newColor
+		data.nonInteractableColor = newNonInteractableColor
+		vector color = data.isInteractable ? file.worldSpaceIcons[data.ent].color : file.worldSpaceIcons[data.ent].nonInteractableColor
+		RuiSetFloat3IfExists( data.rui, "iconColor", color )
+	}
+}
+
+void function SetWorldspaceIconFadeDistance( entity ent, float newMinDistance, float newMaxDistance )
+{
+	if ( ent in file.worldSpaceIcons )
+	{
+		WorldspaceIconData data = file.worldSpaceIcons[ent]
+		data.minAlphaDistance = newMinDistance
+		data.maxAlphaDistance = newMaxDistance
+		RuiSetFloatIfExists( data.rui, "minAlphaDist", data.minAlphaDistance )
+		RuiSetFloatIfExists( data.rui, "maxAlphaDist", data.maxAlphaDistance )
+	}
+}
+
+void function SetWorldspaceIconPingDistance( entity ent, float newDistance )
+{
+	if ( ent in file.worldSpaceIcons )
+	{
+		file.worldSpaceIcons[ent].pingDistance = newDistance
+	}
+}
+
+void function SetWorldspaceIconIsHidden( entity ent, bool shouldHide )
+{
+	if ( ent in clone file.worldSpaceIcons )
+	{
+		WorldspaceIconData data = file.worldSpaceIcons[ent]
+		data.hidden = shouldHide
+		float visibleAlpha = data.isInteractable ? 1.0 : NON_INTERACTABLE_MINIMAP_ICON_OPACITY
+		RuiSetFloatIfExists( data.rui, "alphaMultiplier", shouldHide ? 0.0 : visibleAlpha )
+	}
+}
+
+void function SetWorldspaceIconIsInteractable( entity ent, bool state )
+{
+	if ( ent in clone file.worldSpaceIcons && file.worldSpaceIcons[ent].isInteractable != state )
+	{
+		WorldspaceIconData dataClone = clone file.worldSpaceIcons[ent]
+		dataClone.isInteractable = state
+		ent.Signal( "UpdateWorldSpaceIconMinimapVisibility" )
+		SetupWorldspaceIcon( dataClone )
+	}
+}
+
+#if DEV
+void function DEV_TestSetWorldspaceIconColor()
+{
+	foreach ( entity ent, WorldspaceIconData data in file.worldSpaceIcons )
+	{
+		SetWorldspaceIconColor( ent, COLOR_PINK, COLOR_PURPLE )
+	}
+}
+
+void function DEV_TestSetWorldspaceIconFadeDistance()
+{
+	foreach ( entity ent, WorldspaceIconData data in file.worldSpaceIcons )
+	{
+		SetWorldspaceIconFadeDistance( ent, 50, 550 )
+	}
+}
+
+void function DEV_TestWorldspaceIconsToggleHidden()
+{
+	foreach ( entity ent, WorldspaceIconData data in file.worldSpaceIcons )
+	{
+		SetWorldspaceIconIsHidden( ent, !data.hidden )
+	}
+}
+#endif
+
+ 

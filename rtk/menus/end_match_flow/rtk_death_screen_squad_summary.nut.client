@@ -1,0 +1,650 @@
+
+
+
+
+
+
+
+global function RTKDeathScreenSquadSummary_PopulateData
+
+
+
+const string INLINE_SEPARATOR = " / "
+
+struct
+{
+	rtk_struct squadSummary = null
+		bool consumeNavForward = false
+} file
+
+global struct RTKDeathScreenSquadSummary_Properties
+{
+	rtk_panel summaryCardList
+}
+
+global struct RTKSquadSummaryCardStatModel
+{
+	string title
+	string value
+}
+
+global struct RTKSquadSummaryCardModel
+{
+	string playerName = ""
+	vector playerColor
+	string hardware
+	string platformIDString
+	array<RTKSquadSummaryCardStatModel> stats
+
+
+
+	string obfuscatedID
+	string uid
+	string unspoofedUID
+	string playerEAID
+	string actionText = ""
+	bool isLocalPlayer
+
+	bool canMute = false
+	bool isMuted = false
+	bool canViewProfile = false
+
+	bool canReport = false
+	bool canInvite = false
+	bool canSendFriendRequest = false
+	bool isConnected = true
+}
+
+global struct RTKSquadSummaryModel
+{
+	array<RTKSquadSummaryCardModel> cards
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function RTKDeathScreenSquadSummary_PopulateData( string path = "&menus.squadSummary")
+{
+	if ( !RTKDataModel_HasDataModel( path ) )
+		return
+
+	rtk_struct model = RTKDataModel_GetStruct( path )
+	rtk_array squadGladCards = RTKStruct_GetArray( model, "cards" )
+
+	SquadSummaryData squadSummaryData = GetSquadSummaryData()
+
+	array< PlayerInfo > teammates = Cl_Squad_GetTeammates( true ) 
+
+	entity localPlayer = GetLocalClientPlayer()
+	EHI localPlayerEHI = -1
+	if ( IsValid( localPlayer ) )
+		localPlayerEHI = ToEHI( localPlayer )
+
+	
+	if ( squadSummaryData.playerData.len() > 1 )
+	{
+		foreach ( index, playerData in squadSummaryData.playerData)
+		{
+			if ( playerData.eHandle == localPlayerEHI)
+			{
+				squadSummaryData.playerData.insert( 1, squadSummaryData.playerData.remove(index) )
+				break
+			}
+		}
+	}
+
+	if ( RTKArray_GetCount( squadGladCards ) > 0 )
+		RTKArray_Clear( squadGladCards )
+
+	array< RTKSquadSummaryCardModel > cards
+
+	foreach ( playerData in squadSummaryData.playerData)
+	{
+		bool isLocalPlayer = playerData.eHandle == localPlayerEHI
+		entity dataPlayer = FromEHI( playerData.eHandle )
+
+		
+		RTKSquadSummaryCardModel cardModel
+
+		EHIScriptStruct teammateEHISS
+		if ( EEHHasValidScriptStruct( playerData.eHandle ) )
+			teammateEHISS = GetEHIScriptStruct( playerData.eHandle )
+
+		
+		cardModel.isConnected = ( ( IsValid( dataPlayer ) )? dataPlayer.IsConnectionActive(): false )
+		cardModel.playerEAID = teammateEHISS.playerEAID
+		cardModel.uid = teammateEHISS.uid
+		cardModel.hardware = teammateEHISS.hardware
+
+		bool isPlayerBot = false
+		bool canReport = false
+
+		if ( IsValid( dataPlayer ) )
+		{
+#if AUTO_PLAYER
+			isPlayerBot         = AutoPlayer_IsAutoPlayer( dataPlayer ) || dataPlayer.IsBot()
+#else
+			isPlayerBot         = dataPlayer.IsBot()
+#endif
+
+			cardModel.isMuted       = dataPlayer.IsVoiceAndTextMuted()
+			cardModel.unspoofedUID  = dataPlayer.GetPlatformUserIdStr()
+			canReport 				= CanReportPlayer( dataPlayer )
+			if ( dataPlayer != null )
+			{
+				cardModel.playerColor   = GetPlayerInfoColor( dataPlayer ) / 255.0
+			}
+		}
+		else
+		{
+			cardModel.unspoofedUID = teammateEHISS.unspoofedUid
+
+			int reportStyle = GetReportStyle()
+
+			switch ( reportStyle )
+			{
+				case 1: 
+				canReport = CrossplayUserOptIn() ? true : PlatformIDToIconString(teammateEHISS.platformID) == GetLocalClientPlayer().GetHardwareName()
+				break
+
+				case 2: 
+				canReport = true
+				break
+
+				case 0: 
+				default:
+					canReport = false
+			}
+
+			
+			if ( RTKDeathScreenSquadSummary_IsPlayerBot( teammates, playerData.eHandle ) )
+				isPlayerBot = true
+		}
+
+		cardModel.canViewProfile 	   = !isPlayerBot && !isLocalPlayer && Teams_CanViewProfile( teammateEHISS.uid, teammateEHISS.hardware )
+		cardModel.canInvite            = !isPlayerBot && !isLocalPlayer && CanInviteSquadMate( cardModel.uid ) && CanInviteToparty() == 0
+		cardModel.canMute              = !isPlayerBot && !isLocalPlayer && cardModel.isConnected && !bool(GetCommsRestrictionState() & COMMSRESTRICT_SENDRECV_TEXTANDVOICE)
+		cardModel.canReport            = !isPlayerBot && !isLocalPlayer && canReport
+		cardModel.canSendFriendRequest = !isPlayerBot && !isLocalPlayer && CanSendFriendRequest( GetLocalClientPlayer() ) && !EADP_IsFriendByEAID( cardModel.playerEAID )
+
+		if ( GetCurrentPlaylistVarBool( "showPlayerObfuscatedID", true ) && teammateEHISS.obfuscatedID != "" )
+		{
+			cardModel.obfuscatedID = teammateEHISS.obfuscatedID
+		}
+
+		if ( cardModel.canSendFriendRequest )
+		{
+			
+			CommunityFriends friends = GetFriendInfo()
+			foreach ( id in friends.ids )
+			{
+				if ( cardModel.uid == id )
+				{
+					cardModel.canSendFriendRequest = false
+					break
+				}
+			}
+		}
+
+		string actionText = ""
+		if( cardModel.canViewProfile )
+			actionText += ( actionText == "" )? Localize( "#Y_BUTTON_VIEW_PROFILE" ): "\n" + Localize( "#Y_BUTTON_VIEW_PROFILE" )
+
+		if( cardModel.canInvite )
+			actionText += ( actionText == "" )? Localize( "#CLICK_INVITE_PARTY" ): "\n" + Localize( "#CLICK_INVITE_PARTY" )
+
+		if( cardModel.canSendFriendRequest )
+			actionText += ( actionText == "" )? Localize( "#RCLICK_INVITE_FRIEND" ): "\n" + Localize( "#RCLICK_INVITE_FRIEND" )
+
+		cardModel.actionText = Localize( actionText )
+
+		cardModel.platformIDString = PlatformIDToIconString( teammateEHISS.platformID )
+
+		if ( EEHHasValidScriptStruct( playerData.eHandle ) )
+			cardModel.playerName = GetDisplayablePlayerNameFromEHI( playerData.eHandle )
+		else
+			cardModel.playerName = ""
+
+		cardModel.isLocalPlayer = isLocalPlayer
+
+		
+		array<RTKSquadSummaryCardStatModel> stats
+
+		
+		RTKSquadSummaryCardStatModel kak
+		string kakDisplayStr
+		string kakValueStr
+
+		if ( playerData.modeSpecificSummaryData[ 0 ].displayString != "" )
+		{
+			kakDisplayStr = kakDisplayStr + Localize( playerData.modeSpecificSummaryData[ 0 ].displayString )
+			kakValueStr	= kakValueStr + string ( playerData.modeSpecificSummaryData[ 0 ].displayValue )
+		}
+
+		if ( playerData.modeSpecificSummaryData[ 1 ].displayString != "" )
+		{
+			kakDisplayStr =  kakDisplayStr + INLINE_SEPARATOR + Localize( playerData.modeSpecificSummaryData[ 1 ].displayString )
+			kakValueStr = kakValueStr + INLINE_SEPARATOR + string ( playerData.modeSpecificSummaryData[ 1 ].displayValue )
+		}
+
+		if ( playerData.modeSpecificSummaryData[ 2 ].displayString != "" )
+		{
+			kakDisplayStr =  kakDisplayStr + INLINE_SEPARATOR + Localize( playerData.modeSpecificSummaryData[ 2 ].displayString )
+			kakValueStr = kakValueStr + INLINE_SEPARATOR + string ( playerData.modeSpecificSummaryData[ 2 ].displayValue )
+		}
+
+		kak.title = kakDisplayStr
+		kak.value = kakValueStr
+
+		stats.append(kak)
+
+		
+		RTKSquadSummaryCardStatModel damage
+		damage.title = playerData.modeSpecificSummaryData[ 3 ].displayString
+		damage.value = FormatAndLocalizeNumber( "1", float( playerData.modeSpecificSummaryData[ 3 ].displayValue ), true )
+
+		stats.append(damage)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		{
+
+			if ( IsDynamicStatsEnabled() )
+			{
+				for ( int i = 4; i <= 6 ; ++i )
+				{
+					if ( playerData.modeSpecificSummaryData[ i ].displayString != "" )
+					{
+						RTKSquadSummaryCardStatModel statCard
+						statCard.value = GetCalculatedPersistenceDisplayValue ( playerData.modeMetaDataKeys[ i ], playerData.modeSpecificSummaryData[ i ].displayValue )
+						statCard.title = playerData.modeSpecificSummaryData[ i ].displayString
+						stats.append(statCard)
+					}
+				}
+			}
+			else
+
+			{
+				if ( playerData.modeSpecificSummaryData[ 4 ].displayString != "" )
+				{
+					
+					RTKSquadSummaryCardStatModel survTime
+					survTime.title = playerData.modeSpecificSummaryData[ 4 ].displayString
+					int data4Value = playerData.modeSpecificSummaryData[ 4 ].displayValue
+					if ( playerData.summary3IsTime )
+					{
+						string minutes = string( data4Value/ 60 )
+						string seconds = string ( data4Value % 60 )
+						if ( seconds.len() == 1 )
+							seconds = "0" + seconds
+						survTime.value =  Localize( "#DEATH_SCREEN_SUMMARY_SURVIVAL_TIME_FORMAT", minutes, seconds )
+					}
+					else
+					{
+						survTime.value = string( data4Value )
+					}
+
+					stats.append(survTime)
+				}
+
+
+				if ( playerData.modeSpecificSummaryData[ 5 ].displayString != "" )
+				{
+					RTKSquadSummaryCardStatModel revives
+					revives.title = playerData.modeSpecificSummaryData[ 5 ].displayString
+					revives.value = string( playerData.modeSpecificSummaryData[ 5 ].displayValue )
+					stats.append(revives)
+				}
+
+				if ( playerData.modeSpecificSummaryData[ 6 ].displayString != "" )
+				{
+					RTKSquadSummaryCardStatModel respawnGiven
+					respawnGiven.title = playerData.modeSpecificSummaryData[ 6 ].displayString
+					respawnGiven.value = string( playerData.modeSpecificSummaryData[ 6 ].displayValue )
+					stats.append(respawnGiven)
+				}
+			}
+		}
+
+		cardModel.stats = stats
+		cards.append( cardModel )
+	}
+
+	RTKArray_SetValue( squadGladCards, cards )
+}
+
+
+
+bool function RTKDeathScreenSquadSummary_IsPlayerBot( array< PlayerInfo > teammates, int eHandle )
+{
+	foreach ( teammate in teammates )
+	{
+		if ( teammate.ehi == eHandle )
+		{
+			if ( teammate.isBot )
+			{
+				return true
+			}
+		}
+	}
+	return false
+}
+
+ 

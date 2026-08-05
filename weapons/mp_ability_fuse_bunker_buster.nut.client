@@ -1,0 +1,1845 @@
+global function MpAbilityBunkerBuster_Init
+global function BunkerBuster_SetupTuning
+global function OnProjectileCollision_ability_BunkerBuster
+global function OnWeaponActivate_ability_BunkerBuster
+global function OnWeaponDeactivate_ability_BunkerBuster
+global function OnWeaponPrimaryAttack_ability_BunkerBuster
+global function OnWeaponAttemptOffhandSwitch_ability_BunkerBuster
+global function OnWeaponReadyToFire_ability_BunkerBuster
+#if DEV
+global function DEV_BunkerBusterUseScatterProjectiles
+#endif
+
+
+global function BunkerBuster_ShouldHighlight
+global function BunkerBuster_OnBreachModeChanged
+global function OnCreateClientPreviewFX_ability_BunkerBuster
+global function OnUpdateClientPreviewFX_ability_BunkerBuster
+global function OnDestroyClientPreviewFX_ability_BunkerBuster
+
+
+
+const asset BUNKER_BUSTER_STUCK_MODEL_UP = $"mdl/props/single_joint_props/fuse_ultimate_bomb_02_up.rmdl"
+const asset BUNKER_BUSTER_STUCK_MODEL_DOWN = $"mdl/props/single_joint_props/fuse_ultimate_bomb_02_down.rmdl"
+const asset EXPLOSIVE_PROJECTILE_MODEL = $"mdl/weapons/grenades/w_fuse_minibomb_projectile.rmdl"
+const asset BUNKER_BUSTER_AR_SPRAY = $"pSquad_MDL_arrow_btm"
+const asset  BUNKER_BUSTER_AR_SPRAY_EXIT = $"P_alter_tac_portal_preview_exit"
+const asset  BUNKER_BUSTER_AR_SPRAY_EXIT_TOFLOOR = $"P_alter_tac_rope_preview_exit"
+const asset  BUNKER_BUSTER_BREACH_DECAL_FX = $"P_fuse_ult_v2_hole"
+const asset  BUNKER_BUSTER_DANCING_FLAME_FX = $"P_fuse_ult_v2_fpatch"
+const asset  BUNKER_BUSTER_CLUSTER_TRAIL_FX = $"P_ult_v2_cluster_trail"
+const asset  BUNKER_BUSTER_CLUSTER_GROUP_LAUNCHED_FX = $"P_fuse_ult_v2_deploy"
+global const string BUNKER_BUSTER_ALT_FIRE_MOD = "using_alt_fire"
+const string BUNKER_BUSTER_MISSILE_EXPLOSION = "exp_fuse_ult_v2"
+const string BUNKER_BUSTER_CLUSTER_EXPLOSION = "exp_fuse_ult_v2_cluster"
+const string BUNKER_BUSTER_MISSILE_BREACH_EXIT_EXPLOSION = "exp_fuse_ult_v2_breach_exit"
+const string BUNKER_BUSTER_CLUSTER_BREACH_EXPLOSION = "exp_fuse_ult_v2_cluster_breach"
+
+const string BUNKER_BUSTER_FIRE_START_SFX = "Fuse_Ultimate_Upgraded_Fireworks_Flame_Start"
+const string BUNKER_BUSTER_FIRE_LOOP_SFX = "Fuse_Ultimate_Upgraded_Fireworks_Flame_Burn_Loop"
+const string BUNKER_BUSTER_FIRE_BREACH_START_SFX = "Fuse_Ultimate_BreachMode_Upgraded_Fireworks_Flame_Start"
+const string BUNKER_BUSTER_FIRE_BREACH_LOOP_SFX = "Fuse_Ultimate_BreachMode_Upgraded_Fireworks_Flame_Burn_Loop"
+const string BUNKER_BUSTER_FIRE_1P_SOUND = "Fuse_Mortar_Fire_1p"
+const string BUNKER_BUSTER_FIRE_3P_SOUND = "Fuse_Mortar_Fire_3p"
+const string BUNKER_BUSTER_FIRE_BREACH_1P_SOUND = "Fuse_Ultimate_BreachMode_Mortar_Fire_1p"
+const string BUNKER_BUSTER_FIRE_BREACH_3P_SOUND = "Fuse_Ultimate_BreachMode_Mortar_Fire_3p"
+const string INFERNO_ACTIVATE_1P_SOUND = "Fuse_Mortar_Deploy_1p"
+const string INFERNO_ACTIVATE_3P_SOUND = "Fuse_Mortar_Deploy_3p"
+const string INFERNO_DEACTIVATE_1P_SOUND = "Fuse_Ultimate_Away_1p"
+const string INFERNO_DEACTIVATE_3P_SOUND = "Fuse_Ultimate_Away_3p"
+const string BUNKER_BUSTER_MORTAR_TRAIL_SOUND = "Fuse_Ultimate_BreachMode_Mortar_Projectile_Trail"
+const string BUNKER_BUSTER_MINIBOMB_TRAIL_SOUND = "Fuse_Ultimate_BreachMode_Firebomb_Trails"
+
+global const string BUNKER_BUSTER_ABILITY_NAME = "mp_ability_fuse_bunker_buster"
+global const string BUNKER_BUSTER_EXPLOSIVES_SCRIPT_NAME = "bb_bomb"
+const string BUNKER_BUSTER_FIRE_SCRIPT_NAME = "bb_df"
+
+
+const bool BUNKER_BUSTER_DEBUG = false
+
+enum eStuckType
+{
+	SURFACE_NORMAL,
+	WORLD_UP
+}
+
+enum eBreachType
+{
+	EXIT_SURFACE_NORMAL,
+	PROJECTILE_INPUT_DIRECTION,
+	FIRE_PROJECTILE
+}
+
+struct ExplosiveFiringData
+{
+	vector localThrowDirection
+	float  throwSpeed
+	int    group
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+	bool weaponActive = false
+	bool activateUI = false
+	var depthRui
+	int aimExitVFX
+	int ropeExitVFX
+	int aimEndpointVFX
+	bool aimPreviousWasSuccess
+	array<entity> activeMinibombs
+
+	bool useScatterProjectiles = true
+} file
+
+struct
+{
+	float plantDotCheck
+	bool doMissileExplosion
+	float shellshockRadius
+	float shellshockRadiusSqr
+	float shellshockDuration
+	float missileExplosionDamage
+	float missileExplosionInnerRadius
+	float missileExplosionOuterRadius
+
+	float      explosiveExplosionInnerRadius
+	float      explosiveExplosionOuterRadius
+	float      explosiveLaunchSpeedMin
+	float      explosiveLaunchSpeedMax
+	float      explosiveLaunchHorizontalScale
+	float      explosiveLaunchVerticalScaleMin
+	float      explosiveLaunchVerticalScaleMax
+	array<int> explosiveLaunchGroupingArr
+	array<int> explosiveLaunchGroupingArr_Breach
+	array<int> explosiveLaunchSpeed
+	float      explosiveLaunchCircularPitch
+	float	   explosiveLaunchStartDelay
+	float      explosiveLaunchIndividualDelay
+	float      explosiveLaunchGroupDelay
+	float      explosiveFuseTime
+	float      explosiveDamageMax
+	bool       explosivesAvailableToAll
+
+	bool explosiveDealDamageOnce
+	bool explosiveDealReducedRepeatDamage
+	float explosiveRepeatDamageScalar
+
+	int stuckType
+	int breachType
+	float breachThickness
+	float breachExplosiveLaunchDelay
+	bool breachSkipsMissileExplosion
+	bool breachAvailableToAll
+	bool breachAttachesToDrone
+
+	float damageAmountToRefundScale
+
+	float fireDamageRadius
+	float fireDamageHeight
+	int   fireDamage
+	float fireDuration
+	float fireTickRate
+	bool  fireAvailableToAll
+}
+tuning
+
+void function MpAbilityBunkerBuster_Init()
+{
+	PrecacheWeapon( BUNKER_BUSTER_ABILITY_NAME )
+	PrecacheModel( BUNKER_BUSTER_STUCK_MODEL_UP )
+	PrecacheModel( BUNKER_BUSTER_STUCK_MODEL_DOWN )
+	PrecacheModel( EXPLOSIVE_PROJECTILE_MODEL )
+	PrecacheParticleSystem( BUNKER_BUSTER_AR_SPRAY )
+	PrecacheParticleSystem( BUNKER_BUSTER_DANCING_FLAME_FX )
+	PrecacheParticleSystem( BUNKER_BUSTER_BREACH_DECAL_FX )
+	PrecacheParticleSystem( BUNKER_BUSTER_CLUSTER_TRAIL_FX )
+	PrecacheParticleSystem( BUNKER_BUSTER_CLUSTER_GROUP_LAUNCHED_FX )
+	PrecacheImpactEffectTable( BUNKER_BUSTER_MISSILE_EXPLOSION )
+	PrecacheImpactEffectTable( BUNKER_BUSTER_CLUSTER_EXPLOSION )
+	PrecacheImpactEffectTable( BUNKER_BUSTER_MISSILE_BREACH_EXIT_EXPLOSION )
+	PrecacheImpactEffectTable( BUNKER_BUSTER_CLUSTER_BREACH_EXPLOSION )
+	RegisterSignal( "BunkerBuster_Activate" )
+	RegisterSignal( "BunkerBuster_Deactivate" )
+
+	Remote_RegisterClientFunction( "BunkerBuster_OnBreachModeChanged", "bool", "bool" )
+
+
+
+
+
+
+
+
+		AddCreateCallback( "prop_physics", BunkerBuster_OnPropPhysicsSpawned )
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.bunker_buster_highlight, BunkerBuster_HighlightEnabled )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.bunker_buster_highlight, BunkerBuster_HighlightDisabled )
+		AddLocalPlayerTookDamageTypeCallback( eDamageSourceId.mp_ability_fuse_bunker_buster_fire, BunkerBuster_OnLocalPlayerTookFireDamage )
+
+
+	file.useScatterProjectiles = GetCurrentPlaylistVarBool( "fuse_bb_use_scatter_projectiles", true )
+	BunkerBuster_SetupTuning()
+}
+
+#if DEV
+void function DEV_BunkerBusterUseScatterProjectiles( bool val )
+{
+	file.useScatterProjectiles = val
+}
+#endif
+
+void function BunkerBuster_SetupTuning()
+{
+	tuning.plantDotCheck = DOT_45DEGREE
+	tuning.doMissileExplosion  = true
+
+	tuning.shellshockRadius = GetCurrentPlaylistVarFloat( "fuse_bb_shellshock_radius", 500.0 )
+	tuning.shellshockRadiusSqr = tuning.shellshockRadius * tuning.shellshockRadius
+	tuning.shellshockDuration = GetCurrentPlaylistVarFloat( "fuse_bb_shellshock_dur", 0.0 )
+	tuning.missileExplosionDamage = GetCurrentPlaylistVarFloat( "fuse_bb_missile_dmg", 35.0 )
+	tuning.missileExplosionInnerRadius = GetCurrentPlaylistVarFloat( "fuse_bb_missile_innerradius", 100.0 )
+	tuning.missileExplosionOuterRadius = GetCurrentPlaylistVarFloat( "fuse_bb_missile_outerradius", 350.0 )
+
+	tuning.explosiveExplosionInnerRadius   = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_innerradius", 225.0 )
+	tuning.explosiveExplosionOuterRadius   = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_outerradius", 225.0 )
+	tuning.explosiveLaunchGroupingArr     	 = [ 3, 7, 10 ]
+	tuning.explosiveLaunchGroupingArr_Breach = [ 2, 4, 6 ]
+	tuning.explosiveLaunchSpeed              = [ 350, 525, 700 ]
+	tuning.explosiveLaunchStartDelay       = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_startdelay", 0.1 )
+	tuning.explosiveLaunchIndividualDelay  = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_perbombdelay", 0.0 )
+	tuning.explosiveLaunchGroupDelay       = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_groupdelay", 0.3 )
+	tuning.explosiveFuseTime               = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_fuse", 2.2 )
+	tuning.explosiveDamageMax              = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_dmg", 20.0 )
+	tuning.explosivesAvailableToAll        = true
+
+	tuning.explosiveDealDamageOnce = false
+	tuning.explosiveDealReducedRepeatDamage = true
+	tuning.explosiveRepeatDamageScalar = GetCurrentPlaylistVarFloat( "fuse_bb_minibomb_repeat_scalar", 0.5 )
+
+	tuning.stuckType = eStuckType.WORLD_UP
+	tuning.breachType = eBreachType.PROJECTILE_INPUT_DIRECTION
+	tuning.breachThickness = GetCurrentPlaylistVarFloat( "fuse_bb_breach_thickness", 512.0 )
+	tuning.breachExplosiveLaunchDelay = GetCurrentPlaylistVarFloat( "fuse_bb_breach_startdelay", 1.0 )
+	tuning.breachSkipsMissileExplosion = true
+	tuning.breachAvailableToAll = GetCurrentPlaylistVarBool( "fuse_bb_breach_available", true )
+	tuning.breachAttachesToDrone = GetCurrentPlaylistVarBool( "fuse_bb_breach_attachToDrone", true )
+
+	tuning.damageAmountToRefundScale = GetCurrentPlaylistVarFloat( "fuse_bb_reignition_scalar", 0.5 )
+
+	tuning.fireDamageRadius = 40.0
+	tuning.fireDamageHeight = 40.0
+	tuning.fireDamage = GetCurrentPlaylistVarInt( "fuse_bb_fire_damage", 8 )
+	tuning.fireDuration = GetCurrentPlaylistVarFloat( "fuse_bb_fire_duration", 8.0 )
+	tuning.fireTickRate = GetCurrentPlaylistVarFloat( "fuse_bb_fire_tick", 0.5 )
+	tuning.fireAvailableToAll = false
+}
+
+void function OnWeaponActivate_ability_BunkerBuster(entity weapon)
+{
+	entity owner = weapon.GetWeaponOwner()
+	Assert( owner.IsPlayer() )
+
+
+
+
+
+
+
+		if ( owner != GetLocalViewPlayer() )
+			return
+
+		file.weaponActive = true
+		file.activateUI = false
+
+		EmitSoundOnEntity( owner, INFERNO_ACTIVATE_1P_SOUND )
+
+}
+
+void function OnWeaponDeactivate_ability_BunkerBuster(entity weapon)
+{
+	entity owner = weapon.GetWeaponOwner()
+	Assert( owner.IsPlayer() )
+
+
+
+
+
+		if ( owner != GetLocalViewPlayer() )
+			return
+
+		file.weaponActive = false
+		file.activateUI = false
+
+		EmitSoundOnEntity(owner, INFERNO_DEACTIVATE_1P_SOUND)
+
+
+
+	owner.Signal( "BunkerBuster_Deactivate" )
+}
+
+bool function OnWeaponAttemptOffhandSwitch_ability_BunkerBuster( entity weapon )
+{
+	return true
+}
+
+void function OnWeaponReadyToFire_ability_BunkerBuster( entity weapon )
+{
+
+		entity owner = weapon.GetWeaponOwner()
+		if ( owner != GetLocalViewPlayer() || !file.weaponActive )
+			return
+
+		file.activateUI = true
+
+}
+
+var function OnWeaponPrimaryAttack_ability_BunkerBuster( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity owner = weapon.GetWeaponOwner()
+	var ammo = weapon.GetWeaponSettingInt( eWeaponVar.ammo_min_to_fire )
+
+
+		owner.Signal( "BunkerBuster_Deactivate" )
+		HidePlayerHint( "#FUSE_BUNKER_BUSTER_BREACH_ENTER" )
+		HidePlayerHint( "#FUSE_BUNKER_BUSTER_BREACH_EXIT" )
+
+	LaunchBomb( owner, weapon )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+	return ammo
+}
+
+void function TravelingSoundLoop_Thread(entity nade)
+{
+	while(IsValid(nade))
+	{
+		EmitSoundOnEntity( nade, BUNKER_BUSTER_MORTAR_TRAIL_SOUND )
+		wait 2
+	}
+}
+
+void function LaunchBomb(entity player, entity weapon)
+{
+	if( !IsValid( weapon ) )
+		return
+
+
+	if ( !weapon.ShouldPredictProjectiles() )
+		return
+
+
+
+
+
+
+
+
+
+		string soundString1P = weapon.HasMod( BUNKER_BUSTER_ALT_FIRE_MOD ) ? BUNKER_BUSTER_FIRE_BREACH_1P_SOUND : BUNKER_BUSTER_FIRE_1P_SOUND
+		EmitSoundOnEntity( player, soundString1P )
+
+}
+
+void function OnProjectileCollision_ability_BunkerBuster( entity projectile, vector pos, vector normal, entity hitEnt, int hitbox, bool isCritical, bool isPassthrough )
+{
+	projectile.proj.projectileBounceCount++
+
+	DeployableCollisionParams collisionParams
+	collisionParams.pos = pos
+	collisionParams.normal = normal
+	collisionParams.hitEnt = hitEnt
+	collisionParams.hitBox = hitbox
+	collisionParams.isCritical = isCritical
+	collisionParams.highDetailTrace = true
+
+	if ( file.useScatterProjectiles && ( projectile.GetScriptName() == BUNKER_BUSTER_EXPLOSIVES_SCRIPT_NAME ) )
+	{
+		if ( DotProduct( normal, <0, 0, 1> ) > tuning.plantDotCheck || projectile.proj.projectileBounceCount > 5 )
+			PlantStickyEntity( projectile, collisionParams )
+
+		return
+	}
+
+	RiotDrillPlacementInfo breachResult
+	breachResult.placementResult = BREACH_TRACE_RESULT_FAILURE
+	if ( projectile.HasWeaponMod( BUNKER_BUSTER_ALT_FIRE_MOD ) )
+	{
+		TryBreach( projectile, breachResult, collisionParams )
+	}
+
+	
+	if ( !projectile.HasWeaponMod( BUNKER_BUSTER_ALT_FIRE_MOD ) || breachResult.placementResult != BREACH_TRACE_RESULT_SUCCESS )
+	{
+		if ( DotProduct( normal, <0, 0, 1> ) < tuning.plantDotCheck && projectile.proj.projectileBounceCount < 5 )
+			return
+	}
+
+
+
+
+
+
+
+
+	if ( hitEnt.GetScriptName() == ARMORED_LEAP_SHIELD_ANCHOR_SCRIPTNAME && projectile.proj.projectileBounceCount < 5 )
+		return
+
+	bool stickResult = PlantStickyEntity( projectile, collisionParams )
+
+	if ( !stickResult )
+	{
+		if ( projectile.IsAtRest() )
+			projectile.SetAngles( VectorToAngles( normal ) )
+		else if ( projectile.proj.projectileBounceCount < 5 )
+			return
+	}
+
+	entity breachGlassParent
+	if ( IsValid( hitEnt ) && IsBreachableGlass( hitEnt ) )
+		breachGlassParent = hitEnt
+
+	DetonateBunkerBuster( breachResult, projectile, breachGlassParent )
+}
+
+void function TryBreach( entity projectile, RiotDrillPlacementInfo breachResult, DeployableCollisionParams collisionParams )
+{
+	entity owner = projectile.GetOwner()
+	if ( !IsValid( owner ) )
+		return
+
+	if ( IsValid( collisionParams.hitEnt ) )
+	{
+		if ( collisionParams.hitEnt.GetScriptName() == CRYPTO_DRONE_SCRIPTNAME && !tuning.breachAttachesToDrone )
+		{
+			return
+		}
+	}
+
+
+
+
+
+	vector vel = projectile.GetVelocity()
+
+	array<entity> ignoreArray = GetPlayerArray()
+	ignoreArray.extend( GetPlayerDecoyArray() )
+	ignoreArray.append( projectile )
+
+	
+	
+
+	
+	const float traceStartOffset = 5.0
+	const float tracingHullScale = 2.5
+	const float velScaleForEndPoint = 0.1
+	vector traceStart = projectile.GetOrigin() - ( collisionParams.normal * traceStartOffset )
+	vector traceEnd	= traceStart + velScaleForEndPoint * vel
+
+	vector traceHullMins = tracingHullScale * projectile.GetBoundingMins()
+	vector traceHullMaxs = tracingHullScale * projectile.GetBoundingMaxs()
+
+	TraceResults traceResults = TraceHull( traceStart, traceEnd, traceHullMins, traceHullMaxs, ignoreArray, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE )
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+	if ( traceResults.fraction <  1.0 || traceResults.startSolid )
+	{
+		breachResult.startSurfaceNormal = traceResults.surfaceNormal
+		breachResult.startOrigin        = traceResults.startSolid ? traceStart : traceResults.endPos
+		breachResult.startAngles        = VectorToAngles( vel )
+		breachResult.rightVector        = projectile.GetRightVector()
+		breachResult.placementResult    = BREACH_TRACE_RESULT_SUCCESS
+		breachResult.hitEnt             = traceResults.hitEnt
+		breachResult.weapon             = projectile.GetWeaponSource()
+		FindOutputLocation( owner, breachResult )
+	}
+
+
+
+
+	return
+}
+
+void function DetonateBunkerBuster( RiotDrillPlacementInfo breachPlacement, entity projectile, entity breachGlassParent )
+{
+
+		projectile.SetVelocity( <0, 0, 0> )
+		projectile.StopPhysics()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+int function FindOutputLocation( entity player, RiotDrillPlacementInfo placementInfo )
+{
+	const vector HULL_TRACE_MIN = <-4, -4, 0>
+	const vector HULL_TRACE_MAX = <4, 4, 8>
+
+	vector pos                             = placementInfo.startOrigin
+	vector forward                         = AnglesToForward( placementInfo.startAngles )
+
+	BreachTraceResults breachTraceResults
+	breachTraceResults = BreachTrace( pos, forward, placementInfo.rightVector, HULL_TRACE_MIN, HULL_TRACE_MAX, tuning.breachThickness, HIT_ENTITY_CHECK_DYNAMIC_WORLD_ENTS, player )
+	
+	
+
+	if ( breachTraceResults.result == BREACH_TRACE_RESULT_SUCCESS )
+	{
+		placementInfo.endAngles        = placementInfo.startAngles
+		placementInfo.endOrigin        = breachTraceResults.endPos
+		placementInfo.endSurfaceNormal = breachTraceResults.surfaceNormal
+		
+		
+		
+	}
+	placementInfo.placementResult = breachTraceResults.result
+	return placementInfo.placementResult
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function BunkerBuster_ShouldHighlight( entity viewPlayer, entity ent )
+{
+	if ( !IsValid( viewPlayer ) || !IsValid( ent ) )
+		return false
+
+	if ( !IsAlive( viewPlayer ) )
+		return false
+
+	if ( !viewPlayer.IsPlayer() || !PlayerHasPassive( viewPlayer, ePassives.PAS_FUSE ) )
+		return false
+
+	return StatusEffect_GetSeverity( ent, eStatusEffect.bunker_buster_highlight ) > 0.0
+}
+
+void function BunkerBuster_HighlightEnabled( entity ent, int statusEffect, bool actuallyChanged )
+{
+	ManageHighlightEntity( ent )
+}
+
+void function BunkerBuster_HighlightDisabled( entity ent, int statusEffect, bool actuallyChanged )
+{
+	ManageHighlightEntity( ent )
+}
+
+void function BunkerBuster_OnLocalPlayerTookFireDamage( float damage, vector damageOrigin, int damageType, int damageSourceId, entity attacker )
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	EmitSoundOnEntity( player, "flesh_fire_damage_1p" )
+}
+
+void function BunkerBuster_OnPropPhysicsSpawned( entity prop )
+{
+	if ( prop.GetScriptName() != BUNKER_BUSTER_EXPLOSIVES_SCRIPT_NAME )
+		return
+
+	file.activeMinibombs.append( prop )
+	thread BunkerBuster_WaitForExplosiveDeletion( prop )
+
+	if ( file.activeMinibombs.len() == 1 )
+	{
+		thread BunkerBuster_ManageThreatIndicators()
+	}
+}
+
+void function BunkerBuster_WaitForExplosiveDeletion( entity warnEnt )
+{
+	warnEnt.EndSignal( "OnDestroy" )
+	OnThreadEnd(
+		function() : ( warnEnt )
+		{
+			file.activeMinibombs.fastremovebyvalue( warnEnt )
+		}
+	)
+	WaitForever()
+}
+
+void function BunkerBuster_ManageThreatIndicators()
+{
+	entity localPlayer = GetLocalViewPlayer()
+	if ( !IsValid( localPlayer ) )
+		return
+
+	localPlayer.EndSignal( "OnDestroy" )
+
+	asset indicatorModel   = GRENADE_INDICATOR_GENERIC
+	vector indicatorOffset = <-5, 0, 0>
+
+	entity arrow = CreateClientSidePropDynamic( <0, 0, 0>, <0, 0, 0>, GRENADE_INDICATOR_ARROW_MODEL )
+	entity mdl   = CreateClientSidePropDynamic( <0, 0, 0>, <0, 0, 0>, indicatorModel )
+	EndSignal( arrow, "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( arrow, mdl )
+		{
+			if ( IsValid( arrow ) )
+			{
+				arrow.Destroy()
+			}
+			if ( IsValid( mdl ) )
+			{
+				mdl.Destroy()
+			}
+		}
+	)
+	entity cockpit = localPlayer.GetCockpit()
+	if ( !cockpit )
+		return
+
+	EndSignal( cockpit, "OnDestroy" )
+
+	arrow.SetParent( cockpit, "CAMERA_BASE" )
+	arrow.SetAttachOffsetOrigin( <25, 0, -4> )
+
+	mdl.SetParent( arrow, "BACK" )
+	mdl.SetAttachOffsetOrigin( indicatorOffset )
+
+	float lastVisibleTime = 0
+	bool shouldBeVisible  = true
+
+	while ( IsValid( localPlayer ) && file.activeMinibombs.len() > 0 )
+	{
+		cockpit = localPlayer.GetCockpit()
+		vector playerOrigin = localPlayer.GetOrigin()
+
+		bool firstLoop = true
+		vector closestPoint
+		foreach ( warningLoc in file.activeMinibombs )
+		{
+			if ( !IsValid( warningLoc ) )
+				continue
+
+			vector point = warningLoc.GetOrigin()
+			
+			if ( firstLoop )
+			{
+				closestPoint = point
+			}
+			else if ( DistanceSqr( playerOrigin, closestPoint ) > DistanceSqr( playerOrigin, point ) )
+			{
+				closestPoint = point
+			}
+			firstLoop = false
+		}
+		
+		float dist = Distance( playerOrigin, closestPoint )
+		if ( dist > (tuning.explosiveExplosionOuterRadius * 1.1) || !cockpit || localPlayer.IsPhaseShifted() )
+		{
+			shouldBeVisible = false
+		}
+		else
+		{
+			array<entity> ignoreEnts = [ localPlayer ]
+			foreach( ent in file.activeMinibombs )
+				ignoreEnts.append( ent )
+
+			TraceResults result = TraceLine( closestPoint, localPlayer.EyePosition(), file.activeMinibombs, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE )
+			ignoreEnts.fastremovebyvalue( localPlayer )
+
+			if ( result.fraction == 1.0 || result.hitEnt == localPlayer )
+			{
+				lastVisibleTime = Time()
+			}
+			else
+			{
+				shouldBeVisible = false
+			}
+		}
+
+		if ( shouldBeVisible || Time() - lastVisibleTime < 0.25 )
+		{
+			arrow.EnableDraw()
+			mdl.EnableDraw()
+
+			arrow.kv.rendercolor = GetKeyColor( COLORID_HUD_INDICATOR_ARROW )
+			mdl.kv.rendercolor = GetKeyColor( COLORID_HUD_INDICATOR_GRENADE_MODEL )
+
+			arrow.DisableRenderWithViewModelsNoZoom()
+			arrow.EnableRenderWithCockpit()
+			arrow.EnableRenderWithHud()
+			mdl.DisableRenderWithViewModelsNoZoom()
+			mdl.EnableRenderWithCockpit()
+			mdl.EnableRenderWithHud()
+
+			vector damageArrowAngles = AnglesInverse( localPlayer.EyeAngles() )
+			vector vecToDamage       = closestPoint - (localPlayer.EyePosition() + (localPlayer.GetViewVector() * 20.0))
+
+			
+			if ( arrow.GetParent() == null )
+				arrow.SetParent( cockpit, "CAMERA_BASE", true )
+
+			arrow.SetAttachOffsetAngles( AnglesCompose( damageArrowAngles, VectorToAngles( vecToDamage ) ) )
+		}
+		else
+		{
+			mdl.DisableDraw()
+			arrow.DisableDraw()
+		}
+		WaitFrame()
+	}
+}
+
+RiotDrillPlacementInfo function GetBunkerBusterPlacementInfo( entity player, entity weapon, array<entity> ignoreEnts )
+{
+	int placementResult = eBreachPlacementResult.SUCCESS
+
+	array<entity> ignoreArray = [ player ]
+	ignoreArray.extend( GetPlayerDecoyArray() )
+	ignoreArray.extend( ignoreEnts )
+
+	const float GRENADE_HULL_MAX = 3.0
+	GrenadeIndicatorData endpointData = weapon.GetMostRecentGrenadeIndicatorData()
+	vector breachDir = Normalize( endpointData.hitVelocity )
+
+	vector traceStart = endpointData.hitPos
+	
+	vector traceEnd	= traceStart + ( Normalize( endpointData.hitVelocity ) * 4 * GRENADE_HULL_MAX )
+	vector mins = weapon.GetWeaponSettingVector( eWeaponVar.grenade_hull_mins )
+	vector maxs = weapon.GetWeaponSettingVector( eWeaponVar.grenade_hull_maxs )
+	TraceResults traceResults = TraceHull( traceStart, traceEnd, mins, maxs, ignoreArray, TRACE_MASK_SHOT_HULL, TRACE_COLLISION_GROUP_NONE )
+
+	entity testHitEnt = traceResults.hitEnt
+	if ( IsValid( testHitEnt ) )
+	{
+		if ( IsValid( testHitEnt.GetParent() ) )
+			testHitEnt = testHitEnt.GetParent()
+	}
+
+	if ( !IsValid( testHitEnt ) )
+		placementResult = eBreachPlacementResult.FAILED_OUT_OF_RANGE
+	else if ( testHitEnt.IsPlayer() || testHitEnt.IsNPC() )
+		placementResult = eBreachPlacementResult.FAILED_SAFETY_CATCH
+	else if ( traceResults.hitEnt.GetPassThroughFlags() != 0 && ( CheckPassThroughDir( traceResults.hitEnt, traceResults.surfaceNormal, traceResults.endPos ) ) )
+	{
+		if ( ignoreEnts.len() == 0 )
+			ignoreEnts = [ traceResults.hitEnt ]
+		else
+			ignoreEnts.append( traceResults.hitEnt )
+		return GetBunkerBusterPlacementInfo( player, weapon, ignoreEnts )
+	}
+
+	RiotDrillPlacementInfo placementInfo
+	placementInfo.startOrigin = traceResults.endPos
+	placementInfo.startAngles = VectorToAngles( breachDir )
+	placementInfo.rightVector = player.GetRightVector()
+	placementInfo.startSurfaceNormal = traceResults.surfaceNormal
+	placementInfo.placementResult = placementResult
+	placementInfo.hitEnt = traceResults.hitEnt
+
+	if ( placementInfo.placementResult == eBreachPlacementResult.SUCCESS)
+		placementInfo.placementResult = FindOutputLocation( player, placementInfo )
+
+	return placementInfo
+}
+
+void function OnCreateClientPreviewFX_ability_BunkerBuster( entity weapon, entity player )
+{
+	if( BunkerBuster_IsBreachAvailableToPlayer( player ) )
+	{
+		AddPlayerHint( 4.5, 0.25, $"", "#FUSE_BUNKER_BUSTER_BREACH_ENTER" )
+	}
+
+	file.aimPreviousWasSuccess = true
+}
+
+void function OnUpdateClientPreviewFX_ability_BunkerBuster( entity weapon, entity player )
+{
+	const vector COLOR_FAILURE		= <255, 122, 0>
+	const vector COLOR_DEPTH_MID 	= <255, 210, 73>
+	const vector COLOR_SUCCESS 		= <255, 255, 255>
+
+	if ( !IsValid( weapon ) )
+		return
+
+	GrenadeIndicatorData endpointData = weapon.GetMostRecentGrenadeIndicatorData()
+
+	if ( !weapon.HasMod( BUNKER_BUSTER_ALT_FIRE_MOD ) )
+	{
+		if ( file.depthRui )
+		{
+			RuiDestroyIfAlive( file.depthRui )
+			file.depthRui = null
+		}
+
+		if ( EffectDoesExist( file.aimExitVFX ) )
+		{
+			EffectStop( file.aimExitVFX, true, false )
+		}
+
+		if ( EffectDoesExist( file.ropeExitVFX ) )
+		{
+			EffectStop( file.ropeExitVFX, true, false )
+		}
+
+		if ( tuning.plantDotCheck == 0.0 )
+		{
+			if ( !EffectDoesExist( file.aimEndpointVFX ) )
+			{
+				file.aimEndpointVFX = StartParticleEffectInWorldWithHandle( GetParticleSystemIndex( $"P_arc_red" ), endpointData.hitPos, VectorToAngles( endpointData.hitNormal ) )
+			}
+			EffectSetControlPointVector( file.aimEndpointVFX, 0, endpointData.hitPos )
+			EffectSetControlPointAngles( file.aimEndpointVFX, 0, VectorToAngles( endpointData.hitNormal ) )
+			EffectSetControlPointVector( file.aimEndpointVFX, 1, endpointData.hitNormal * 400.0 )
+			EffectSetControlPointVector( file.aimEndpointVFX, 3, <250, 250, 250> )			
+			EffectSetControlPointAngles( file.aimEndpointVFX, 3, VectorToAngles( endpointData.hitNormal ) )
+			EffectSetControlPointVector( file.aimEndpointVFX, 5, <250, 250, 250> )		
+			EffectSetControlPointVector( file.aimEndpointVFX, 6, <1.5, 1.5, 1.5> )		
+			EffectSetControlPointVector( file.aimEndpointVFX, 7, endpointData.hitNormal * 400.0 )
+		}
+
+		
+		{
+
+
+
+
+
+
+
+
+
+}
+	}
+	else
+	{
+		if ( EffectDoesExist( file.aimEndpointVFX ) )
+			EffectStop( file.aimEndpointVFX, false, true )
+
+		
+		if ( file.depthRui == null )
+		{
+			file.depthRui = CreateFullscreenRui( $"ui/fuse_bunkerbuster.rpak" )
+		}
+
+		RiotDrillPlacementInfo placementInfo = GetBunkerBusterPlacementInfo( player, weapon, [] )
+
+		float distance = -1.0
+		vector color = COLOR_FAILURE
+
+		bool resultWasSuccess = true
+		switch ( placementInfo.placementResult )
+		{
+			case eBreachPlacementResult.FAILED_GENERIC:
+			case eBreachPlacementResult.FAILED_OUT_OF_RANGE:
+			case eBreachPlacementResult.FAILED_WALL_TOO_THICK:
+			case eBreachPlacementResult.FAILED_SAFETY_CATCH:
+				resultWasSuccess = false
+				break
+			default:
+				distance = Distance( placementInfo.startOrigin, placementInfo.endOrigin )
+				float distanceFrac = distance / tuning.breachThickness
+				color = GetTriLerpColor( distanceFrac, COLOR_SUCCESS, COLOR_DEPTH_MID, COLOR_FAILURE, 0.6, 0.3 )
+				resultWasSuccess = true
+		}
+
+		if ( resultWasSuccess != file.aimPreviousWasSuccess )
+		{
+			file.aimPreviousWasSuccess = resultWasSuccess
+			weapon.SetGrenadeIndicatorEffectUseBlockedFX( !resultWasSuccess )
+		}
+
+		RuiSetFloat( file.depthRui, "depth", distance )
+		RuiSetFloat3( file.depthRui, "infoTextColorRGB", ( color / 255.0 ) )
+		RuiSetBool( file.depthRui, "breachSuccess", resultWasSuccess )
+
+		
+		{
+			if ( resultWasSuccess )
+			{
+				
+				if ( !EffectDoesExist( file.aimExitVFX ) )
+				{
+					
+				}
+				else
+				{
+					vector exitVector = placementInfo.endSurfaceNormal
+					EffectSetControlPointVector( file.aimExitVFX, 0, placementInfo.endOrigin )
+					EffectSetControlPointAngles( file.aimExitVFX, 0 , VectorToAngles( exitVector ) + <90, 0, 0> )
+				}
+
+				
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			}
+			else
+			{
+				if ( EffectDoesExist( file.aimExitVFX ) )
+				{
+					EffectStop( file.aimExitVFX, true, false )
+				}
+
+				if ( EffectDoesExist( file.ropeExitVFX ) )
+				{
+					EffectStop( file.ropeExitVFX, true, false )
+				}
+			}
+		}
+	}
+}
+
+void function OnDestroyClientPreviewFX_ability_BunkerBuster( entity weapon, entity player )
+{
+	if ( EffectDoesExist( file.aimEndpointVFX ) )
+		EffectStop( file.aimEndpointVFX, false, true )
+
+	if ( EffectDoesExist( file.aimExitVFX ) )
+		EffectStop( file.aimExitVFX, false, true )
+
+	if ( EffectDoesExist( file.ropeExitVFX ) )
+		EffectStop( file.ropeExitVFX, false, true )
+
+	if ( file.depthRui != null )
+	{
+		RuiDestroyIfAlive( file.depthRui )
+		file.depthRui = null
+	}
+
+	weapon.SetGrenadeIndicatorEffectUseBlockedFX( false ) 
+
+	HidePlayerHint( "#FUSE_BUNKER_BUSTER_BREACH_ENTER" )
+}
+
+void function BunkerBuster_OnBreachModeChanged( bool nowActive, bool wasToggleADS )
+{
+	if ( nowActive )
+	{
+		HidePlayerHint( "#FUSE_BUNKER_BUSTER_BREACH_ENTER" )
+		if ( wasToggleADS )
+		{
+			AddPlayerHint( 4.5, 0.25, $"", "#FUSE_BUNKER_BUSTER_BREACH_EXIT" )
+		}
+	}
+	else
+	{
+		HidePlayerHint( "#FUSE_BUNKER_BUSTER_BREACH_EXIT" )
+		AddPlayerHint( 4.5, 0.25, $"", "#FUSE_BUNKER_BUSTER_BREACH_ENTER" )
+	}
+}
+
+
+bool function BunkerBuster_AreExplosivesAvailableToPlayer( entity player )
+{
+	if ( tuning.explosivesAvailableToAll )
+		return true
+	else
+		return IsValid( player ) && PlayerHasPassive( player, ePassives.PAS_FUSE ) && PlayerHasPassive( player, ePassives.PAS_ULT_UPGRADE_THREE )
+
+	unreachable
+}
+
+bool function BunkerBuster_IsBreachAvailableToPlayer( entity player )
+{
+	if ( tuning.breachAvailableToAll )
+		return true
+	else
+		return false
+
+	unreachable
+}
+
+bool function BunkerBuster_IsDancingFlameAvailableToPlayer( entity player )
+{
+	if ( tuning.fireAvailableToAll )
+		return true
+	else
+		return IsValid( player ) && PlayerHasPassive( player, ePassives.PAS_FUSE ) && PlayerHasPassive( player, ePassives.PAS_ULT_UPGRADE_THREE )
+
+	unreachable
+} 

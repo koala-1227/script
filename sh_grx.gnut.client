@@ -1,0 +1,10987 @@
+
+global function ShGRX_LevelInit
+global function ShGRX_RegisterItemFlavor
+
+
+
+
+
+
+global function IsValidGRXRef
+global function IsValidItemFlavorGRXIndex
+global function GetItemFlavorByGRXRef
+global function GetGRXIndexByGRXRef
+global function GetItemFlavorByGRXIndex
+global function ItemFlavor_GetGRXMode
+global function ItemFlavor_GetGRXIndex
+global function ItemFlavor_GetGRXAlias
+global function ItemFlavor_GetGRXOwnershipTarget
+global function ItemFlavor_GetGRXOwnershipTargettedBy
+global function ItemFlavor_GetGRXMultipleOwnershipRequirementsList
+global function ItemFlavorIsStackable
+global function GRXCurrency_RegisterNewCurrencyAssetInEventSlot
+global function GRXCurrency_GetCurrencyIndex
+global function GRXCurrency_GetPurchaseSound
+global function GRXCurrency_GetPreviewModel
+global function GRXCurrency_GetRewardIcon
+global function GRXCurrencyBundle_GetCurrencyFlav
+global function GRXCurrencyBundle_GetValue
+global function AccountFlag_GetPreviewModel
+global function AccountFlag_GetRewardIcon
+global function GRX_IsInventoryReady
+global function GRX_HasInventoryEverBeenReady
+global function GRX_GetNumberOfOwnedItemsByPlayer
+global function GRX_IsItemOwnedByPlayer
+global function GRX_IsItemOwnedByPlayer_AllowOutOfDateData
+global function GetItemOwnershipStateForPlayer
+global function GRX_GetPlayerEdition
+global function GRX_IsOfferRestricted
+global function GRXPack_IsEphemeral
+global function GRXPack_IsAnyRetroPack
+global function GRXPack_IsBackfillPack
+global function GRXPack_IsWishlistSirngePack
+global function GRXPack_IsExpectedToContainSingleItemWithCurrency
+global function GRXPack_GetTickModel
+global function GRXPack_GetTickModelSkin
+global function GRXPack_GetPackContents
+
+global function GRX_GetStickerPacksWithRewards
+global function GRX_GetRetroPacksWithRewards
+global function GRXPack_GetStickerCompletionRewardSequence
+global function GRXPack_PlayerOwnsAllItemsInPack
+global function GRXPack_GetStickerCompletionRewardPack
+
+global function LootPoolBrowser_IsEnabled
+global function GRXPack_GetPackContentsSorted
+global function GRXPack_ValidateLootPoolBrowserConfig
+global function GRXPack_GetIsLootPoolBrowsable
+global function GRXPack_GetPackSort
+global function GRXPack_GetCompletionRewards
+global function GRXPack_GetCompletionRewardType
+global function GRXPack_GetCompletionRewardSequenceString
+global function GRXPack_GetPackOpenProgressRewardSequenceString
+global function GRXPack_GetCompletionRewardAsset
+global function GRXPack_GetIsBackfillEnabled
+global function GRXPack_GetBackfillPool
+global function GRXPack_GetContainerAlias
+global function GRXPack_GetRarityConfig
+global function GRXPack_GetLootPoolItems
+global function GRXPack_GetRetroPackDisclaimerType
+global function GRX_GetLootPoolProgress
+global function GRX_IsValidGRXOwnershipMode
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function GRXPack_GetTickSoundAlias
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function GRX_GetMostRecentPackOpeningResults
+global function GRX_GetMostRecentPackOpeningContainerType
+global function GRX_GetMostRecentPackOpeningContainerResults
+global function GRX_IsItemFlavInPackResultContainer
+global function GRXPack_GetCustomColor
+global function GRXPack_GetCustomCountTextCol
+global function GRX_GetRarityOverrideFromQuantity
+global function GRX_GetQuantityOverrideForStackableItemFlavor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function UIToClient_GRXInventoryCleanStateChange
+global function ClientCodeCallback_GRXPacksOpened
+global function ClientCodeCallback_GRXGetBattlepassSeasonAndSplitNumber
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+global function GRX_Warning
+global function GRX_Info
+
+
+
+
+
+
+
+global function DEV_GRX_ForcePackResults
+
+
+
+
+
+
+
+
+
+
+
+#endif
+
+
+
+
+
+global const int MAX_REWARDS_PER_REWARD_SEQ_CALL = 255
+global int OFFER_HAS_NO_LIMIT = -1
+
+global const int REMEMBERING_TITAN_BADGE_GUID = 1438636403
+global const array<string> REMEMBERING_TITAN_BADGE_SFX =
+[
+	"diag_mp_blisk_vz_01_1p",
+	"diag_mp_blisk_vz_02_1p",
+	"diag_mp_blisk_vz_03_1p",
+	"diag_mp_blisk_vz_04_1p",
+	"diag_mp_blisk_vz_05_1p",
+	"diag_mp_blisk_vz_06_1p",
+	"diag_mp_blisk_vz_07_1p",
+	"diag_mp_blisk_vz_08_1p",
+	"diag_mp_blisk_vz_09_1p",
+	"diag_mp_blisk_vz_10_1p",
+	"diag_mp_blisk_vz_11_1p",
+	"diag_mp_blisk_vz_12_1p",
+	"diag_mp_blisk_vz_13_1p",
+	"diag_mp_blisk_vz_14_1p"
+]
+
+global const int QUEUED_REWARDS_MAX_COUNT = 12
+const int QUEUED_REWARDS_MAX_ITEMS_COUNT = 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const string SHOP_TAB_ALIAS = "shop"
+const string TRUSTED_OVERRIDE_ACCOUNT_ATTRIBUTE_NAME = "trusted"
+const string HAS_PURCHASED_AC_ACCOUNT_ATTRIBUTE_NAME = "hasPurchasedAC"
+
+
+
+
+
+
+
+
+global enum eItemFlavorGRXMode
+{
+	NONE = GRX_ITEMFLAVORMODE_NONE,
+	REGULAR = GRX_ITEMFLAVORMODE_REGULAR,
+	PACK = GRX_ITEMFLAVORMODE_PACK,
+	CONSUMABLE = GRX_ITEMFLAVORMODE_CONSUMABLE,
+	CURRENCY = GRX_ITEMFLAVORMODE_CURRENCY,
+	OWNERSHIP_TARGET = -1337,
+	ONE_OF_MULTIPLE = -4273,
+	MULTIPLE_OWNERSHIP_TARGET = -9001,
+}
+
+
+
+global enum eItemFlavorGRXOwnershipReason
+{
+	
+	UNOWNED_PLATFORM_EXCLUSIVE = -10,
+	UNOWNED_GRX = -9,
+	UNOWNED_EXCLUSIVE_FUNC = -5,
+	UNOWNED_UNLOCK_FUNC = -4,
+	UNOWNED_DEPENDENCY = -2,
+	UNOWNED_OWNED_SPLIT = 0, 
+	OWNED_SPECIAL_EVENT = 1,
+	OWNED_DEPENDENCY = 2,
+	OWNED_QUEUED_REWARD = 3,
+	OWNED_UNLOCK_FUNC = 4,
+	OWNED_EXCLUSIVE_FUNC = 5,
+	OWNED_NON_GRX = 6,
+	OWNED_INVENTORY_NEVER_READY = 7,
+	OWNED_EVERYTHING_UNLOCKED = 8,
+	OWNED_GRX = 9,
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global enum eBackfillPoolCategory
+{
+	EPIC_CHARACTER_SKIN = 0,
+	EPIC_WEAPON_SKIN,
+	EPIC_NON_SKIN,
+	LEGENDARY_CHARACTER_SKIN,
+	LEGENDARY_WEAPON_SKIN,
+	LEGENDARY_NON_SKIN,
+	MYTHIC_CHARACTER_SKIN,
+	MYTHIC_WEAPON_SKIN,
+	MYTHIC_NON_SKIN
+	_COUNT,
+}
+
+global enum eLootPoolBrowserSortOrder
+{
+	RARITY_ASCENDING,
+	RARITY_DESCENDING,
+	BAKERY,
+}
+
+global enum eLootPoolBrowserRewardType
+{
+	PACKS = 0,
+	ITEMS = 1,
+	CURRENCY = 2,
+}
+
+
+global enum eRetroPackDisclosureType
+{
+	MILESTONE_EVENT,
+	COLLECTION_EVENT,
+}
+
+global struct PoolRarityConfig
+{
+	float droprateCommon
+	float droprateRare
+	float droprateEpic
+	float droprateLegendary
+	float droprateMythic
+
+	table< ItemFlavor, float > specificFlavs
+}
+
+global struct PackPoolItemInfo
+{
+	ItemFlavor& flav
+	float droprate
+	bool isChase
+}
+
+const float ITEM_POOL_DROP_RATE_UNSET = -99.00
+
+global struct GRXLootPoolProgress
+{
+	int owned
+	int total
+}
+
+
+
+
+
+
+const string OFFER_RESTRICTED_CACHE_PVAR = "grxOfferRestricted"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Assert( GRX_CURRENCY_COUNT == 13 )
+global ItemFlavor&[GRX_CURRENCY_COUNT] GRX_CURRENCIES = [{...}, {...}, {...}, {...}, {...}, {...}, {...}, {...}, {...}, {...}, {...}, {...}, {...}]
+
+global int GRX_DEV_ITEM = -1
+global int GRX_QA_ITEM = -1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global enum eGRXPackTickSoundKind
+{
+	TriadBounce
+	PuckLand
+	Unpack
+	DeployTriadExplo1
+	DeployTriadExplo2
+	DeployTriadExplo3
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global struct PlayerGRXScriptState
+
+{
+
+
+
+
+
+
+
+
+		bool isInventoryReady = false
+		bool isInventoryValidated = false
+		bool hasInventoryEverBeenClean = false
+		int  marketplaceEdition = -1
+		bool isOfferRestricted = false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct FileStruct_LifetimeLevel
+{
+	array<ItemFlavor>      	packFlavorList
+	table<string, int> 	   	currencyIndexMap
+	table<int, ItemFlavor> 	grxIndexItemFlavorMap
+	table<string, int>     	grxRefToGRXIndexMap
+
+	array<ItemFlavor> stickerPacksWithRewards
+	array<ItemFlavor> retroPacksWithRewards
+
+	table<string, ItemFlavor> grxRefItemFlavorMap
+
+
+
+
+
+
+
+		PlayerGRXScriptState localGRXState
+
+		ItemFlavorBag ornull mostRecentPackOpeningResultsOrNull = null
+		int mostRecentPackOpeningContainerType = -1
+		array<ItemFlavor> mostRecentPackOpeningContainerResults
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	bool GRX_DEBUG_PRINTS_disableTemporarily = false
+}
+FileStruct_LifetimeLevel& fileLevel
+
+
+const float USERINFO_DIRTY_DEBOUNCE_DURATION = 0.3
+
+
+
+global enum eIneligibilityCode
+{
+	ELIGIBLE = 0,
+	OFFER_NOT_IN_EFFECT = 1,
+	OFFER_NOT_PURCHASABLE_CONSTRAINTS = 2,
+	BUNDLE_ALREADY_OWNED = 3,
+	OFFER_NOT_PURCHASABLE_LIMIT = 4,
+	MAX_PURCHASES_IN_RESET_WINDOW = 5,
+	WINDOW_HAS_EXPIRED = 6,
+	ACCOUNT_PURCHASE_LIMIT = 7,
+	ACCOUNT_GRANT_LIMIT = 8,
+	ACCOUNT_RECEIVE_LIMIT = 9,
+	WINDOW_HAS_CLOSED = 10
+	WINDOW_NOT_STARTED = 11,
+	PROFILE_PURCHASE_LIMIT = 12
+}
+
+global enum eOfferStatus
+{
+	
+	PURCHASABLE = 0,
+	UNAFFORDABLE, 
+
+
+	FULLY_CLAIMED, 
+	COLLECTION_COMPLETE,
+	BUNDLE_RESTRICTED,  
+
+
+	PURCHASE_LIMIT_REACHED, 
+	RETRO_PACK_COMPLETE,
+
+	BATTLEPASS_OVER_LEVEL_LIMIT,
+	INELIGIBLE, 
+	UNAVAILABLE, 
+	LOCKED, 
+	EXPIRED,
+	INVALID_PRICE,
+
+	_COUNT
+}
+
+
+const table<int, int> CRAFTING_MATERIAL_MAX_QUANTITY_TO_RARITY_MAP = {
+	[24] = eRarityTier.COMMON,
+	[199] = eRarityTier.RARE,
+	[599] = eRarityTier.EPIC,
+	[INT_MAX] = eRarityTier.LEGENDARY,
+}
+
+const table<int, int> BP_STARS_QUANTITY_TO_RARITY_MAP = {
+	[2] = eRarityTier.RARE,
+	[5] = eRarityTier.EPIC,
+	[INT_MAX] = eRarityTier.LEGENDARY,
+}
+
+const table<int, int> LEGEND_TOKENS_MAX_QUANTITY_TO_RARITY_MAP = {
+	[11999] = eRarityTier.COMMON,
+	
+	
+	[INT_MAX] = eRarityTier.LEGENDARY,
+}
+
+
+global const string GRX_MATCH_DEDIS_HAVE_USER_INFO = "mtx_userInfo_matchDedisHaveUserInfo"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ShGRX_LevelInit()
+{
+	FileStruct_LifetimeLevel newFileLevel
+
+
+
+
+	fileLevel = newFileLevel
+
+
+
+
+
+
+
+
+	AddCallback_RegisterRootItemFlavors( void function() {
+		Assert( GRX_CURRENCY_COUNT == 13 )
+		GRX_CURRENCIES[GRX_CURRENCY_PREMIUM] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/premium.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_CREDITS] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/credits.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_CRAFTING] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/crafting.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_HEIRLOOM] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/heirloom.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_EXOTIC] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/exotic.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_ESCROW] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/escrow.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_BONUS_METER] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/bonus_meter_token.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_BONUS_METER_COMPLETION] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/bonus_completion_token.rpak" )) 
+
+		
+		GRX_CURRENCIES[GRX_CURRENCY_EVENT] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/s19me01_coin.rpak" )) 
+
+		
+		GRX_CURRENCIES[GRX_CURRENCY_WISHLIST_TOKEN] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/grx_currency/wishlist_select_token.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_PACK_RARE] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/pack/cosmetic_rare.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_PACK_EPIC] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/pack/cosmetic_epic.rpak" )) 
+		GRX_CURRENCIES[GRX_CURRENCY_PACK_LEGENDARY] = expect ItemFlavor(RegisterItemFlavorFromSettingsAsset( $"settings/itemflav/pack/cosmetic_legendary.rpak" )) 
+
+		foreach ( int currencyIndex, ItemFlavor flav in GRX_CURRENCIES )
+		{
+			fileLevel.currencyIndexMap[ItemFlavor_GetGUIDString( flav )] <- currencyIndex
+
+
+
+
+
+		}
+
+		foreach ( asset packAsset in GetBaseItemFlavorsFromArray( "packs" ) )
+		{
+			ItemFlavor ornull flavOrNull = RegisterItemFlavorFromSettingsAsset( packAsset )
+			if ( flavOrNull != null )
+				fileLevel.packFlavorList.append( expect ItemFlavor(flavOrNull) )
+		}
+
+		foreach ( asset currencyBundleAsset in GetBaseItemFlavorsFromArray( "currencyBundles" ) )
+			RegisterItemFlavorFromSettingsAsset( currencyBundleAsset )
+
+		foreach ( asset accountFlagAsset in GetBaseItemFlavorsFromArray( "accountFlags" ) )
+		{
+			ItemFlavor ornull flagFlav = RegisterItemFlavorFromSettingsAsset( accountFlagAsset )
+
+
+
+
+
+
+
+
+
+		}
+	} )
+	AddCallback_OnItemFlavorRegistered( eItemType.account_currency_bundle, AssertCurrencyBundleValuesAreValid )
+
+	AddCallback_OnItemFlavorRegistered( eItemType.account_pack, OnItemTypeAccountPackFlavRegistered )
+
+	AddCallback_OnItemFlavorRegistered( eItemType.character_skin, OnRecolorableSkinRegistered )
+	AddCallback_OnItemFlavorRegistered( eItemType.weapon_skin, OnRecolorableSkinRegistered )
+
+
+
+
+
+	RegisterSignal( "ScriptGRXOperationDone" )
+
+
+		Remote_RegisterUIFunction( "ServerToUI_PROTO_YouAreGreenLightedForGRX" )
+		Remote_RegisterUIFunction( "ServerToUI_GRX_QueuedRewardsGiven" )
+
+		Remote_RegisterServerFunction( "ClientCallback_acknowledge_reward", "int", 0, QUEUED_REWARDS_MAX_COUNT, "int", 0, INT_MAX )
+		Remote_RegisterServerFunction( "ClientCallback_SetOfferRefreshSuppressed", "bool" )
+		Remote_RegisterServerFunction( "UICallback_GRXInventoryNotReadySendQueryErrorsToPIN" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	GRX_DEV_ITEM = GRX_RegisterItem( "account_flag_dev", eItemFlavorGRXMode.REGULAR )
+	GRX_QA_ITEM = GRX_RegisterItem( "account_flag_QA", eItemFlavorGRXMode.REGULAR )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ShGRX_RegisterItemFlavor( ItemFlavor flavor )
+{
+	string grxModeStr = GetGlobalSettingsString( ItemFlavor_GetAsset( flavor ), "grxMode" )
+	Assert( grxModeStr in eItemFlavorGRXMode, "Unknown item flavor GRX mode: " + grxModeStr )
+	flavor.grxMode = eItemFlavorGRXMode[grxModeStr]
+	if ( flavor.grxMode == eItemFlavorGRXMode.REGULAR
+	|| flavor.grxMode == eItemFlavorGRXMode.CONSUMABLE
+	|| flavor.grxMode == eItemFlavorGRXMode.PACK
+	|| flavor.grxMode == eItemFlavorGRXMode.CURRENCY )
+	{
+		string grxRef = ItemFlavor_GetGRXAlias( flavor )
+		Assert( grxRef != "", "Item " + string(ItemFlavor_GetAsset( flavor )) + " has GRX mode enabled but GRX ref is undefined." )
+
+		flavor.grxIndex = GRX_RegisterItem( grxRef, flavor.grxMode )
+
+		fileLevel.grxIndexItemFlavorMap[flavor.grxIndex] <- flavor
+		fileLevel.grxRefToGRXIndexMap[grxRef] <- flavor.grxIndex
+
+		bool duplicateGRXRefFound = grxRef in fileLevel.grxRefItemFlavorMap
+		Assert( !duplicateGRXRefFound, "Duplicate GRX ref found. Already used by " + string(ItemFlavor_GetAsset( fileLevel.grxRefItemFlavorMap[grxRef] )) )
+		fileLevel.grxRefItemFlavorMap[grxRef] <- flavor
+	}
+	else if ( flavor.grxMode == eItemFlavorGRXMode.OWNERSHIP_TARGET )
+	{
+		ItemFlavor ornull ownershipTarget = ItemFlavor_GetGRXOwnershipTarget( flavor )
+		if ( ownershipTarget != null )
+		{
+			expect ItemFlavor(ownershipTarget)
+			if ( ownershipTarget.grxOwnershipTargettedBy == null )
+				ownershipTarget.grxOwnershipTargettedBy = []
+			array<int> targettedBy = expect array<int>(ownershipTarget.grxOwnershipTargettedBy)
+			targettedBy.append( flavor.guid )
+		}
+	}
+	else if ( flavor.grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET || flavor.grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE )
+	{
+		array< ItemFlavor > ownershipRequirementsList = ItemFlavor_GetGRXMultipleOwnershipRequirementsList( flavor )
+		if ( ownershipRequirementsList.len() == 0 )
+		{
+			Assert( false, "Item had GRX mode MULTIPLE_OWNERSHIP_TARGET or ONE_OF_MULTIPLE but list was empty: " + string( ItemFlavor_GetAsset( flavor ) ) )
+			return
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+bool function IsValidItemFlavorGRXIndex( int index, int validationBehavior = eValidation.DONT_ASSERT )
+{
+	bool good = (index in fileLevel.grxIndexItemFlavorMap)
+
+	Assert( good || validationBehavior != eValidation.ASSERT, "Unknown item flavor GRX index: " + index + " (valid range is 0-" + (fileLevel.grxIndexItemFlavorMap.len() - 1) + ")" )
+	return good
+}
+
+
+
+
+int function GetGRXIndexByGRXRef( string grxRef )
+{
+	return fileLevel.grxRefToGRXIndexMap[ grxRef ]
+}
+
+
+
+
+ItemFlavor function GetItemFlavorByGRXIndex( int index )
+{
+	IsValidItemFlavorGRXIndex( index, eValidation.ASSERT )
+
+	return fileLevel.grxIndexItemFlavorMap[ index ]
+}
+
+
+
+
+ItemFlavor function GetItemFlavorByGRXRef( string grxRef )
+{
+	return fileLevel.grxRefItemFlavorMap[ grxRef ]
+}
+
+
+
+bool function IsValidGRXRef( string grxRef )
+{
+	return (grxRef in fileLevel.grxRefItemFlavorMap)
+}
+
+
+
+
+int function ItemFlavor_GetGRXMode( ItemFlavor flavor )
+{
+	Assert( IsItemFlavorStructValid( flavor.guid, eValidation.ASSERT ) )
+
+	return flavor.grxMode
+}
+
+
+
+
+int function ItemFlavor_GetGRXIndex( ItemFlavor flavor, int validationBehavior = eValidation.ASSERT )
+{
+	Assert( IsItemFlavorStructValid( flavor.guid, eValidation.ASSERT ) )
+	Assert( flavor.grxMode != eItemFlavorGRXMode.NONE || validationBehavior == eValidation.DONT_ASSERT, "Attempted to get the GRX index of a non-GRX item flavor: " + DEV_DescItemFlavor( flavor ) )
+	Assert( flavor.grxIndex >= 0 || validationBehavior == eValidation.DONT_ASSERT, format( "%s( %s ) has an invalid index (%d)", FUNC_NAME(), DEV_DescItemFlavor( flavor ), flavor.grxIndex ) )
+	return flavor.grxIndex
+}
+
+
+
+
+string function ItemFlavor_GetGRXAlias( ItemFlavor flavor )
+{
+	Assert( IsItemFlavorStructValid( flavor.guid, eValidation.ASSERT ) )
+	Assert( flavor.grxMode != eItemFlavorGRXMode.NONE, "Attempted to get the GRX alias of a non-GRX item flavor: " + DEV_DescItemFlavor( flavor ) )
+
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( flavor ), "grxRef" )
+}
+
+
+
+
+ItemFlavor ornull function ItemFlavor_GetGRXOwnershipTarget( ItemFlavor flavor )
+{
+	Assert( IsItemFlavorStructValid( flavor.guid, eValidation.ASSERT ) )
+	if ( flavor.grxMode != eItemFlavorGRXMode.OWNERSHIP_TARGET )
+		return null
+
+	asset ownershipTargetFlavAsset = GetGlobalSettingsAsset( ItemFlavor_GetAsset( flavor ), "ownershipTarget" )
+	if ( IsValidItemFlavorSettingsAsset( ownershipTargetFlavAsset ) )
+		return GetItemFlavorByAsset( ownershipTargetFlavAsset )
+	return null
+}
+
+
+
+array< ItemFlavor > function ItemFlavor_GetGRXMultipleOwnershipRequirementsList( ItemFlavor flavor )
+{
+	Assert( IsItemFlavorStructValid( flavor.guid, eValidation.ASSERT ) )
+	Assert( flavor.grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET || flavor.grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE, "attempted to check GRX multiple ownership mode for an item that does not have that mode set: " + string( ItemFlavor_GetAsset( flavor ) ) )
+
+	array< ItemFlavor > ownershipList = []
+	foreach ( int index, var ownershipBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flavor ), "multipleOwnershipTargets" ) )
+	{
+		asset ownershipAsset = GetSettingsBlockAsset( ownershipBlock, "multipleOwnershipTarget" )
+		Assert( IsValidItemFlavorSettingsAsset( ownershipAsset ), format( "Bad ownership target in GRX configuration of %s: %s", string( ItemFlavor_GetAsset( flavor ) ), string( ownershipAsset ) ) )
+		ownershipList.append( GetItemFlavorByAsset( ownershipAsset ) )
+	}
+
+	Assert( ownershipList.len() > 0, "Mode was set to MULTIPLE_OWNERSHIP_TARGET or ONE_OF_MULTIPLE, but no valid targets were found: " + string( ItemFlavor_GetAsset( flavor ) ) )
+	return ownershipList
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array<ItemFlavor> function ItemFlavor_GetGRXOwnershipTargettedBy( ItemFlavor flavor )
+{
+	array<ItemFlavor> out = []
+	if ( flavor.grxOwnershipTargettedBy != null )
+	{
+		foreach ( int targeterGuid in expect array<int>(flavor.grxOwnershipTargettedBy) )
+		{
+			out.append( GetItemFlavorByGUID( targeterGuid ) )
+		}
+	}
+	return out
+}
+
+
+
+void function GRXCurrency_RegisterNewCurrencyAssetInEventSlot( ItemFlavor newCurrencyFlav )
+{
+	Assert( ItemFlavor_GetType( newCurrencyFlav ) == eItemType.account_currency )
+	ItemFlavor oldCurrencyFlav = GRX_CURRENCIES [ GRX_CURRENCY_EVENT ]
+	GRX_CURRENCIES[ GRX_CURRENCY_EVENT ] = newCurrencyFlav
+
+	int targetIndex = GRXCurrency_GetCurrencyIndex( oldCurrencyFlav )
+	delete fileLevel.currencyIndexMap[ ItemFlavor_GetGUIDString( oldCurrencyFlav ) ]
+	fileLevel.currencyIndexMap[ ItemFlavor_GetGUIDString( newCurrencyFlav ) ] <- targetIndex
+
+
+
+
+
+
+
+
+}
+
+
+
+
+int function GRXCurrency_GetCurrencyIndex( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_currency || ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return fileLevel.currencyIndexMap[ItemFlavor_GetGUIDString( flav )]
+}
+
+
+
+
+string function GRXCurrency_GetPurchaseSound( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_currency || ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "purchaseSound" )
+}
+
+
+
+
+asset function GRXCurrency_GetPreviewModel( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_currency || ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	if ( ItemFlavor_GetType( flav ) == eItemType.account_currency )
+	{
+		return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "previewMdl" )
+	}
+
+	if ( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	{
+		return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "tickMdl" )
+	}
+
+	unreachable
+}
+
+
+
+
+asset function GRXCurrency_GetRewardIcon( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_currency || ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "rewardIcon" )
+}
+
+
+
+
+ItemFlavor function GRXCurrencyBundle_GetCurrencyFlav( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_currency_bundle )
+	return GetItemFlavorByAsset( GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "currencyFlav" ) )
+}
+
+
+
+
+int function GRXCurrencyBundle_GetValue( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_currency_bundle )
+
+	
+	int playlistValue = GetCurrentPlaylistVarInt( "grx_" + ItemFlavor_GetGRXAlias( flav ) + "_count", -1 )
+	int bakeryValue = GetGlobalSettingsInt( ItemFlavor_GetAsset( flav ), "currencyCount" )
+
+	if ( playlistValue != -1 )
+	{
+		return playlistValue
+	}
+
+	return bakeryValue
+}
+
+
+
+asset function AccountFlag_GetPreviewModel( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_flag )
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "previewMdl" )
+}
+
+
+
+
+asset function AccountFlag_GetRewardIcon( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_flag )
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "rewardIcon" )
+}
+
+
+
+bool function GRX_CheckCanAccessUserInfo()
+{
+	bool isLobby = IsLobby()
+	bool valid = isLobby || ( GetConVarBool( "mtx_userInfo_assertOnMatchAccess" ) == false )
+
+
+
+
+
+		valid = valid || ( !isLobby && GetConVarBool( "mtx_userInfo_sendInMatch" ) && GetConVarBool( GRX_MATCH_DEDIS_HAVE_USER_INFO ) )
+		Assert( valid, "Tried to check GRX User Info while connected a match dedi that is neither expected to have it nor to send it. Set `+mtx_userInfo_assertOnMatchAccess 0` on Server to bypass this assert." )
+
+
+	return valid
+}
+
+
+
+bool function GRX_IsInventoryReady( entity player = null )
+{
+	if ( !GRX_CheckCanAccessUserInfo() )
+		return false
+
+
+
+
+
+
+	return GetPlayerGRXScriptState( player ).isInventoryReady
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GRX_HasInventoryEverBeenReady( entity player = null )
+{
+	if ( !IsLobby() && !GetConVarBool( GRX_MATCH_DEDIS_HAVE_USER_INFO ) )
+		return false
+
+
+
+
+		if ( player == null )
+			player = GetLocalClientPlayer()
+
+
+
+
+
+	PlayerGRXScriptState scriptState = GetPlayerGRXScriptState( player )
+	return scriptState.hasInventoryEverBeenClean
+}
+
+
+
+
+int function GRX_GetPlayerEdition( entity player = null )
+{
+
+
+
+		if ( player == null )
+			player = GetLocalClientPlayer()
+
+
+
+
+
+	return GetPlayerGRXScriptState( player ).marketplaceEdition
+}
+
+
+
+int function GRX_GetNumberOfOwnedItemsByPlayer( array<ItemFlavor> items, entity player = null )
+{
+	if ( !GetPlayerGRXScriptState( player ).isInventoryReady )
+		return 0
+	int count = 0
+	foreach( item in items )
+	{
+		if ( GRX_IsItemOwnedByPlayer( item, player ) )
+		{
+			count++
+		}
+	}
+	return count
+}
+
+bool function GRX_IsItemOwnedByPlayer( ItemFlavor flav, entity player = null )
+{
+	Assert( GetPlayerGRXScriptState( player ).isInventoryReady, "Called GRX_IsItemOwnedByPlayer while the player's inventory was not ready" )
+
+	return IsItemOwnedByPlayerInternal( flav, player )
+}
+
+bool function GRX_IsItemOwnedByPlayer_AllowOutOfDateData( ItemFlavor flav, entity player = null )
+{
+	
+	
+	
+	
+	
+	
+
+	return IsItemOwnedByPlayerInternal( flav, player )
+}
+
+bool function IsItemOwnedByPlayerInternal( ItemFlavor flav, entity player = null )
+{
+	int type = ItemFlavor_GetType( flav )
+
+#if DEV
+		
+		if ( type == eItemType.character )
+		{
+			var stackInfos = getstackinfos( 3 ) 
+			if ( stackInfos != null )
+			{
+				expect table(stackInfos)
+				string funcName = expect string(stackInfos.func)
+				const array< string > FUNCS_THAT_CAN_CHECK_CHARACTER_OWNERSHIP_DIRECTLY = [
+					"Loadout_GetCharacterUnlockedStateForPlayer" 
+					"PurchaseDialog", 
+					"GRXOffer_IsFullyClaimed", 
+					"Loadout_IsCharacterOwnedByPlayerIgnoringUnlockSources", 
+					"GRXOffer_GetOwnedItemsCount", 
+				]
+
+				if ( !FUNCS_THAT_CAN_CHECK_CHARACTER_OWNERSHIP_DIRECTLY.contains( funcName ) )
+				{
+					GRX_Warning( "%s is checking ownership of character %s directly rather than using an approved wrapper function", funcName, string(ItemFlavor_GetAsset( flav )) )
+					
+					
+					
+				}
+			}
+		}
+#endif
+
+
+
+
+		if ( player == null )
+			player = GetLocalClientPlayer()
+
+
+
+
+
+	if ( ItemFlavor_GetPlaylistAvailability( flav ) == eItemFlavorPlaylistAvailability.FORCE_UNLOCK_FOR_SPECIAL_EVENT )
+		return true
+
+	int grxMode = ItemFlavor_GetGRXMode( flav )
+
+	if ( grxMode == eItemFlavorGRXMode.OWNERSHIP_TARGET )
+	{
+		ItemFlavor ornull ownershipTargetOverride = ItemFlavor_GetGRXOwnershipTarget( flav )
+		if ( ownershipTargetOverride != null )
+			return IsItemOwnedByPlayerInternal( expect ItemFlavor(ownershipTargetOverride), player )
+
+		GRX_Warning( "Item flavor %s is set to use GRX ownership of another item but it isn't a valid item: %s", string(ItemFlavor_GetAsset( flav )), string(GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "ownershipTarget" )) )
+		return false
+	}
+
+	if ( grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET || grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE )
+	{
+		array< ItemFlavor > ownershipTargetList = ItemFlavor_GetGRXMultipleOwnershipRequirementsList( flav )
+		if ( ownershipTargetList.len() == 0 )
+		{
+			GRX_Warning( "Item flavor %s is set to use GRX ownership of a set of items, but the set was empty: %s", string( ItemFlavor_GetAsset( flav ) ) )
+			return false
+		}
+
+		foreach ( ItemFlavor ownershipFlav in ownershipTargetList )
+		{
+			bool isOwned = IsItemOwnedByPlayerInternal( ownershipFlav, player )
+			if ( grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET && !isOwned )
+			{
+				return false
+			}
+			else if ( grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE && isOwned )
+			{
+				return true
+			}
+		}
+
+		return ( grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET ) 
+	}
+
+	
+	
+	
+	
+
+	
+	
+
+		bool isLobby = IsLobby()
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		
+		
+		if ( grxMode == eItemFlavorGRXMode.REGULAR && isLobby && GetConVarBool( "mtx_allow_pending_grants_for_item_ownership" ) )
+		{
+			for ( int index = 0; index < QUEUED_REWARDS_MAX_COUNT; index++ )
+			{
+				SettingsAssetGUID rewardGUID = player.GetPersistentVarAsInt( format( "grxQueuedRewards[%d].rewardGUIDs[0]", index ) )
+				if ( rewardGUID == 0 || !IsValidItemFlavorGUID( rewardGUID ) )
+				{
+					continue
+				}
+
+				if ( flav.guid == rewardGUID )
+				{
+					GRX_Info( "reporting queued GRX reward as owned instead of relying on GRX_Inventory call or persistence cache --- this should be temporary and should resolve on next successful GRX refresh" )
+					return true
+				}
+			}
+		}
+
+
+	
+	if ( ItemFlavor_HasUnlockFunc( flav ) && grxMode == GRX_ITEMFLAVORMODE_NONE )
+		return ItemFlavor_PassesUnlockFunc( flav, player )
+
+	if ( grxMode == GRX_ITEMFLAVORMODE_NONE )
+		return true
+
+	Assert( grxMode == GRX_ITEMFLAVORMODE_REGULAR, format( "Tried to call GRX_IsItemOwnedByPlayer on a non-regular GRX item: %s", string(ItemFlavor_GetAsset( flav )) ) )
+
+	bool has
+	if ( !GRX_HasInventoryEverBeenReady( player ) )
+	{
+		has = true 
+	}
+	else
+	{
+		if ( !ItemFlavor_IsMarketplaceExclusive( flav, player ) && ItemFlavor_HasExclusiveFunc( flav ) )
+		{
+			return ItemFlavor_PassesExclusiveFunc( flav, player )
+		}
+
+
+
+
+
+				Assert( player == GetLocalClientPlayer() )
+
+
+
+			has = GRX_HasItem( flav.grxIndex )
+
+	}
+
+	if ( IsEverythingUnlocked() )
+		return true
+
+	return has
+}
+
+
+
+int function GetItemOwnershipStateForPlayer( ItemFlavor flav, entity player = null )
+{
+	
+	
+	int type = ItemFlavor_GetType( flav )
+
+
+
+
+		if ( player == null )
+			player = GetLocalClientPlayer()
+
+
+
+
+
+	if ( ItemFlavor_GetPlaylistAvailability( flav ) == eItemFlavorPlaylistAvailability.FORCE_UNLOCK_FOR_SPECIAL_EVENT )
+		return eItemFlavorGRXOwnershipReason.OWNED_SPECIAL_EVENT
+
+	int grxMode = ItemFlavor_GetGRXMode( flav )
+
+	if ( grxMode == eItemFlavorGRXMode.OWNERSHIP_TARGET )
+	{
+		ItemFlavor ornull ownershipTargetOverride = ItemFlavor_GetGRXOwnershipTarget( flav )
+		if ( ownershipTargetOverride != null )
+		{
+			int ownershipState = IsItemOwnedByPlayerInternal( expect ItemFlavor(ownershipTargetOverride), player ) ? eItemFlavorGRXOwnershipReason.OWNED_DEPENDENCY : eItemFlavorGRXOwnershipReason.UNOWNED_DEPENDENCY
+			return ownershipState
+		}
+
+		GRX_Warning( "Item flavor %s is set to use GRX ownership of another item but it isn't a valid item: %s", string(ItemFlavor_GetAsset( flav )), string(GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "ownershipTarget" )) )
+		return eItemFlavorGRXOwnershipReason.UNOWNED_DEPENDENCY
+	}
+
+	if ( grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET || grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE )
+	{
+		array< ItemFlavor > ownershipTargetList = ItemFlavor_GetGRXMultipleOwnershipRequirementsList( flav )
+		if ( ownershipTargetList.len() == 0 )
+		{
+			GRX_Warning( "Item flavor %s is set to use GRX ownership of a set of items, but the set was empty: %s", string( ItemFlavor_GetAsset( flav ) ) )
+			return eItemFlavorGRXOwnershipReason.UNOWNED_DEPENDENCY
+		}
+
+		foreach ( ItemFlavor ownershipFlav in ownershipTargetList )
+		{
+			bool isOwned = IsItemOwnedByPlayerInternal( ownershipFlav, player )
+			if ( grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET && !isOwned )
+			{
+				return eItemFlavorGRXOwnershipReason.UNOWNED_DEPENDENCY
+			}
+			else if ( grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE && isOwned )
+			{
+				return eItemFlavorGRXOwnershipReason.OWNED_DEPENDENCY
+			}
+		}
+
+		int ownershipState = ( grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET ) ? eItemFlavorGRXOwnershipReason.OWNED_DEPENDENCY : eItemFlavorGRXOwnershipReason.UNOWNED_DEPENDENCY 
+		return ownershipState
+	}
+
+	
+	
+	
+	
+
+	
+	
+
+		bool isLobby = IsLobby()
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		
+		
+		if ( grxMode == eItemFlavorGRXMode.REGULAR && isLobby && GetConVarBool( "mtx_allow_pending_grants_for_item_ownership" ) )
+		{
+			for ( int index = 0; index < QUEUED_REWARDS_MAX_COUNT; index++ )
+			{
+				SettingsAssetGUID rewardGUID = player.GetPersistentVarAsInt( format( "grxQueuedRewards[%d].rewardGUIDs[0]", index ) )
+				if ( rewardGUID == 0 || !IsValidItemFlavorGUID( rewardGUID ) )
+				{
+					continue
+				}
+
+				if ( flav.guid == rewardGUID )
+				{
+					GRX_Info( "reporting queued GRX reward as owned instead of relying on GRX_Inventory call or persistence cache --- this should be temporary and should resolve on next successful GRX refresh" )
+					return eItemFlavorGRXOwnershipReason.OWNED_QUEUED_REWARD
+				}
+			}
+		}
+
+
+	
+	if ( ItemFlavor_HasUnlockFunc( flav ) && grxMode == GRX_ITEMFLAVORMODE_NONE )
+	{
+		int ownershipState = ItemFlavor_PassesUnlockFunc( flav, player ) ? eItemFlavorGRXOwnershipReason.OWNED_UNLOCK_FUNC : eItemFlavorGRXOwnershipReason.UNOWNED_UNLOCK_FUNC
+		return ownershipState
+	}
+
+	if ( grxMode == GRX_ITEMFLAVORMODE_NONE )
+		return eItemFlavorGRXOwnershipReason.OWNED_NON_GRX
+
+	Assert( grxMode == GRX_ITEMFLAVORMODE_REGULAR, format( "Tried to call %s on a non-regular GRX item: %s", FUNC_NAME(), string(ItemFlavor_GetAsset( flav )) ) )
+
+	bool has
+	if ( !GRX_HasInventoryEverBeenReady( player ) )
+	{
+		return eItemFlavorGRXOwnershipReason.OWNED_INVENTORY_NEVER_READY
+	}
+	else
+	{
+		if ( !ItemFlavor_IsMarketplaceExclusive( flav, player ) && ItemFlavor_HasExclusiveFunc( flav ) )
+		{
+			int ownershipState = ItemFlavor_PassesExclusiveFunc( flav, player ) ? eItemFlavorGRXOwnershipReason.OWNED_EXCLUSIVE_FUNC : eItemFlavorGRXOwnershipReason.UNOWNED_EXCLUSIVE_FUNC
+			return ownershipState
+		}
+
+
+
+
+
+				Assert( player == GetLocalClientPlayer() )
+
+
+
+			has = GRX_HasItem( flav.grxIndex )
+
+	}
+
+	if ( IsEverythingUnlocked() )
+		return eItemFlavorGRXOwnershipReason.OWNED_EVERYTHING_UNLOCKED
+
+	int ownershipState = has ? eItemFlavorGRXOwnershipReason.OWNED_GRX : eItemFlavorGRXOwnershipReason.UNOWNED_GRX
+	return ownershipState
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ItemFlavorBag function GRX_GetMostRecentPackOpeningResults()
+{
+	Assert( fileLevel.mostRecentPackOpeningResultsOrNull != null, "Tried to call GRX_GetMostRecentPackOpeningResults with no pack opening results available for use" )
+
+	ItemFlavorBag bag = expect ItemFlavorBag( fileLevel.mostRecentPackOpeningResultsOrNull )
+	return bag
+}
+
+
+
+int function GRX_GetMostRecentPackOpeningContainerType()
+{
+	return fileLevel.mostRecentPackOpeningContainerType
+}
+
+
+
+array<ItemFlavor> function GRX_GetMostRecentPackOpeningContainerResults()
+{
+	return fileLevel.mostRecentPackOpeningContainerResults
+}
+
+
+
+bool function GRX_IsItemFlavInPackResultContainer( ItemFlavor flav, int targetContainerType )
+{
+	int containerType = GRX_GetMostRecentPackOpeningContainerType()
+	if ( containerType != targetContainerType )
+	{
+		return false
+	}
+
+	array<ItemFlavor> containerItems = GRX_GetMostRecentPackOpeningContainerResults()
+	foreach ( ItemFlavor containerFlav in containerItems )
+	{
+		if ( flav.guid == containerFlav.guid )
+		{
+			return true
+		}
+	}
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GRX_GetQuantityOverrideForStackableItemFlavor( ItemFlavor itemFlavor )
+{
+	int quantity = 1
+	if ( ItemFlavor_GetType( itemFlavor ) == eItemType.account_currency_bundle )
+	{
+		quantity = GRXCurrencyBundle_GetValue( itemFlavor )
+	}
+	else if ( ItemFlavor_GetType( itemFlavor ) == eItemType.voucher )
+	{
+		int stars = Voucher_GetEffectBattlepassStars( itemFlavor )
+		quantity = stars > 0 ? stars : 1
+	}
+	return quantity
+}
+
+
+
+int function GRX_GetRarityOverrideFromQuantity( ItemFlavor item, int currentRarity, int quantity )
+{
+	bool isCrafting = ( item == GRX_CURRENCIES[GRX_CURRENCY_CRAFTING] )
+	bool isLegendTokens = ( item == GRX_CURRENCIES[GRX_CURRENCY_CREDITS] )
+	bool isStars = ( ItemFlavor_GetType( item ) == eItemType.voucher && Voucher_GetEffectBattlepassStars( item ) > 0 )
+	if ( !isCrafting && !isStars && !isLegendTokens )
+		return currentRarity
+
+	int rarity = eRarityTier.COMMON
+	table<int, int> tableToIterate
+	if ( isCrafting )
+		tableToIterate = clone CRAFTING_MATERIAL_MAX_QUANTITY_TO_RARITY_MAP
+	else if ( isLegendTokens)
+		tableToIterate = clone LEGEND_TOKENS_MAX_QUANTITY_TO_RARITY_MAP
+	else if ( isStars )
+		tableToIterate = clone BP_STARS_QUANTITY_TO_RARITY_MAP
+	else
+		Assert( false, "Tried to get override rarity for item not in Rarity:Quantity table." )
+
+	foreach ( int maxQuantity, int associatedRarity in tableToIterate )
+	{
+		rarity = associatedRarity
+		if ( maxQuantity >= quantity )
+			break
+	}
+
+	return rarity
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+asset function GRXPack_GetOpenButtonIcon( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "openButtonIcon" )
+}
+
+
+
+
+vector ornull function GRXPack_GetCustomColor( ItemFlavor flav, int idx )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	if ( !GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "useCustomColors" ) )
+		return null
+
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( flav ), format( "customCol%d", idx ) )
+}
+
+
+
+
+vector ornull function GRXPack_GetCustomCountTextCol( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	if ( !GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "useCustomColors" ) )
+		return null
+
+	return GetGlobalSettingsVector( ItemFlavor_GetAsset( flav ), "countTextCol" )
+}
+
+
+
+
+bool function GRXPack_IsEphemeral( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	return GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "isEphemeral" )
+}
+
+
+
+bool function GRXPack_IsAnyRetroPack( ItemFlavor flav )
+{
+	int packType = ItemFlavor_GetAccountPackType( flav )
+
+	bool rv =
+		( packType == eAccountPackType.RETRO_PACK ) ||
+		( packType == eAccountPackType.RETRO_BACKFILL_PACK ) ||
+		( packType == eAccountPackType.RETRO_ESCALATING_PACK ) ||
+		( packType == eAccountPackType.RETRO_ESCALATING_BACKFILL_PACK )
+
+	return rv
+}
+
+
+
+bool function GRXPack_IsBackfillPack( ItemFlavor flav )
+{
+	int packType = ItemFlavor_GetAccountPackType( flav )
+
+	bool rv =
+		( packType == eAccountPackType.RETRO_BACKFILL_PACK ) ||
+		( packType == eAccountPackType.RETRO_ESCALATING_BACKFILL_PACK )
+
+	return rv
+}
+
+
+
+bool function GRXPack_IsWishlistSirngePack( ItemFlavor flav )
+{
+	int packType = ItemFlavor_GetAccountPackType( flav )
+
+	if ( packType != eAccountPackType.SIRNGE )
+		return false
+
+	asset itemAsset = ItemFlavor_GetAsset( flav )
+
+	return GetGlobalSettingsBool( itemAsset, "isWishlistSirngePack" )
+}
+
+
+
+bool function GRXPack_IsExpectedToContainSingleItemWithCurrency( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	return GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "isExpectedToContainSingleItemWithCurrency" )
+}
+
+
+
+
+asset function GRXPack_GetTickModel( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "tickMdl" )
+}
+
+
+
+int function GRXPack_GetRetroPackDisclaimerType( ItemFlavor pack )
+{
+	Assert( IsItemFlavorStructValid( pack.guid, eValidation.ASSERT ) )
+	Assert( GRXPack_IsAnyRetroPack( pack ) )
+
+	asset itemAsset = ItemFlavor_GetAsset( pack )
+	string settingsString = GetGlobalSettingsString( itemAsset, "packDisclosureType" )
+	int accountPackType
+
+	switch ( settingsString )
+	{
+		case "MILESTONE_EVENT":
+			accountPackType = eRetroPackDisclosureType.MILESTONE_EVENT
+			break
+		case "COLLECTION_EVENT":
+			accountPackType = eRetroPackDisclosureType.COLLECTION_EVENT
+			break
+		default:
+			Assert( false )
+			break
+	}
+
+	return accountPackType
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array<ItemFlavor> function GRXPack_GetPackContents( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	array<ItemFlavor> contents = []
+	foreach ( var contentsBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "packContents" ) )
+	{
+		asset contentAsset = GetSettingsBlockAsset( contentsBlock, "flavor" )
+		if ( IsValidItemFlavorSettingsAsset( contentAsset ) )
+			contents.append( GetItemFlavorByAsset( contentAsset ) )
+	}
+	return contents
+}
+
+
+
+array< ItemFlavor > function GRXPack_GetPackContentsSorted( ItemFlavor pack )
+{
+	Assert( ItemFlavor_GetType( pack ) == eItemType.account_pack )
+
+	array< ItemFlavor > contents = GRXPack_GetPackContents( pack )
+	int sort = GRXPack_GetPackSort( pack )
+
+	SortItemFlavorArray( contents, sort )
+	return contents
+}
+
+
+
+asset function GRXPack_GetStickerCompletionRewardPack( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "stickerRewardPack" )
+}
+
+string function GRXPack_GetStickerCompletionRewardSequence( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "stickerRewardSequence" )
+}
+
+
+
+
+string function GRXPack_GetTickSoundAlias( ItemFlavor flav, int soundKind )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	switch ( soundKind )
+	{
+		case eGRXPackTickSoundKind.TriadBounce: return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "triadBounceSound" )
+
+		case eGRXPackTickSoundKind.PuckLand: return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "puckLandSound" )
+
+		case eGRXPackTickSoundKind.Unpack: return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "unpackSound" )
+
+		case eGRXPackTickSoundKind.DeployTriadExplo1: return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "deployTriadExplo1Sound" )
+
+		case eGRXPackTickSoundKind.DeployTriadExplo2: return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "deployTriadExplo2Sound" )
+
+		case eGRXPackTickSoundKind.DeployTriadExplo3: return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "deployTriadExplo3Sound" )
+	}
+	Assert( false )
+	return ""
+}
+
+
+
+
+string function GRXPack_GetTickModelSkin( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "tickMdlSkin" )
+}
+
+bool function GRXPack_PlayerOwnsAllItemsInPack( entity player, ItemFlavor pack )
+{
+	
+	if ( !IsValid( player ) || !GRX_HasInventoryEverBeenReady( player ) )
+	{
+		return false
+	}
+
+	
+	foreach ( grxItem in GRXPack_GetPackContents( pack ) )
+	{
+		Assert( grxItem.grxMode != eItemFlavorGRXMode.NONE, "GRX mode cannot be none for items inside pack for ownership check." )
+
+
+
+
+
+
+
+		if ( !GRX_HasItem( ItemFlavor_GetGRXIndex( grxItem ) ) )
+		{
+			return false
+		}
+
+	}
+
+	return true
+}
+
+void function SortItemFlavorArray( array< ItemFlavor > contents, int sort )
+{
+	switch ( sort )
+	{
+		case eLootPoolBrowserSortOrder.BAKERY:
+			break
+
+		case eLootPoolBrowserSortOrder.RARITY_DESCENDING:
+			contents.sort( int function ( ItemFlavor a, ItemFlavor b ) {
+				int qualityA = ItemFlavor_GetQuality( a )
+				int qualityB = ItemFlavor_GetQuality( b )
+
+				if ( qualityA < qualityB )
+				{
+					return -1
+				}
+
+				if ( qualityA > qualityB )
+				{
+					return 1
+				}
+
+				return 0
+			} )
+			break
+
+		case eLootPoolBrowserSortOrder.RARITY_ASCENDING:
+			contents.sort( int function ( ItemFlavor a, ItemFlavor b) {
+				int qualityA = ItemFlavor_GetQuality( a )
+				int qualityB = ItemFlavor_GetQuality( b )
+
+				if ( qualityA < qualityB )
+				{
+					return 1
+				}
+
+				if ( qualityA > qualityB )
+				{
+					return -1
+				}
+
+				return 0
+			} )
+			break
+	}
+}
+
+bool function LootPoolBrowser_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "loot_pool_browser_enabled", true )
+}
+
+bool function GRXPack_ValidateLootPoolBrowserConfig( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	if ( !GRXPack_GetIsLootPoolBrowsable( flav ) )
+	{
+		return true
+	}
+
+	bool isValid = true
+
+	
+	
+	array< asset > completionRewardPool = []
+	array< asset > mainPool             = []
+	foreach ( var mainPoolBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "packContents" ) )
+	{
+		mainPool.append( GetSettingsBlockAsset( mainPoolBlock, "flavor" ) )
+	}
+
+	foreach ( var poolBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "completionRewards" ) )
+	{
+		asset iterPoolAsset = GetSettingsBlockAsset( poolBlock, "flavor" )
+
+		if ( completionRewardPool.contains( iterPoolAsset ) )
+		{
+			Assert( false, format( "Duplicate flav (%s) found in pool flav (%s) - completion pools cannot contain duplicates", string( iterPoolAsset ), ItemFlavor_GetAssetString( flav ) ) )
+			isValid = false
+		}
+
+		completionRewardPool.append( iterPoolAsset )
+
+		if ( mainPool.contains( iterPoolAsset ) )
+		{
+			Assert( false, format( "Completion pool item (%s) found in main pool flav: %s", string( iterPoolAsset ), ItemFlavor_GetAssetString( flav ) ) )
+			isValid = false
+		}
+	}
+
+	
+	table< string, float > rarityMap = {}
+	array< asset > specificDroprateAssets = []
+	const array< string > rarityCategoryKeys = [ "COMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC" ]
+	foreach ( var poolRarityBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "poolRarities" ) )
+	{
+		string rarityKey = GetSettingsBlockString( poolRarityBlock, "rarity" )
+		Assert( rarityKey in eRarityTier || rarityKey == "SPECIFIC_FLAV", "Invalid rarity tier key: " + rarityKey )
+
+		if ( rarityCategoryKeys.contains( rarityKey ) )
+		{
+			if ( rarityKey in rarityMap )
+			{
+				Assert( false, format( "Duplicate rarity defined in loot pool rarity config (%s) for pack pool: %s", rarityKey, ItemFlavor_GetAssetString( flav ) ) )
+				isValid = false
+			}
+		}
+		else
+		{
+			asset droprateAsset = GetSettingsBlockAsset( poolRarityBlock, "specificDroprateFlav" )
+			if ( specificDroprateAssets.contains( droprateAsset ) )
+			{
+				Assert( false, format( "Duplicate specific flav defined in loot pool rarity config (%s) for pack pool: %s", string( droprateAsset ), ItemFlavor_GetAssetString( flav ) ) )
+				isValid = false
+			}
+
+			specificDroprateAssets.append( droprateAsset )
+
+			if ( !mainPool.contains( droprateAsset ) )
+			{
+				Assert( false, format( "Specific droprate asset (%s) was not found in the main loot pool on: %s", string( droprateAsset ), ItemFlavor_GetAssetString( flav ) ) )
+				isValid = false
+			}
+		}
+
+		float rarityDroprate = GetSettingsBlockFloat( poolRarityBlock, "droprate" )
+		if ( !( rarityDroprate > 0.0 && rarityDroprate <= 100.0 ) )
+		{
+			Assert( false, format( "Rarity tier (%s) in flav (%s) is invalid: %d - must be >0 and <= 100", rarityKey, ItemFlavor_GetAssetString( flav ), rarityDroprate ) )
+			isValid = false
+		}
+
+		rarityMap[ rarityKey ] <- rarityDroprate
+	}
+
+	
+	float total = 0.0
+	foreach ( string rarity, float droprate in rarityMap )
+	{
+		total += droprate
+	}
+
+	if ( total != 100.0 )
+	{
+		Assert( false, format( "Rarity configuration does not add up to 100 in flav: %s", ItemFlavor_GetAssetString( flav ) ) )
+		isValid = false
+	}
+
+	
+	if ( GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "hasBackfillDefined" ) )
+	{
+		table< string, asset > backfillPools = {}
+		foreach ( var backfillBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "backfillPoolContents" ) )
+		{
+			string category = GetSettingsBlockString( backfillBlock, "category" )
+			asset backfillFlav = GetSettingsBlockAsset( backfillBlock, "backfillPool" )
+
+			
+			if ( category in backfillPools )
+			{
+				Assert( false, format( "Duplicate category entry found: %s in asset: %s", category, ItemFlavor_GetAssetString( flav ) ) )
+				isValid = false
+			}
+
+			backfillPools[ category ] <- backfillFlav
+		}
+
+		if ( backfillPools.len() == 0 )
+		{
+			Assert( false, format( "Backfill was enabled for pack (%s) but no backfill configurations were found.", ItemFlavor_GetAssetString( flav ) ) )
+			isValid = false
+		}
+	}
+
+	return isValid
+}
+
+int function GRXPack_GetPackSort( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	Assert( GRXPack_GetIsLootPoolBrowsable( flav ) )
+
+	string sortKey = GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "packSort" )
+	Assert( sortKey in eLootPoolBrowserSortOrder )
+
+	return eLootPoolBrowserSortOrder[ sortKey ]
+}
+
+bool function GRXPack_GetIsLootPoolBrowsable( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	
+	if ( !LootPoolBrowser_IsEnabled() )
+		return false
+
+	return GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "isLootPoolBrowsable" )
+}
+
+array< ItemFlavor > function GRXPack_GetCompletionRewards( ItemFlavor flav, int sort )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	Assert( GRXPack_GetIsLootPoolBrowsable( flav ) )
+
+	array< ItemFlavor > contents = []
+	foreach ( var poolBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "completionRewards" ) )
+	{
+		asset iterPoolAsset = GetSettingsBlockAsset( poolBlock, "flavor" )
+		Assert( IsValidItemFlavorSettingsAsset( iterPoolAsset, eValidation.ASSERT ) )
+
+		contents.append( GetItemFlavorByAsset( iterPoolAsset ) )
+	}
+
+	SortItemFlavorArray( contents, sort )
+	return contents
+}
+
+int function GRXPack_GetCompletionRewardType( ItemFlavor packFlav )
+{
+	Assert( ItemFlavor_GetType( packFlav ) == eItemType.account_pack )
+	Assert( GRXPack_GetIsLootPoolBrowsable( packFlav ) )
+
+	string type = GetGlobalSettingsString( ItemFlavor_GetAsset( packFlav ), "completionRewardType" )
+	Assert( type in eLootPoolBrowserRewardType )
+
+	return eLootPoolBrowserRewardType[ type ]
+}
+
+string function GRXPack_GetCompletionRewardSequenceString( ItemFlavor pack )
+{
+	Assert( ItemFlavor_GetType( pack ) == eItemType.account_pack )
+	Assert( GRXPack_GetIsLootPoolBrowsable( pack ) )
+
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( pack ), "completionRewardSequenceRef" )
+}
+
+string function GRXPack_GetPackOpenProgressRewardSequenceString( ItemFlavor pack )
+{
+	Assert( ItemFlavor_GetType( pack ) == eItemType.account_pack )
+
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( pack ), "packOpenProgressRewardSequenceRef" )
+}
+
+asset function GRXPack_GetCompletionRewardAsset( ItemFlavor pack )
+{
+	Assert( ItemFlavor_GetType( pack ) == eItemType.account_pack )
+
+	return GetGlobalSettingsAsset( ItemFlavor_GetAsset( pack ), "completionRewardAsset" )
+}
+
+bool function GRXPack_GetIsBackfillEnabled( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "hasBackfillDefined" )
+}
+
+array< ItemFlavor > function GRXPack_GetBackfillPool( ItemFlavor flav, int category, int sort )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	Assert( GRXPack_GetIsLootPoolBrowsable( flav ) )
+
+	if ( !GRXPack_GetIsBackfillEnabled( flav ) )
+	{
+		return []
+	}
+
+	table< int, ItemFlavor > categoryPoolMap = {}
+	foreach ( var backfillBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "backfillPoolContents" ) )
+	{
+		asset iterPoolAsset = GetSettingsBlockAsset( backfillBlock, "flavor" )
+		Assert( IsValidItemFlavorSettingsAsset( iterPoolAsset, eValidation.ASSERT ) )
+
+		string categoryKey = GetSettingsBlockString( backfillBlock, "category" )
+		if ( !(categoryKey in eBackfillPoolCategory) )
+		{
+			Assert( false, format( "Invalid category key in asset (%s): %s", string( iterPoolAsset ), categoryKey ) )
+			continue
+		}
+
+		categoryPoolMap[ eBackfillPoolCategory[ categoryKey ] ] <- GetItemFlavorByAsset( iterPoolAsset )
+	}
+
+	if ( categoryPoolMap.len() == 0 || !( category in categoryPoolMap ) )
+	{
+		return []
+	}
+
+	array< ItemFlavor > contents = GRXPack_GetPackContents( categoryPoolMap[ category ] )
+	SortItemFlavorArray( contents, sort )
+
+	return contents
+}
+
+string function GRXPack_GetContainerAlias( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	return GetGlobalSettingsString( ItemFlavor_GetAsset( flav ), "grxContainer" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PoolRarityConfig function GRXPack_GetRarityConfig( ItemFlavor flav )
+{
+	Assert( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+
+	PoolRarityConfig config
+	foreach ( var rarityBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( flav ), "poolRarities" ) )
+	{
+		string rarityKey = GetSettingsBlockString( rarityBlock, "rarity" )
+		float droprate = GetSettingsBlockFloat( rarityBlock, "droprate" )
+
+		switch ( rarityKey )
+		{
+			case "COMMON":
+				config.droprateCommon = droprate
+				break
+
+			case "RARE":
+				config.droprateRare = droprate
+				break
+
+			case "EPIC":
+				config.droprateEpic = droprate
+				break
+
+			case "LEGENDARY":
+				config.droprateLegendary = droprate
+				break
+
+			case "MYTHIC":
+				config.droprateMythic = droprate
+				break
+
+			case "SPECIFIC_FLAV":
+				asset rarityAsset = GetSettingsBlockAsset( rarityBlock, "specificDroprateFlav" )
+				config.specificFlavs[ GetItemFlavorByAsset( rarityAsset ) ] <- droprate
+		}
+	}
+
+	return config
+}
+
+array< PackPoolItemInfo > function GRXPack_GetLootPoolItems( ItemFlavor pack )
+{
+	Assert( ItemFlavor_GetType( pack ) == eItemType.account_pack )
+	Assert( GRXPack_GetIsLootPoolBrowsable( pack ) )
+
+	PoolRarityConfig config = GRXPack_GetRarityConfig( pack )
+
+	array< PackPoolItemInfo > contents = []
+	foreach( var packContentsBlock in IterateSettingsAssetArray( ItemFlavor_GetAsset( pack ), "packContents" ) )
+	{
+		asset blockAsset = GetSettingsBlockAsset( packContentsBlock, "flavor" )
+		Assert( IsValidItemFlavorSettingsAsset( blockAsset, eValidation.ASSERT ) )
+		ItemFlavor blockFlav = GetItemFlavorByAsset( blockAsset )
+
+		bool isChase = GetSettingsBlockBool( packContentsBlock, "isChase" )
+		float droprate = ( blockFlav in config.specificFlavs ? config.specificFlavs[ blockFlav ] : ITEM_POOL_DROP_RATE_UNSET )
+
+		PackPoolItemInfo loot
+		loot.flav = blockFlav
+		loot.droprate = droprate
+		loot.isChase = isChase
+
+		contents.append( loot )
+	}
+
+	return contents
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GRX_Warning( string fmt, ... )
+{
+	if ( GetConVarInt( "mtx_log_level" ) < GRX_LOG_LEVEL_WARN )
+	{
+		return
+	}
+
+	table stackInfos = expect table(getstackinfos( 2 ))
+
+	array< var > vargs
+	for ( int i = 0; i < vargc; ++i )
+	{
+		vargs.append( vargv[i] )
+	}
+
+	Warning( "[GRX][%s] %s\n", stackInfos.func, vformat( fmt, vargs ) )
+}
+
+void function GRX_Info( string fmt, ... )
+{
+	if ( fileLevel.GRX_DEBUG_PRINTS_disableTemporarily )
+	{
+		return
+	}
+
+	if ( GetConVarInt( "mtx_log_level" ) < GRX_LOG_LEVEL_INFO )
+	{
+		return
+	}
+
+	table stackInfos = expect table(getstackinfos( 2 ))
+
+	array< var > vargs
+	for ( int i = 0; i < vargc; ++i )
+	{
+		vargs.append( vargv[i] )
+	}
+
+	printf( "[GRX][%s] %s\n", stackInfos.func, vformat( fmt, vargs ) )
+}
+
+void function GRX_Trace( string fmt, ... )
+{
+	if ( fileLevel.GRX_DEBUG_PRINTS_disableTemporarily )
+	{
+		return
+	}
+
+	if ( GetConVarInt( "mtx_log_level" ) < GRX_LOG_LEVEL_TRACE )
+	{
+		return
+	}
+
+	table stackInfos = expect table(getstackinfos( 2 ))
+
+
+	array< var > vargs
+	for ( int i = 0; i < vargc; ++i )
+	{
+		vargs.append( vargv[i] )
+	}
+
+	string message = format( "[GRX][%s] %s\n", stackInfos.func, vformat( fmt, vargs ) )
+	printf( message )
+	SpamLog( message )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+ItemFlavorBag ornull DEV_GRX_ForcePackResults_resultsOrNull
+void function DEV_GRX_ForcePackResults( int packError, ... )
+{
+	if ( packError == -1 )
+	{
+		DEV_GRX_ForcePackResults_resultsOrNull = null
+		return
+	}
+
+	ItemFlavorBag bag
+	bag.associatedError = packError
+	for ( int argIdx = 0; argIdx < vargc; argIdx += 2 )
+	{
+		bag.flavors.append( GetItemFlavorByGRXRef( expect string(vargv[argIdx + 0]) ) )
+		bag.quantities.append( expect int(vargv[argIdx + 1]) )
+	}
+
+	DEV_GRX_ForcePackResults_resultsOrNull = bag
+}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PlayerGRXScriptState function GetPlayerGRXScriptState( entity player )
+{
+	if ( !GRX_CheckCanAccessUserInfo() )
+	{
+		PlayerGRXScriptState state
+		return state
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+			Assert( player == GetLocalClientPlayer() )
+
+
+
+
+
+
+		return fileLevel.localGRXState
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function UIToClient_GRXInventoryCleanStateChange( bool isClean, int marketplaceEdition, bool isOfferResticted )
+{
+	PlayerGRXScriptState scriptState = GetPlayerGRXScriptState( GetLocalClientPlayer() )
+	scriptState.isInventoryReady = isClean
+	scriptState.marketplaceEdition = marketplaceEdition
+	scriptState.isOfferRestricted = isOfferResticted
+	if ( isClean )
+	{
+		scriptState.hasInventoryEverBeenClean = true
+
+		
+		ItemFlavor ornull activeBattlePass = GetActiveBattlePass()
+		if ( activeBattlePass == null )
+			return
+
+		expect ItemFlavor( activeBattlePass )
+
+		ItemFlavor xpBoostFlav = BattlePass_GetXPBoostFlav( activeBattlePass )
+		SetConVarInt( "client_boostcount", GRX_GetConsumableCount( ItemFlavor_GetGRXIndex( xpBoostFlav ) ) )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsValidCurrencyForPackOpening( ItemFlavor currency )
+{
+	if ( currency.guid == GRX_CURRENCIES[GRX_CURRENCY_CRAFTING].guid
+	|| currency.guid == GRX_CURRENCIES[GRX_CURRENCY_HEIRLOOM].guid
+	|| currency.guid == GRX_CURRENCIES[GRX_CURRENCY_EXOTIC].guid )
+	{
+		return true
+	}
+
+	return false
+}
+
+
+
+void function ClientCodeCallback_GRXPacksOpened( int batchCounter, int numBatchesOfItemsToSend, array<int> balanceDiffs, array<int> newItems, int containerType, array<int> containerItems, int packError )
+{
+	GRX_Info(
+		"batchCounter=%d , numBatchesOfItemsToSend=%d , balanceDiffs=%s , newItems=%s , packError=%d",
+		batchCounter,
+		numBatchesOfItemsToSend,
+		format( "[%s]", balanceDiffs.join( "," ) ),
+		format( "[%s]", newItems.join( "," ) ),
+		packError
+	)
+
+	ItemFlavorBag bag
+
+	
+	if ( batchCounter == 0 )
+	{
+		
+		fileLevel.mostRecentPackOpeningResultsOrNull = null
+		fileLevel.mostRecentPackOpeningContainerType = -1
+		fileLevel.mostRecentPackOpeningContainerResults.clear()
+
+		for ( int currencyIndex = 0; currencyIndex < GRX_CURRENCY_COUNT; currencyIndex++ )
+		{
+			ItemFlavor currency = GRX_CURRENCIES[currencyIndex]
+
+			if ( !IsValidCurrencyForPackOpening( currency ) )
+			{
+				continue
+			}
+
+			int diff            = balanceDiffs[currencyIndex]
+			if ( diff != 0 )
+			{
+				bag.flavors.append( currency )
+				bag.quantities.append( diff )
+			}
+		}
+
+		if ( packError != GRX_INVENTORYERROR_NONE )
+		{
+			bag.associatedError = packError
+			GRX_Info( "packError: %d", packError )
+		}
+	}
+	else 
+	{
+		Assert( fileLevel.mostRecentPackOpeningResultsOrNull != null, "fileLevel.mostRecentPackOpeningResultsOrNull should not be null" )
+		bag = expect ItemFlavorBag( fileLevel.mostRecentPackOpeningResultsOrNull )
+	}
+
+	foreach ( int itemGRXIndex in newItems )
+	{
+		ItemFlavor flav = GetItemFlavorByGRXIndex( itemGRXIndex )
+
+		bag.flavors.append( flav )
+		bag.quantities.append( 1 )
+	}
+
+	fileLevel.mostRecentPackOpeningContainerType = containerType
+
+	foreach ( int itemGRXIndex in containerItems )
+	{
+		ItemFlavor flav = GetItemFlavorByGRXIndex( itemGRXIndex )
+		fileLevel.mostRecentPackOpeningContainerResults.append( flav )
+	}
+
+	
+	if ( batchCounter == ( numBatchesOfItemsToSend - 1 ) )
+	{
+		foreach ( int flavIndex, ItemFlavor flav in bag.flavors )
+		{
+			GRX_Info( "flav: %s, name: %s, qty: %d",
+				DEV_DescItemFlavor( flav ),
+				Localize( ItemFlavor_GetLongName( flav ) ),
+				bag.quantities[flavIndex]
+			)
+
+			Newness_MarkItemAsNewAndInformServer( flav )
+		}
+
+#if DEV
+			int menuHeirloomOverrideGUID = DEV_GetMenuHeirloomOverrideGUID()
+
+			if ( menuHeirloomOverrideGUID >= 0 )
+			{
+				ItemFlavor item = GetItemFlavorByGUID( menuHeirloomOverrideGUID )
+				bag.flavors.append( item )
+				bag.flavors.append( item )
+				bag.flavors.append( item )
+				bag.quantities.append( 1 )
+				bag.quantities.append( 1 )
+				bag.quantities.append( 1 )
+				bag.associatedError = GRX_INVENTORYERROR_NONE
+			}
+			else if ( DEV_GRX_ForcePackResults_resultsOrNull != null )
+			{
+				GRX_Info( "PACK RESULTS FORCED!!" )
+				bag = expect ItemFlavorBag(DEV_GRX_ForcePackResults_resultsOrNull)
+			}
+#endif
+
+		if ( newItems.len() > 0 )
+		{
+			RunUIScript( "ClientToUI_WORKAROUND_GRXPackOpened_Start", bag.associatedError, fileLevel.mostRecentPackOpeningContainerType )
+
+			foreach ( int flavIdx, ItemFlavor flav in bag.flavors )
+			{
+				RunUIScript( "ClientToUI_WORKAROUND_GRXPackOpened_Entry", ItemFlavor_GetGUID( flav ), bag.quantities[flavIdx], false )
+			}
+
+			foreach ( ItemFlavor flav in fileLevel.mostRecentPackOpeningContainerResults )
+			{
+				RunUIScript( "ClientToUI_WORKAROUND_GRXPackOpened_Entry", ItemFlavor_GetGUID( flav ), 1, true )
+			}
+
+			RunUIScript( "ClientToUI_WORKAROUND_GRXPackOpened_Finish" )
+		}
+	}
+
+	fileLevel.mostRecentPackOpeningResultsOrNull = bag
+}
+
+
+
+int function ClientCodeCallback_GRXGetBattlepassSeasonAndSplitNumber()
+{
+	int battlePassSeasonAndSplit = 0
+	ItemFlavor ornull currentPassFlav = GetActiveBattlePassV2()
+	if ( currentPassFlav != null )
+	{
+		int activeSeasonNumber = GetActiveSeasonNumber()
+		expect ItemFlavor( currentPassFlav )
+		int currentSplit = BattlePassV2_GetCurrentSplit( currentPassFlav )
+
+		
+		
+		battlePassSeasonAndSplit = ( activeSeasonNumber * 10 ) + currentSplit
+	}
+	return battlePassSeasonAndSplit
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function AssertCurrencyBundleValuesAreValid( ItemFlavor bundle )
+{
+	
+	
+
+	int playlistValue = GetCurrentPlaylistVarInt( "grx_" + ItemFlavor_GetGRXAlias( bundle ) + "_count", -1 )
+	int bakeryValue = GetGlobalSettingsInt( ItemFlavor_GetAsset( bundle ), "currencyCount" )
+	string playlistKey = "grx_" + ItemFlavor_GetGRXAlias( bundle ) + "_count"
+
+	if ( GRXCurrencyBundle_GetValue( bundle ) <= 0 )
+	{
+		Assert( false, format( "Invalid currency bundle count setup, please check Bakery & playlist setup for %s - playlist %d, bakery %d", ItemFlavor_GetGRXAlias( bundle ), playlistValue, bakeryValue ) )
+	}
+
+#if DEV
+	if ( playlistValue != -1 )
+	{
+		printf( "%s: Playlist value %s is overriding the bakery value, using %d", FUNC_NAME(), playlistKey, playlistValue )
+	}
+	else
+	{
+		printf( "%s: Using bakery value for %s = %d", FUNC_NAME(), ItemFlavor_GetGRXAlias( bundle ), bakeryValue )
+	}
+#endif
+}
+
+void function OnRecolorableSkinRegistered( ItemFlavor flav )
+{
+	
+	bool isRecolor = GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "isRecolor" )
+	bool isRecolorParent = GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "isRecolorParent" )
+
+	Assert( !( isRecolor && isRecolorParent ), format( "%s: %s is marked as both a parent and child for recolors; this is not allowed.", FUNC_NAME(), ItemFlavor_GetAssetString( flav ) ) )
+
+	
+	if ( isRecolor )
+	{
+		asset recolorParent = GetGlobalSettingsAsset( ItemFlavor_GetAsset( flav ), "recolorParent" )
+		Assert( recolorParent != "", format( "%s: %s is marked as a recolor but has no recolor parent set.", FUNC_NAME(), ItemFlavor_GetAssetString( flav ) ) )
+	}
+
+	
+}
+
+void function OnItemTypeAccountPackFlavRegistered( ItemFlavor flav )
+{
+	
+	if ( GetGlobalSettingsBool( ItemFlavor_GetAsset( flav ), "hasStickers" ) )
+	{
+		if ( GRXPack_GetStickerCompletionRewardSequence( flav ) != "" )
+		{
+			fileLevel.stickerPacksWithRewards.append( flav )
+		}
+	}
+
+	
+	if ( GRXPack_IsAnyRetroPack( flav ) )
+	{
+		array<ItemFlavor> rewards = GRXPack_GetCompletionRewards( flav, eLootPoolBrowserSortOrder.RARITY_ASCENDING )
+
+		if ( rewards.len() == 0 )
+		{
+			GRX_Info( "Skipping retro pack %s, no completion rewards found", ItemFlavor_GetAssetString( flav ))
+		}
+		else if( GRXPack_GetCompletionRewardSequenceString( flav ) == "" )
+		{
+			GRX_Info( "Skipping retro pack %s, no completion reward sequence found", ItemFlavor_GetAssetString( flav ))
+		}
+		else
+		{
+			fileLevel.retroPacksWithRewards.append( flav )
+		}
+	}
+
+	
+#if DEV
+		if ( GRXPack_GetIsLootPoolBrowsable( flav ) )
+		{
+			if ( !GRXPack_ValidateLootPoolBrowserConfig( flav ) )
+			{
+				Warning( "Loot browser configuration for pack: %s was invalid", ItemFlavor_GetAssetString( flav ) )
+			}
+		}
+#endif
+}
+
+array<ItemFlavor> function GRX_GetStickerPacksWithRewards()
+{
+	return fileLevel.stickerPacksWithRewards
+}
+
+array<ItemFlavor> function GRX_GetRetroPacksWithRewards()
+{
+	return fileLevel.retroPacksWithRewards
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GRX_IsOfferRestricted( entity player = null )
+{
+
+	if ( player == null )
+		player = GetLocalClientPlayer()
+
+
+
+
+
+	if ( !IsLobby() && !GetConVarBool( GRX_MATCH_DEDIS_HAVE_USER_INFO ) )
+		return expect bool( player.GetPersistentVar( OFFER_RESTRICTED_CACHE_PVAR ) )
+
+
+
+
+
+		Assert( player == GetLocalClientPlayer() )
+		PlayerGRXScriptState grxState = GetPlayerGRXScriptState( player )
+
+
+
+
+
+	return grxState.isOfferRestricted
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GRX_IsItemCoveredByOfferRestrictions( ItemFlavor flav )
+{
+	if ( ItemFlavor_GetType( flav ) == eItemType.account_pack )
+	{
+		
+		if ( ItemFlavor_GetQuality( flav, eRarityTier.NONE ) == eRarityTier.MYTHIC )
+			return false
+
+		return true
+	}
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ItemFlavorIsStackable( ItemFlavor itemFlav )
+{
+	return ItemFlavor_GetGRXMode( itemFlav ) == eItemFlavorGRXMode.PACK ||
+	ItemFlavor_GetGRXMode( itemFlav ) == eItemFlavorGRXMode.CONSUMABLE ||
+	ItemFlavor_GetGRXMode( itemFlav ) == eItemFlavorGRXMode.CURRENCY
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GRXLootPoolProgress function GRX_GetLootPoolProgress( entity player, ItemFlavor pack )
+{
+	Assert( ItemFlavor_GetType( pack ) == eItemType.account_pack )
+
+	array< ItemFlavor > contents = GRXPack_GetPackContents( pack )
+	GRXLootPoolProgress progress
+	progress.owned = 0
+	progress.total = contents.len()
+
+	
+	bool isBackfillType = ItemFlavor_GetAccountPackType( pack ) == eAccountPackType.RETRO_BACKFILL_PACK
+	if ( isBackfillType )
+	{
+		string progressRewardSeq = GRXPack_GetPackOpenProgressRewardSequenceString( pack )
+
+		
+
+
+
+
+			
+			if ( progressRewardSeq == "rewardseq_retro_s11e01_progress" )
+			{
+				progress.owned = player.GetPersistentVarAsInt( progressRewardSeq )
+			}
+
+
+		return progress
+	}
+
+	
+	foreach ( ItemFlavor item in contents )
+	{
+		if ( GRX_IsItemOwnedByPlayer( item, player ) )
+		{
+			progress.owned += 1
+		}
+	}
+
+	return progress
+}
+
+
+
+bool function GRX_IsValidGRXOwnershipMode( int grxMode )
+{
+	return grxMode == eItemFlavorGRXMode.OWNERSHIP_TARGET || grxMode == eItemFlavorGRXMode.ONE_OF_MULTIPLE	|| grxMode == eItemFlavorGRXMode.MULTIPLE_OWNERSHIP_TARGET
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
