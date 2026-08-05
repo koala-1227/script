@@ -1,0 +1,742 @@
+global function Ability_ClockUp_EnhancedReflex_Init
+global function Ability_ClockUp_EnhancedReflex_IsValidRef
+global function Ability_ClockUp_EnhancedReflex_CanSpawnInDeathbox
+global function Ability_ClockUp_EnhancedReflex_GetCyberloadTriggerCost
+global function Ability_ClockUp_EnhancedReflex_TryActivate
+
+
+
+
+
+
+
+
+
+
+
+const string PVAR_ABILITY_CLOCKUP_ENHANCED_REFLEX_IS_ENABLED							= "ability_clockup_enhanced_reflex_is_enabled"
+
+
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_START							= "ability_clockup_enhanced_reflex_lifetime_start"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_STOP							= "ability_clockup_enhanced_reflex_lifetime_stop"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_TRY_DASH								= "ability_clockup_enhanced_reflex_try_dash"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_ON_TOUCH_GROUND						= "ability_clockup_enhanced_reflex_on_touch_ground"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_START						= "ability_clockup_enhanced_reflex_fov_punch_start"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_END							= "ability_clockup_enhanced_reflex_fov_punch_end"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_START							= "ability_clockup_enhanced_reflex_dash_fx_start"
+const string SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_END							= "ability_clockup_enhanced_reflex_dash_fx_end"
+
+
+const string ABILITY_CLOCKUP_ENHANCED_REFLEX_REF										= "mp_ability_clockup_enhanced_reflex"
+const float ABILITY_CLOCKUP_ENHANCED_REFLEX_CYBERLOAD_ACCELERATION						= 4.0
+const int ABILITY_CLOCKUP_ENHANCED_REFLEX_MAX_CONSECUTIVE_DASH							= 2
+const float ABILITY_CLOCKUP_ENHANCED_REFLEX_GADGET_ENGAGE_TIME							= 1.0
+const float ABILITY_CLOCKUP_ENHANCED_REFLEX_GADGET_ACTIVE_TIME							= 40.0
+const float ABILITY_CLOCKUP_ENHANCED_REFLEX_SHIELD_REGEN_RATE							= 10.0
+const string ABILITY_CLOCKUP_ENHANCED_REFLEX_TRAIL_ATTACHMENT_POINT						= "CHESTFOCUS"
+const string ABILITY_CLOCKUP_ENHANCED_REFLEX_PVAR_PREFIX								= "ability_clockup_enhanced_reflex_"
+const string ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_COLOR_CORRECTION						= "materials/correction/clockup_dash.raw_hdr"
+
+
+const asset VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED									= $"P_clockup_cyber_lines"
+const asset VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_1P									= $"P_clockup_dash_FP"
+const asset VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_TRAIL_3P								= $"P_clockup_dash_trail"
+
+
+const string SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_1P										= "Clockup_Sandevistan_Dash_1P"
+const string SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_3P										= "Clockup_Sandevistan_Dash_3P"
+const string SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED_1P								= "Clockup_Cyberware_Activate_1P"
+const string SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DISENGAGED_1P							= "Clockup_Cyberware_Deactivate_1P"
+const string SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED_3P								= "Clockup_Cyberware_Activate_3P"
+const string SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DISENGAGED_3P							= "Clockup_Cyberware_Deactivate_3P"
+
+
+struct
+{
+	int cyberloadTriggerCost															= 0
+	bool canSpawnInDeathbox																= false
+	bool canDropEquipmentOnDeath														= false
+	bool fovPunchEnabled																= true
+	float fovPunchOffset																= 2.0
+	float fovPunchFadeInTime															= 0.1
+	float fovPunchFadeOutTime															= 0.1
+	float fovPunchWaitTime																= 0.1
+	float dashColorCorrectionWeight														= 1.0
+	float dashColorCorrectionFadeInTime													= 0.0
+	float dashColorCorrectionWaitTime													= 0.2
+	float dashColorCorrectionFadeOutTime												= 0.1
+} tuning
+
+
+struct
+{
+	table< entity, int > playerToDashCount
+
+
+
+
+
+
+	float localViewPlayerFOVOffset														= 0.0
+	float localViewPlayerDashColorCorrectionWeight										= 0.0
+	int dashColorCorrection																= -1
+
+} file
+
+
+void function Ability_ClockUp_EnhancedReflex_Init()
+{
+	if ( !Ability_ClockUp_EnhancedReflex_IsEnabled() )
+	{
+		SURVIVAL_Loot_AddDisabledRef( ABILITY_CLOCKUP_ENHANCED_REFLEX_REF )
+		return
+	}
+
+	RegisterTuningStruct( "tuning", ABILITY_CLOCKUP_ENHANCED_REFLEX_PVAR_PREFIX )
+
+	PrecacheParticleSystem( VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_TRAIL_3P )
+
+	
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_STOP )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_TRY_DASH )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_ON_TOUCH_GROUND )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_END )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_END )
+
+	BoostKit_RegisterOnMeleePressedFunctionOverride( ABILITY_CLOCKUP_ENHANCED_REFLEX_REF, Ability_ClockUp_EnhancedReflex_OnMeleePressed_Override )
+
+
+
+
+
+
+
+
+
+	PrecacheParticleSystem( VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED )
+	PrecacheParticleSystem( VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_1P )
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_CLOCKUP_ENHANCED_REFLEX, Ability_ClockUp_EnhancedReflex_OnPassiveChanged )
+
+	file.dashColorCorrection = ColorCorrection_Register( ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_COLOR_CORRECTION )
+
+}
+
+bool function Ability_ClockUp_EnhancedReflex_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_ABILITY_CLOCKUP_ENHANCED_REFLEX_IS_ENABLED, false )
+}
+
+bool function Ability_ClockUp_EnhancedReflex_IsValidRef( string ref )
+{
+	return (ref.find( ABILITY_CLOCKUP_ENHANCED_REFLEX_REF ) != -1)
+}
+
+bool function Ability_ClockUp_EnhancedReflex_CanSpawnInDeathbox()
+{
+	return tuning.canSpawnInDeathbox
+}
+
+int function Ability_ClockUp_EnhancedReflex_GetCyberloadTriggerCost()
+{
+	return tuning.cyberloadTriggerCost
+}
+
+bool function Ability_ClockUp_EnhancedReflex_CanDropEquipmentOnDeath()
+{
+	return tuning.canDropEquipmentOnDeath
+}
+
+bool function Ability_ClockUp_EnhancedReflex_IsDashing( entity player )
+{
+	return StatusEffect_HasSeverity( player, eStatusEffect.clockup_enhanced_reflex_dash )
+}
+
+bool function Ability_ClockUp_EnhancedReflex_TryActivate( entity player, entity gadget )
+{
+	if ( !Ability_ClockUp_EnhancedReflex_IsEnabled() )
+		return false
+
+	string gadgetRef = EquipmentSlot_GetLootRefForSlot( player, GADGET_SLOT )
+	if ( !Ability_ClockUp_EnhancedReflex_IsValidRef( gadgetRef ) )
+		return false
+
+	if ( !player.HasPassive( ePassives.PAS_CLOCKUP_ENHANCED_REFLEX ) && gadget.GetWeaponPrimaryClipCountMax() != gadget.GetWeaponPrimaryClipCount() )
+		return false
+
+	
+	{
+		entity weapon = player.GetOffhandWeapon( GENERIC_OFFHAND_INDEX )
+		if ( IsValid( weapon ) )
+		{
+			weapon.AddMod( "clockup_gadget" )
+		}
+
+		thread (void function() : ( player )
+		{
+			EndSignal( player, "OnDeath", "OnDestroy" )
+
+			OnThreadEnd(
+				function() : ( player )
+				{
+					if ( !IsValid( player ) )
+						return
+
+					entity weapon = player.GetOffhandWeapon( GENERIC_OFFHAND_INDEX )
+					if ( !IsValid( weapon ) )
+						return
+
+					weapon.RemoveMod( "clockup_gadget" )
+				}
+			)
+
+			WaitFrame()
+		})()
+	}
+
+	player.ClearOffhand( eActiveInventorySlot.altHand )
+	BoostKit_ActivateOffhand( player )
+
+	if ( player.HasPassive( ePassives.PAS_CLOCKUP_ENHANCED_REFLEX ) )
+	{
+
+
+
+
+		Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_STOP )
+	}
+	else
+	{
+
+
+
+		thread Ability_ClockUp_EnhancedReflex_Lifetime_Thread( player )
+	}
+
+	return true
+}
+
+bool function Ability_ClockUp_EnhancedReflex_OnMeleePressed_Override( entity player )
+{
+	if ( !player.HasPassive( ePassives.PAS_CLOCKUP_ENHANCED_REFLEX ) )
+		return false
+
+	if ( player.ContextAction_IsMeleeExecution() ) 
+		return false
+
+	if ( player.ContextAction_IsBusy() )
+		return false
+
+	if ( IsInBleedoutOrRevive( player ) )
+		return false
+
+	if ( player.Player_IsSkydiving() || player.Player_IsSkywardFollowing() || player.Player_IsSkywardLaunching() )
+		return false
+
+	Ability_ClockUp_EnhancedReflex_TryDash( player )
+	return true
+}
+
+void function Ability_ClockUp_EnhancedReflex_Lifetime_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_STOP )
+	EndSignal( player, SIG_CLOCKUP_CYBERFORM_TRANSFORM )
+	EndSignal( player, SIG_CLOCKUP_ENDORSEMENTS_DISENGAGE_GADGET )
+	EndSignal( player, "OnDestroy", "OnDeath" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		ClockUp_ShowEndorsementFirstUseHint( player )
+		entity cockpit = player.GetCockpit()
+		if ( !IsValid( cockpit ) )
+			return
+
+		int gadgetEngagedEffectID = GetParticleSystemIndex( VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED )
+		if ( gadgetEngagedEffectID != 0 )
+		{
+			int vfxHandleGadgetEngaged = StartParticleEffectOnEntity( cockpit, gadgetEngagedEffectID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+			EffectSetIsWithCockpit( vfxHandleGadgetEngaged, true )
+			EffectSetControlPointVector( vfxHandleGadgetEngaged, 1, COLOR_LIGHT_GREEN )
+
+			OnThreadEnd(
+				function() : ( player, vfxHandleGadgetEngaged )
+				{
+					if ( EffectDoesExist( vfxHandleGadgetEngaged ) )
+					{
+						EffectStop( vfxHandleGadgetEngaged, false, true )
+					}
+
+					if ( SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DISENGAGED_1P != "" )
+					{
+						EmitSoundOnEntity( player, SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DISENGAGED_1P )
+					}
+				}
+			)
+		}
+
+		if ( SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED_1P != "" )
+		{
+			EmitSoundOnEntity( player, SFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_ENGAGED_1P )
+		}
+
+		WaitForever()
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Ability_ClockUp_EnhancedReflex_OnTouchGround( entity player )
+{
+	if ( player.IsWallRunning() )
+		return
+
+	Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_ON_TOUCH_GROUND )
+}
+
+void function Ability_ClockUp_EnhancedReflex_TryDash( entity player )
+{
+	if ( Ability_ClockUp_EnhancedReflex_IsDashing( player ) )
+		return
+
+	if ( !(player in file.playerToDashCount) )
+	{
+		file.playerToDashCount[player] <- 0
+	}
+
+	if ( file.playerToDashCount[player] == 0 )
+	{
+		thread Ability_ClockUp_EnhancedReflex_Thread( player )
+	}
+	else if ( file.playerToDashCount[player] < ABILITY_CLOCKUP_ENHANCED_REFLEX_MAX_CONSECUTIVE_DASH )
+	{
+		Ability_ClockUp_EnhancedReflex_ApplyDashMovement( player )
+	}
+}
+
+void function Ability_ClockUp_EnhancedReflex_Thread( entity player )
+{
+	AssertIsNewThread()
+	EndSignal( player, "OnDeath", "OnDestroy", SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_ON_TOUCH_GROUND )
+
+	if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, Ability_ClockUp_EnhancedReflex_OnTouchGround ) )
+	{
+		AddPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, Ability_ClockUp_EnhancedReflex_OnTouchGround )
+	}
+	int statusEffectHandle = SE_INVALID_HANDLE
+
+
+	if ( InPrediction() )
+
+	{
+		statusEffectHandle = StatusEffect_AddEndless( player, eStatusEffect.breach_strength, 1.0 )
+	}
+
+	OnThreadEnd( function() : ( player, statusEffectHandle )
+	{
+		if ( !IsValid( player ) )
+			return
+
+		if ( statusEffectHandle != SE_INVALID_HANDLE )
+		{
+
+			if ( InPrediction() )
+
+			{
+				StatusEffect_Stop( player, statusEffectHandle )
+			}
+		}
+
+		file.playerToDashCount[player] <- 0
+
+		if ( HasPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, Ability_ClockUp_EnhancedReflex_OnTouchGround ) )
+		{
+			RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, Ability_ClockUp_EnhancedReflex_OnTouchGround )
+		}
+	} )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	Ability_ClockUp_EnhancedReflex_ApplyDashMovement( player )
+	WaitForever()
+}
+
+void function Ability_ClockUp_EnhancedReflex_ApplyDashMovement( entity player )
+{
+
+	if ( player == GetLocalViewPlayer() )
+	{
+		ClockUp_Cyberform_TriggerClockupPulse()
+		ClockUp_Cyberform_TriggerGadgetPulse()
+		Ability_ClockUp_EnhancedReflex_ApplyDashVisuals( player )
+	}
+
+
+
+	if ( InPrediction() )
+
+	{
+		
+		vector lookDirection = player.GetViewForward()
+		lookDirection.z = 0
+		lookDirection   = Normalize( lookDirection )
+
+		float inputForward = player.GetInputAxisForward()
+		float inputRight   = player.GetInputAxisRight()
+		vector inputVector = Normalize( <inputForward, -inputRight, 0> )
+		vector playerLaunchDirection = RotateVector( inputVector, VectorToAngles( lookDirection ) )
+
+		
+		const float DASH_SPEED = 800
+		vector flattenedDirection = playerLaunchDirection * DASH_SPEED
+		vector up                 = player.GetUpVector() * DASH_SPEED * 0.25
+		player.PlayerLaunch( flattenedDirection + up, false )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		float duration = 0.4
+		StatusEffect_AddTimed( player, eStatusEffect.clockup_enhanced_reflex_dash, 1.0, duration, 0.0 )
+	}
+
+
+	thread function() : ( player )
+	{
+		Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_TRY_DASH )
+		EndSignal( player, "OnDeath", "OnDestroy", SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_ON_TOUCH_GROUND, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_TRY_DASH )
+
+		int screenVFXHandle = -1
+		screenVFXHandle = StartParticleEffectOnEntityWithPos( player, GetParticleSystemIndex( VFX_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+		EffectSetIsWithCockpit( screenVFXHandle, true )
+
+		OnThreadEnd( function() : ( screenVFXHandle )
+		{
+			if ( !EffectDoesExist( screenVFXHandle ) )
+				return
+
+			EffectStop( screenVFXHandle, true, true )
+		} )
+
+		WaitForever()
+	}()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	file.playerToDashCount[player]++
+
+
+
+
+}
+
+
+void function Ability_ClockUp_EnhancedReflex_ApplyDashVisuals( entity player )
+{
+	thread Ability_ClockUp_EnhancedReflex_DashFX_Thread( player )
+
+	if ( tuning.fovPunchEnabled )
+	{
+		float fovMultiplier = 0.0
+		bool canTriggerFOVPunch = false
+
+		
+		vector lookDirection = player.GetViewForward()
+		lookDirection.z = 0.0
+		lookDirection = Normalize( lookDirection )
+
+		float inputForward = player.GetInputAxisForward()
+		float inputRight = player.GetInputAxisRight()
+		vector inputVector = Normalize( <inputForward, -inputRight, 0> )
+		inputVector = RotateVector( inputVector, VectorToAngles( lookDirection ) )
+
+		float dot = DotProduct2D( lookDirection, inputVector )
+		float angleBetween = acos( dot ) * RAD_TO_DEG
+
+		if ( angleBetween <= 70.0 )
+		{
+			fovMultiplier = 1.0
+			canTriggerFOVPunch = true
+		}
+		else if ( angleBetween >= 110.0 )
+		{
+			fovMultiplier = -1.0
+			canTriggerFOVPunch = true
+		}
+
+		if ( canTriggerFOVPunch )
+		{
+			thread Ability_ClockUp_EnhancedReflex_FOVPunch_Thread( player, fovMultiplier )
+		}
+	}
+}
+
+
+
+void function Ability_ClockUp_EnhancedReflex_FOVPunch_Thread( entity player, float fovMultiplier )
+{
+	AssertIsNewThread()
+	Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_FOV_PUNCH_END )
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	OnThreadEnd( function( string signalID ) : ( player )
+	{
+		if ( signalID != "OnDeath" && signalID != "OnDestroy" )
+			return
+
+		file.localViewPlayerFOVOffset = 0.0
+		player.SetFOVOffset( file.localViewPlayerFOVOffset )
+	} )
+
+	float fovPunchOffset = tuning.fovPunchOffset * fovMultiplier
+	float fovOffsetPercentage = (fovPunchOffset - file.localViewPlayerFOVOffset) / fovPunchOffset
+	float currentTime = Time()
+	float endTime = currentTime + (tuning.fovPunchFadeInTime * fovOffsetPercentage)
+
+	while ( currentTime < endTime )
+	{
+		file.localViewPlayerFOVOffset = fovPunchOffset - ( (endTime - currentTime) / tuning.fovPunchFadeInTime * fovPunchOffset )
+		player.SetFOVOffset( file.localViewPlayerFOVOffset )
+		WaitFrame()
+		currentTime = Time()
+	}
+
+	if ( tuning.fovPunchWaitTime > FLT_EPSILON )
+	{
+		wait tuning.fovPunchWaitTime
+	}
+
+	endTime = currentTime + tuning.fovPunchFadeOutTime
+	while ( currentTime < endTime )
+	{
+		file.localViewPlayerFOVOffset = (endTime - currentTime) / tuning.fovPunchFadeOutTime * fovPunchOffset
+		player.SetFOVOffset( file.localViewPlayerFOVOffset )
+		WaitFrame()
+		currentTime = Time()
+	}
+
+	file.localViewPlayerFOVOffset = 0.0
+	player.SetFOVOffset( file.localViewPlayerFOVOffset )
+}
+
+
+
+void function Ability_ClockUp_EnhancedReflex_DashFX_Thread( entity player )
+{
+	AssertIsNewThread()
+	Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_DASH_FX_END )
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	OnThreadEnd( function( string signalID ) : ( player )
+	{
+		if ( signalID != "OnDeath" && signalID != "OnDestroy" )
+			return
+
+		file.localViewPlayerDashColorCorrectionWeight = 0.0
+		ColorCorrection_SetWeight( file.dashColorCorrection, file.localViewPlayerDashColorCorrectionWeight )
+		ColorCorrection_SetExclusive( file.dashColorCorrection, false )
+	} )
+
+	float colorCorrectionStartWeight = file.localViewPlayerDashColorCorrectionWeight
+	float colorCorrectionWeightPercentage = (tuning.dashColorCorrectionWeight - colorCorrectionStartWeight) / tuning.dashColorCorrectionWeight
+	float startTime = Time()
+	float currentTime = startTime
+	float endTime = currentTime + (tuning.dashColorCorrectionFadeInTime * colorCorrectionWeightPercentage)
+	ColorCorrection_SetExclusive( file.dashColorCorrection, true )
+
+	while ( currentTime < endTime )
+	{
+		file.localViewPlayerDashColorCorrectionWeight = GraphCapped( currentTime, startTime, endTime, colorCorrectionStartWeight, tuning.dashColorCorrectionWeight )
+		ColorCorrection_SetWeight( file.dashColorCorrection, file.localViewPlayerDashColorCorrectionWeight )
+		WaitFrame()
+		currentTime = Time()
+	}
+
+	file.localViewPlayerDashColorCorrectionWeight = tuning.dashColorCorrectionWeight
+	ColorCorrection_SetWeight( file.dashColorCorrection, file.localViewPlayerDashColorCorrectionWeight )
+	if ( tuning.dashColorCorrectionWaitTime > FLT_EPSILON )
+	{
+		wait tuning.dashColorCorrectionWaitTime
+	}
+
+	colorCorrectionStartWeight = file.localViewPlayerDashColorCorrectionWeight
+	startTime = Time()
+	currentTime = startTime
+	endTime = currentTime + tuning.dashColorCorrectionFadeOutTime
+
+	while ( currentTime < endTime )
+	{
+		file.localViewPlayerDashColorCorrectionWeight = GraphCapped( currentTime, startTime, endTime, colorCorrectionStartWeight, 0.0 )
+		ColorCorrection_SetWeight( file.dashColorCorrection, file.localViewPlayerDashColorCorrectionWeight )
+		WaitFrame()
+		currentTime = Time()
+	}
+
+	file.localViewPlayerDashColorCorrectionWeight = 0.0
+	ColorCorrection_SetWeight( file.dashColorCorrection, file.localViewPlayerDashColorCorrectionWeight )
+	ColorCorrection_SetExclusive( file.dashColorCorrection, false )
+}
+
+
+
+void function Ability_ClockUp_EnhancedReflex_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( nowHas )
+	{
+		thread Ability_ClockUp_EnhancedReflex_Lifetime_Thread( player )
+	}
+	else
+	{
+		Signal( player, SIG_ABILITY_CLOCKUP_ENHANCED_REFLEX_LIFETIME_STOP )
+	}
+}
+
+
+
+
+
+
+
+       

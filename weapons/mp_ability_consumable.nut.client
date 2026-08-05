@@ -1,0 +1,4307 @@
+global function OnWeaponAttemptOffhandSwitch_Consumable
+global function OnWeaponActivate_Consumable
+global function OnWeaponDeactivate_Consumable
+global function OnWeaponRaise_Consumable
+global function OnWeaponChargeBegin_Consumable
+global function OnWeaponChargeEnd_Consumable
+global function OnWeaponPrimaryAttack_Consumable
+global function OnWeaponOwnerChanged_Consumable
+global function WeaponShouldReactivateOnLower_Consumable
+global function GetAdditionalHolsterAnimDuration_Consumable
+
+global function Consumable_Init
+global function Consumable_PredictConsumableUse
+global function Consumable_IsValidConsumableInfo
+global function Consumable_GetConsumableInfo
+global function Consumable_CanUseConsumable
+global function Consumable_CreatePotentialHealData
+global function Consumable_CanUseUltAccel
+global function Consumable_CalculateTotalHealFromItem
+global function Consumable_CalculateTotalShieldFromItem
+
+global function Consumable_Register_ConsumableInfo
+global function Consumable_GetInfo_ByType
+global function Consumable_Register_ModNameToConsumableType
+
+global function Consumable_TryUseFunc_HealingItem
+global function Consumable_RemoveDoubleJumpDisableStatusEffect
+
+
+global function OnCreateChargeEffect_Consumable
+global function OnCreateMuzzleFlashEffect_Consumable
+
+global function Consumable_UseItemByType
+global function Consumable_UseItemByRef
+global function Consumable_UseCurrentSelectedItem
+global function Consumable_GetBestConsumableTypeForPlayer
+global function TryUpdateCurrentSelectedConsumableToBest
+global function Consumable_GetLocalViewPlayerSelectedConsumableType
+global function Consumable_SetSelectedConsumableType
+global function Consumable_OnSelectedConsumableTypeNetIntChanged
+global function Consumable_GetClientSelectedConsumableType
+global function Consumable_CancelHeal
+global function Consumable_IsCurrentSelectedConsumableTypeUseful
+
+global function Consumable_SetClientTypeOnly
+
+global function Consumable_DoUltAccelScreenFx
+global function Consumable_DoHealScreenFx
+
+global function ServerCallback_TryUseConsumable
+global function ServerToClient_DoUltAccelScreenFx
+global function ServerToClient_SetClientChargeTime
+global function ServerToClient_TryUpdateCurrentSelectedConsumableToBest
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Consumable_IsValidModCommand
+global function Consumable_IsHealthItem
+global function Consumable_IsShieldItem
+
+global function Consumable_DisableDraw
+global function Consumable_EnableDraw
+
+global function Survival_IsPlayerHealing
+
+
+global function GetConsumableModOnWeapon
+global function Consumable_GetPlayerNextMod
+global function Consumable_ChainHealEnabled
+global function Consumable_GetNextHealInQueue
+global function Consumable_SetNextHealInQueue
+global function Consumable_GetChainHealMode
+global function Consumable_PlayerCanQueueItem
+global function Consumable_PlayerCanQueueHealthItem
+#if DEV
+global function DEV_SetChainHealAdditionalHolsterAnimDuration
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+global function Consumable_ClearQueuedHeal
+global function Consumable_RuiSetQueueActive
+global function Consumable_RuiSetChainHealMode
+
+
+
+const int MAX_SETABLE_CONSUMABLE_INDEX = eHealthPickupType.MED_WHEEL_CONSUMABLE_END - 1
+
+const float UNSET_CHARGE_TIME = -1
+
+global struct ConsumableInfo
+{
+	LootData&           lootData
+	float               chargeTime = UNSET_CHARGE_TIME
+	string              cancelSoundName = ""
+	int					healAmount
+	int					shieldAmount
+	float               ultimateAmount
+	float               healTime
+	table< int, float > healBonus = {
+		[ePassives.PAS_SYRINGE_BONUS] = 0.0,
+		[ePassives.PAS_HEALTH_BONUS_MED] = 0.0,
+		[ePassives.PAS_HEALTH_BONUS_ALL] = 0.0,
+		[ePassives.PAS_BONUS_SMALL_HEAL] = 25.0
+	}
+	table< int, float > shieldBonus = {
+		[ePassives.PAS_BONUS_SMALL_HEAL] = 25.0
+	}
+	float               healCap = 100
+
+	string modName
+	float shieldCapacitorCooldown = 0
+	int consumableType
+	int functionref( entity ) tryUseFunc = null
+
+
+	bool functionref( entity ) canQueueItem = null 
+
+
+
+
+
+
+
+		void functionref( entity ) callback_DoOnUseFX = null
+
+}
+
+global struct PotentialHealData
+{
+	ConsumableInfo & consumableInfo
+	int              kitType
+	int              count
+	int              overHeal
+	int              overShield
+
+	int possibleHealthAdd
+	int possibleShieldAdd
+
+	float healthPerSecond
+
+	int totalOverheal
+	int totalAppliedHeal
+}
+
+global enum eUseConsumableResult
+{
+	ALLOW,
+	DENY_NONE,
+	DENY_ULT_FULL,
+	DENY_ULT_NOTREADY,
+	DENY_HEALTH_FULL,
+	DENY_SHIELD_FULL,
+	DENY_NO_HEALTH_KIT,
+	DENY_NO_SHIELD_KIT,
+	DENY_NO_PHOENIX_KIT,
+	DENY_NO_KITS,
+	DENY_NO_SHIELDS,
+	DENY_FULL,
+	DENY_DEATH_TOTEM,
+
+	DENY_NO_CYBERLOAD,
+	DENY_NO_CLOCKUP_SYRINGE,
+
+
+	DENY_SHIELD_HEAL_DENIED
+
+
+
+
+	DENY_
+	COUNT,
+}
+
+enum eConsumableRecoveryType
+{
+	HEALTH,
+	SHIELDS,
+	COMBINED,
+	ULTIMATE,
+}
+
+struct ConsumablePersistentData
+{
+	bool useFinished = false
+	int  healAmount = 0
+	int  healAmountRemaining = 0	
+	int  healthKitResourceId = 0
+	int  shieldStatusHandle = 0
+	int  healthStatusHandle = 0
+	int  lastMissingHealth = -1
+	int  lastMissingShields = -1
+	int  lastCurrentHealth = -1
+	float lastHealAmount = -1
+	float lastShieldAmount = -1
+
+	array<int> statusEffectHandles
+	int doubleJumpDisableStatusEffectHandle = -1
+}
+
+struct
+{
+	table< string, int > modNameToConsumableType
+
+	table< int, ConsumableInfo >              consumableTypeToInfo
+	table< entity, array<int> >               playerHealResourceIds
+	table< entity, ConsumablePersistentData > weaponPersistentData
+
+	array< int > consumableUseOrder = []
+
+	array< void functionref(entity, float) >         Callbacks_OnPlayerHealingStarted
+	array< void functionref(entity, string, bool) > Callbacks_OnPlayerHealingEnded
+
+	bool chargeTimesInitialized = false
+
+	table< entity, float > playerToLastHealChatterTime
+	table< entity, float > playerToLastShieldChatterTime
+
+
+
+
+
+		string clientPlayerNextMod
+
+		bool healCompletedSuccessfully
+		int  clientSelectedConsumableType = eHealthPickupType.SHIELD_SMALL
+		int  healScreenFxHandle
+		int  ultAccelScreenFxHandle
+
+		bool doExtraPredictableCheck = true
+
+
+			var progressBarRui = null
+			float timeActivated = 0.0
+			float timeDeactivated = 0.0
+
+
+
+
+	bool observerModeNoShow = false
+} file
+
+
+global enum eChainHealMode
+{
+	CHAIN_HEAL_OFF 						= 0,
+	CHAIN_HEAL_QUEUE_NEXT				= 1,
+	CHAIN_HEAL_AUTO_QUEUE				= 2,
+	COUNT								= 3
+}
+
+struct
+{
+	bool enabled = false
+	bool additionalHolsterAnimDurationEnabled = false
+	float additionalHolsterAnimDuration = 0.3
+
+
+		int nextHealInQueue = eHealthPickupType.INVALID
+		bool shouldClearQueue = false
+		float queueDelay = 0.2
+
+
+
+
+
+
+} chainHeal
+
+
+const string CHAIN_HEAL_SOUND_QUEUE= "Recovery_UI_Queue"
+const string CHAIN_HEAL_SOUND_QUEUE_BLOCKED = "Recovery_UI_Queue_Blocked"
+const string CHAIN_HEAL_SOUND_QUEUE_CANCEL = "Recovery_UI_Queue_Cancel"
+
+
+
+global const int OFFHAND_SLOT_FOR_CONSUMABLES = eOffhandInv.CONSUMABLE
+global const string CONSUMABLE_WEAPON_NAME = "mp_ability_consumable"
+
+
+
+
+
+
+
+
+
+
+const string SHOW_ULT_ACCEL_FX_PLAYLIST_VAR = "ult_accel_vfx_enable"
+
+const float HEAL_CHATTER_DEBOUNCE = 10.0
+const RESTORE_HEALTH_COCKPIT_FX = $"P_heal_loop_screen"
+const asset VFX_ULT_ACCEL_POP = $"P_UltAcc_screenSpace"
+global const vector HEALTH_RGB = < 114, 245, 250 >
+
+
+const string WATTSON_EXTRA_ULT_ACCEL_SFX = "Wattson_Xtra_A"
+
+const bool CONSUMABLE_LOGGING_ENABLED = false
+
+
+const bool CHAIN_HEAL_LOGGING_ENABLED = false
+
+
+const string OCTANE_HEAL_MOD = "octane_heal"
+
+
+
+void function Consumable_Init()
+{
+	RegisterWeaponForUse( CONSUMABLE_WEAPON_NAME )
+	RegisterSignal( "HealEnded" )
+	RegisterSignal( "ConsumableDestroyRui" )
+
+	PrecacheParticleSystem( VFX_ULT_ACCEL_POP )
+
+	Remote_RegisterServerFunction( "ClientCallback_SetSelectedConsumableTypeNetInt", "int", 0, MAX_SETABLE_CONSUMABLE_INDEX )
+	Remote_RegisterServerFunction( "ClientCallback_SetNextHealModType", "int", 0, eHealthPickupType._count - 1 )
+	Remote_RegisterClientFunction( "ServerToClient_TryUpdateCurrentSelectedConsumableToBest" )
+
+
+		chainHeal.enabled = GetCurrentPlaylistVarBool( "chain_heal_enabled", true )
+		if ( chainHeal.enabled )
+		{
+			Remote_RegisterServerFunction( "ClientToServer_SetPlayerNextHealInQueue", "int", eHealthPickupType.INVALID, eHealthPickupType._count )
+			Remote_RegisterServerFunction( "ClientToServer_SetPlayerClearQueue", "bool" )
+
+			chainHeal.additionalHolsterAnimDurationEnabled = GetCurrentPlaylistVarBool( "chain_heal_additional_holster_anim_duration_enabled", chainHeal.additionalHolsterAnimDurationEnabled )
+			chainHeal.additionalHolsterAnimDuration = GetCurrentPlaylistVarFloat( "chain_heal_additional_holster_anim_duration", chainHeal.additionalHolsterAnimDuration )
+
+
+				chainHeal.queueDelay = GetCurrentPlaylistVarFloat( "chain_heal_queue_delay", chainHeal.queueDelay )
+
+		}
+
+
+	RegisterNetworkedVariable( "isHealing", SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL, false )
+	RegisterNetworkedVariable( "healingKitTypeCurrentlyBeingUsed", SNDC_PLAYER_GLOBAL, SNVT_INT, -1 )
+	RegisterNetworkedVariable( "healingKitEndTime", SNDC_PLAYER_GLOBAL, SNVT_TIME, 0.0 )
+
+	int defaultHealOption = GetCurrentPlaylistVarBool( "auto_heal_option", false ) ? -1 : 0
+	RegisterNetworkedVariable( "selectedHealthPickupType", SNDC_PLAYER_EXCLUSIVE, SNVT_INT, defaultHealOption )
+	Remote_RegisterClientFunction( "ServerCallback_TryUseConsumable", "entity", "int", 0, 128 )
+	Remote_RegisterClientFunction( "ServerToClient_DoUltAccelScreenFx" )
+	Remote_RegisterClientFunction( "ServerToClient_SetClientChargeTime", "int", 0, 64, "float", 0.0 , 100.0, 32)
+
+	
+	
+	
+	
+	
+
+	Consumable_ShieldLarge_Init()
+
+
+
+
+
+	Consumable_ShieldSmall_Init()
+	Consumable_PhoenixKit_Init()
+	Consumable_HealthLarge_Init()
+	Consumable_HealthSmall_Init()
+
+	Consumable_UltimateBattery_Init()
+
+
+
+
+
+
+
+
+
+		Consumable_ClockUp_Syringe_Init()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		AddCallback_OnPlayerConsumableInventoryChanged( SwitchSelectedConsumableIfEmptyAndPushClientSelectionToServer ) 
+		if ( GetPlaylistVar_ConsumableSelectAggressive() )
+		{
+			AddLocalPlayerTookDamageCallback( Consumable_OnPlayerDamaged )
+		}
+
+		SetCallback_UseConsumable( Consumable_HandleConsumableUseCommand )
+		AddCallback_GameStateEnter( eGameState.Resolution, Consumable_OnGamestateEnterResolution )
+
+		RegisterNetVarBoolChangeCallback( "isHealing", OnIsHealingChanged )
+		RegisterNetVarIntChangeCallback( "healingKitTypeCurrentlyBeingUsed", OnInUseHealingKitTypeChanged )
+		RegisterNetVarIntChangeCallback( "selectedHealthPickupType", OnHealthPickupTypeChanged )
+
+		file.doExtraPredictableCheck = GetCurrentPlaylistVarBool( "consumable_do_extra_predictable_check", true )
+
+
+		AddCallback_OnPassiveChanged( ePassives.PAS_ULT_ACCEL_CHARGE, UpgradedUltAccel_PassiveToggle ) 
+
+
+}
+
+
+
+void function Consumable_Register_ConsumableInfo( ConsumableInfo consumableInfo, bool addToUseOrder = true  )
+{
+	
+	
+	
+
+	int consumableType = consumableInfo.consumableType
+
+	if( consumableType <= eHealthPickupType.INVALID )
+		return
+
+	if( consumableType >= eHealthPickupType._count )
+		return
+
+	file.consumableTypeToInfo[ consumableType ] <- consumableInfo
+	Consumable_Register_ModNameToConsumableType( consumableInfo.modName, consumableType )
+
+	if( ( addToUseOrder ) && !file.consumableUseOrder.contains( consumableType ) )
+	{
+		file.consumableUseOrder.append( consumableType )
+	}
+}
+
+ConsumableInfo function Consumable_GetInfo_ByType( int consumableType )
+{
+	Assert( consumableType in file.consumableTypeToInfo, "ERROR: Tried to get ConsumableInfo from unsupported type " + consumableType  )
+	return file.consumableTypeToInfo[ consumableType ]
+}
+
+asset function GetConsumableItemIcon( int itemType )
+{
+	ConsumableInfo info = Consumable_GetInfo_ByType( itemType )
+	return info.lootData.hudIcon
+}
+
+void function Consumable_Register_ModNameToConsumableType( string modName, int consumableType )
+{
+	file.modNameToConsumableType[ modName ] <- consumableType
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ShouldHaveFastUltAccel( entity player )
+{
+	bool shouldHaveFastUltAccel = false
+	shouldHaveFastUltAccel = shouldHaveFastUltAccel || PlayerHasPassive( player, ePassives.PAS_ULT_ACCEL_CHARGE)
+
+	return shouldHaveFastUltAccel
+}
+
+void function UpgradedUltAccel_PassiveToggle( entity player, int pas, bool didHave, bool nowHas )
+{
+
+		if ( !InPrediction() )
+			return
+
+
+	bool shouldToggleFastUltAccel = false
+	shouldToggleFastUltAccel = shouldToggleFastUltAccel || pas == ePassives.PAS_ULT_ACCEL_CHARGE
+
+	if ( shouldToggleFastUltAccel )
+	{
+		if ( nowHas )
+		{
+			entity weapon = player.GetOffhandWeapon( OFFHAND_SLOT_FOR_CONSUMABLES )
+			if( IsValid( weapon ) )
+			{
+				if( weapon.HasMod( "ultimate_battery" ) )
+				{
+					weapon.RemoveMod( "ultimate_battery" )
+					weapon.AddMod( "ultimate_battery_fast" )
+				}
+			}
+
+		}
+		if ( didHave )
+		{
+			entity weapon = player.GetOffhandWeapon( OFFHAND_SLOT_FOR_CONSUMABLES )
+			if( IsValid( weapon ) )
+			{
+				if ( weapon.HasMod( "ultimate_battery_fast" ) )
+				{
+					weapon.RemoveMod( "ultimate_battery_fast" )
+					weapon.AddMod( "ultimate_battery" )
+				}
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+void function TryAddWeaponPersistenceData( entity weapon )
+{
+	if (!( weapon in file.weaponPersistentData ))
+	{
+		ConsumablePersistentData data
+		file.weaponPersistentData[ weapon ] <- data
+	}
+}
+
+void function OnWeaponOwnerChanged_Consumable( entity weapon, WeaponOwnerChangedParams changeParams )
+{
+	entity weaponOwner = weapon.GetOwner()
+
+	if ( !IsValid( changeParams.oldOwner ) )
+	{
+
+		if ( weaponOwner == GetLocalViewPlayer() )
+
+		{
+			TryAddWeaponPersistenceData( weapon )
+		}
+	}
+
+	file.playerToLastHealChatterTime[ weaponOwner ] <- Time()
+	file.playerToLastShieldChatterTime[ weaponOwner ] <- Time()
+
+	if ( file.chargeTimesInitialized )
+		return
+
+	foreach ( string modName, int consumableType in file.modNameToConsumableType )
+	{
+		ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+		if ( info.chargeTime == UNSET_CHARGE_TIME )
+		{
+
+
+
+
+
+
+
+
+
+
+				if ( weapon.GetOwner() != GetLocalClientPlayer() || !InPrediction() )
+					return
+
+				weapon.SetMods( [ modName ] )
+#if CONSUMABLE_LOGGING_ENABLED
+				printf( "[CONSUMABlE-%s] OnWeaponOwnerChanged_Consumable: Add mod (%s)", weaponOwner.GetPlayerName(), modName )
+#endif
+				info.chargeTime = weapon.GetWeaponSettingFloat( eWeaponVar.charge_time )
+
+		}
+	}
+
+	file.chargeTimesInitialized = true
+
+
+
+
+		if( InPrediction()  )
+			weapon.SetMods( [] )
+
+
+#if CONSUMABLE_LOGGING_ENABLED
+	printf( "[CONSUMABlE-%s] OnWeaponOwnerChanged_Consumable: Remove mods", weaponOwner.GetPlayerName() )
+#endif
+}
+
+bool function WeaponShouldReactivateOnLower_Consumable( entity weapon )
+{
+
+	if ( !chainHeal.enabled )
+		return false
+
+	entity weaponOwner = weapon.GetOwner()
+	if ( IsValid( weaponOwner ) )
+	{
+		if ( Consumable_GetChainHealMode( weaponOwner ) != eChainHealMode.CHAIN_HEAL_QUEUE_NEXT && Consumable_GetChainHealMode( weaponOwner ) != eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+			return false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			if ( chainHeal.nextHealInQueue == eHealthPickupType.INVALID )
+				return false
+
+#if CHAIN_HEAL_LOGGING_ENABLED
+				printt("[ChainHeal]", FUNC_NAME(), "returning true on type", chainHeal.nextHealInQueue )
+#endif
+			return true
+
+
+	}
+
+	return false
+}
+
+float function GetAdditionalHolsterAnimDuration_Consumable( entity weapon )
+{
+	entity weaponOwner = weapon.GetOwner()
+	float duration = 0.0
+
+	if ( IsValid( weaponOwner ) && chainHeal.additionalHolsterAnimDurationEnabled )
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( file.healCompletedSuccessfully && chainHeal.nextHealInQueue != eHealthPickupType.INVALID )
+		{
+			duration = chainHeal.additionalHolsterAnimDuration
+		}
+
+	}
+	return duration
+}
+
+bool function OnWeaponAttemptOffhandSwitch_Consumable( entity weapon )
+{
+	string nextMod
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		nextMod = file.clientPlayerNextMod
+
+
+	if ( !CanSwitchToWeapon( weapon, nextMod ) )
+	{
+#if CONSUMABLE_LOGGING_ENABLED
+		printf( "[CONSUMABlE-%s] Offhand switch NOT allowed for nextMod (%s)", weapon.GetOwner().GetPlayerName(), nextMod )
+#endif
+		return false
+	}
+
+#if CONSUMABLE_LOGGING_ENABLED
+	printf( "[CONSUMABlE-%s] Offhand switch allowed for nextMod (%s)", weapon.GetOwner().GetPlayerName(), nextMod )
+#endif
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ApplyStickers( entity weapon )
+{
+	entity weaponOwner = weapon.GetOwner()
+	string modName = GetConsumableModOnWeapon( weapon )
+
+	entity weaponVm = weapon.GetWeaponViewmodel()
+	if ( weaponVm )
+	{
+		DestroyAllStickersOnEntity( weaponVm )
+
+		int stickerObjectType = GetStickerObjectType( modName )
+		if ( stickerObjectType != -1 )
+		{
+			EHI weaponOwnerEHI = ToEHI( weaponOwner )
+			int maxStickersForObjectType = GetMaxStickersForObjectType( stickerObjectType )
+
+			for ( int stickerSlot = 0; stickerSlot < maxStickersForObjectType; ++stickerSlot )
+			{
+				SettingsAssetGUID stickerLoadoutSlotGuid = weaponOwner.GetStickerSlot( stickerObjectType * maxStickersForObjectType + stickerSlot )
+				ItemFlavor ornull stickerItemOrNull = GetItemFlavorOrNullByGUID( stickerLoadoutSlotGuid )
+
+				if (stickerItemOrNull == null)
+					continue
+
+				ItemFlavor stickerItem = expect ItemFlavor( stickerItemOrNull )
+
+				if ( !Sticker_IsTheEmpty( stickerItem ) )
+				{
+					float scale = Sticker_GetDecalScale( stickerItem, stickerObjectType, stickerSlot + 1 )
+					Sticker_PlaceDecalForLocalPlayer( weaponVm, Sticker_GetDecalMaterialAsset( stickerItem ), "STICKER_" + ( stickerSlot + 1 ), scale )
+				}
+			}
+		}
+	}
+}
+
+
+void function Consumable_RemoveDoubleJumpDisableStatusEffect( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) || !(weapon in file.weaponPersistentData) )
+		return
+
+	ConsumablePersistentData useData = file.weaponPersistentData[weapon]
+	useData.statusEffectHandles.removebyvalue( useData.doubleJumpDisableStatusEffectHandle )
+	StatusEffect_Stop( player, useData.doubleJumpDisableStatusEffectHandle )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnWeaponActivate_Consumable( entity weapon )
+{
+	entity weaponOwner = weapon.GetOwner()
+	string modName
+
+#if CHAIN_HEAL_LOGGING_ENABLED
+		printt( "[ChainHeal]", FUNC_NAME(), Time() )
+#endif
+
+
+	TryAddWeaponPersistenceData( weapon )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		
+		if ( weapon.GetOwner() != GetLocalClientPlayer() && GetLocalViewPlayer() == weapon.GetOwner() )		
+		{
+			ApplyStickers( weapon )
+		}
+
+
+
+
+			file.timeActivated = Time()
+
+
+
+
+		if ( weapon.GetOwner() != GetLocalViewPlayer() && !IsSpectatorSpectatingPlayer( weapon.GetOwner() ) )
+			return
+
+		if( file.clientPlayerNextMod == "ultimate_battery" )
+		{
+			if( ShouldHaveFastUltAccel( weapon.GetOwner() ) )
+			{
+				file.clientPlayerNextMod = "ultimate_battery_fast"
+			}
+		}
+		modName = file.clientPlayerNextMod
+#if CONSUMABLE_LOGGING_ENABLED
+		printf( "[CONSUMABlE] Activating consumable (%s)", modName )
+#endif
+
+		if ( IsSpectator( GetLocalClientPlayer() ) )
+		{
+			modName = GetConsumableModOnWeapon( weapon )
+			Assert( modName != "", "No consumable mod on weapon for pure spectator" )
+		}
+
+		
+		if ( modName == "" )
+			return
+
+		file.healCompletedSuccessfully = false
+
+
+
+
+	bool inPrediction = InPrediction() && weapon.IsPredicted()
+	
+	
+	Assert( !inPrediction || weapon.GetPredictable() )
+	inPrediction = file.doExtraPredictableCheck ? inPrediction && weapon.GetPredictable() : inPrediction
+	if ( inPrediction )
+
+	{
+
+			int cloakSkinIndex = weapon.GetSkinIndexByName( "RefractionCloak" )
+			if ( !AreaCloak_UsesEntityCloak() && AreaCloak_IsCloaked( weaponOwner ) && cloakSkinIndex > 0 )	
+			{
+				weapon.SetSkin( cloakSkinIndex )
+			}
+			else if ( modName == "phoenix_kit" )
+			{
+				weapon.SetWeaponSkin( 1 )
+			}
+			else
+			{
+				weapon.SetWeaponSkin( 0 )
+			}
+
+
+
+
+
+
+
+		weapon.SetScriptTime0( Time() ) 
+		weapon.SetMods( [ modName ] )
+#if CONSUMABLE_LOGGING_ENABLED
+		printf( "[CONSUMABLE-%s] OnWeaponActivate_Consumable: Add mod (%s)", weaponOwner.GetPlayerName(), modName )
+#endif
+	}
+
+
+	ApplyStickers( weapon )
+
+	
+	if ( IsSpectatorSpectatingPlayer( weapon.GetOwner() ) )
+	{
+		TryAddWeaponPersistenceData( weapon )
+	}
+
+
+	ConsumablePersistentData useData = file.weaponPersistentData[weapon]
+	ResetConsumableData( useData )
+
+	if ( GetCurrentPlaylistVarBool( "survival_healthkits_limit_movement", true ) )
+	{
+
+		inPrediction = InPrediction()
+		Assert( !inPrediction || weapon.GetPredictable() )
+		inPrediction = file.doExtraPredictableCheck ? inPrediction && weapon.GetPredictable() : inPrediction
+		if ( inPrediction )
+
+		{
+
+
+
+
+				if( Perk_CanPlayerSprintHeal( weaponOwner ) )
+				{
+					
+					useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.move_slow, .06 ) )
+				}
+				else if( modName == "ultimate_battery" )
+				{
+					useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.move_slow, GetCurrentPlaylistVarFloat( "ult_accel_move_speed_reduction", .06 ) ) )
+				}
+
+				else if( Perk_CanPlayerSkirmisherHeal( weaponOwner ) )
+				{
+					float slowAmount = GetCurrentPlaylistVarFloat( "perk_sprint_heal_skirmisher_slow", 0.0 )
+					useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.move_slow, slowAmount ) )
+
+					const string SKIRMISHER_HEAL_MOD = "skirmisher_heal"
+					if( !weapon.HasMod( SKIRMISHER_HEAL_MOD) )
+						weapon.AddMod( SKIRMISHER_HEAL_MOD )
+				}
+
+				else if( GetCurrentPlaylistVarBool( "octane_run_with_meds_enabled", true ) && PlayerHasPassive( weaponOwner, ePassives.PAS_OCTANE ) && StatusEffect_HasSeverity( weaponOwner, eStatusEffect.speed_boost ) )
+				{
+					float slowAmount = GetCurrentPlaylistVarFloat( "octane_run_with_meds_slow", 0.0 )
+					if( slowAmount > 0.0 )
+					{
+						useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.move_slow, slowAmount ) )
+					}
+
+					if( !weapon.HasMod( OCTANE_HEAL_MOD) )
+						weapon.AddMod( OCTANE_HEAL_MOD )
+				}
+				else
+				{
+					useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.move_slow, GetCurrentPlaylistVarFloat( "survival_healthkits_move_speed_reduction", 0.4 ) ) )
+				}
+
+
+
+			useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.disable_wall_run, 1.0 ) )
+			if ( !HasDoubleJumpFromJumpPad( weaponOwner ) )
+			{
+			 	int doubleJumpDisableHandle = StatusEffect_AddEndless( weaponOwner, eStatusEffect.disable_double_jump, 1.0 )
+				useData.statusEffectHandles.append( doubleJumpDisableHandle )
+				useData.doubleJumpDisableStatusEffectHandle = doubleJumpDisableHandle
+			}
+
+			useData.statusEffectHandles.append( StatusEffect_AddEndless( weaponOwner, eStatusEffect.disable_dodge, 1.0 ) )
+		}
+	}
+
+	int consumableType  = file.modNameToConsumableType[ modName ]
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( SURVIVAL_CountItemsInInventory( weapon.GetOwner(), info.lootData.ref ) <= 0 )
+		{
+#if CONSUMABLE_LOGGING_ENABLED
+			printf( "[CONSUMABlE] Cancelling activation since we don't have required item (%s)", info.lootData.ref	)
+#endif
+			Consumable_CancelHeal( weapon.GetOwner() )
+		}
+
+		Chroma_ConsumableBegin( weapon, info )
+
+
+
+
+
+
+
+
+	if ( Consumable_IsHealthItem( consumableType ) )
+	{
+		if ( (weaponOwner in file.playerToLastHealChatterTime) && Time() - file.playerToLastHealChatterTime[ weaponOwner ] > HEAL_CHATTER_DEBOUNCE )
+		{
+
+			if ( !IsSpectatorSpectatingPlayer( weaponOwner ) )
+
+			{
+				file.playerToLastHealChatterTime[ weaponOwner ] <- Time()
+				if(modName == "phoenix_kit")
+				{
+					PlayBattleChatterToSelfOnClientAndTeamOnServer( weaponOwner, "bc_healingPhoenix" )
+				}
+				else
+				{
+					PlayBattleChatterToSelfOnClientAndTeamOnServer( weaponOwner, "bc_healing" )
+				}
+			}
+		}
+	}
+	else if ( Consumable_IsShieldItem( consumableType ) )
+	{
+		if ( (weaponOwner in file.playerToLastHealChatterTime) && Time() - file.playerToLastShieldChatterTime[ weaponOwner ] > HEAL_CHATTER_DEBOUNCE )
+		{
+
+			if ( !IsSpectatorSpectatingPlayer( weaponOwner ) )
+
+			{
+				file.playerToLastShieldChatterTime[ weaponOwner ] <- Time()
+				PlayBattleChatterToSelfOnClientAndTeamOnServer( weaponOwner, "bc_usingShieldCell" )
+			}
+		}
+	}
+
+	int consumableRecoveryType = Consumable_GetConsumableRecoveryType( consumableType )
+
+
+	inPrediction = InPrediction()
+	Assert( !inPrediction || weapon.GetPredictable() )
+	inPrediction = file.doExtraPredictableCheck ? inPrediction && weapon.GetPredictable() : inPrediction
+	if ( inPrediction )
+
+	{
+		weapon.SetScriptInt0( consumableRecoveryType )
+#if CONSUMABLE_LOGGING_ENABLED
+		printf( "[CONSUMABlE-%s] Done activating, setting consumable int to %d", weaponOwner.GetPlayerName(), consumableRecoveryType )
+#endif
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		thread Consumable_DisplayProgressBar( weaponOwner, weapon, consumableRecoveryType )
+
+}
+
+
+void function OnWeaponDeactivate_Consumable( entity weapon )
+{
+	entity weaponOwner = weapon.GetOwner()
+
+	
+	if ( !IsValid( weaponOwner ) )
+		return
+
+	ConsumablePersistentData useData
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( IsValid( weaponOwner ) && weaponOwner != GetLocalViewPlayer() )
+			return
+
+		Signal( weaponOwner, "ConsumableDestroyRui" )
+		Chroma_ConsumableEnd()
+
+#if CONSUMABLE_LOGGING_ENABLED
+		printf( "[CONSUMABLE] OnWeaponDeactivate, file struct's nextMod is (%s)", file.clientPlayerNextMod )
+#endif
+
+		if ( !InPrediction() )
+			return
+
+		useData = file.weaponPersistentData[ weapon ]
+
+		string currentMod = GetConsumableModOnWeapon( weapon )
+		if ( currentMod != "" )
+		{
+			int consumableType  = file.modNameToConsumableType[ currentMod ]
+			ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+
+			if ( !file.healCompletedSuccessfully && info.cancelSoundName != "" && DoesAliasExist( info.cancelSoundName ) )
+			{
+				EmitSoundOnEntity( weaponOwner, info.cancelSoundName )
+			}
+
+			if ( file.healCompletedSuccessfully && PlayerHasPassive( weaponOwner, ePassives.PAS_ENDORSEMENT_UPGRADE_CELL_TO_BAT ) && (currentMod == "shield_small" ) )
+			{
+				EmitSoundOnEntity( weaponOwner, "Shield_Battery_Primary_End_Overcharged_Wildcard" )
+			}
+		}
+
+
+	if ( IsValid( weaponOwner ) )
+	{
+		foreach ( effectHandle in useData.statusEffectHandles )
+			StatusEffect_Stop( weaponOwner, effectHandle )
+		useData.doubleJumpDisableStatusEffectHandle = -1
+	}
+
+
+		bool previousHealCompleted = false
+
+			previousHealCompleted = file.healCompletedSuccessfully
+			file.timeDeactivated = Time()
+
+
+
+
+		bool serverOrPredicted = IsServer() || ( InPrediction() && IsFirstTimePredicted() )   
+
+		bool shouldTryChainHeal = previousHealCompleted && ShouldTryChainHeal( weaponOwner, file.modNameToConsumableType[ currentMod ] )
+#if CHAIN_HEAL_LOGGING_ENABLED
+			printt("[ChainHeal]", FUNC_NAME(), "shouldTryChainHeal:", string( shouldTryChainHeal ) )
+#endif
+
+		if ( shouldTryChainHeal )
+		{
+			if ( Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+			{
+				int nextHealType = eHealthPickupType.INVALID
+
+
+
+
+
+
+					nextHealType = chainHeal.nextHealInQueue
+
+
+#if CHAIN_HEAL_LOGGING_ENABLED
+					printt("[ChainHeal]", FUNC_NAME(), "nextHealType:", nextHealType )
+#endif
+
+				Assert( nextHealType in file.consumableTypeToInfo )
+				ConsumableInfo nextHealTypeInfo = file.consumableTypeToInfo[nextHealType]
+
+
+
+
+
+
+					file.clientPlayerNextMod = nextHealTypeInfo.modName
+
+			}
+		}
+		else
+		{
+			if ( Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+			{
+
+
+
+
+
+
+
+
+
+
+					chainHeal.nextHealInQueue = eHealthPickupType.INVALID
+					if ( GetCurrentPlaylistVarBool( "chain_heal_clear_next_mod_on_deactivate", true ) )
+					{
+						file.clientPlayerNextMod = ""
+					}
+
+
+
+#if CHAIN_HEAL_LOGGING_ENABLED
+					printt("[ChainHeal]", FUNC_NAME(), "setting nextHealInQueue to INVALID " )
+#endif
+			}
+
+		}
+
+
+
+
+	entity weaponVm = weapon.GetWeaponViewmodel()
+	if ( IsValid( weaponVm ) && GetLocalViewPlayer() == weapon.GetOwner() )
+	{
+		thread function() : ( weaponVm, weapon )
+		{
+			
+			while( IsValid( weapon ) && IsValid( weaponVm ) && GetLocalViewPlayer() == weapon.GetOwner() && weapon.GetOwner().GetActiveWeapon( eActiveInventorySlot.mainHand  ) == weapon )
+			{
+				WaitFrame()
+			}
+
+#if CONSUMABLE_LOGGING_ENABLED
+			printt( "[CONSUMABLE] Removing stickers" )
+#endif
+
+			
+			if ( IsValid( weaponVm ) )
+				DestroyAllStickersOnEntity( weaponVm )
+		}()
+	}
+
+
+
+
+
+
+
+
+}
+
+
+void function OnWeaponRaise_Consumable( entity weapon )
+{
+	string modName
+	entity weaponOwner = weapon.GetOwner()
+
+
+
+
+
+
+		Assert( weaponOwner == GetLocalClientPlayer() )
+		Assert( InPrediction() )
+
+		if ( !IsFirstTimePredicted() )
+			return
+
+		modName = file.clientPlayerNextMod
+
+
+
+		if ( chainHeal.enabled && (Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE) )
+		{
+				bool clearQueue = true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+				if ( Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+				{
+					if ( Consumable_PlayerCanQueueItem( weaponOwner, chainHeal.nextHealInQueue ) )
+					{
+						if ( !chainHeal.shouldClearQueue )
+						{
+							clearQueue = false
+						}
+					}
+				}
+
+				if ( clearQueue )
+				{
+					chainHeal.nextHealInQueue = eHealthPickupType.INVALID
+					if ( IsValid( file.progressBarRui ) && RuiIsAlive( file.progressBarRui ) )
+					{
+						RuiSetInt( file.progressBarRui, "nextHealInQueue", eHealthPickupType.INVALID )
+					}
+				}
+#if CHAIN_HEAL_LOGGING_ENABLED
+					printt("[ChainHeal]", FUNC_NAME(), clearQueue ? "next heal in queue set to" : "next heal type", chainHeal.nextHealInQueue )
+#endif
+
+
+			if ( Consumable_GetChainHealMode( weaponOwner ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+			{
+
+					chainHeal.shouldClearQueue = false
+
+
+
+
+
+
+
+
+			}
+		}
+
+
+#if CONSUMABLE_LOGGING_ENABLED
+	printf( "[CONSUMABLE-%s] OnWeaponRaise for mod (%s)", weaponOwner.GetPlayerName(), modName )
+#endif
+
+
+		
+		if ( modName == "" )
+			return
+
+
+	int consumableType = file.modNameToConsumableType[ modName ]
+
+
+		int cloakSkinIndex = weapon.GetSkinIndexByName( "RefractionCloak" )
+		if ( !AreaCloak_UsesEntityCloak() && AreaCloak_IsCloaked( weaponOwner ) && cloakSkinIndex > 0 )	
+		{
+			weapon.SetSkin( cloakSkinIndex )
+		}
+		else if ( modName == "phoenix_kit" )
+		{
+			weapon.SetWeaponSkin( 1 )
+		}
+		else
+		{
+			weapon.SetWeaponSkin( 0 )
+		}
+
+
+
+
+
+
+
+	weapon.SetMods( [ modName ] )
+#if CONSUMABLE_LOGGING_ENABLED
+	printf( "[CONSUMABlE-%s] OnWeaponRaise_Consumable: Add mod (%s)", weaponOwner.GetPlayerName(), modName )
+#endif
+
+	bool playSuperchargedFX = (file.consumableTypeToInfo[consumableType].ultimateAmount > 0) && ShouldPlayUltimateSuperchargedFX( weaponOwner )
+
+	playSuperchargedFX = playSuperchargedFX && (consumableType != eHealthPickupType.CLOCKUP_SYRINGE)
+
+	if ( playSuperchargedFX )
+	{
+			weapon.AddMod( "ultimate_battery_supercharged_fx" )
+	}
+
+	if( GetCurrentPlaylistVarBool( "octane_run_with_meds_enabled", true ) && PlayerHasPassive( weaponOwner, ePassives.PAS_OCTANE ) && StatusEffect_HasSeverity( weaponOwner, eStatusEffect.speed_boost ) )
+	{
+		weapon.AddMod( OCTANE_HEAL_MOD )
+	}
+}
+
+
+
+void function Consumable_DisplayProgressBar( entity player, entity weapon, int consumableRecoveryType )
+{
+	player.EndSignal( "OnDeath", "OnChargeEnd", "ConsumableDestroyRui" )
+	weapon.EndSignal( "OnDestroy" )
+
+	string consumableName = weapon.GetWeaponSettingString( eWeaponVar.printname )
+	asset hudIcon         = weapon.GetWeaponSettingAsset( eWeaponVar.hud_icon )
+	float raiseTime       = weapon.GetWeaponSettingFloat( eWeaponVar.raise_time )
+	float chargeTime      = weapon.GetWeaponSettingFloat( eWeaponVar.charge_time )
+
+	var rui = CreateFullscreenRui( $"ui/consumable_progress.rpak" )
+
+		if ( chainHeal.enabled )
+		{
+			file.progressBarRui = rui
+			Consumable_RuiSetQueueActive()
+			Consumable_RuiSetChainHealMode()
+			Consumable_RuiSetPlayerCanQueueSelectedItem( player )
+			if ( Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+			{
+				RuiSetInt( file.progressBarRui, "nextHealInQueue", chainHeal.nextHealInQueue )
+				if ( chainHeal.nextHealInQueue != eHealthPickupType.INVALID )
+					RuiSetImage( file.progressBarRui, "nextHealInQueueIcon", GetConsumableItemIcon( chainHeal.nextHealInQueue ) )
+			}
+			RuiSetString( rui, "hintController", "#CHAIN_HEAL_CANCEL_HEAL_GAMEPAD" )
+			RuiSetString( rui, "hintKeyboardMouse", "#CHAIN_HEAL_CANCEL_HEAL_PC" )
+		}
+
+	RuiSetGameTime( rui, "healStartTime", Time() )
+	RuiSetString( rui, "consumableName", consumableName )
+	RuiSetFloat( rui, "totalHealTime", raiseTime + chargeTime )
+	RuiSetImage( rui, "hudIcon", hudIcon )
+	RuiSetInt( rui, "consumableType", consumableRecoveryType )
+
+	OnThreadEnd(
+		function() : ( rui, player )
+		{
+			RuiDestroy( rui )
+
+				file.progressBarRui = null
+
+		}
+	)
+
+	
+	float startTime = Time()
+	float endTime = startTime + raiseTime + chargeTime
+	float timeSpentInRaise = 0.0
+	bool raiseDone = false
+	float setPointTime = 0.0
+	float ratioAtSetPoint = 0.0
+	while ( Time() < endTime )
+	{
+		RuiSetVisible( rui, !file.observerModeNoShow )
+		if ( !raiseDone && weapon.GetWeaponChargeFraction() > 0.0 )
+		{
+			timeSpentInRaise = weapon.GetWeaponSettingFloat( eWeaponVar.raise_time )
+			raiseDone = true
+		}
+		
+		if ( IsPlayerInCryptoDroneCameraView( player ) )
+		{
+			RuiSetString( rui, "hintController", "" )
+			RuiSetString( rui, "hintKeyboardMouse", "" )
+		} 
+		else
+		{
+
+				if ( chainHeal.enabled )
+				{
+					RuiSetString( rui, "hintController", "#CHAIN_HEAL_CANCEL_HEAL_GAMEPAD" )
+					RuiSetString( rui, "hintKeyboardMouse", "#CHAIN_HEAL_CANCEL_HEAL_PC" )
+				}
+				else
+
+			{
+				RuiSetString( rui, "hintController", "#SURVIVAL_CANCEL_HEAL_GAMEPAD" )
+				RuiSetString( rui, "hintKeyboardMouse", "#SURVIVAL_CANCEL_HEAL_PC" )
+			}
+		}
+
+		float newChargeTime = weapon.GetWeaponSettingFloat( eWeaponVar.charge_time )
+		if( chargeTime != newChargeTime )
+		{
+			float newRaiseTime = weapon.GetWeaponSettingFloat( eWeaponVar.raise_time )
+
+			float oldProgress
+			if ( setPointTime == 0.0 )
+			{
+				oldProgress = ( Time() - startTime) / (endTime - startTime)
+			}
+			else
+			{
+				float tempProgress = (Time() - setPointTime) / ( endTime - setPointTime )
+				oldProgress = Graph( tempProgress, 0, 1.0, ratioAtSetPoint, 1.0 )
+			}
+
+			if ( raiseDone )
+			{
+				raiseTime = timeSpentInRaise
+			}
+			else
+			{
+				raiseTime = newRaiseTime
+			}
+
+			chargeTime = newChargeTime
+			float remainingTime = ( (raiseDone ? 0.0 : ( raiseTime - (Time() - startTime) ) ) + chargeTime * (1 - weapon.GetWeaponChargeFraction()) )
+			float completedTime = ( Time() - startTime)
+			endTime = Time() + remainingTime
+
+			setPointTime = Time()
+			ratioAtSetPoint = oldProgress
+			RuiSetGameTime( rui, "endTime", endTime )
+			RuiSetGameTime( rui, "setPointTime", setPointTime )
+			RuiSetFloat( rui, "ratioAtSetPointTime", ratioAtSetPoint )
+			RuiSetFloat( rui, "totalHealTime", remainingTime + completedTime )
+		}
+
+		bool isBoosted = PlayerHasPassive( player, ePassives.PAS_FAST_HEAL )
+		string modName = GetConsumableModOnWeapon( weapon )
+		bool hasSupportBoost = Perk_CanPlayerSprintHeal( player ) && (modName == "health_small" || modName == "shield_small")
+
+		int MAX_PROGRESS_BUFFS_SHOWN = 3
+		for(int i = 0; i < MAX_PROGRESS_BUFFS_SHOWN; i++ )
+		{
+			RuiSetFloatIfExists( rui, "iconBuffAlpha" + i, 0.0 )
+		}
+		array< asset > progressBuffAssets
+
+		bool healDomeBoosted = false
+
+		if( PlayerHasPassive( player, ePassives.PAS_BONUS_SMALL_HEAL ) )
+		{
+			if ( InDomeShield( player ) )
+			{
+				if ( modName == "health_small" || modName == "shield_small" )
+				{
+					isBoosted = true
+					healDomeBoosted = true
+
+					RuiSetFloatIfExists( rui, "iconBuffInlineAlpha", 1.0 )
+
+					if ( modName == "health_small" )
+					{
+						RuiSetImageIfExists( rui, "iconBuffInline", $"rui/hud/legend_upgrades/upgrade_generic_health_regen" )
+					}
+					else
+					{
+						RuiSetImageIfExists( rui, "iconBuffInline", $"rui/hud/legend_upgrades/upgrade_generic_damage_mitigation" )
+					}
+				}
+			}
+		}
+
+		if ( PlayerHasPassive( player, ePassives.PAS_ENDORSEMENT_FAST_RELOAD_FAST_HEALS ) && ( modName == "health_pickup_combo_small"  || modName == "shield_small" ) )
+		{
+			EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( "fastreloadfastheals" )
+			progressBuffAssets.push( endorsementDefinition.endorsementIcon )
+		}
+		if ( PlayerHasPassive( player, ePassives.PAS_ENDORSEMENT_UPGRADE_CELL_TO_BAT ) && ( modName == "health_pickup_combo_small"  || modName == "shield_small" ) )
+		{
+			EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( "upgradecelltobat" )
+			progressBuffAssets.push( endorsementDefinition.endorsementIcon )
+		}
+		if ( PlayerHasPassive( player, ePassives.PAS_HEAL_RADIUS ) && ( modName == "health_pickup_combo_small"  || modName == "shield_small" ) )
+		{
+			EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( "squadheal" )
+			progressBuffAssets.push( endorsementDefinition.endorsementIcon )
+		}
+
+
+
+
+
+
+
+
+
+
+
+		foreach ( int i, asset buffAsset in progressBuffAssets )
+		{
+			if( i >= MAX_PROGRESS_BUFFS_SHOWN )
+				break
+
+			RuiSetFloatIfExists( rui, "iconBuffAlpha" + i, 1.0 )
+			RuiSetImageIfExists( rui, "iconBuff" + i, buffAsset )
+		}
+
+		RuiSetBool( rui, "isBoosted", isBoosted )
+
+		if ( !healDomeBoosted )
+			RuiSetFloat( rui, "iconBuffInlineAlpha", 0 )
+
+		if( healDomeBoosted )
+			RuiSetColorAlpha( rui, "boostedColor", SrgbToLinear( < 0.0, 0.8227857543962835, 1.0 > ), 1.0)
+		else
+			RuiSetColorAlpha( rui, "boostedColor", SrgbToLinear( < 0.0, 1.0, 0.73 > ), 1.0)
+
+		RuiSetBool( rui, "isSupportClass", hasSupportBoost )
+		RuiSetColorAlpha( rui, "supportClassColor", SrgbToLinear(CharacterClass_GetRoleColor(eCharacterClassRole.SUPPORT)), 1.0)
+
+
+
+		WaitFrame()
+	}
+}
+
+
+void function OnCreateMuzzleFlashEffect_Consumable( entity weapon, int fxHandle )
+{
+	if ( !IsValid( weapon.GetOwner() ) )
+		return
+
+	string modName = GetConsumableModOnWeapon( weapon )
+
+	if ( modName == "health_small" )
+		return
+
+	if ( modName == "health_large" )
+		return
+
+
+		int armorTier   = UpgradeCore_GetPlayerArmorTier( weapon.GetOwner() )
+
+
+
+
+	vector colorVec = GetFXRarityColorForTier( armorTier )
+
+	EffectSetControlPointVector( fxHandle, 2, colorVec )
+}
+
+void function OnCreateChargeEffect_Consumable( entity weapon, int fxHandle )
+{
+	if ( !IsValid( weapon.GetOwner() ) )
+		return
+
+	if( weapon.GetOwner().IsCloaked(true) )
+	{
+		if ( EffectDoesExist( fxHandle ) )
+			EffectStop( fxHandle, true, false ) 
+		return
+	}
+
+	string modName = GetConsumableModOnWeapon( weapon )
+
+	if ( modName == "health_small" )
+		return
+
+	if ( modName == "health_large" )
+		return
+
+
+		int armorTier   = UpgradeCore_GetPlayerArmorTier( weapon.GetOwner() )
+
+
+
+
+	vector colorVec = GetFXRarityColorForTier( armorTier )
+
+	if ( armorTier == 0 || weapon.GetOwner().GetShieldHealth() >= weapon.GetOwner().GetShieldHealthMax() )
+		colorVec = HEALTH_RGB
+
+	weapon.kv.renderColor = colorVec
+	EffectSetControlPointVector( fxHandle, 2, colorVec )
+}
+
+
+
+bool function OnWeaponChargeBegin_Consumable( entity weapon )
+{
+	string currentMod = GetConsumableModOnWeapon( weapon )
+
+#if CONSUMABLE_LOGGING_ENABLED
+	if( currentMod == "" )
+	{
+		foreach ( string mod in weapon.GetMods() )
+		{
+			printt( "[CONSUMABLE] OnWeaponChargeBegin: No consumable mods on weapon, print current weapon mods: %s", mod )
+		}
+	}
+#endif
+
+	Assert( currentMod != "", "[CONSUMABLE] No consumable mods on weapon" )
+	if ( currentMod == "" )
+		return false
+
+	entity player = weapon.GetOwner()
+
+#if CONSUMABLE_LOGGING_ENABLED
+	if ( IsValid( player ) )
+		printf( "[CONSUMABLE-%s] OnWeaponChargeBegin (%s)", player.GetPlayerName(), currentMod )
+#endif
+
+	Assert( currentMod in file.modNameToConsumableType, "Invalid mod on consumable weapon: " + currentMod )
+	if ( !(currentMod in file.modNameToConsumableType) )
+		return false
+
+	int consumableType  = file.modNameToConsumableType[ currentMod ]
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+
+	weapon.SetWeaponChargeFractionForced( 0.0 )
+
+	TryAddWeaponPersistenceData( weapon )
+
+
+
+
+
+
+
+
+		if ( player != GetLocalViewPlayer() || !(InPrediction() && IsFirstTimePredicted()) )
+			return true
+
+		if ( ShouldPlayUltimateSuperchargedFX( player ) && DoesAliasExist( WATTSON_EXTRA_ULT_ACCEL_SFX ) )
+		{
+			EmitSoundOnEntity( player, WATTSON_EXTRA_ULT_ACCEL_SFX )
+		}
+
+
+
+
+
+
+
+
+
+
+		if ( SURVIVAL_CountItemsInInventory( weapon.GetOwner(), info.lootData.ref ) <= 0 )
+		{
+#if CONSUMABLE_LOGGING_ENABLED
+			printf( "[CONSUMABlE] Cancelling charge since we don't have required item (%s)", info.lootData.ref	)
+#endif
+			Consumable_CancelHeal( weapon.GetOwner() )
+		}
+
+
+	return true
+
+}
+
+
+void function OnWeaponChargeEnd_Consumable( entity weapon )
+{
+	string currentMod = GetConsumableModOnWeapon( weapon )
+#if CONSUMABLE_LOGGING_ENABLED
+	if( currentMod == "" )
+	{
+		foreach ( string mod in weapon.GetMods() )
+		{
+			printf( "[CONSUMABLE] OnWeaponChargeBegin: No consumable mods on weapon, print current weapon mods: %s", mod )
+		}
+	}
+#endif
+
+	Assert( currentMod != "", "[CONSUMABlE] No consumable mod on weapon" )
+	entity player = weapon.GetOwner()
+
+#if CONSUMABLE_LOGGING_ENABLED
+	if ( IsValid( player ) )
+		printf( "[CONSUMABLE-%s] OnWeaponChargeEnd (%s)", player.GetPlayerName(), currentMod )
+#endif
+
+	float chargeFracAtEnd = weapon.GetWeaponChargeFraction()
+	if ( chargeFracAtEnd < 1.0 )
+	{
+		Signal( player, "OnChargeEnd" )
+	}
+
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( currentMod != "" ) 
+	{
+		if ( ShouldPlayUltimateSuperchargedFX( player ) )
+		{
+			StopSoundOnEntity( player, WATTSON_EXTRA_ULT_ACCEL_SFX )
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+var function OnWeaponPrimaryAttack_Consumable( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity player = weapon.GetOwner()
+
+	if ( weapon.GetWeaponChargeFraction() < 1.0 )
+		return 0
+
+	string currentMod = GetConsumableModOnWeapon( weapon )
+
+#if CONSUMABLE_LOGGING_ENABLED
+	if ( IsValid( player ) )
+		printf( "[CONSUMABlE-%s] OnWeaponPrimaryAttack (%s)", player.GetPlayerName(), currentMod )
+#endif
+
+	if ( currentMod == "" )
+		return 0
+
+	int consumableType  = file.modNameToConsumableType[ currentMod ]
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+
+
+
+
+
+
+
+
+
+
+
+
+	if ( SURVIVAL_CountItemsInInventory( weapon.GetOwner(), info.lootData.ref ) <= 0 )
+	{
+		return 1
+	}
+
+
+	int healAmount = int( Consumable_CalculateTotalHealFromItem( player, info ) )
+	int shieldAmount = int( Consumable_CalculateTotalShieldFromItem( player, info ) )
+
+
+		string itemName  = info.lootData.ref
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if( Augments_BatteryPrinter_PlayerHasInfiniteConsumableUses( player, itemName ) )
+		{
+			
+			thread SetBeingReusedAnimationThread( player, REUSE_ANIMATION_DURATION )
+		}
+
+
+
+
+
+
+
+
+
+
+		if ( player != GetLocalViewPlayer() )
+			return
+
+		file.healCompletedSuccessfully = true
+
+		if ( !IsFirstTimePredicted() )
+			return
+
+		bool playerAtFullHealthAndShields = (player.GetHealth() + healAmount) >= player.GetMaxHealth() && (player.GetShieldHealth() + shieldAmount) >= player.GetShieldHealthMax()
+
+
+
+		if ( !playerAtFullHealthAndShields && !IsConsumableTypeUsefulToPlayer( player, file.clientSelectedConsumableType, healAmount, shieldAmount ) )
+
+		{
+			TryUpdateCurrentSelectedConsumableToBest( player, healAmount, shieldAmount )
+		}
+
+
+		if ( GamemodeVariant_UH_ClockUp_IsClockUpEnabled() )
+		{
+			TryUpdateCurrentSelectedConsumableToBest( player, healAmount, shieldAmount )
+		}
+
+
+		if ( info.callback_DoOnUseFX != null )
+		{
+			info.callback_DoOnUseFX( player )
+		}
+		else
+		{
+			if ( healAmount > 0 && (shieldAmount == 0 || (player.GetShieldHealth() >= player.GetShieldHealthMax())) )
+			{
+				Consumable_DoHealScreenFx( player )
+			}
+			else if ( info.ultimateAmount > 0 )
+			{
+				Consumable_DoUltAccelScreenFx( player )
+			}
+		}
+
+		Chroma_ConsumableSucceeded( info )
+
+
+	return 1
+}
+
+
+float function Consumable_CalculateTotalHealFromItem( entity player, ConsumableInfo info )
+{
+
+		if ( Augments_Enabled() && info.healAmount == 0 && PlayerHasPassive( player, ePassives.PAS_AUGMENT_HEAL_OVERFLOW ) )
+		{
+			return Augment_HealOverflow_GetShieldOverflowToHealAmount( info )
+		}
+
+
+	if ( info.healAmount == 0 )
+		return 0.0
+
+	if ( PlayerHasPassive( player, ePassives.PAS_SYRINGE_BONUS ) )
+		return info.healAmount + info.healBonus[ ePassives.PAS_SYRINGE_BONUS ]
+
+	if ( PlayerHasPassive( player, ePassives.PAS_HEALTH_BONUS_MED ) )
+		return info.healAmount + info.healBonus[ ePassives.PAS_HEALTH_BONUS_MED ]
+
+	if ( PlayerHasPassive( player, ePassives.PAS_HEALTH_BONUS_ALL ) )
+		return info.healAmount + info.healBonus[ ePassives.PAS_HEALTH_BONUS_ALL ]
+
+	if ( PlayerHasPassive( player, ePassives.PAS_BONUS_SMALL_HEAL ) && info.lootData.ref == "health_pickup_health_small" && !RingLethality_Is_Player_InRingOutWarning( player ) )
+		return info.healAmount + info.healBonus[ ePassives.PAS_BONUS_SMALL_HEAL ]
+
+	return float( info.healAmount )
+}
+
+
+float function Consumable_CalculateTotalShieldFromItem( entity player, ConsumableInfo info )
+{
+
+		if ( Augments_Enabled() && info.shieldAmount == 0 && PlayerHasPassive( player, ePassives.PAS_AUGMENT_HEAL_OVERFLOW ) )
+		{
+			return Augment_HealOverflow_GetHealOverflowToShieldAmount( info )
+		}
+
+
+	if ( info.shieldAmount == 0 )
+		return 0.0
+
+	if ( PlayerHasPassive( player, ePassives.PAS_BONUS_SMALL_HEAL ) && info.lootData.ref == "health_pickup_combo_small" )
+		return info.shieldAmount + info.shieldBonus[ ePassives.PAS_BONUS_SMALL_HEAL ]
+
+
+
+
+
+
+
+
+
+
+	return float( info.shieldAmount )
+}
+
+ConsumableInfo function GetConsumableInfoFromRef( string ref )
+{
+	foreach ( int consumableType, ConsumableInfo info in file.consumableTypeToInfo )
+	{
+		if ( info.lootData.ref == ref )
+			return info
+	}
+
+	Assert( false, "Unknown ref \"" + ref + "\" used in mp_ability_consumable." )
+	unreachable
+}
+
+bool function IsConsumableTypeUsefulToPlayer( entity player, int consumableType, int addedHealth, int addedShields )
+{
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return false
+
+	if ( ! (consumableType in file.consumableTypeToInfo) )
+		return false
+
+	ConsumableInfo info = file.consumableTypeToInfo[consumableType]
+
+	int healAmount = int( Consumable_CalculateTotalHealFromItem( player, info ) )
+	bool canHealHealth = healAmount > 0 && ((player.GetHealth() + addedHealth) < player.GetMaxHealth())
+	int shieldAmount = int( Consumable_CalculateTotalShieldFromItem( player, info ) )
+	bool canHealShields = shieldAmount > 0 && ((player.GetShieldHealth() + addedShields) < player.GetShieldHealthMax())
+
+
+	if ( (consumableType == eHealthPickupType.CLOCKUP_SYRINGE) && (ClockUp_Cyberform_PlayerHasCyberwareEquipped( player ) || ClockUp_Cyberform_IsPlayerInCyberform(player)) )
+		return true
+
+
+	return canHealShields || canHealHealth
+}
+
+bool function Survival_IsPlayerHealing( entity player )
+{
+	return player.GetPlayerNetBool( "isHealing" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Consumable_SetClientTypeOnly()
+{
+	file.clientSelectedConsumableType = eHealthPickupType.COMBO_FULL
+}
+
+void function Consumable_UseCurrentSelectedItem( entity player )
+{
+	int selectedPickupType = file.clientSelectedConsumableType
+	if ( !Consumable_CanUseConsumable( player, selectedPickupType ) )
+	{
+		return
+		
+		
+		
+	}
+
+	ConsumableInfo info = file.consumableTypeToInfo[ selectedPickupType ]
+
+	thread AddModAndFireWeapon_Thread( player, info.modName )
+}
+
+void function Consumable_UseItemByRef( entity player, string itemName )
+{
+	ConsumableInfo info = GetConsumableInfoFromRef( itemName )
+
+	thread AddModAndFireWeapon_Thread( player, info.modName )
+}
+
+void function Consumable_UseItemByType( entity player, int consumableType )
+{
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+
+	thread AddModAndFireWeapon_Thread( player, info.modName )
+}
+
+void function ServerCallback_TryUseConsumable( entity player, int consumableType )
+{
+	if ( !( consumableType in file.consumableTypeToInfo ) )
+		return
+
+	Consumable_UseItemByType( player, consumableType )
+}
+
+void function Consumable_OnPlayerDamaged( float damage, vector damageOrigin, int damageType, int damageSourceId, entity attacker )
+{
+	TryUpdateCurrentSelectedConsumableToBest( GetLocalClientPlayer(), 0, 0 )
+}
+
+void function Consumable_HandleConsumableUseCommand( entity player, string consumableCommand )
+{
+	
+	string consumableCommand_Lower = consumableCommand.tolower()
+	int consType = -1
+	if( consumableCommand_Lower in file.modNameToConsumableType )
+	{
+		consType = file.modNameToConsumableType[ consumableCommand_Lower ]
+
+#if DEV
+			printt( FUNC_NAME() + "(): consumableCommand_Lower = " + consumableCommand_Lower )
+			printt( FUNC_NAME() + "(): consumableType = " + consType )
+#endif
+
+		Consumable_UseItemByType( player, consType )
+		return
+	}
+	else
+	{
+		string warnString = FUNC_NAME() + "(): WARNING: consumableCommand " + consumableCommand + " unsupported."
+		Warning( warnString )
+	}
+}
+
+void function AddModAndFireWeapon_Thread( entity player, string modName )
+{
+	if ( !( player == GetLocalClientPlayer() && player == GetLocalViewPlayer() ) )
+		return
+
+	if ( player.IsBot() )
+		return
+
+	int consumableType  = file.modNameToConsumableType[ modName ]
+	if ( !Consumable_CanUseConsumable( player, consumableType, true ) )
+	{
+#if CONSUMABLE_LOGGING_ENABLED
+		printf( "[CONSUMABLE] Not allowed to use consumable (%s), not activating offhand weapon", modName )
+#endif
+		return
+	}
+
+	entity selectedWeapon = player.GetSelectedWeapon( eActiveInventorySlot.mainHand )
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+	if ( IsValid( selectedWeapon ) && selectedWeapon.GetWeaponClassName() == CONSUMABLE_WEAPON_NAME
+			|| IsValid( activeWeapon ) && activeWeapon.GetWeaponClassName() == CONSUMABLE_WEAPON_NAME)
+	{
+
+		if ( chainHeal.enabled && (Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE) )
+		{
+			if ( chainHeal.nextHealInQueue != consumableType && Time() > file.timeActivated + chainHeal.queueDelay && Time() > file.timeDeactivated + chainHeal.queueDelay )
+			{
+				TryQueueNextItem( player, consumableType )
+			}
+			else if ( chainHeal.nextHealInQueue == consumableType && consumableType != eHealthPickupType.INVALID )
+			{
+				EmitSoundOnEntity( player, CHAIN_HEAL_SOUND_QUEUE_BLOCKED )
+			}
+		}
+		else
+
+		{
+#if CONSUMABLE_LOGGING_ENABLED
+			printf( "[CONSUMABLE] Already using consumable, not activating offhand weapon", modName )
+#endif
+		}
+		return
+	}
+
+
+		if ( chainHeal.enabled )
+		{
+			chainHeal.nextHealInQueue = eHealthPickupType.INVALID
+#if CHAIN_HEAL_LOGGING_ENABLED
+				printt("[ChainHeal] AddModAndFireWeapon_Thread setting nextHealInQueue to INVALID.  Calling RPC to set on server." )
+#endif
+			Remote_ServerCallFunction( "ClientToServer_SetPlayerNextHealInQueue", chainHeal.nextHealInQueue )
+		}
+
+
+	if ( !IsWatchingReplay() )
+	{
+		if ( CharacterSelect_MenuIsOpen() )
+			CloseCharacterSelectMenu()
+
+		RunUIScript( "CloseAllMenus" )
+	}
+
+#if CONSUMABLE_LOGGING_ENABLED
+	printf( "[CONSUMABLE] Activating offhand weapon, mod is %s", modName )
+#endif
+	file.clientPlayerNextMod = modName
+
+	if( modName in file.modNameToConsumableType )
+		Remote_ServerCallFunction( "ClientCallback_SetNextHealModType", file.modNameToConsumableType[ modName ] )
+
+	ActivateOffhandWeaponByIndex( OFFHAND_SLOT_FOR_CONSUMABLES )
+}
+
+int function Consumable_GetLocalViewPlayerSelectedConsumableType()
+{
+	return GetSelectedConsumableTypeForPlayer( GetLocalViewPlayer() )
+}
+
+int function GetSelectedConsumableTypeForPlayer( entity player )
+{
+	if ( !IsValid( player ) )
+		return eHealthPickupType.HEALTH_SMALL
+
+	return player.GetPlayerNetInt( "selectedHealthPickupType" )
+}
+
+void function Consumable_SetSelectedConsumableType( int type )
+{
+	Remote_ServerCallFunction( "ClientCallback_SetSelectedConsumableTypeNetInt", type )
+	file.clientSelectedConsumableType = type
+}
+
+void function Consumable_OnSelectedConsumableTypeNetIntChanged( entity player, int kitType )
+{
+	if ( player != GetLocalClientPlayer() )
+		return
+
+	file.clientSelectedConsumableType = kitType
+
+
+		if ( chainHeal.enabled )
+		{
+#if CHAIN_HEAL_LOGGING_ENABLED
+				printt("[ChainHeal]", FUNC_NAME(), player, "selected consumable net int change to:", kitType )
+#endif
+			Consumable_RuiSetPlayerCanQueueSelectedItem( player )
+		}
+
+}
+
+int function Consumable_GetClientSelectedConsumableType( entity player )
+{
+	if ( player != GetLocalClientPlayer() )
+		return -1
+
+	return file.clientSelectedConsumableType
+}
+
+void function SwitchSelectedConsumableIfEmptyAndPushClientSelectionToServer( entity player )
+{
+	if ( player != GetLocalClientPlayer() )
+		return
+
+	if ( !Consumable_IsValidConsumableInfo( file.clientSelectedConsumableType ) )
+	{
+		Assert( false, "Invalid ConsumableType \"" + file.clientSelectedConsumableType + "\" not present in table." )
+		return
+	}
+
+	ConsumableInfo kitInfo = Consumable_GetConsumableInfo( file.clientSelectedConsumableType )
+
+	if ( SURVIVAL_CountItemsInInventory( player, kitInfo.lootData.ref ) == 0 )
+	{
+		file.clientSelectedConsumableType = Consumable_GetBestConsumableTypeForPlayer( player, 0, 0 )
+	}
+
+	Consumable_SetSelectedConsumableType( file.clientSelectedConsumableType )
+}
+
+void function TryUpdateCurrentSelectedConsumableToBest( entity player, int addedHealth, int addedShields )
+{
+	int healthPickupType = file.clientSelectedConsumableType
+
+	if ( healthPickupType == -1 )
+		return
+
+	ConsumableInfo kitInfo = Consumable_GetConsumableInfo( healthPickupType )
+
+	if ( SURVIVAL_CountItemsInInventory( player, kitInfo.lootData.ref ) > 0 && !GetPlaylistVar_ConsumableSelectAggressive() )
+	{
+		
+		int healAmount = int( Consumable_CalculateTotalHealFromItem( player, kitInfo ) )
+		if ( healAmount > 0 && ((player.GetHealth() + addedHealth) < player.GetMaxHealth()) )
+			return
+
+		
+		int shieldAmount = int( Consumable_CalculateTotalShieldFromItem( player, kitInfo ) )
+		if ( shieldAmount > 0 && player.GetShieldHealthMax() > 0 && ((player.GetShieldHealth() + addedShields) < player.GetShieldHealthMax()) )
+			return
+	}
+
+	healthPickupType = Consumable_GetBestConsumableTypeForPlayer( player, addedHealth, addedShields )
+
+	Consumable_SetSelectedConsumableType( healthPickupType )
+}
+
+int function Consumable_GetBestConsumableTypeForPlayer( entity player, int addedHealth, int addedShields )
+{
+
+		if ( Unhinged_IsModeActive() )
+		{
+
+			if ( Consumable_ClockUp_Syringe_IsEnabled() )
+			{
+				int clockUpSyringeCount = SURVIVAL_CountItemsInInventory( player, REF_CLOCKUP_SYRINGE )
+				bool shouldSwitchToSyringe = clockUpSyringeCount > 0
+				shouldSwitchToSyringe = shouldSwitchToSyringe && ((player.GetShieldHealth() + addedShields) >= player.GetShieldHealthMax())
+				shouldSwitchToSyringe = shouldSwitchToSyringe && (ClockUp_Cyberform_PlayerHasCyberwareEquipped( player ) || ClockUp_Cyberform_IsPlayerInCyberform( player ))
+				if ( shouldSwitchToSyringe )
+				{
+					return eHealthPickupType.CLOCKUP_SYRINGE
+				}
+			}
+
+
+			return eHealthPickupType.SHIELD_SMALL
+		}
+
+
+	array< PotentialHealData > healthDataArray
+	foreach ( int consumableType in file.consumableUseOrder )
+	{
+		PotentialHealData healData = Consumable_CreatePotentialHealData( player, consumableType, addedHealth, addedShields )
+		healthDataArray.append( healData )
+	}
+
+	int functionref( PotentialHealData, PotentialHealData ) healSort
+	healSort = GetPlaylistVar_ConsumableSelectHealthRegenMode() ? CompareHealData_HealthRegenMode : CompareHealData
+
+	healthDataArray.sort( healSort )
+
+#if CONSUMABLE_LOGGING_ENABLED
+		foreach ( PotentialHealData healData in healthDataArray )
+			printt( "Consumable_GetBestConsumableTypeForPlayer", Localize( healData.consumableInfo.lootData.pickupString ), healData.totalAppliedHeal, healData.healthPerSecond )
+#endif
+
+	foreach ( PotentialHealData healData in healthDataArray )
+	{
+		if ( healData.count > 0 && IsConsumableTypeUsefulToPlayer( player, healData.kitType, addedHealth, addedShields ) )
+		{
+			return healData.kitType
+		}
+	}
+
+	if ( GetPlaylistVar_ConsumableSelectAggressive() )
+	{
+		foreach ( PotentialHealData healData in healthDataArray )
+		{
+			if ( healData.count > 0 && CanConsumableTypeBeHealHint( player, healData.kitType ) )
+			{
+				return healData.kitType
+			}
+		}
+	}
+
+	
+	return GetSelectedConsumableTypeForPlayer( player )
+}
+
+bool function Consumable_IsCurrentSelectedConsumableTypeUseful()
+{
+	entity player = GetLocalClientPlayer()
+
+	return IsConsumableTypeUsefulToPlayer( player, file.clientSelectedConsumableType, 0, 0 )
+}
+
+bool function CanConsumableTypeBeHealHint( entity player, int consumableType )
+{
+	if ( !IsValid( player ) || !IsAlive( player ) )
+		return false
+
+	if ( ! (consumableType in file.consumableTypeToInfo) )
+		return false
+
+	ConsumableInfo info = file.consumableTypeToInfo[consumableType]
+
+	return info.consumableType <= MAX_SETABLE_CONSUMABLE_INDEX
+}
+
+void function Consumable_DoHealScreenFx( entity player )
+{
+	thread DoHealScreenFx( player )
+}
+
+void function DoHealScreenFx( entity player )
+{
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	if ( EffectDoesExist( file.healScreenFxHandle ) )
+		return
+
+	int fxID = GetParticleSystemIndex( RESTORE_HEALTH_COCKPIT_FX )
+	file.healScreenFxHandle = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( file.healScreenFxHandle, true )
+
+	OnThreadEnd( function() {
+		if ( EffectDoesExist( file.healScreenFxHandle ) )
+			EffectStop( file.healScreenFxHandle, false, true )
+	} )
+
+	WaitFrame()
+}
+
+void function Consumable_DoUltAccelScreenFx( entity player )
+{
+	if ( GetCurrentPlaylistVarBool( SHOW_ULT_ACCEL_FX_PLAYLIST_VAR, true ) )
+	{
+		thread DoUltAccelScreenFx( player )
+	}
+}
+
+void function DoUltAccelScreenFx( entity player )
+{
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	if ( EffectDoesExist( file.ultAccelScreenFxHandle ) )
+		return
+
+	int fxID = GetParticleSystemIndex( VFX_ULT_ACCEL_POP )
+	file.ultAccelScreenFxHandle = StartParticleEffectOnEntity( cockpit, fxID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( file.ultAccelScreenFxHandle, true )
+	EffectSetControlPointVector( file.ultAccelScreenFxHandle, 1, <255, 208, 56> )
+
+	OnThreadEnd( function() {
+		if ( EffectDoesExist( file.ultAccelScreenFxHandle ) )
+			EffectStop( file.ultAccelScreenFxHandle, false, true )
+	} )
+
+	wait 2
+}
+
+void function OnIsHealingChanged( entity player, bool isHealing )
+{
+	if ( player != GetLocalClientPlayer() )
+		return
+	UpdateHealHint( player )
+}
+
+void function PlayConsumableUseChroma( entity weapon, ConsumableInfo info )
+{
+	EndSignal( weapon.GetOwner(), "EndChroma" )
+
+	float raiseTime  = weapon.GetWeaponSettingFloat( eWeaponVar.raise_time )
+	float chargeTime = weapon.GetWeaponSettingFloat( eWeaponVar.charge_time )
+
+	Chroma_ConsumableBegin( weapon, info )
+
+	OnThreadEnd(
+		function() : ()
+		{
+			Chroma_ConsumableEnd()
+		}
+	)
+
+	wait raiseTime + chargeTime
+}
+
+void function Consumable_CancelHeal( entity player )
+{
+	if ( player.GetActiveWeapon( eActiveInventorySlot.mainHand ).GetWeaponClassName() != CONSUMABLE_WEAPON_NAME )
+		return
+
+	player.ClientCommand( "invnext" )
+}
+
+bool function PlayerHasHealthKits( entity player )
+{
+	foreach ( int type, ConsumableInfo info in file.consumableTypeToInfo )
+	{
+		int healAmount = int( Consumable_CalculateTotalHealFromItem( player, info ) )
+
+		if ( healAmount > 0 && SURVIVAL_CountItemsInInventory( player, info.lootData.ref ) > 0 )
+		{
+			return true
+		}
+	}
+
+	return false
+}
+
+bool function PlayerHasShieldKits( entity player )
+{
+	foreach ( int type, ConsumableInfo info in file.consumableTypeToInfo )
+	{
+		int shieldAmount = int( Consumable_CalculateTotalShieldFromItem( player, info ) )
+
+		if ( shieldAmount > 0 )
+		{
+
+
+
+
+
+
+
+
+			if ( SURVIVAL_CountItemsInInventory( player, info.lootData.ref ) > 0 )
+			{
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+bool function ShouldDisplayConsumableSwitchHint( entity player )
+{
+	if ( player.IsShadowForm() )
+		return false
+
+
+	return (PlayerHasHealthKits( player ) && player.GetHealth() < player.GetMaxHealth()) || (PlayerHasShieldKits( player ) && player.GetShieldHealth() < player.GetShieldHealthMax() && !StatusEffect_HasSeverity( player, eStatusEffect.healing_denied ))
+
+
+
+}
+
+string function GetCanUseResultString( int consumableUseActionResult )
+{
+	switch( consumableUseActionResult )
+	{
+		case eUseConsumableResult.ALLOW:
+		case eUseConsumableResult.DENY_NONE:
+			return ""
+
+		case eUseConsumableResult.DENY_SHIELD_HEAL_DENIED:
+			return "#DENY_SHIELD_HEAL_DENIED"
+
+		case eUseConsumableResult.DENY_ULT_FULL:
+			return "#DENY_ULT_FULL"
+
+		case eUseConsumableResult.DENY_ULT_NOTREADY:
+			return "#DENY_ULT_NOTREADY"
+
+		case eUseConsumableResult.DENY_HEALTH_FULL:
+			return "#DENY_HEALTH_FULL"
+
+		case eUseConsumableResult.DENY_SHIELD_FULL:
+			return "#DENY_SHIELD_FULL"
+
+		case eUseConsumableResult.DENY_NO_HEALTH_KIT:
+			return "#DENY_NO_HEALTH_KIT"
+
+		case eUseConsumableResult.DENY_NO_SHIELD_KIT:
+			return "#DENY_NO_SHIELD_KIT"
+
+		case eUseConsumableResult.DENY_NO_PHOENIX_KIT:
+			return "#DENY_NO_PHOENIX_KIT"
+
+		case eUseConsumableResult.DENY_NO_KITS:
+			return "#DENY_NO_KITS"
+
+		case eUseConsumableResult.DENY_NO_SHIELDS:
+		{
+			if( LegendUpgrades_IsEnabled() )
+				return "#DENY_NO_SHIELD_CORE"
+			else
+				return "#DENY_NO_SHIELDS"
+		}
+
+		case eUseConsumableResult.DENY_FULL:
+			return "#DENY_FULL"
+
+		case eUseConsumableResult.DENY_DEATH_TOTEM:
+			return "#DENY_DEATH_TOTEM"
+
+
+
+
+
+
+
+
+
+
+		case eUseConsumableResult.DENY_NO_CYBERLOAD:
+			return "#DENY_NO_CYBERLOAD"
+
+		case eUseConsumableResult.DENY_NO_CLOCKUP_SYRINGE:
+			return "#DENY_NO_CLOCKUP_SYRINGE"
+
+
+		default:
+			return ""
+	}
+
+	unreachable
+}
+
+void function Consumable_OnGamestateEnterResolution()
+{
+	array<entity> livingPlayer = GetPlayerArray_Alive()
+	foreach( player in livingPlayer )
+		Signal( player, "ConsumableDestroyRui" )
+}
+
+void function ServerToClient_DoUltAccelScreenFx()
+{
+	Consumable_DoUltAccelScreenFx( GetLocalViewPlayer() )
+}
+
+void function ServerToClient_SetClientChargeTime( int consumableType, float chargeTime )
+{
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+	info.chargeTime = chargeTime
+}
+
+void function ServerToClient_TryUpdateCurrentSelectedConsumableToBest()
+{
+	TryUpdateCurrentSelectedConsumableToBest( GetLocalViewPlayer(), 0, 0 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Consumable_CanUseUltAccel( entity player , bool checkMinToFire = true )
+{
+	entity ult = player.GetOffhandWeapon( eOffhandInv.ULTIMATE )
+	if ( !IsValid( ult ) )
+		return false
+
+	if ( checkMinToFire )
+	{
+		int minToFire = ult.GetWeaponSettingInt( eWeaponVar.ammo_min_to_fire )
+		int burstCount = ult.GetWeaponSettingInt( eWeaponVar.burst_fire_count )
+		if ( burstCount > 0 )
+			minToFire *= burstCount
+
+		if ( ult.GetWeaponPrimaryClipCount() >= minToFire )
+			return false
+	}
+
+	int maxClipCount = ult.GetWeaponPrimaryClipCountMax()
+	if ( ult.GetWeaponPrimaryClipCount() == maxClipCount )
+		return false
+
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+bool function Consumable_IsValidModCommand( entity player, entity weapon, string mod, bool isAdd )
+{
+	if ( weapon.GetWeaponClassName() != CONSUMABLE_WEAPON_NAME )
+		return false
+
+	if ( ! (mod in file.modNameToConsumableType) )
+		return false
+
+	if ( isAdd )
+	{
+		if ( !Consumable_CanUseConsumable( player, file.modNameToConsumableType[ mod ], false ) )
+			return false
+	}
+
+	return true
+}
+
+bool function Consumable_IsValidConsumableInfo( int consumableType )
+{
+	return (consumableType in file.consumableTypeToInfo)
+}
+
+
+ConsumableInfo function Consumable_GetConsumableInfo( int consumableType )
+{
+	Assert( consumableType in file.consumableTypeToInfo, "Invalid ConsumableType \"" + consumableType + "\" not present in table." )
+
+	return file.consumableTypeToInfo[ consumableType ]
+}
+
+
+PotentialHealData function Consumable_CreatePotentialHealData( entity player, int consumableType, int addedHealth = 0, int addedShields = 0 )
+{
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+	string itemName     = info.lootData.ref
+
+	PotentialHealData healData
+	healData.kitType = consumableType
+	healData.count = SURVIVAL_CountItemsInInventory( player, itemName )
+
+	healData.possibleHealthAdd = int( Consumable_CalculateTotalHealFromItem( player, info ) )
+	healData.possibleShieldAdd = int( Consumable_CalculateTotalShieldFromItem( player, info ) )
+
+	int health = player.GetHealth() + addedHealth
+	int shields = player.GetShieldHealth() + addedShields
+	health = minint( health, player.GetMaxHealth() )
+	shields = minint( shields, player.GetShieldHealthMax() )
+
+	int missingHealth  = player.GetMaxHealth() - health
+	int missingShields = player.GetShieldHealthMax() - shields
+
+	missingHealth = maxint( 0, missingHealth )
+	missingShields = maxint( 0, missingShields )
+
+
+
+	healData.consumableInfo = clone info
+
+
+	int appliedHeal = minint( missingHealth, healData.possibleHealthAdd )
+	healData.overHeal = maxint( healData.possibleHealthAdd - missingHealth, 0 )
+
+	int appliedShields = minint( missingShields, healData.possibleShieldAdd )
+	healData.overShield = maxint( healData.possibleShieldAdd - missingShields, 0 )
+
+	healData.totalAppliedHeal = appliedHeal + appliedShields
+	healData.totalOverheal = (healData.overHeal + healData.overShield)
+
+	healData.healthPerSecond = healData.totalAppliedHeal / info.chargeTime
+
+
+	return healData
+}
+
+
+int function CompareHealData( PotentialHealData a, PotentialHealData b )
+{
+
+		
+		if ( a.possibleShieldAdd > 0 && a.totalAppliedHeal == b.totalAppliedHeal && a.consumableInfo.chargeTime < b.consumableInfo.chargeTime )
+			return -1
+		else if ( b.possibleShieldAdd > 0 && b.totalAppliedHeal == a.totalAppliedHeal && b.consumableInfo.chargeTime < a.consumableInfo.chargeTime)
+			return 1
+
+		if ( a.possibleShieldAdd > 0  && a.overShield < a.possibleShieldAdd && a.healthPerSecond > b.healthPerSecond )
+			return -1
+		else if ( b.possibleShieldAdd > 0 && b.overShield < b.possibleShieldAdd && b.healthPerSecond > a.healthPerSecond )
+			return 1
+
+		
+		if ( a.possibleHealthAdd > 0 && a.consumableInfo.chargeTime < b.consumableInfo.chargeTime )
+			return -1
+		else if( b.possibleHealthAdd > 0 && b.consumableInfo.chargeTime < a.consumableInfo.chargeTime  )
+			return 1
+
+		return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+int function CompareHealData_HealthRegenMode( PotentialHealData a, PotentialHealData b )
+{
+	
+	if ( (a.possibleHealthAdd > 0 && a.possibleShieldAdd > 0) && (b.possibleHealthAdd == 0 || b.possibleShieldAdd == 0) )
+		return 1
+	if ( (b.possibleHealthAdd > 0 && b.possibleShieldAdd > 0) && (a.possibleHealthAdd == 0 || a.possibleShieldAdd == 0) )
+		return -1
+
+	
+	if ( a.possibleShieldAdd > 0 && b.possibleShieldAdd == 0 )
+		return -1
+	else if ( b.possibleShieldAdd > 0 && a.possibleShieldAdd == 0 )
+		return 1
+
+	
+	if ( a.healthPerSecond > b.healthPerSecond )
+		return -1
+	else if ( b.healthPerSecond > a.healthPerSecond )
+		return 1
+
+	
+	if ( a.consumableInfo.chargeTime < b.consumableInfo.chargeTime )
+		return -1
+	else if ( b.consumableInfo.chargeTime < a.consumableInfo.chargeTime )
+		return 1
+
+	return 0
+}
+
+int function Consumable_GetConsumableRecoveryType( int consumableType )
+{
+	int consumableRecoveryType
+
+	bool isHealth = Consumable_IsHealthItem( consumableType )
+	bool isShield = Consumable_IsShieldItem( consumableType )
+	bool isUltimate = Consumable_IsUltimateItem( consumableType )
+
+	if ( isHealth && isShield )
+	{
+		consumableRecoveryType = eConsumableRecoveryType.COMBINED
+	}
+	else if ( isHealth )
+	{
+		consumableRecoveryType = eConsumableRecoveryType.HEALTH
+	}
+	else if ( isShield )
+	{
+		consumableRecoveryType = eConsumableRecoveryType.SHIELDS
+	}
+	else if ( isUltimate )
+	{
+		consumableRecoveryType = eConsumableRecoveryType.ULTIMATE
+	}
+
+	return consumableRecoveryType
+}
+
+bool function Consumable_CanUseConsumable( entity player, int consumableType, bool printReason = true )
+{
+
+		if ( IsPlayerShadowZombie( player ) )
+		{
+
+			if ( !GamemodeVariant_UH_ClockUp_IsClockUpEnabled() || (consumableType != eHealthPickupType.CLOCKUP_SYRINGE) )
+
+			{
+				return false
+			}
+		}
+
+
+
+	int canUseResult = TryUseConsumable( player, consumableType )
+
+	if ( canUseResult == eUseConsumableResult.ALLOW )
+	{
+		return true
+	}
+
+
+		if ( printReason && !player.GetPlayerNetBool( "isHealing" ) )
+		{
+			switch( canUseResult )
+			{
+				case eUseConsumableResult.DENY_NO_KITS:
+				case eUseConsumableResult.DENY_NO_HEALTH_KIT:
+				case eUseConsumableResult.DENY_NO_PHOENIX_KIT:
+				case eUseConsumableResult.DENY_SHIELD_FULL:
+				case eUseConsumableResult.DENY_NO_SHIELDS:
+					if ( player.GetHealth() < player.GetMaxHealth() && !PlayerHasHealthKits( player ) )
+					{
+						Remote_ServerCallFunction( "ClientCallback_Quickchat", eCommsAction.INVENTORY_NEED_HEALTH, eCommsFlags.NONE )
+					}
+					else if ( player.GetShieldHealth() < player.GetShieldHealthMax() && !PlayerHasShieldKits( player ) )
+					{
+						Remote_ServerCallFunction( "ClientCallback_Quickchat", eCommsAction.INVENTORY_NEED_SHIELDS, eCommsFlags.NONE )
+					}
+					break
+
+				case eUseConsumableResult.DENY_NO_SHIELD_KIT:
+				case eUseConsumableResult.DENY_HEALTH_FULL:
+					if ( player.GetShieldHealth() < player.GetShieldHealthMax() && !PlayerHasShieldKits( player ) )
+					{
+						Remote_ServerCallFunction( "ClientCallback_Quickchat", eCommsAction.INVENTORY_NEED_SHIELDS, eCommsFlags.NONE )
+					}
+					break
+
+				case eUseConsumableResult.DENY_SHIELD_HEAL_DENIED:
+					EmitSoundOnEntity( player, "crafting_replicator_menu_deny" )
+					break
+
+
+				default:
+				}
+			string reason = GetCanUseResultString( canUseResult )
+			if ( reason == "" )
+				return false
+
+			if ( ShouldDisplayConsumableSwitchHint( player ) )
+			{
+				reason = Localize( "#SWITCH_HEALTH_KIT_ENTIRE", Localize ( GetCanUseResultString( canUseResult ) ), Localize( "#SWITCH_HEALTH_KIT" ) )
+			}
+			AnnouncementMessageRight( player, reason )
+			return false
+		}
+
+	return false
+}
+
+int function TryUseConsumable( entity player, int consumableType )
+{
+
+	if ( player != GetLocalClientPlayer() )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( player != GetLocalViewPlayer() )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( IsWatchingReplay() )
+		return eUseConsumableResult.DENY_NONE
+
+
+
+
+
+	if ( player.ContextAction_IsActive() && !player.ContextAction_IsRodeo() )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( PlayerDrone_IsPlayerInDroneView( player ) )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( Bleedout_IsBleedingOut( player ) )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( !IsAlive( player ) )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( player.IsPhaseShifted() )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.placing_phase_tunnel ) )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.healing_denied ) )
+	{
+		if ( consumableType == eHealthPickupType.SHIELD_LARGE || consumableType == eHealthPickupType.SHIELD_SMALL )
+		{
+			return eUseConsumableResult.DENY_SHIELD_HEAL_DENIED
+		}
+	}
+
+
+	if ( player.GetWeaponDisableFlags() == WEAPON_DISABLE_FLAGS_ALL )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( player.IsTitan() )
+		return eUseConsumableResult.DENY_NONE
+
+	if ( DeathTotem_PlayerCanRecall( player ) )
+		return eUseConsumableResult.DENY_DEATH_TOTEM
+
+	if( !IsConsumableTypeValid( consumableType ) )
+	{
+		Warning( FUNC_NAME() + "(): ERROR: consumableType " + consumableType + " not supported" )
+		return eUseConsumableResult.DENY_
+	}
+
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+
+	Assert( info.tryUseFunc != null, FUNC_NAME() + "(): ERROR: empty TryUse Function for consumable of type " + consumableType )
+
+	int result = info.tryUseFunc( player )
+	return result
+}
+
+bool function IsConsumableTypeValid( int consumableType )
+{
+	bool isValid = consumableType in file.consumableTypeToInfo
+	return isValid
+}
+
+int function Consumable_TryUseFunc_HealingItem( entity player, ConsumableInfo info )
+{
+	int consumableType = info.consumableType
+	int currentHealth  = player.GetHealth()
+	int currentShields = player.GetShieldHealth()
+	int maxHealth  = player.GetMaxHealth()
+	int maxShields = player.GetShieldHealthMax()
+	bool canHeal       = false
+	bool canShield     = false
+	bool needHeal      = currentHealth < maxHealth
+	bool needShield    = currentShields < maxShields
+
+
+		if ( SquadHeal_CanHealSquad( player ) )
+		{
+			array<entity> teammates = GetPlayerArrayOfTeam_Alive( player.GetTeam() )
+			foreach( entity teammate in teammates )
+			{
+				if( teammate == player )
+					continue
+
+				int partnerCurrentHealth  = teammate.GetHealth()
+				int partnerCurrentShields = teammate.GetShieldHealth()
+				needHeal      = needHeal || (partnerCurrentHealth < teammate.GetMaxHealth())
+				needShield    = needShield || (partnerCurrentShields < teammate.GetShieldHealthMax())
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	int healAmount = int( Consumable_CalculateTotalHealFromItem( player, info ) )
+	int shieldAmount = int( Consumable_CalculateTotalShieldFromItem( player, info ) )
+
+	int count = SURVIVAL_CountItemsInInventory( player, info.lootData.ref )
+
+
+
+	if ( count == 0 )
+
+	{
+		if ( healAmount > 0 && shieldAmount > 0 )
+			return eUseConsumableResult.DENY_NO_PHOENIX_KIT
+		if ( healAmount > 0 )
+			return eUseConsumableResult.DENY_NO_HEALTH_KIT
+		if ( shieldAmount > 0 )
+			return eUseConsumableResult.DENY_NO_SHIELD_KIT
+	}
+
+	if ( healAmount > 0 && shieldAmount == 0 && info.healCap <= 100 )
+	{
+		if ( !needHeal )
+			return eUseConsumableResult.DENY_HEALTH_FULL
+	}
+	else if ( shieldAmount > 0 && healAmount == 0 )
+	{
+		if ( !needShield )
+			return maxShields > 0 ? eUseConsumableResult.DENY_SHIELD_FULL : eUseConsumableResult.DENY_NO_SHIELDS
+	}
+	else
+	{
+		if ( healAmount > 0 && needHeal )
+			canHeal = true
+
+		if ( shieldAmount > 0 && needShield )
+			canShield = true
+
+		if ( healAmount > 0 && info.healCap > 100 )
+		{
+			int targetHealth = currentHealth + healAmount
+			int overHeal     = targetHealth - maxHealth
+			if ( overHeal != 0 && currentShields < maxShields )
+				canShield = true
+		}
+
+		if ( !canHeal && !canShield )
+		{
+			if ( currentHealth == player.GetMaxHealth() && currentShields == maxShields )
+				return eUseConsumableResult.DENY_FULL
+
+			return eUseConsumableResult.DENY_NO_KITS
+		}
+	}
+
+	return eUseConsumableResult.ALLOW
+}
+
+
+bool function CanSwitchToWeapon( entity weapon, string modName )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( !(modName in file.modNameToConsumableType) )
+		return false
+
+	entity player = weapon.GetOwner()
+
+	int consumableType  = file.modNameToConsumableType[ modName ]
+	ConsumableInfo info = Consumable_GetInfo_ByType( consumableType )
+	string itemName     = info.lootData.ref
+
+
+	if ( !Consumable_CanUseConsumable( player, consumableType, true ) )
+		return false
+
+	if ( player.GetActiveWeapon( eActiveInventorySlot.mainHand ) == weapon )
+		return false
+
+	return true
+}
+
+
+string function GetConsumableModOnWeapon( entity weapon )
+{
+	foreach ( string mod in weapon.GetMods() )
+	{
+		foreach ( int consumableType, ConsumableInfo info in file.consumableTypeToInfo )
+		{
+			if ( mod == info.modName )
+			{
+				return mod
+			}
+			else if( mod == "ultimate_battery_fast" && info.modName == "ultimate_battery" )
+			{
+				return mod
+			}
+
+		}
+	}
+
+	return ""
+}
+
+string function Consumable_GetPlayerNextMod( entity player )
+{
+	if ( !IsValidPlayer( player ) )
+		return ""
+
+
+
+
+
+
+
+		return file.clientPlayerNextMod
+
+}
+
+
+TargetKitHealthAmounts function Consumable_PredictConsumableUse( entity player, ConsumableInfo kitInfo )
+{
+	int currentHealth   = player.GetHealth()
+	int maxHealth       = player.GetMaxHealth()
+	int currentShields  = player.GetShieldHealth()
+	int shieldHealthMax = player.GetShieldHealthMax()
+
+	int resourceHealthRemaining = 0
+	int virtualHealth           = minint( currentHealth + resourceHealthRemaining, maxHealth )
+	int missingHealth           = maxHealth - virtualHealth
+	int missingShields          = shieldHealthMax - currentShields
+
+	TargetKitHealthAmounts targetValues
+
+	float healAmount   = Consumable_CalculateTotalHealFromItem( player, kitInfo )
+	float shieldAmount = Consumable_CalculateTotalShieldFromItem( player, kitInfo )
+
+	if ( healAmount > 0 )
+	{
+		int healthToApply = minint( int( healAmount ), missingHealth )
+		Assert( virtualHealth + healthToApply <= maxHealth, "Bad math: " + virtualHealth + " + " + healthToApply + " > max health of " + maxHealth )
+
+		if ( healthToApply != 0 || kitInfo.healTime > 0 ) 
+			targetValues.targetHealth = (healthToApply + resourceHealthRemaining) / float( maxHealth )
+	}
+
+	if ( shieldAmount > 0 && shieldHealthMax > 0 )
+		targetValues.targetShields = shieldAmount / float( shieldHealthMax )
+
+	return targetValues
+}
+
+
+void function ResetConsumableData( ConsumablePersistentData useData )
+{
+	useData.useFinished         = false
+	useData.healAmount          = 0
+	useData.healAmountRemaining = 0
+	useData.healthKitResourceId = 0
+	useData.shieldStatusHandle  = 0
+	useData.healthStatusHandle  = 0
+	useData.lastMissingHealth   = -1
+	useData.lastMissingShields  = -1
+	useData.lastCurrentHealth   = -1
+	useData.lastHealAmount      = -1
+	useData.lastShieldAmount    = -1
+	useData.statusEffectHandles = []
+	useData.doubleJumpDisableStatusEffectHandle = -1
+}
+
+bool function Consumable_IsHealthItem( int consumableType )
+{
+	if ( !( consumableType in file.consumableTypeToInfo ) )
+		return false
+
+	if ( file.consumableTypeToInfo[ consumableType ].healAmount > 0 )
+		return true
+
+	return false
+}
+
+bool function Consumable_IsShieldItem( int consumableType )
+{
+	if ( !( consumableType in file.consumableTypeToInfo ) )
+		return false
+
+	if ( file.consumableTypeToInfo[ consumableType ].shieldAmount > 0 )
+		return true
+
+	return false
+}
+
+bool function Consumable_IsComboItem( int consumableType )
+{
+	if ( !(consumableType in file.consumableTypeToInfo) )
+		return false
+
+	ConsumableInfo info = file.consumableTypeToInfo[consumableType]
+
+	if ( info.healAmount <= 0 )
+		return false
+	if ( info.shieldAmount <= 0 )
+		return false
+
+	return true
+}
+
+bool function Consumable_IsUltimateItem( int consumableType )
+{
+	if ( !(consumableType in file.consumableTypeToInfo) )
+		return false
+
+	if ( file.consumableTypeToInfo[consumableType].ultimateAmount > 0 )
+		return true
+
+	return false
+}
+
+bool function ShouldPlayUltimateSuperchargedFX( entity player )
+{
+	if ( PlayerHasPassive( player, ePassives.PAS_BATTERY_POWERED ) )
+		return true
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GetPlaylistVar_ConsumableSelectHealthRegenMode()
+{
+	return GetCurrentPlaylistVarBool( "consumable_select_health_regen_mode", false )
+}
+
+bool function GetPlaylistVar_ConsumableSelectAggressive()
+{
+	return GetCurrentPlaylistVarBool( "consumable_select_aggressive", false )
+}
+
+void function Consumable_DisableDraw()
+{
+	file.observerModeNoShow = true
+}
+
+void function Consumable_EnableDraw()
+{
+	file.observerModeNoShow = false
+}
+
+
+bool function Consumable_ChainHealEnabled()
+{
+	return chainHeal.enabled
+}
+
+bool function ShouldTryChainHeal( entity player, int consumableType )
+{
+	if ( !chainHeal.enabled )
+		return false
+
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	if ( Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_OFF )
+		return false
+
+	switch ( Consumable_GetChainHealMode( player ) )
+	{
+		case eChainHealMode.CHAIN_HEAL_AUTO_QUEUE:
+		case eChainHealMode.CHAIN_HEAL_QUEUE_NEXT:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			if ( chainHeal.nextHealInQueue == eHealthPickupType.INVALID )
+			{
+				return false
+			}
+
+			if ( Consumable_CanUseConsumable( player, chainHeal.nextHealInQueue, false ) )
+				return true
+
+
+			return false
+		default:
+			return false
+	}
+
+	unreachable
+}
+
+int function Consumable_GetNextHealInQueue( entity player )
+{
+
+
+
+
+
+
+
+
+
+
+		if ( player != GetLocalViewPlayer() )
+			return eHealthPickupType.INVALID
+		return chainHeal.nextHealInQueue
+
+}
+
+void function Consumable_SetNextHealInQueue( entity player, int consumableType )
+{
+
+
+
+
+
+		chainHeal.nextHealInQueue = consumableType
+		if ( IsValid( file.progressBarRui ) && RuiIsAlive( file.progressBarRui ) )
+		{
+			RuiSetInt( file.progressBarRui, "nextHealInQueue", chainHeal.nextHealInQueue )
+		}
+
+}
+
+int function Consumable_GetChainHealMode( entity player )
+{
+
+		return GetConVarInt( "hud_setting_chainHeal" )
+
+
+
+
+
+}
+
+bool function IsSmallHealType( int consumableType )
+{
+	return consumableType == eHealthPickupType.HEALTH_SMALL || consumableType == eHealthPickupType.SHIELD_SMALL
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+void function DEV_SetChainHealAdditionalHolsterAnimDuration( float dur = -1.0 )
+{
+	if ( dur < 0.0 )
+		chainHeal.additionalHolsterAnimDuration = GetCurrentPlaylistVarFloat( "chain_heal_additional_holster_anim_duration", 0.3 )
+	else
+		chainHeal.additionalHolsterAnimDuration = dur
+}
+#endif
+
+
+void function TryQueueNextItem( entity player, int nextConsumableType )
+{
+	Assert( Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE )
+
+	if ( file.clientPlayerNextMod == "" )
+	{
+#if CHAIN_HEAL_LOGGING_ENABLED
+			printt("[ChainHeal]", FUNC_NAME(), "returning early... file.clientPlayerNextMod empty string" )
+#endif
+		return
+	}
+
+#if CHAIN_HEAL_LOGGING_ENABLED
+		printt("[ChainHeal]", FUNC_NAME(), "called with nextConsumableType:", nextConsumableType, "current queued type:", chainHeal.nextHealInQueue )
+#endif
+
+	int curQueuedType = chainHeal.nextHealInQueue
+
+	if ( Consumable_PlayerCanQueueItem( player, nextConsumableType ) )
+	{
+		chainHeal.nextHealInQueue = nextConsumableType
+	}
+
+	if ( curQueuedType != chainHeal.nextHealInQueue )
+	{
+		if ( IsValid( file.progressBarRui ) && RuiIsAlive( file.progressBarRui ) )
+		{
+			RuiSetInt( file.progressBarRui, "nextHealInQueue", chainHeal.nextHealInQueue )
+			if ( chainHeal.nextHealInQueue != eHealthPickupType.INVALID )
+				RuiSetImage( file.progressBarRui, "nextHealInQueueIcon", GetConsumableItemIcon( chainHeal.nextHealInQueue ) )
+		}
+		EmitSoundOnEntity( player, CHAIN_HEAL_SOUND_QUEUE )
+#if CHAIN_HEAL_LOGGING_ENABLED
+			printt("[ChainHeal]", FUNC_NAME(), "setting nextHealInQueue and calling RPC.  Type:", chainHeal.nextHealInQueue )
+#endif
+		Remote_ServerCallFunction( "ClientToServer_SetPlayerNextHealInQueue", chainHeal.nextHealInQueue )
+
+		
+		
+		
+		if ( Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE && curQueuedType != eHealthPickupType.INVALID )
+		{
+			chainHeal.shouldClearQueue = true
+			Remote_ServerCallFunction( "ClientToServer_SetPlayerClearQueue", true )
+		}
+	}
+	else
+	{
+		EmitSoundOnEntity( player, CHAIN_HEAL_SOUND_QUEUE_BLOCKED )
+#if CHAIN_HEAL_LOGGING_ENABLED
+			printt("[ChainHeal]", FUNC_NAME(), "nextHealInQueue unchanged" )
+#endif
+	}
+}
+
+void function Consumable_ClearQueuedHeal( entity player )
+{
+	if ( (Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( player ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE) && chainHeal.nextHealInQueue != eHealthPickupType.INVALID )
+	{
+		chainHeal.nextHealInQueue = eHealthPickupType.INVALID
+		if ( IsValid( file.progressBarRui ) && RuiIsAlive( file.progressBarRui ) )
+		{
+			RuiSetInt( file.progressBarRui, "nextHealInQueue", eHealthPickupType.INVALID )
+		}
+		EmitSoundOnEntity( player, CHAIN_HEAL_SOUND_QUEUE_CANCEL )
+		Remote_ServerCallFunction( "ClientToServer_SetPlayerNextHealInQueue", eHealthPickupType.INVALID )
+
+#if CHAIN_HEAL_LOGGING_ENABLED
+			printt("[ChainHeal]", FUNC_NAME(), ". Calling RPC with type INVALID" )
+#endif
+
+	}
+}
+
+void function Consumable_RuiSetQueueActive()
+{
+	if ( file.progressBarRui == null || !RuiIsAlive( file.progressBarRui ) )
+		return
+
+	RuiSetBool( file.progressBarRui, "queueActive", Consumable_IsQueueActive() )
+}
+
+void function Consumable_RuiSetChainHealMode()
+{
+	if ( file.progressBarRui == null || !RuiIsAlive( file.progressBarRui ) )
+		return
+
+	RuiSetInt( file.progressBarRui, "chainHealMode", Consumable_GetChainHealMode( GetLocalClientPlayer() ) )
+}
+
+void function Consumable_RuiSetPlayerCanQueueSelectedItem( entity player )
+{
+	if ( Consumable_IsQueueActive() )
+	{
+		if ( !IsValid( file.progressBarRui ) || !RuiIsAlive( file.progressBarRui ) )
+			return
+
+		int selectedItem = Survival_Health_GetSelectedHealthPickupType()
+		bool canQueueSelectedItem = Consumable_PlayerCanQueueItem( player, selectedItem )
+		RuiSetBool( file.progressBarRui, "canQueueSelectedItem", canQueueSelectedItem )
+	}
+}
+
+bool function Consumable_IsQueueActive()
+{
+	return ( Consumable_GetChainHealMode( GetLocalClientPlayer() ) == eChainHealMode.CHAIN_HEAL_QUEUE_NEXT || Consumable_GetChainHealMode( GetLocalClientPlayer() ) == eChainHealMode.CHAIN_HEAL_AUTO_QUEUE) && GetConVarInt( "hud_setting_chainHeal" ) > 0 && GetCurrentPlaylistVarBool( "chain_heal_enabled", true )
+}
+
+
+bool function Consumable_PlayerCanQueueItem( entity player, int consumableType )
+{
+	if ( !(consumableType in file.consumableTypeToInfo) )
+		return false
+
+	ConsumableInfo info = file.consumableTypeToInfo[consumableType]
+
+	if ( info.canQueueItem == null )
+		return false
+
+	return info.canQueueItem( player )
+}
+
+bool function Consumable_PlayerCanQueueHealthItem( entity player, int nextItem )
+{
+	if ( nextItem == eHealthPickupType.INVALID )
+		return false
+
+	if ( !IsValidPlayer( player ) )
+		return false
+
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+	if ( !IsValid( activeWeapon ) || !(activeWeapon.GetWeaponClassName() == CONSUMABLE_WEAPON_NAME) )
+		return false
+
+	string currentMod = GetConsumableModOnWeapon( activeWeapon )   
+	int currentConsumableType = currentMod in file.modNameToConsumableType ? file.modNameToConsumableType[currentMod] : eHealthPickupType.INVALID
+
+	if ( currentConsumableType == eHealthPickupType.INVALID )
+		return false
+
+	ConsumableInfo currentInfo = Consumable_GetInfo_ByType( currentConsumableType )
+
+	
+	bool playerWillNeedHealth = false
+	bool playerWillNeedShields = false
+
+	switch ( currentConsumableType )
+	{
+		case eHealthPickupType.COMBO_FULL:
+			playerWillNeedHealth = false
+			playerWillNeedShields = false
+			break
+
+		case eHealthPickupType.HEALTH_LARGE:
+			playerWillNeedHealth = false
+			playerWillNeedShields = player.GetShieldHealth() < player.GetShieldHealthMax()
+			break
+
+		case eHealthPickupType.HEALTH_SMALL:
+			int currentHealth  = player.GetHealth()
+			float healAmount   = Consumable_CalculateTotalHealFromItem( player, currentInfo )
+			bool currentHealWillMaxOutHealth = int( healAmount + currentHealth ) >= player.GetMaxHealth()
+			playerWillNeedHealth = !currentHealWillMaxOutHealth
+			playerWillNeedShields = player.GetShieldHealth() < player.GetShieldHealthMax()
+			break
+
+		case eHealthPickupType.SHIELD_LARGE:
+			playerWillNeedShields = false
+			playerWillNeedHealth = player.GetHealth() < player.GetMaxHealth()
+			break
+
+		case eHealthPickupType.SHIELD_SMALL:
+			int currentShields = player.GetShieldHealth()
+			float shieldAmount = Consumable_CalculateTotalShieldFromItem( player, currentInfo )
+			bool currentHealWillMaxOutShields = int( currentShields + shieldAmount ) >= player.GetShieldHealthMax()
+			playerWillNeedShields = !currentHealWillMaxOutShields
+			playerWillNeedHealth = player.GetHealth() < player.GetMaxHealth()
+			break
+
+		default:
+			return false
+	}
+
+	ConsumableInfo nextInfo = Consumable_GetInfo_ByType( nextItem )
+	int nextItemCount = SURVIVAL_CountItemsInInventory( player, nextInfo.lootData.ref )
+	if ( nextItem == currentConsumableType && !PlayerHasPassive( player, ePassives.PAS_INFINITE_HEAL ) )
+	{
+		nextItemCount -= 1 		
+	}
+
+	if ( nextItemCount <= 0 )
+		return false
+
+	switch( nextItem )
+	{
+		case eHealthPickupType.COMBO_FULL:
+			return playerWillNeedHealth || playerWillNeedShields
+
+		case eHealthPickupType.HEALTH_LARGE:
+		case eHealthPickupType.HEALTH_SMALL:
+			return playerWillNeedHealth
+
+		case eHealthPickupType.SHIELD_LARGE:
+		case eHealthPickupType.SHIELD_SMALL:
+			return playerWillNeedShields
+
+		default:
+			return false
+	}
+
+	unreachable
+}
+
+                          

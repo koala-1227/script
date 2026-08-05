@@ -1,0 +1,420 @@
+global function OnWeaponActivate_alternator_smg
+global function OnWeaponDeactivate_alternator_smg
+global function OnWeaponPrimaryAttack_alternator_smg
+global function OnWeaponOwnerChanged_alternator_smg
+global function MpWeaponAlternatorSMG_Init
+
+
+
+
+
+
+	global function OnClientAnimEvent_alternator_smg
+
+
+
+const ALTERNATOR_SMG_TRACER_FX = $"weapon_tracers_xo16_speed"
+const ALTERNATOR_SMG_PRECACHE_FIX = $"P_mythic_alternt1_kill_3p"
+
+
+
+const ALTERNATOR_SMG_PRECACHE_BASE_PANEL_L = $"P_mythic_alternt2_base_panel_l"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANEL_R = $"P_mythic_alternt2_base_panel_r"
+
+
+
+
+const ALTERNATOR_SMG_PRECACHE_KILL_PANEL_3P_L = $"P_mythic_alternt2_kill_panel_l_3P"
+const ALTERNATOR_SMG_PRECACHE_KILL_PANEL_3P_R = $"P_mythic_alternt2_kill_panel_r_3P"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANEL_3P_L = $"P_mythic_alternt2_base_panel_l_3P"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANEL_3P_R = $"P_mythic_alternt2_base_panel_r_3P"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P = $"P_mythic_alternt2_base_panels_3P"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P_RT01 = $"P_mythic_alternt2_base_panels_3P_rt01"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P_RT02 = $"P_mythic_alternt2_base_panels_3P_rt02"
+const ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P_RT03 = $"P_mythic_alternt2_base_panels_3P_rt03"
+
+
+
+
+
+
+
+
+
+const string MYTHIC_ALTERNATOR_ENGAGE_SIGNAL = "OnDeactivate_MythicAlternatorCompanionVO"
+
+
+
+void function MpWeaponAlternatorSMG_Init()
+{
+
+		PrecacheParticleSystem( ALTERNATOR_SMG_TRACER_FX )
+
+		RegisterNetVarIntChangeCallback( "kills", OnNetVarChange_PlayerKills )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_FIX )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANEL_L )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANEL_R )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_KILL_PANEL_3P_L )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_KILL_PANEL_3P_R )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANEL_3P_L )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANEL_3P_R )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P_RT01 )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P_RT02 )
+		PrecacheParticleSystem( ALTERNATOR_SMG_PRECACHE_BASE_PANELS_3P_RT03 )
+
+		RegisterSignal( MYTHIC_ALTERNATOR_ENGAGE_SIGNAL )
+
+
+
+
+		
+		
+		AddCallback_OnItemFlavorRegistered( eItemType.weapon_skin, void function( ItemFlavor skin ) {
+			if ( MYTHIC_ALTERNATOR_WEAPON_SKIN_GUIDS.contains( ItemFlavor_GetGUID( skin ) ) )
+			{
+				PrecacheAllParticleSystemsOfMeleeSkinVfxAliases( skin )
+			}
+		} )
+
+}
+
+void function OnWeaponActivate_alternator_smg( entity weapon )
+{
+	GoldenHorseGreen_OnWeaponActivate( weapon )
+
+
+
+
+}
+
+void function OnWeaponDeactivate_alternator_smg( entity weapon )
+{
+
+
+
+
+
+
+
+
+
+
+	weapon.Signal( MYTHIC_ALTERNATOR_ENGAGE_SIGNAL )
+
+
+}
+
+var function OnWeaponPrimaryAttack_alternator_smg( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	return FireWeaponPlayerAndNPC( weapon, attackParams, true )
+}
+
+void function OnWeaponOwnerChanged_alternator_smg( entity weapon, WeaponOwnerChangedParams wocp )
+{
+
+
+	entity localPlayer = GetLocalViewPlayer()
+	if ( !IsValid( localPlayer ) )
+		return
+
+	int aliasId = GetAnyAliasIdForName( "bc_engagingEnemy" )
+	if ( wocp.oldOwner == localPlayer && aliasId in localPlayer.p.battleChatterIdCallbackMap )
+		delete localPlayer.p.battleChatterIdCallbackMap[ aliasId ]
+
+	if ( wocp.newOwner == localPlayer )
+	{
+		
+		
+		localPlayer.p.battleChatterIdCallbackMap[ aliasId ] <- bool function( entity speaker ) : ( weapon )
+		{
+			thread PlayDelayedCompanionVO( speaker, weapon, "wpn_engageEnemy" )
+			return false
+		}
+	}
+
+
+}
+
+
+
+const string DIALOGUE_VM_ATTACH = "fx_companion_center"
+
+void function OnNetVarChange_PlayerKills( entity killer, int killCount )
+{
+	if ( killer != GetLocalViewPlayer() )
+		return
+
+	entity weapon = killer.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weapon ) || weapon.GetReactiveKillLevelCount() == 0 )
+		return
+
+	int killThreshold         = GetConVarInt( "script_weapon_mythic_multikill_kill_threshold" )
+	int varietyTimeoutSec     = GetConVarInt( "script_weapon_mythic_multikill_variety_timeout_sec" )
+	float multikillRollChance = GetConVarFloat( "script_weapon_mythic_multikill_roll_chance" )
+
+	int roundThreshold        = GetCurrentPlaylistVarInt( "mythic_alternator_multikill_round_threshold", -1 )
+
+	int currentRingRound = SURVIVAL_GetCurrentDeathFieldStage()
+	bool thresholdMet    = ( killCount >= killThreshold )
+	                       && ( roundThreshold < 0 || currentRingRound >= roundThreshold )
+
+	int currentTimestamp = GetUnixTimestamp()
+	int secSinceLastKill = currentTimestamp - killer.p.mythicAlternatorLastKillTimestamp
+
+	bool playMultikill = false
+	if ( thresholdMet )
+	{
+		if ( killCount == killThreshold )
+			playMultikill = true                                    
+		else if ( secSinceLastKill > varietyTimeoutSec )
+			playMultikill = true                                    
+		else
+			playMultikill = RandomFloat( 1.0 ) < multikillRollChance 
+	}
+
+	string milesAlias
+	if ( playMultikill )
+	{
+		int skinGUID = weapon.GetItemFlavorGUID()
+		asset skinAsset = ItemFlavor_GetAsset( GetItemFlavorByGUID( skinGUID ) )
+		milesAlias = skinAsset.find( "level02" ) != -1 ? "wpn_multikillTier2" : "wpn_multikillTier1"
+	}
+	else
+	{
+		milesAlias = killer.IsMechanical() ? "wpn_tauntRobot" : "wpn_tauntHuman"
+	}
+
+	thread PlayDelayedCompanionVO( killer, weapon, milesAlias )
+
+	killer.p.mythicAlternatorLastKillTimestamp = currentTimestamp
+}
+
+void function PlayDelayedCompanionVO( entity player, entity weapon, string milesAlias )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+
+	weapon.EndSignal( MYTHIC_ALTERNATOR_ENGAGE_SIGNAL )
+	weapon.EndSignal( "OnDestroy" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( "OnDeath" )
+
+	entity weaponVM = player.GetViewModelEntity( eActiveInventorySlot.mainHand )
+	if ( !IsValid( weaponVM ) )
+		return
+
+	int attachId = weaponVM.LookupAttachment( DIALOGUE_VM_ATTACH )
+	if ( attachId == 0 )
+		return
+
+	weaponVM.EndSignal( "OnDestroy" )
+	int weaponVMIdx = weaponVM.GetEntIndex()
+
+	OnThreadEnd(
+		function ( string signalId ) : ( weaponVMIdx )
+		{
+			if ( signalId != "" )
+				Dialogue_CancelAllHandlesForSpeaker( weaponVMIdx )
+		}
+	)
+
+	wait GetConVarInt( "script_weapon_mythic_vo_delay_sec" )
+
+	
+	
+	
+	
+	
+	if ( weapon.GetModelName() != weaponVM.GetModelName() )
+		return
+
+	PlayClientDialogueOnEntity( GetAnyAliasIdForName( milesAlias ), 0, weaponVM )
+}
+
+
+
+
+
+
+
+
+
+
+int function FireWeaponPlayerAndNPC( entity weapon, WeaponPrimaryAttackParams attackParams, bool playerFired )
+{
+	weapon.EmitWeaponNpcSound( LOUD_WEAPON_AI_SOUND_RADIUS_MP, 0.2 )
+	int damageType = weapon.GetWeaponDamageFlags()
+	
+	
+	
+	
+	
+	
+	
+	
+	weapon.FireWeaponBullet( attackParams.pos, attackParams.dir, 1, damageType )
+
+	return 1
+}
+
+
+void function OnClientAnimEvent_alternator_smg( entity weapon, string name )
+{
+	GlobalClientEventHandler( weapon, name )
+}
+
+
+
+
+
+
+
+
+const array<asset> MYTHIC_ALTERNATOR_FX_ASSETS_REFERENCES = [
+	$"P_mythic_alternt2_companion_fire_eye_l_rc01",
+	$"P_mythic_alternt2_companion_fire_eye_r_rc01",
+	$"P_mythic_alternt2_fire_panel_l_rc01",
+	$"P_mythic_alternt2_fire_panel_r_rc01",
+	$"P_mythic_alternt2_fire_panel_r_top_rc01",
+	$"P_mythic_alternt2_fire_panel_r_btm_rc01",
+	$"P_mythic_alternt2_fire_panel_l_top_rc01",
+	$"P_mythic_alternt2_fire_panel_l_btm_rc01",
+	$"P_mythic_alternt2_fire_panel_sml_rc01",
+	$"P_mythic_alternt2_fire_panel_sml_l_rc01",
+	$"P_mythic_alternt2_fire_panel_sml_r_rc01",
+	$"P_mythic_alternt2_fireselect_base_rc01",
+	$"P_mythic_alternt2_fireselect_panel_l_top_rc01",
+	$"P_mythic_alternt2_fireselect_panel_l_btm_rc01",
+	$"P_mythic_alternt2_fireselect_panel_r_top_rc01",
+	$"P_mythic_alternt2_fireselect_panel_r_btm_rc01",
+
+	$"P_mythic_alternt2_companion_fire_eye_l_rc02",
+	$"P_mythic_alternt2_companion_fire_eye_r_rc02",
+	$"P_mythic_alternt2_fire_panel_l_rc02",
+	$"P_mythic_alternt2_fire_panel_r_rc02",
+	$"P_mythic_alternt2_fire_panel_r_top_rc02",
+	$"P_mythic_alternt2_fire_panel_r_btm_rc02",
+	$"P_mythic_alternt2_fire_panel_l_top_rc02",
+	$"P_mythic_alternt2_fire_panel_l_btm_rc02",
+	$"P_mythic_alternt2_fire_panel_sml_rc02",
+	$"P_mythic_alternt2_fire_panel_sml_l_rc02",
+	$"P_mythic_alternt2_fire_panel_sml_r_rc02",
+	$"P_mythic_alternt2_fireselect_base_rc02",
+	$"P_mythic_alternt2_fireselect_panel_l_top_rc02",
+	$"P_mythic_alternt2_fireselect_panel_l_btm_rc02",
+	$"P_mythic_alternt2_fireselect_panel_r_top_rc02",
+	$"P_mythic_alternt2_fireselect_panel_r_btm_rc02",
+
+	$"P_mythic_alternt2_companion_fire_eye_l_rc03",
+	$"P_mythic_alternt2_companion_fire_eye_r_rc03",
+	$"P_mythic_alternt2_fire_panel_l_rc03",
+	$"P_mythic_alternt2_fire_panel_r_rc03",
+	$"P_mythic_alternt2_fire_panel_r_top_rc03",
+	$"P_mythic_alternt2_fire_panel_r_btm_rc03",
+	$"P_mythic_alternt2_fire_panel_l_top_rc03",
+	$"P_mythic_alternt2_fire_panel_l_btm_rc03",
+	$"P_mythic_alternt2_fire_panel_sml_rc03",
+	$"P_mythic_alternt2_fire_panel_sml_l_rc03",
+	$"P_mythic_alternt2_fire_panel_sml_r_rc03",
+	$"P_mythic_alternt2_fireselect_base_rc03",
+	$"P_mythic_alternt2_fireselect_panel_l_top_rc03",
+	$"P_mythic_alternt2_fireselect_panel_l_btm_rc03",
+	$"P_mythic_alternt2_fireselect_panel_r_top_rc03",
+	$"P_mythic_alternt2_fireselect_panel_r_btm_rc03",
+
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_l",
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_r",
+	$"P_mythic_alternt_smlfndr_fire_panel_l",
+	$"P_mythic_alternt_smlfndr_fire_panel_r",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_top",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_btm",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_top",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_btm",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_l",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_r",
+
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_l_rc01",
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_r_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_top_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_btm_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_top_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_btm_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_l_rc01",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_r_rc01",
+	$"P_mythic_alternt2_smlfndr_fireselect_base_rc01",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_l_top_rc01",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_l_btm_rc01",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_r_top_rc01",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_r_btm_rc01",
+
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_l_rc02",
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_r_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_top_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_btm_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_top_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_btm_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_l_rc02",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_r_rc02",
+	$"P_mythic_alternt2_smlfndr_fireselect_base_rc02",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_l_top_rc02",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_l_btm_rc02",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_r_top_rc02",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_r_btm_rc02",
+
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_l_rc03",
+	$"P_mythic_alternt_smlfndr_companion_fire_eye_r_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_top_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_r_btm_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_top_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_l_btm_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_l_rc03",
+	$"P_mythic_alternt_smlfndr_fire_panel_sml_r_rc03",
+	$"P_mythic_alternt2_smlfndr_fireselect_base_rc03",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_l_top_rc03",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_l_btm_rc03",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_r_top_rc03",
+	$"P_mythic_alternt2_smlfndr_fireselect_panel_r_btm_rc03",
+
+	$"P_mythic_alternt_smlfndr_sprint",
+	$"P_mythic_alternt_smlfndr_trail_sprintraise",
+	$"P_mythic_alternator_smlfndr_mag_impact_t1",
+	$"P_mythic_alternator_smlfndr_trail_t1",
+	$"P_mythic_alternator_smlfndr_mag_reload_t1",
+
+	$"P_mythic_alternt2_smlfndr_draw_body_trail",
+	$"P_mythic_alternt2_smlfndr_empty",
+	$"P_mythic_alternt_smlfndr_companion_draw_eye_burst",
+	$"P_mythic_alternt2_smlfndr_companion_draw_hand_trail",
+	$"P_mythic_alternt2_smlfndr_companion_hand_r",
+	$"P_mythic_alternt2_smlfndr_draw_body_trail_lobby",
+	$"P_mythic_alternt2_smlfndr_companion_draw_hand_trail_lobby",
+	$"P_mythic_alternt2_smlfndr_companion_hand_r_lobby",
+
+	
+
+	$"P_mythic_alternt1_kill_3p",
+	$"P_mythic_alternator_wpn_kill_t1",
+
+]
+
+const array<int> MYTHIC_ALTERNATOR_WEAPON_SKIN_GUIDS = [
+	1897244370,
+	370998115,
+	956830253,
+	190008761,
+	1194833995,
+	1106352198,
+	173143607,
+	1391569764
+]
+ 

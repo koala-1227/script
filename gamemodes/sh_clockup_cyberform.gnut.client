@@ -1,0 +1,1956 @@
+global function ClockUp_Cyberform_Init
+global function ClockUp_Cyberform_IsEnabled
+global function ClockUp_Cyberform_PlayerHasCyberwareEquipped
+global function ClockUp_Cyberform_IsValidCyberwareRef
+global function ClockUp_Cyberform_GetCyberloadForPlayer
+global function ClockUp_Cyberform_IsPlayerInCyberform
+global function ClockUp_Cyberform_GetCyberformMeleeDamageMultiplierOnBreachGlass
+
+global function ServerToClient_ClockUp_Cyberform_SetCyberformActiveState
+global function ServerToClient_ClockUp_Cyberform_OnPlayerConnectionRestored
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ClockUp_Cyberform_ShouldDisplayCyberloadWarningForPlayer
+global function ClockUp_Cyberform_RegisterThemeStates
+global function ClockUp_Cyberform_OnUpdateDpadHud
+global function ClockUp_Cyberform_UpdateInventoryUnitframeTheme
+global function ClockUp_Cyberform_UpdateFullmapUnitframeTheme
+global function ClockUp_Cyberform_UpdateFullmapThemeForTeammate
+global function ClockUp_Cyberform_TriggerClockupPulse
+global function ClockUp_Cyberform_TriggerGadgetPulse
+
+
+
+const string PVAR_CLOCKUP_CYBERFORM_ENABLED											= "clockup_cyberform_enabled"
+
+
+const int CLOCKUP_CYBERFORM_MAX_CYBERLOAD 											= 100
+const string CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME								= "clockup_cyberform_cyberload"
+const string CLOCKUP_CYBERFORM_TRAIL_ATTACHMENT_POINT								= "CHESTFOCUS"
+const string CLOCKUP_CYBERFORM_PVAR_PREFIX											= "clockup_cyberform_"
+const string CLOCKUP_CYBERFORM_BC_CYBERPSYCHOSIS_REACHED							= "bc_clockup_cyberpsychosisReached"
+global const vector CLOCKUP_COLOR_RED_UI 											= <243, 51, 56 > / 255
+const vector CLOCKUP_COLOR_YELLOW													= <243, 198, 33 > / 255
+const string CLOCKUP_CYBERFORM_COLOR_CORRECTION										= "materials/correction/clockup_cyberform.raw_hdr"
+const array< string > CLOCKUP_CYBERFORM_PLAYER_SETTINGS_MODS						= ["clockup"]
+
+
+const asset VFX_CLOCKUP_CYBERFORM_TRAIL_3P											= $"P_clockup_overload"   
+const asset VFX_CLOCKUP_CYBERFORM_SCREEN_1P											= $"P_clockup_cyberform_SS_FP"		
+
+
+const string SFX_CLOCKUP_CYBERFORM_START_1P											= "Clockup_Cyberpsychosis_Start_1P"
+const string SFX_CLOCKUP_CYBERFORM_START_3P											= "Clockup_Cyberpsychosis_Start_3P"
+const string SFX_CLOCKUP_CYBERFORM_LOOP_1P											= "Clockup_Cyberpsychosis_Loop_1P"
+const string SFX_CLOCKUP_CYBERFORM_LOOP_3P											= "Clockup_Cyberpsychosis_Loop_3P"
+const string SFX_CLOCKUP_CYBERFORM_END_1P											= "Clockup_Cyberpsychosis_End_1P"
+const string SFX_CLOCKUP_CYBERFORM_END_3P											= "Clockup_Cyberpsychosis_End_3P"
+const string SFX_CLOCKUP_CYBERFORM_WARNING_1P										= "UI_Clockup_Cyberpsychosis_Imminent_Warning"
+
+
+const asset CLOCKUP_CYBERFORM_MELEE_HANDS											= $"melee_clockup_cyberform_hands"
+const asset CLOCKUP_CYBERFORM_PRIMARY_WEAPON										= $"mp_weapon_clockup_cyberform_hands_primary"
+
+
+const asset CLOCKUP_FRAME_OVERLAY                                               	= $"rui/hud/unitframes/clockup/widget_clockup_overlay"
+const asset CLOCKUP_FRAME_OVERLAY_TOP                                           	= $"rui/hud/unitframes/clockup/widget_clockup_overlay_embelishment_top"
+const asset CLOCKUP_FRAME_OVERLAY_BOTTOM                                        	= $"rui/hud/unitframes/clockup/widget_clockup_overlay_embelishment_bottom"
+const asset CLOCKUP_FRAME_OVERLAY_BASE                                          	= $"rui/hud/unitframes/clockup/widget_clockup_overlay_base"
+const asset CLOCKUP_FRAME_OVERLAY_BASE_TOPPER                                   	= $"rui/hud/unitframes/clockup/widget_clockup_overlay_base_topper"
+const asset CLOCKUP_FRAME_OVERLAY_TOPPER                                        	= $"rui/hud/unitframes/clockup/widget_clockup_overlay_topper"
+const asset CLOCKUP_GLITCH_EFFECT_RUI                                           	= $"ui/clockup_glitch_effect.rpak"
+
+
+
+enum eClockUpThemeState
+{
+	CLOCKUP_GADGET_ENGAGED,
+	CLOCKUP_GADGET_ENGAGED_TEAMMATE,
+	CYBERFORM_PLAYER,
+	CYBERFORM_TEAMMATE,
+}
+
+
+const string SIG_CLOCKUP_CYBERFORM_TRACKING_START									= "ClockUp_Cyberform_Tracking_Start"
+const string SIG_CLOCKUP_CYBERFORM_TRACKING_STOP									= "ClockUp_Cyberform_Tracking_Stop"
+global const string SIG_CLOCKUP_CYBERFORM_TRANSFORM									= "ClockUp_Cyberform_Transform"
+const string SIG_CLOCKUP_CYBERFORM_LOOK_START										= "ClockUp_Cyberform_Shadow_Zombie_Look_Start"
+const string SIG_CLOCKUP_CYBERFORM_LOOK_STOP										= "ClockUp_Cyberform_Shadow_Zombie_Look_Stop"
+const string SIG_CLOCKUP_CYBERFORM_REVENANT_BLEEDOUT_START							= "ClockUp_Cyberform_Revenant_Bleedout_Start"
+const string SIG_CLOCKUP_CYBERFORM_REVENANT_BLEEDOUT_STOP							= "ClockUp_Cyberform_Revenant_Bleedout_Stop"
+const string SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_START					= "ClockUp_Cyberform_Spectator_Tracking_Start"
+const string SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_STOP					= "ClockUp_Cyberform_Spectator_Tracking_Stop"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct
+{
+	int cyberloadReductionOnDeath													= 0
+	int cyberloadPercentageWarning													= 75
+	int syringeToSpawnFromEmptyPlayer												= 0
+	bool useDefaultModelForCyberformSkin											= false
+	bool isDevUIEnabled																= false
+	float battleChatterCooldownFromCyberpsychosisEnd								= 0.1			
+	string cyberformSkinName														= ""
+	int meleeDamageMultiplierOnBreachGlass											= 3
+	float fortifiedDamageScale														= 0.67
+} tuning
+
+struct
+{
+
+
+
+
+
+		bool isCyberloadTrackingActive												= false
+		table< entity, float > playerToShadowZombieEndTime
+		int cyberformColorCorrection												= -1
+		bool psychosisAnnouncementRecentlyShown										= false
+		HudNotificationQueueItem ornull psychosisAnnouncementQueueItem				= null
+
+} file
+
+void function ClockUp_Cyberform_Init()
+{
+	if ( !ClockUp_Cyberform_IsEnabled() )
+		return
+
+	RegisterTuningStruct( "tuning", CLOCKUP_CYBERFORM_PVAR_PREFIX )
+
+	
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_TRACKING_START )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_TRACKING_STOP )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_TRANSFORM )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_LOOK_START )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_LOOK_STOP )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_START )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_STOP )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_REVENANT_BLEEDOUT_START )
+	RegisterSignal( SIG_CLOCKUP_CYBERFORM_REVENANT_BLEEDOUT_STOP )
+
+
+
+
+	
+	Remote_RegisterClientFunction( string( ServerToClient_ClockUp_Cyberform_SetCyberformActiveState ), "bool" )
+	Remote_RegisterClientFunction( string( ServerToClient_ClockUp_Cyberform_OnPlayerConnectionRestored ) )
+
+	
+	PrecacheSkinName( tuning.cyberformSkinName )
+	PrecacheParticleSystem( VFX_CLOCKUP_CYBERFORM_TRAIL_3P )
+	PrecacheWeapon( CLOCKUP_CYBERFORM_MELEE_HANDS )
+	PrecacheWeapon( CLOCKUP_CYBERFORM_PRIMARY_WEAPON )
+
+	
+	RegisterNetworkedVariable( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME, SNDC_PLAYER_EXCLUSIVE, SNVT_INT, 0 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		PrecacheParticleSystem( VFX_CLOCKUP_CYBERFORM_SCREEN_1P )
+		file.cyberformColorCorrection = ColorCorrection_Register( CLOCKUP_CYBERFORM_COLOR_CORRECTION )
+
+		
+		RegisterNetVarIntChangeCallback( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME, ClockUp_Cyberform_OnCyberloadUpdate )
+		AddCallback_GameStateEnter( eGameState.WinnerDetermined, ClockUp_Cyberform_OnWinnerDetermined )
+		AddOnSpectatorTargetChangedCallback( ClockUp_Cyberform_OnSpectatorTargetChanged )
+		AddFirstPersonSpectateStartedCallback( ClockUp_Cyberform_OnFirstPersonSpectateStarted )
+
+		
+		ClockUp_Cyberform_RegisterThemeStates()
+
+
+	ShadowZombieSettings shadowZombieOverrides
+
+
+
+
+
+
+
+
+		shadowZombieOverrides.callback_OnNetVarChanged_IsPlayerShadowZombie = ClockUp_Cyberform_OnNetVarChanged_IsPlayerShadowZombie
+
+	AbilityShadowZombie_SetShadowZombieOverrides( shadowZombieOverrides )
+}
+
+
+void function ClockUp_Cyberform_RegisterThemeStates()
+{
+	
+	ThemeState gadgetState
+	gadgetState.stateIndex = eClockUpThemeState.CLOCKUP_GADGET_ENGAGED
+
+	ThemeFrameArgs gadgetPlayerArgs
+	gadgetPlayerArgs.frameImage             = CLOCKUP_FRAME_OVERLAY_BASE
+	gadgetPlayerArgs.endorsementsFrameImage = CLOCKUP_FRAME_OVERLAY_TOPPER
+	gadgetPlayerArgs.color                  = UNHINGED_COLOR_UI
+	gadgetState.widgetArgs[THEME_WIDGET_PLAYER_INFO] <- gadgetPlayerArgs
+	gadgetState.widgetArgs[THEME_WIDGET_INVENTORY_PLAYER_INFO] <- gadgetPlayerArgs
+	gadgetState.widgetArgs[THEME_WIDGET_FULLMAP_PLAYER_INFO] <- gadgetPlayerArgs
+
+	HudTheming_RegisterState( gadgetState )
+
+	
+	ThemeState gadgetTeammateState
+	gadgetTeammateState.stateIndex = eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE
+
+	ThemeFrameArgs gadgetUnitArgs
+	gadgetUnitArgs.frameImage             = CLOCKUP_FRAME_OVERLAY_BASE
+	gadgetUnitArgs.endorsementsFrameImage = CLOCKUP_FRAME_OVERLAY_TOPPER
+	gadgetUnitArgs.color                  = UNHINGED_COLOR_UI
+	gadgetTeammateState.widgetArgs[THEME_WIDGET_UNITFRAME] <- gadgetUnitArgs
+	gadgetTeammateState.widgetArgs[THEME_WIDGET_INVENTORY_UNITFRAME] <- gadgetUnitArgs
+	gadgetTeammateState.widgetArgs[THEME_WIDGET_FULLMAP_UNITFRAME] <- gadgetUnitArgs
+
+	HudTheming_RegisterState( gadgetTeammateState )
+
+	
+	ThemeState cyberformPlayerState
+	cyberformPlayerState.stateIndex = eClockUpThemeState.CYBERFORM_PLAYER
+
+	ThemeFrameArgs cyberformPlayerArgs
+	cyberformPlayerArgs.frameImage             = CLOCKUP_FRAME_OVERLAY
+	cyberformPlayerArgs.topImage               = CLOCKUP_FRAME_OVERLAY_TOP
+	cyberformPlayerArgs.bottomImage            = CLOCKUP_FRAME_OVERLAY_BOTTOM
+	cyberformPlayerArgs.endorsementsFrameImage = CLOCKUP_FRAME_OVERLAY_TOPPER
+	cyberformPlayerArgs.color                  = CLOCKUP_COLOR_RED_UI
+	cyberformPlayerArgs.bgColor                = SrgbToLinear( CLOCKUP_COLOR_RED_UI )
+	cyberformPlayerArgs.bgAlpha                = 1.0
+	cyberformPlayerArgs.topImageSize           = GetImageSize( cyberformPlayerArgs.topImage )
+	cyberformPlayerArgs.bottomImageSize        = GetImageSize( cyberformPlayerArgs.bottomImage )
+	cyberformPlayerArgs.effectRui              = CLOCKUP_GLITCH_EFFECT_RUI
+	
+	
+	
+	cyberformPlayerState.widgetArgs[THEME_WIDGET_PLAYER_INFO] <- cyberformPlayerArgs
+	cyberformPlayerState.widgetArgs[THEME_WIDGET_INVENTORY_PLAYER_INFO] <- cyberformPlayerArgs
+
+	ThemeFrameArgs cyberformFullmapPlayerArgs
+	cyberformFullmapPlayerArgs.frameImage             = CLOCKUP_FRAME_OVERLAY
+	cyberformFullmapPlayerArgs.topImage               = $""
+	cyberformFullmapPlayerArgs.bottomImage            = CLOCKUP_FRAME_OVERLAY_BOTTOM
+	cyberformFullmapPlayerArgs.endorsementsFrameImage = CLOCKUP_FRAME_OVERLAY_TOPPER
+	cyberformFullmapPlayerArgs.color                  = CLOCKUP_COLOR_RED_UI
+	cyberformFullmapPlayerArgs.bgColor                = SrgbToLinear( CLOCKUP_COLOR_RED_UI )
+	cyberformFullmapPlayerArgs.bgAlpha                = 1.0
+	cyberformFullmapPlayerArgs.bottomImageSize        = GetImageSize( cyberformFullmapPlayerArgs.bottomImage )
+	cyberformFullmapPlayerArgs.effectRui              = CLOCKUP_GLITCH_EFFECT_RUI
+	cyberformPlayerState.widgetArgs[THEME_WIDGET_FULLMAP_PLAYER_INFO] <- cyberformFullmapPlayerArgs
+
+	HudTheming_RegisterState( cyberformPlayerState )
+
+	
+	ThemeState cyberformTeammateState
+	cyberformTeammateState.stateIndex = eClockUpThemeState.CYBERFORM_TEAMMATE
+
+	ThemeFrameArgs cyberformUnitframeArgs
+	cyberformUnitframeArgs.frameImage             = CLOCKUP_FRAME_OVERLAY
+	cyberformUnitframeArgs.topImage               = CLOCKUP_FRAME_OVERLAY_TOP
+	cyberformUnitframeArgs.bottomImage            = CLOCKUP_FRAME_OVERLAY_BOTTOM
+	cyberformUnitframeArgs.endorsementsFrameImage = CLOCKUP_FRAME_OVERLAY_TOPPER
+	cyberformUnitframeArgs.color                  = CLOCKUP_COLOR_RED_UI
+	cyberformUnitframeArgs.bgColor                = SrgbToLinear( CLOCKUP_COLOR_RED_UI )
+	cyberformUnitframeArgs.bgAlpha                = 1.0
+	cyberformUnitframeArgs.topImageSize           = GetImageSize( cyberformUnitframeArgs.topImage )
+	cyberformUnitframeArgs.bottomImageSize        = GetImageSize( cyberformUnitframeArgs.bottomImage )
+	cyberformUnitframeArgs.effectRui              = CLOCKUP_GLITCH_EFFECT_RUI
+	
+	
+	
+	cyberformTeammateState.widgetArgs[THEME_WIDGET_UNITFRAME] <- cyberformUnitframeArgs
+	cyberformTeammateState.widgetArgs[THEME_WIDGET_INVENTORY_UNITFRAME] <- cyberformUnitframeArgs
+
+	ThemeFrameArgs cyberformFullmapUnitframeArgs
+	cyberformFullmapUnitframeArgs.frameImage             = CLOCKUP_FRAME_OVERLAY
+	cyberformFullmapUnitframeArgs.topImage               = $""
+	cyberformFullmapUnitframeArgs.bottomImage            = CLOCKUP_FRAME_OVERLAY_BOTTOM
+	cyberformFullmapUnitframeArgs.endorsementsFrameImage = CLOCKUP_FRAME_OVERLAY_TOPPER
+	cyberformFullmapUnitframeArgs.color                  = CLOCKUP_COLOR_RED_UI
+	cyberformFullmapUnitframeArgs.bgColor                = SrgbToLinear( CLOCKUP_COLOR_RED_UI )
+	cyberformFullmapUnitframeArgs.bgAlpha                = 1.0
+	cyberformFullmapUnitframeArgs.bottomImageSize        = GetImageSize( cyberformFullmapUnitframeArgs.bottomImage )
+	cyberformFullmapUnitframeArgs.effectRui              = CLOCKUP_GLITCH_EFFECT_RUI
+	cyberformTeammateState.widgetArgs[THEME_WIDGET_FULLMAP_UNITFRAME] <- cyberformFullmapUnitframeArgs
+
+	HudTheming_RegisterState( cyberformTeammateState )
+
+	vector ufTopImageSize = cyberformUnitframeArgs.topImageSize
+	vector ufBotImageSize = cyberformUnitframeArgs.bottomImageSize
+
+	printt( "[HudTheme] Unitframe Top Img Size: " + ufTopImageSize )
+	printt( "[HudTheme] Unitframe Bot Img Size: " + ufBotImageSize )
+}
+
+void function ClockUp_Cyberform_UpdateInventoryUnitframeTheme( entity teammate, var rui )
+{
+	if ( ClockUp_Cyberform_IsPlayerInCyberform( teammate ) )
+	{
+		HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_INVENTORY_UNITFRAME, rui )
+		HudTheming_ActivateStateOnWidget( eClockUpThemeState.CYBERFORM_TEAMMATE, THEME_WIDGET_INVENTORY_UNITFRAME, rui )
+	}
+	else
+	{
+		HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CYBERFORM_TEAMMATE, THEME_WIDGET_INVENTORY_UNITFRAME, rui )
+
+		if ( ClockUp_Cyberform_IsCyberwareEngaged( teammate ) )
+		{
+			HudTheming_ActivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_INVENTORY_UNITFRAME, rui )
+		}
+		else
+		{
+			HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_INVENTORY_UNITFRAME, rui )
+		}
+	}
+}
+
+void function ClockUp_Cyberform_UpdateFullmapUnitframeTheme( entity teammate, var rui )
+{
+	if ( ClockUp_Cyberform_IsPlayerInCyberform( teammate ) )
+	{
+		HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_FULLMAP_UNITFRAME, rui )
+		HudTheming_ActivateStateOnWidget( eClockUpThemeState.CYBERFORM_TEAMMATE, THEME_WIDGET_FULLMAP_UNITFRAME, rui )
+	}
+	else
+	{
+		HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CYBERFORM_TEAMMATE, THEME_WIDGET_FULLMAP_UNITFRAME, rui )
+
+		if ( ClockUp_Cyberform_IsCyberwareEngaged( teammate ) )
+		{
+			HudTheming_ActivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_FULLMAP_UNITFRAME, rui )
+		}
+		else
+		{
+			HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_FULLMAP_UNITFRAME, rui )
+		}
+	}
+}
+
+void function ClockUp_Cyberform_UpdateFullmapThemeForTeammate( entity teammate )
+{
+	if ( !Fullmap_IsVisible() )
+		return
+
+	array<var> mapUnitFrames = GetUnitFramesRui()
+
+	for ( int i = 1; i < mapUnitFrames.len(); i++ )
+	{
+		int slotIndex = i - 1
+		entity framePlayer = UnitFrame_GetOwnerByIndex( slotIndex )
+
+		if ( framePlayer != teammate || !IsValid( framePlayer ) )
+			continue
+
+		ClockUp_Cyberform_UpdateFullmapUnitframeTheme( teammate, mapUnitFrames[i] )
+		break
+	}
+}
+
+
+bool function ClockUp_Cyberform_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_CLOCKUP_CYBERFORM_ENABLED, false )
+}
+
+bool function ClockUp_Cyberform_PlayerHasCyberwareEquipped( entity player )
+{
+	entity gadgetWeapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+	if ( !IsValid( gadgetWeapon ) )
+		return false
+
+
+	if ( Ability_ClockUp_DisruptingHack_IsValidRef( gadgetWeapon.GetWeaponClassName() ) )
+		return true
+
+
+
+	if ( Ability_ClockUp_EnhancedReflex_IsValidRef( gadgetWeapon.GetWeaponClassName() ) )
+		return true
+
+
+	return false
+}
+
+bool function ClockUp_Cyberform_IsValidCyberwareRef( string ref )
+{
+
+	if ( Ability_ClockUp_DisruptingHack_IsValidRef( ref ) )
+		return true
+
+
+
+	if ( Ability_ClockUp_EnhancedReflex_IsValidRef( ref ) )
+		return true
+
+
+	return false
+}
+
+bool function ClockUp_Cyberform_IsPlayerInCyberform( entity player )
+{
+	return ClockUp_Cyberform_IsEnabled() && player.IsShadowForm() && !IsInForgedShadows( player )
+}
+
+int function ClockUp_Cyberform_GetCyberformMeleeDamageMultiplierOnBreachGlass()
+{
+	return tuning.meleeDamageMultiplierOnBreachGlass
+}
+
+int function ClockUp_Cyberform_GetCyberloadForPlayer( entity player )
+{
+	if ( !IsValidPlayer( player ) || !ClockUp_Cyberform_IsEnabled() )
+		return 0
+
+	return player.GetPlayerNetInt( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClockUp_Cyberform_OnUpdateDpadHud( entity player )
+{
+	ClockUp_Cyberform_OnCyberloadUpdate( player, player.GetPlayerNetInt( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME ) )
+}
+
+
+
+void function ClockUp_Cyberform_OnCyberloadUpdate( entity player, int updatedCyberload )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	float cyberloadLevel = float(updatedCyberload) / CLOCKUP_CYBERFORM_MAX_CYBERLOAD
+	Sound_SetPsychLevel( cyberloadLevel )
+
+	if ( file.isCyberloadTrackingActive )
+		return
+
+	thread ClockUp_Cyberform_CyberloadTracking_Client_Thread( player )
+}
+
+
+
+void function ClockUp_Cyberform_OnSpectatorTargetChanged( entity observer, entity prevTarget, entity newTarget )
+{
+	if ( observer != GetLocalClientPlayer() )
+		return
+
+	if ( IsValid( prevTarget ) )
+	{
+		Signal( prevTarget, SIG_CLOCKUP_CYBERFORM_LOOK_STOP )
+	}
+
+	thread ClockUp_Cyberform_SpectatorTracking_Thread( observer )
+}
+
+
+
+void function ClockUp_Cyberform_OnFirstPersonSpectateStarted( entity observer, entity target )
+{
+	if ( observer != GetLocalClientPlayer() )
+		return
+
+	thread ClockUp_Cyberform_SpectatorTracking_Thread( observer )
+}
+
+
+
+void function ClockUp_Cyberform_SpectatorTracking_Thread( entity observer )
+{
+	AssertIsNewThread()
+
+	Signal( observer, SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_START )
+	EndSignal( observer, SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_START )
+	EndSignal( observer, SIG_CLOCKUP_CYBERFORM_SPECTATOR_TRACKING_THREAD_STOP )
+
+	int previousObserverMode = OBS_MODE_NONE
+	while ( IsValid( observer ) )
+	{
+		if ( !IsSpectating() )
+			break
+
+		entity localViewPlayer = GetLocalViewPlayer()
+		int currentObserverMode = observer.GetObserverMode()
+		if ( previousObserverMode != currentObserverMode )
+		{
+			switch ( currentObserverMode )
+			{
+				case OBS_MODE_IN_EYE:
+				{
+					if ( IsValid( localViewPlayer ) && ClockUp_Cyberform_IsPlayerInCyberform( localViewPlayer ) )
+					{
+						thread Client_ClockUp_Cyberform_Look_Lifetime_Thread( localViewPlayer )
+					}
+					break
+				}
+
+				default:
+				{
+					if ( IsValid( localViewPlayer ) )
+					{
+						Signal( localViewPlayer, SIG_CLOCKUP_CYBERFORM_LOOK_STOP )
+					}
+					break
+				}
+			}
+
+			previousObserverMode = currentObserverMode
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+void function ClockUp_Cyberform_OnWinnerDetermined()
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	Signal( player, SIG_CLOCKUP_CYBERFORM_LOOK_STOP )
+}
+
+
+
+void function ClockUp_Cyberform_CyberloadTracking_Client_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_CLOCKUP_CYBERFORM_TRACKING_START )
+	EndSignal( player, SIG_CLOCKUP_CYBERFORM_TRACKING_START )
+	EndSignal( player, SIG_CLOCKUP_CYBERFORM_TRACKING_STOP )
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	if ( GetCustomGadgetRui() == null )
+	{
+		CreateCustomGadgetRui( $"ui/clockup.rpak" )
+	}
+
+	file.isCyberloadTrackingActive = true
+
+	var dpadRuiInit = GetDpadMenuRui()
+	float shrinkScale = 0.7
+	if ( dpadRuiInit != null )
+	{
+		RuiSetBool( dpadRuiInit, "gadgetShouldShrink", true )
+		RuiSetFloat( dpadRuiInit, "gadgetShrinkScale", shrinkScale )
+	}
+
+	var customRuiInit = GetCustomGadgetRui()
+	if ( customRuiInit != null )
+	{
+		RuiSetBool( customRuiInit, "gadgetShouldShrink", true )
+		RuiSetFloat( customRuiInit, "gadgetShrinkScale", shrinkScale )
+	}
+
+	OnThreadEnd( function() : ( player )
+	{
+		var dpadRuiCleanup = GetDpadMenuRui()
+		if ( dpadRuiCleanup != null )
+		{
+			RuiSetBool( dpadRuiCleanup, "gadgetShouldShrink", false )
+			RuiSetFloat( dpadRuiCleanup, "gadgetShrinkScale", 1.0 )
+		}
+
+		var customRuiCleanup = GetCustomGadgetRui()
+		if ( customRuiCleanup != null )
+		{
+			RuiSetBool( customRuiCleanup, "gadgetShouldShrink", false )
+			RuiSetFloat( customRuiCleanup, "gadgetShrinkScale", 1.0 )
+		}
+
+		ResetToDefaultGadgetRui()
+
+		
+		HudTheming_DeactivateState( eClockUpThemeState.CYBERFORM_PLAYER )
+		HudTheming_DeactivateState( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED )
+
+
+
+
+
+		file.isCyberloadTrackingActive = false
+	})
+
+	bool wasGadgetEngagedForTheme = false
+	bool wasCyberformForTheme = false
+	table< entity, bool > teammateGadgetEngagedState
+	bool wasSyringeActive = false
+	float syringeStartTime = 0.0
+	float syringeTotalDuration = 0.0
+	float lastFrameTime = Time()
+	bool hasShownImmunoblockerHint = false
+	bool canTriggerBattleChatter = true
+	int previousSyringeCount = -1
+	bool previousSyringeSelected = false
+	bool previousIsAtShieldMax = player.GetShieldHealth() == player.GetShieldHealthMax()
+	float cachedCyberloadPerUse = 0.0
+
+	while ( IsValid( player ) )
+	{
+		float currentTime = Time()
+
+		
+		
+		
+		bool shouldDisplayWarning = ClockUp_Cyberform_ShouldDisplayCyberloadWarningForPlayer( player )
+		bool isGadgetEngaged = ClockUp_Cyberform_IsCyberwareEngaged( player )
+		if ( canTriggerBattleChatter && shouldDisplayWarning )
+		{
+			EmitSoundOnEntity( player, SFX_CLOCKUP_CYBERFORM_WARNING_1P )
+			PlayBattleChatterToSelfOnClient( player, CLOCKUP_CYBERFORM_BC_CYBERPSYCHOSIS_REACHED )
+		}
+		if ( !shouldDisplayWarning && (canTriggerBattleChatter == shouldDisplayWarning) )
+		{
+			StopSoundOnEntity( player, SFX_CLOCKUP_CYBERFORM_WARNING_1P )
+		}
+
+		canTriggerBattleChatter = !shouldDisplayWarning
+
+		
+		
+		
+		bool currentIsAtShieldMax = player.GetShieldHealth() == player.GetShieldHealthMax()
+		if ( previousIsAtShieldMax != currentIsAtShieldMax )
+		{
+			previousIsAtShieldMax = currentIsAtShieldMax
+			TryUpdateCurrentSelectedConsumableToBest( player, 0, 0 )
+		}
+
+		
+		
+		var customRui = GetCustomGadgetRui()
+		var dpadRui = GetDpadMenuRui()
+
+		if ( customRui == null )
+		{
+			CreateCustomGadgetRui( $"ui/clockup.rpak" )
+			customRui = GetCustomGadgetRui()
+			if ( customRui == null )
+				return
+		}
+
+		
+		
+		
+		int accumulatedCyberload = player.GetPlayerNetInt( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME )
+
+		float cyberloadFrac = clamp( float(accumulatedCyberload) / CLOCKUP_CYBERFORM_MAX_CYBERLOAD, 0.0, 1.0 )
+		bool isWarning = accumulatedCyberload >= tuning.cyberloadPercentageWarning
+
+		RuiSetFloat( customRui, "chargeFraction", cyberloadFrac )
+		RuiSetBool( customRui, "isVisible", true )
+		RuiSetBool( customRui, "isWarning", isWarning )
+		RuiSetBool( customRui, "isMaxCyberload", ClockUp_Cyberform_IsPlayerInCyberform( player ) )
+		RuiTrackFloat( customRui, "bleedoutEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "bleedoutEndTime" ) )
+		RuiSetBool ( customRui, "isGadgetEngaged", isGadgetEngaged )
+
+		if ( dpadRui != null )
+		{
+			RuiSetBool( dpadRui, "gadgetShouldShrink", true )
+			RuiSetFloat( dpadRui, "gadgetShrinkScale", shrinkScale )
+		}
+
+		RuiSetBool( customRui, "gadgetShouldShrink", true )
+		RuiSetFloat( customRui, "gadgetShrinkScale", shrinkScale )
+
+		
+		
+		
+		entity gadgetWeapon = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_GADGET )
+		if ( IsValid( gadgetWeapon ) )
+		{
+			int triggerCost = 0
+			string gadgetRef = gadgetWeapon.GetWeaponClassName()
+
+			if ( Ability_ClockUp_DisruptingHack_IsValidRef( gadgetRef ) )
+			{
+				triggerCost = Ability_ClockUp_DisruptingHack_GetCyberloadTriggerCost()
+			}
+
+
+			if ( Ability_ClockUp_EnhancedReflex_IsValidRef( gadgetRef ) )
+			{
+				triggerCost = Ability_ClockUp_EnhancedReflex_GetCyberloadTriggerCost()
+			}
+
+			if ( triggerCost > 0 )
+			{
+				cachedCyberloadPerUse = float(triggerCost) / float(CLOCKUP_CYBERFORM_MAX_CYBERLOAD)
+			}
+		}
+		RuiSetFloat( customRui, "cyberloadPerUse", cachedCyberloadPerUse )
+
+		
+		
+		
+
+		
+		int syringeCount = 0
+		bool isSyringeSelected = false
+
+		if ( Consumable_ClockUp_Syringe_IsEnabled() )
+		{
+			syringeCount = SURVIVAL_CountItemsInInventory( player, "health_pickup_clockup_syringe" )
+
+			
+			if ( syringeCount > 0 )
+			{
+				int selectedHealthPickupType = Survival_Health_GetSelectedHealthPickupType()
+				if ( selectedHealthPickupType == eHealthPickupType.CLOCKUP_SYRINGE )
+				{
+					isSyringeSelected = true
+				}
+			}
+		}
+
+
+		bool shouldShowHint = ( GetGameState() == eGameState.Playing )  && ( shouldDisplayWarning || ClockUp_Cyberform_IsPlayerInCyberform( player )) && ( !player.ContextAction_IsMeleeExecution() && !player.Player_IsSkydiving() && !player.Player_IsSkywardLaunching() && !Bleedout_IsBleedingOut( player ) )
+		if ( shouldShowHint )
+		{
+			
+			string hintToShow = ""
+			if ( syringeCount > 0 && isSyringeSelected )
+			{
+				hintToShow = "#CLOCKUP_IMMUNOBLOCKER_HINT"
+			}
+			else if ( syringeCount > 0 && !isSyringeSelected )
+			{
+				hintToShow = "#CLOCKUP_SELECT_IMMUNOBLOCKER_HINT"
+			}
+			else
+			{
+				hintToShow = "#CLOCKUP_FIND_IMMUNOBLOCKER_HINT"
+			}
+
+			
+			if ( !hasShownImmunoblockerHint || syringeCount != previousSyringeCount || isSyringeSelected != previousSyringeSelected )
+			{
+				
+				if ( hasShownImmunoblockerHint )
+				{
+					HidePlayerHint( "#CLOCKUP_IMMUNOBLOCKER_HINT" )
+					HidePlayerHint( "#CLOCKUP_SELECT_IMMUNOBLOCKER_HINT" )
+					HidePlayerHint( "#CLOCKUP_FIND_IMMUNOBLOCKER_HINT" )
+				}
+
+				
+				AddPlayerHint( 9999.0, 0.2, $"", hintToShow )
+
+				previousSyringeCount = syringeCount
+				previousSyringeSelected = isSyringeSelected
+				hasShownImmunoblockerHint = true
+			}
+		}
+		else if ( hasShownImmunoblockerHint )
+		{
+			
+			hasShownImmunoblockerHint = false
+			previousSyringeCount = -1
+			previousSyringeSelected = false
+			HidePlayerHint( "#CLOCKUP_IMMUNOBLOCKER_HINT" )
+			HidePlayerHint( "#CLOCKUP_SELECT_IMMUNOBLOCKER_HINT" )
+			HidePlayerHint( "#CLOCKUP_FIND_IMMUNOBLOCKER_HINT" )
+		}
+
+		
+		
+		
+		bool isSyringeActive = false
+		float syringeDrainFraction = 0.0
+		float syringeProgress = 0.0
+
+
+		if ( Consumable_ClockUp_Syringe_IsEnabled() )
+		{
+			if ( player.GetPlayerNetBool( "isHealing" ) && player.GetPlayerNetInt( "healingKitTypeCurrentlyBeingUsed" ) == eHealthPickupType.CLOCKUP_SYRINGE )
+			{
+				isSyringeActive = true
+				syringeDrainFraction = 35.0 / 100.0
+
+				float healEndTime = player.GetPlayerNetTime( "healingKitEndTime" )
+
+				if ( !wasSyringeActive )
+				{
+					syringeStartTime = currentTime
+					syringeTotalDuration = healEndTime - currentTime
+				}
+
+				if ( syringeTotalDuration > 0.0 )
+				{
+					float elapsed = currentTime - syringeStartTime
+					syringeProgress = min( elapsed / syringeTotalDuration, 1.0 )
+				}
+				else
+				{
+					syringeProgress = 1.0
+				}
+			}
+		}
+
+
+		if ( isSyringeActive )
+		{
+			RuiSetFloat( customRui, "syringeDrainFraction", syringeDrainFraction * syringeProgress )
+		}
+		else
+		{
+			syringeStartTime = 0.0
+			syringeTotalDuration = 0.0
+			RuiSetFloat( customRui, "syringeDrainFraction", 0.0 )
+		}
+		wasSyringeActive = isSyringeActive
+
+		RuiSetBool( customRui, "isSyringeActive", isSyringeActive )
+
+		
+		
+		
+		bool isCyberform = ClockUp_Cyberform_IsPlayerInCyberform( player )
+
+		if ( dpadRui != null )
+		{
+			RuiSetBool( dpadRui, "gadgetChargeUIEnabled", true )
+			RuiSetFloat( dpadRui, "gadgetChargeFrac", 1.0 )
+			RuiSetString( dpadRui, "gadgetChargePercent", Localize( "#N_PERCENT", 100 ) )
+			RuiSetBool( dpadRui, "gadgetUIEnabled", true )
+			RuiSetBool( dpadRui, "isGadgetEmpty", isCyberform )
+			RuiSetInt( dpadRui, "gadgetCount", 1 )
+			RuiSetInt( dpadRui, "maxGadgetCount", 0 )
+
+			
+			
+			
+
+			if ( isCyberform )
+			{
+				
+				RuiSetBool( dpadRui, "isGadgetBoosted", true )
+				RuiSetFloat3( dpadRui, "gadgetBoostedColor", SrgbToLinear( CLOCKUP_COLOR_RED_UI ) )
+			}
+			else if ( isGadgetEngaged )
+			{
+				
+				RuiSetBool( dpadRui, "isGadgetBoosted", true )
+				RuiSetFloat3( dpadRui, "gadgetBoostedColor", SrgbToLinear( isWarning? CLOCKUP_COLOR_YELLOW : UNHINGED_COLOR_UI ) )
+			}
+			else
+			{
+				RuiSetBool( dpadRui, "isGadgetBoosted", false )
+
+				if ( wasGadgetEngagedForTheme || wasCyberformForTheme )
+					ClockUp_HideEndorsementFirstUseHint()
+			}
+
+			
+			
+			
+			bool shouldFlashHealthPickup = false
+
+				if ( Consumable_ClockUp_Syringe_IsEnabled() && isSyringeSelected )
+				{
+					
+					
+					
+					if ( shouldDisplayWarning || isCyberform )
+					{
+						shouldFlashHealthPickup = true
+					}
+				}
+
+			RuiSetBool( dpadRui, "shouldFlashHealthPickup", shouldFlashHealthPickup )
+		}
+
+			
+			
+			
+			bool localStateChanged = (isGadgetEngaged != wasGadgetEngagedForTheme) || (isCyberform != wasCyberformForTheme)
+
+			if ( localStateChanged )
+			{
+				if ( isCyberform )
+				{
+					
+					if ( file.psychosisAnnouncementQueueItem != null )
+					{
+						HudNotificationQueueItem queueItem = expect HudNotificationQueueItem( file.psychosisAnnouncementQueueItem )
+						if ( queueItem.timeToStartOutro > Time() )
+							queueItem.timeToStartOutro = Time()
+						file.psychosisAnnouncementQueueItem = null
+					}
+
+					HudTheming_ActivateState( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED )
+					HudTheming_ActivateState( eClockUpThemeState.CYBERFORM_PLAYER )
+				}
+				else if ( isGadgetEngaged )
+				{
+					HudTheming_DeactivateState( eClockUpThemeState.CYBERFORM_PLAYER )
+					HudTheming_ActivateState( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED )
+				}
+				else
+				{
+					HudTheming_DeactivateState( eClockUpThemeState.CYBERFORM_PLAYER )
+					HudTheming_DeactivateState( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED )
+				}
+			}
+			wasGadgetEngagedForTheme = isGadgetEngaged
+			wasCyberformForTheme = isCyberform
+
+			
+			
+			
+			array< entity > teammates = GetPlayerArrayOfTeam_Alive( player.GetTeam() )
+			foreach ( entity teammate in teammates )
+			{
+				if ( teammate == player )
+					continue
+
+				if ( !PlayerHasUnitFrame( teammate ) )
+					continue
+
+				bool wasEngaged = (teammate in teammateGadgetEngagedState) ? teammateGadgetEngagedState[teammate] : false
+				bool isEngaged = ClockUp_Cyberform_IsCyberwareEngaged( teammate )
+
+				if ( isEngaged != wasEngaged )
+				{
+					UnitFrameDef unitFrame = GetUnitFrame( teammate )
+					if ( isEngaged )
+					{
+						HudTheming_ActivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_UNITFRAME, unitFrame.rui )
+					}
+					else
+					{
+						HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_UNITFRAME, unitFrame.rui )
+					}
+
+					teammateGadgetEngagedState[teammate] <- isEngaged
+				ClockUp_Cyberform_UpdateFullmapThemeForTeammate( teammate )
+				}
+			}
+
+		lastFrameTime = currentTime
+		WaitFrame()
+	}
+}
+
+
+
+void function ClockUp_Cyberform_TriggerClockupPulse()
+{
+	var customRui = GetCustomGadgetRui()
+	if ( customRui != null )
+	{
+		RuiSetGameTime( customRui, "clockupPulseTime", Time() )
+	}
+}
+
+void function ClockUp_Cyberform_TriggerGadgetPulse()
+{
+	var dpadRui = GetDpadMenuRui()
+	if ( dpadRui != null )
+	{
+		RuiSetGameTime( dpadRui, "gadgetBoostedPulseTime", Time() )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_ClockUp_Cyberform_SetCyberformActiveState( bool cyberformIsActive )
+{
+
+		if ( cyberformIsActive )
+		{
+			thread Client_ClockUp_Cyberform_Look_Lifetime_Thread( GetLocalViewPlayer() )
+		}
+		else
+		{
+			Signal( GetLocalViewPlayer(), SIG_CLOCKUP_CYBERFORM_LOOK_STOP )
+		}
+
+}
+
+void function ServerToClient_ClockUp_Cyberform_OnPlayerConnectionRestored()
+{
+
+	entity player = GetLocalClientPlayer()
+
+	if ( ClockUp_Cyberform_PlayerHasCyberwareEquipped( player ) || ClockUp_Cyberform_IsPlayerInCyberform( player ) )
+	{
+		thread ClockUp_Cyberform_CyberloadTracking_Client_Thread( player )
+	}
+	else if ( ClockUp_Endorsements_IsEnabled() && !ClockUp_PlayerHasClockUpEndorsement( player ) )
+	{
+		ServerToClient_ClockUp_Endorsements_ShowClockUpLandingUI()
+	}
+
+	if ( ClockUp_Cyberform_IsPlayerInCyberform( player ) )
+	{
+		thread Client_ClockUp_Cyberform_Look_Lifetime_Thread( player )
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClockUp_Cyberform_OnNetVarChanged_IsPlayerShadowZombie( entity player, bool isShadowZombie )
+{
+	player.Anim_SetSuppressDialogSounds( isShadowZombie )
+
+	
+	entity localViewPlayer = GetLocalViewPlayer()
+	if ( player != localViewPlayer && PlayerHasUnitFrame( player ) )
+	{
+		UnitFrameDef unitFrame = GetUnitFrame( player )
+		if ( isShadowZombie )
+		{
+			HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_UNITFRAME, unitFrame.rui )
+			HudTheming_ActivateStateOnWidget( eClockUpThemeState.CYBERFORM_TEAMMATE, THEME_WIDGET_UNITFRAME, unitFrame.rui )
+		}
+		else
+		{
+			HudTheming_DeactivateStateOnWidget( eClockUpThemeState.CYBERFORM_TEAMMATE, THEME_WIDGET_UNITFRAME, unitFrame.rui )
+
+			
+			if ( ClockUp_Cyberform_IsCyberwareEngaged( player ) )
+			{
+				HudTheming_ActivateStateOnWidget( eClockUpThemeState.CLOCKUP_GADGET_ENGAGED_TEAMMATE, THEME_WIDGET_UNITFRAME, unitFrame.rui )
+			}
+		}
+
+		
+		ClockUp_Cyberform_UpdateFullmapThemeForTeammate( player )
+	}
+
+	if ( !isShadowZombie )
+	{
+		file.playerToShadowZombieEndTime[player] <- Time()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Client_ClockUp_Cyberform_Look_Lifetime_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	if ( !IsValidPlayer( player ) )
+		return
+
+	if ( GetGameState() >= eGameState.WinnerDetermined )
+		return
+
+	Signal( player, SIG_CLOCKUP_CYBERFORM_LOOK_START )
+	EndSignal( player, SIG_CLOCKUP_CYBERFORM_LOOK_START )
+	EndSignal( player, SIG_CLOCKUP_CYBERFORM_LOOK_STOP )
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	HealthHUD_StopUpdate( player )
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	PassByReferenceInt vfxHandleRef
+	OnThreadEnd( function() : ( player, vfxHandleRef )
+	{
+		if ( EffectDoesExist( vfxHandleRef.value ) )
+		{
+			EffectStop( vfxHandleRef.value, false, true )
+		}
+
+		ColorCorrection_SetWeight( file.cyberformColorCorrection, 0.0 )
+		ColorCorrection_SetExclusive( file.cyberformColorCorrection, false )
+
+		TryUpdateCurrentSelectedConsumableToBest( player, 0, 0 )
+	} )
+
+	TryUpdateCurrentSelectedConsumableToBest( player, 0, 0 )
+
+	bool prevIsCyberformLookOn = false
+	while ( IsValid( player ) )
+	{
+		bool cyberformLookShouldBeOn = !GetPlayerIsEmoting( player ) && !player.ContextAction_IsMeleeExecutionAttacker()
+
+		if ( prevIsCyberformLookOn != cyberformLookShouldBeOn )
+		{
+			if ( cyberformLookShouldBeOn )
+			{
+				vfxHandleRef.value = StartParticleEffectOnEntity( cockpit, GetParticleSystemIndex( VFX_CLOCKUP_CYBERFORM_SCREEN_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+				EffectSetIsWithCockpit( vfxHandleRef.value, true )
+				vector controlPoint = <1, 1, 1>
+				EffectSetControlPointVector( vfxHandleRef.value, 1, controlPoint )
+
+				ColorCorrection_SetWeight( file.cyberformColorCorrection, 1.0 )
+				ColorCorrection_SetExclusive( file.cyberformColorCorrection, true )
+			}
+			else
+			{
+				if ( EffectDoesExist( vfxHandleRef.value ) )
+				{
+					EffectStop( vfxHandleRef.value, false, true )
+				}
+
+				ColorCorrection_SetWeight( file.cyberformColorCorrection, 0.0 )
+				ColorCorrection_SetExclusive( file.cyberformColorCorrection, false )
+			}
+
+			prevIsCyberformLookOn = cyberformLookShouldBeOn
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+bool function ClockUp_Cyberform_ShouldDisplayCyberloadWarningForPlayer( entity player )
+{
+	if ( !IsValid( player ) || (player != GetLocalViewPlayer()) )
+		return false
+
+	if ( !ClockUp_Cyberform_PlayerHasCyberwareEquipped( player ) || ClockUp_Cyberform_IsPlayerInCyberform( player ) )
+		return false
+
+	if ( (player in file.playerToShadowZombieEndTime) && (Time() - file.playerToShadowZombieEndTime[player]) < tuning.battleChatterCooldownFromCyberpsychosisEnd )
+		return false
+
+	if ( ( player.GetPlayerNetInt( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME ) >= tuning.cyberloadPercentageWarning ) && !file.psychosisAnnouncementRecentlyShown )
+	{
+		Clockup_Cyberform_QueueCyberpsychosisAnnouncement()
+	}
+	if ( player.GetPlayerNetInt( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME ) < tuning.cyberloadPercentageWarning )
+	{
+		file.psychosisAnnouncementRecentlyShown = false
+		file.psychosisAnnouncementQueueItem = null
+	}
+
+	return player.GetPlayerNetInt( CLOCKUP_CYBERFORM_CYBERLOAD_NETVAR_NAME ) >= tuning.cyberloadPercentageWarning
+}
+
+void function Clockup_Cyberform_QueueCyberpsychosisAnnouncement()
+{
+	CenterAnnouncementItem cyberpsychosisAnnouncement = CenterAnnouncements_CreateBoxStyle()
+	cyberpsychosisAnnouncement.mainText = Localize("#CLOCKUP_CYBERFORM_IMMINENT")
+	cyberpsychosisAnnouncement.mainTextColor = CLOCKUP_COLOR_YELLOW
+	cyberpsychosisAnnouncement.announcementHeight = 45
+	cyberpsychosisAnnouncement.contentVerticalPaddingTop = 10.0
+	cyberpsychosisAnnouncement.contentVerticalPaddingBottom = 10.0
+
+	cyberpsychosisAnnouncement.paddingTop = 100
+	cyberpsychosisAnnouncement.leftEndPadding = 40
+	cyberpsychosisAnnouncement.rightEndPadding = 40
+
+	cyberpsychosisAnnouncement.frameColor = CLOCKUP_COLOR_RED_UI
+
+	cyberpsychosisAnnouncement.priority = eHudNotificationQueuePriority.CRITICAL
+
+	cyberpsychosisAnnouncement.mainIcon1 = $"rui/hud/unitframes/clockup/clockup_splash_topper_warning"
+	cyberpsychosisAnnouncement.mainIcon1Color = CLOCKUP_COLOR_RED_UI
+	cyberpsychosisAnnouncement.mainIcon1Size = <1.2, 1, 1>
+	cyberpsychosisAnnouncement.imageContainerHeight = 42.0
+
+	cyberpsychosisAnnouncement.scalar = 1.0
+	cyberpsychosisAnnouncement.duration = 10.0
+
+	file.psychosisAnnouncementRecentlyShown = true
+	file.psychosisAnnouncementQueueItem = CenterAnnouncements_QueueItem( cyberpsychosisAnnouncement, ePersistenceContext.PLAYER )
+}
+
+
+bool function ClockUp_Cyberform_IsCyberwareEngaged( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	return StatusEffect_HasSeverity( player, eStatusEffect.clockup_cyberload_acceleration )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+       

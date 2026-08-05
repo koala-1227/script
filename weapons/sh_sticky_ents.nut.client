@@ -1,0 +1,762 @@
+global function StickyEnts_Init
+
+global function EntityCanHaveStickyEnts
+global function EntityShouldStick
+global function EntityShouldStickEx
+global function PlantStickyEntity
+global function PlantStickyEntityOnConsistentSurface
+global function PlantStickyEntityThatBouncesOffWalls
+global function PlantStickyEntityOnWorldThatBouncesOffWalls
+
+
+
+
+
+#if DEV
+global function DEV_DumpStickinessTable
+#endif
+
+
+const int ITEM_STICKS = 1
+const int ITEM_NOT_FOUND_STICKINESS = -1
+
+const float BOUNCE_STUCK_DISTANCE = 5.0
+
+global const string ARROWS_UNSTICK_SIGNAL = "arrows_unstick"
+
+struct
+{
+	table< string, table <string, int> > throwableItemStickinessTable
+} file
+
+
+
+
+StringSet STICKY_CLASSES = {
+	worldspawn = IN_SET,
+	player = IN_SET,
+	prop_dynamic = IN_SET,
+	prop_script = IN_SET,
+	prop_death_box = IN_SET,
+	func_brush = IN_SET,
+	func_brush_lightweight = IN_SET,
+	phys_bone_follower = IN_SET,
+	prop_door = IN_SET,
+	script_mover = IN_SET,
+	player_vehicle = IN_SET,
+	turret = IN_SET,
+	prop_loot_grabber = IN_SET,
+	prop_lootroller = IN_SET,
+	prop_arsenal = IN_SET,
+	breachable_glass = IN_SET,
+}
+
+void function StickyEnts_Init()
+{
+
+
+
+	InitThrowableItemStickinessDatatable()
+}
+
+const asset THROWABLE_ITEM_STICKINESS_DATATABLE = $"datatable/throwable_item_stickiness.rpak"
+const int ENT_NAME_COL = 0
+const int FIRST_DATA_COLUMN = 1
+
+void function InitThrowableItemStickinessDatatable()
+{
+	var dataTable = GetDataTable( THROWABLE_ITEM_STICKINESS_DATATABLE )
+	int numRows = GetDataTableRowCount( dataTable )
+	int numCols = GetDatatableColumnCount( dataTable )
+
+	for( int col = FIRST_DATA_COLUMN; col < numCols; col++ )
+	{
+		table< string, int > columnTable
+
+
+
+
+
+		for ( int j = 0; j < numRows; j++ )
+		{
+			string entName = GetDataTableString( dataTable, j, ENT_NAME_COL )
+			int value = int( GetDataTableString( dataTable, j, col ) )
+
+			Assert( !(entName in columnTable), "Ent " + entName +" already in stickiness table! There is a duplicate row" )
+
+			columnTable[ entName ] <- value
+		}
+
+		string colName = GetDatatableColumnName( dataTable, col )
+		Assert( !( colName in file.throwableItemStickinessTable ), "Ent " + colName + " already in stickiness table! There is a duplicate column" )
+		file.throwableItemStickinessTable[ colName ] <- columnTable
+	}
+}
+
+bool function PlantStickyEntityOnWorldThatBouncesOffWalls( entity ent, DeployableCollisionParams collisionParams, float bounceDot = DOT_45DEGREE, vector angleOffset = ZERO_VECTOR, bool skipHullTrace = false )
+{
+	entity hitEnt = collisionParams.hitEnt
+	if ( HitEntOnWorldIsValidToStick( hitEnt ) )
+	{
+		float dot = collisionParams.normal.Dot( UP_VECTOR )
+
+		if ( dot < bounceDot )
+		{
+
+
+
+
+
+
+
+
+
+
+
+
+
+				return false
+
+		}
+
+		return PlantStickyEntity( ent, collisionParams, angleOffset, skipHullTrace )
+	}
+
+	return false
+}
+
+bool function HitEntOnWorldIsValidToStick( entity hitEnt )
+{
+	if ( !IsValid( hitEnt ) )
+		return false
+
+	var hitEntName = hitEnt.GetScriptName()
+
+	if ( hitEnt.IsWorld() )
+		return true
+	if ( hitEnt.IsBreachableGlass() )
+		return true
+	if ( hitEnt.HasPusherAncestor() )
+		return true
+	if ( hitEnt.IsFuncBrush() )
+		return true
+	if ( hitEntName == "ziprail_launcher_prop" )
+		return true
+	if ( hitEntName == "jump_tower" )
+		return true
+	if ( hitEntName == "slide_gate" )
+		return true
+
+	return false
+}
+
+#if DEV
+const bool DEBUG_SURFACE_TEST = false
+const float DEBUG_SURFACE_TEST_TIME = 20
+#endif
+const float SURFACE_TEST_TRACE_LENGTH = 66
+
+bool function PlantStickyEntityOnConsistentSurface( entity projectile, DeployableCollisionParams collisionParams, float consistentDotThreshold, float size, vector angleOffset = ZERO_VECTOR )
+{
+	bool surfaceIsConsistent = true
+
+	
+	vector forward = CrossProduct( collisionParams.normal, <1, 0, 0> ) 
+	if ( Length( forward ) == 0.0 )
+	{
+		forward = CrossProduct( collisionParams.normal, UP_VECTOR )
+	}
+	vector surfaceAngles = AnglesOnSurface( collisionParams.normal, forward )
+	vector right         = AnglesToRight( surfaceAngles )
+
+#if DEV
+		if ( DEBUG_SURFACE_TEST )
+		{
+			
+			
+			 DebugDrawArrow( collisionParams.pos, collisionParams.pos + collisionParams.normal * SURFACE_TEST_TRACE_LENGTH / 2, 10, COLOR_GREEN, true, DEBUG_SURFACE_TEST_TIME )
+		}
+#endif
+
+	int goodHitCount            = 0
+	array<vector> testPositions = [ <-1, -1, 0>, <-1, 1, 0>, <1, 1, 0>, <1, -1, 0> ]
+	for ( int i = 0; i < testPositions.len(); ++i )
+	{
+		vector testPos = testPositions[i]
+
+		vector origin    = collisionParams.pos + collisionParams.normal * size
+		vector endOrigin = origin + forward * testPos.x * size + right * testPos.y * size - collisionParams.normal * SURFACE_TEST_TRACE_LENGTH
+
+#if DEV
+			if ( DEBUG_SURFACE_TEST )
+			{
+				DebugDrawArrow( origin, endOrigin, 5, COLOR_CYAN, true, DEBUG_SURFACE_TEST_TIME )
+			}
+#endif
+		TraceResults traceResult = TraceLine( origin, endOrigin, [ projectile ], TRACE_MASK_NPCWORLDSTATIC, TRACE_COLLISION_GROUP_NONE )
+
+		if ( traceResult.fraction < 1.0 ) 
+		{
+			float dot = traceResult.surfaceNormal.Dot( collisionParams.normal )
+			if ( dot < consistentDotThreshold )
+			{
+				surfaceIsConsistent = false
+#if DEV
+					if ( DEBUG_SURFACE_TEST )
+					{
+						DebugDrawArrow( traceResult.endPos, traceResult.endPos + traceResult.surfaceNormal * 20, 5, <255, 100, 0>, true, DEBUG_SURFACE_TEST_TIME )
+					}
+#endif
+			}
+			else
+			{
+				goodHitCount++
+#if DEV
+					if ( DEBUG_SURFACE_TEST )
+					{
+						DebugDrawArrow( traceResult.endPos, traceResult.endPos + traceResult.surfaceNormal * 20, 5, <100, 255, 0>, true, DEBUG_SURFACE_TEST_TIME )
+					}
+#endif
+			}
+		}
+		else
+		{
+			surfaceIsConsistent = false
+			break
+		}
+	}
+
+
+	if ( !surfaceIsConsistent )
+	{
+
+
+
+
+
+
+
+
+
+
+
+		return false
+	}
+
+	return PlantStickyEntity( projectile, collisionParams, angleOffset )
+}
+
+bool function PlantStickyEntityThatBouncesOffWalls( entity projectile, DeployableCollisionParams cp, float bounceDot = DOT_45DEGREE, vector angleOffset = ZERO_VECTOR )
+{
+
+	if ( IsBitFlagSet( cp.deployableFlags, eDeployableFlags.VEHICLES_LARGE_DEPLOYABLE ) && EntIsHoverVehicle( cp.hitEnt ) )
+		return PlantStickyEntity_LargeDeployableOnVehicle( projectile, cp, angleOffset )
+
+
+	float dot = cp.normal.Dot( UP_VECTOR )
+	if ( dot < bounceDot )
+	{
+
+
+
+
+
+
+
+
+
+		return false
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	return PlantStickyEntity( projectile, cp, angleOffset )
+}
+
+
+#if DEV
+const bool DEBUG_DRAW_PLANT_STICKY = false
+#endif
+
+bool function PlantStickyEntity( entity ent, DeployableCollisionParams cp, vector angleOffset = ZERO_VECTOR, bool skipHullTrace = false, bool moveOnNoHitTrace = true )
+{
+	if ( !EntityShouldStickEx( ent, cp ) )
+		return false
+	Assert( !ent.IsMarkedForDeletion(), "" )
+	Assert( !cp.hitEnt.IsMarkedForDeletion(), "" )
+
+	
+	if ( LengthSqr( cp.normal ) <= FLT_EPSILON )
+	{
+		Warning( "PlantStickyEntity: normal vector " + cp.normal + " is a zero vector. Entity: '" + ent + "' is sticking to HitEnt: '" + cp.hitEnt + "' at position: " + cp.pos )
+		cp.normal = UP_VECTOR
+	}
+
+	vector plantAngles = AnglesCompose( VectorToAngles( cp.normal ), angleOffset )
+	vector plantPosition
+	if ( skipHullTrace )
+	{
+		plantPosition = cp.pos
+	}
+	else
+	{
+		vector traceDir    = cp.normal * -1
+		vector entPos 	   = cp.pos
+		vector mins        = cp.ignoreHullSize ? ZERO_VECTOR: ent.GetBoundingMins()
+		vector maxs        = cp.ignoreHullSize ? ZERO_VECTOR: ent.GetBoundingMaxs()
+#if DEV
+		const float DRAW_DURATION = 60
+		if ( DEBUG_DRAW_PLANT_STICKY )
+		{
+			DebugDrawSphere( cp.pos, 5, COLOR_YELLOW, false, DRAW_DURATION )
+			DebugDrawBox( cp.pos, mins , maxs, COLOR_YELLOW, 1, DRAW_DURATION )
+
+			DebugDrawArrow( cp.pos, cp.pos + cp.normal*20, 10, COLOR_YELLOW, false, DRAW_DURATION )
+		}
+#endif
+
+		int traceMask 	   = (ent.IsProjectile() && ent.GetProjectileWeaponSettingBool( eWeaponVar.grenade_use_mask_ability )) ? TRACE_MASK_ABILITY : TRACE_MASK_SHOT
+		array<entity> ignoreEnts = [ent]
+		if ( ent.IsProjectile() && ent.proj.ignoreOwnerForPlaceStickyEnt && IsValid( ent.GetOwner() ) )
+			ignoreEnts.append( ent.GetOwner() )
+
+		TraceResults trace
+		if( ( cp.hitEnt.IsPlayer() || cp.hitEnt.IsNPC() ) && ent.IsProjectile() && ent.ProjectileGetWeaponClassName() == "mp_weapon_cluster_bomb_launcher" )
+		{
+			vector center = cp.hitEnt.GetWorldSpaceCenter()
+			center.z = entPos.z
+			trace = TraceLineHighDetail( entPos, center, ignoreEnts, traceMask, TRACE_COLLISION_GROUP_NONE )
+		}
+		else if( cp.highDetailTrace || ( ent.IsProjectile() && ent.proj.useHighDetailCollisionTraceForPlaceStickyEnt ) )
+		{
+			trace = TraceHullHighDetail( entPos, ( entPos + ( traceDir * cp.traceLength ) ), mins, maxs, ignoreEnts, ( traceMask & ~CONTENTS_HITBOX ), TRACE_COLLISION_GROUP_NONE, cp.normal )
+		}
+		else
+		{
+			trace = TraceHull( entPos, ( entPos + ( traceDir * cp.traceLength ) ), mins, maxs, ignoreEnts, ( traceMask & ~CONTENTS_HITBOX ), TRACE_COLLISION_GROUP_NONE, cp.normal )
+
+		}
+
+#if DEV
+			if ( DEBUG_DRAW_PLANT_STICKY )
+			{
+				DebugDrawArrow( entPos, trace.endPos, 4, COLOR_GREEN, false, DRAW_DURATION )
+			}
+#endif
+
+		if( moveOnNoHitTrace || trace.fraction < 1.0 )
+		{
+			plantPosition = trace.endPos
+
+#if DEV
+			if ( DEBUG_DRAW_PLANT_STICKY )
+			{
+				DebugDrawSphere( plantPosition, 3, COLOR_RED, false, DRAW_DURATION )
+				DebugDrawBox( plantPosition, mins , maxs, COLOR_RED, 1, DRAW_DURATION )
+			}
+#endif
+		}
+		else
+		{
+			plantPosition = cp.pos
+
+#if DEV
+			if ( DEBUG_DRAW_PLANT_STICKY )
+			{
+				DebugDrawSphere( plantPosition, 3, COLOR_BLUE, false, DRAW_DURATION )
+			}
+#endif
+		}
+
+		if ( !LegalOrigin( plantPosition ) )
+			return false
+
+		if ( trace.startSolid && IsValid( trace.hitEnt ) && !trace.hitEnt.IsWorld() && ent.IsProjectile() && ent.GetProjectileWeaponSettingBool( eWeaponVar.grenade_mover_destroy_when_planted ) )
+		{
+
+
+
+			return false
+		}
+	}
+
+	if ( IsOriginInvalidForPlacingPermanentOnto( plantPosition, ent ) )
+		return false
+
+
+
+
+
+
+
+		ent.SetOrigin( plantPosition )
+		ent.SetAngles( plantAngles )
+
+	ent.SetVelocity( ZERO_VECTOR )
+
+	
+	if ( !EntityShouldStickEx( ent, cp ) )
+		return false
+	Assert( !ent.IsMarkedForDeletion(), "" )
+	Assert( !cp.hitEnt.IsMarkedForDeletion(), "" )
+
+	
+	
+	if ( cp.hitEnt.IsWorld() || cp.hitEnt.IsBreachableGlass() )
+	{
+
+
+
+
+
+
+
+		ent.SetVelocity( ZERO_VECTOR )
+		ent.StopPhysics()
+
+
+
+
+
+	}
+	else
+	{
+		if ( cp.hitBox > 0 )
+		{
+			ent.SetParentWithHitbox( cp.hitEnt, cp.hitBox, true )
+		}
+		else
+		{
+			int collisionAttachment = ATTACHMENTID_INVALID
+			if ( IsABaseGrenade( ent ) )
+				collisionAttachment = ent.GetCollisionAttachment()
+
+			if ( collisionAttachment != ATTACHMENTID_INVALID )
+				ent.SetParentWithAttachmentId( cp.hitEnt, collisionAttachment, true )
+			else
+				ent.SetParent( cp.hitEnt )
+		}
+
+		if ( cp.hitEnt.IsPlayer() || IsDoor( cp.hitEnt ) || IsReinforced (cp.hitEnt))
+			thread HandleDisappearingParent( ent, cp.hitEnt )
+		else if ( cp.hitEnt.IsNPC() )
+			thread HandleDisappearingParentNPC( ent, cp.hitEnt )
+	}
+
+	CommonOnSuccessfulStickyPlant( ent, cp )
+	return true
+}
+
+void function HandleDisappearingParentNPC( entity ent, entity parentEnt )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+bool function IsEntParentedToObjectOfScriptname( entity ent, string scriptname )
+{
+	entity parentEnt = ent.GetParent()
+	while ( IsValid( parentEnt ) )
+	{
+		if ( parentEnt.GetScriptName() == scriptname )
+			return true
+
+		parentEnt = parentEnt.GetParent()
+	}
+	return false
+}
+
+void function CommonOnSuccessfulStickyPlant( entity ent, DeployableCollisionParams cp )
+{
+	if ( IsABaseGrenade( ent ) )
+	{
+		ent.MarkAsAttached()
+		ent.AddGrenadeStatusFlag( GSF_PLANTED )
+	}
+	if ( ent.IsProjectile() )
+	{
+		ent.proj.isPlanted = true
+		if ( ent.proj.deployFunc != null )
+			ent.proj.deployFunc( ent, cp )
+	}
+}
+
+
+bool function PlantStickyEntity_LargeDeployableOnVehicle( entity ent, DeployableCollisionParams cp, vector angleOffset = ZERO_VECTOR )
+{
+	if ( !HoverVehicle_AttachEntToNearestAbilityAttachment( ent, cp.hitEnt, false, false, ZERO_VECTOR ) )
+		return false
+	CommonOnSuccessfulStickyPlant( ent, cp )
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function GetClassnamefromStickyHitEnt( entity hitEnt )
+{
+	string ornull classNameRaw = hitEnt.GetNetworkedClassName()
+	return ((classNameRaw == null) ? "" : expect string( classNameRaw ))
+}
+
+bool function EntityShouldStickEx( entity stickyEnt, DeployableCollisionParams params )
+{
+	entity hitEnt = params.hitEnt
+	if ( !EntityCanHaveStickyEnts( stickyEnt, hitEnt ) )
+		return false
+
+	string className = GetClassnamefromStickyHitEnt( hitEnt )
+	if ( className == "prop_door" )
+	{
+		float normal = ((params.normal == ZERO_VECTOR) ? 0.0 : params.normal.Dot( UP_VECTOR ))
+		if ( normal > DOT_60DEGREE )
+			return false
+	}
+
+	if ( stickyEnt.IsMarkedForDeletion() )
+		return false
+	if ( hitEnt.IsMarkedForDeletion() )
+		return false
+	if ( hitEnt == stickyEnt )
+		return false
+	if ( hitEnt == stickyEnt.GetParent() )
+		return false
+
+
+	if ( IsBitFlagSet( params.deployableFlags, eDeployableFlags.VEHICLES_NO_STICK ) && ( className == "player_vehicle" ) )
+		return false
+
+
+	if ( hitEnt.GetScriptName() == DIRTY_BOMB_SCRIPTNAME && params.hitBox == 0 && stickyEnt.GetScriptName() != RIOT_DRILL_SCRIPT_NAME)
+		return false
+
+	return true
+}
+bool function EntityShouldStick( entity stickyEnt, entity hitEnt )
+{
+	DeployableCollisionParams params
+	params.hitEnt = hitEnt
+	return EntityShouldStickEx( stickyEnt, params )
+}
+
+bool function EntityCanHaveStickyEnts( entity stickyEnt, entity ent )
+{
+	if ( !IsValid( ent ) )
+		return false
+
+	string stickyEntScriptName = stickyEnt.GetScriptName()
+	string entScriptName = ent.GetScriptName()
+
+	if ( ent.GetModelName() == $"" ) 
+		return false
+
+	
+	if ( ent.IsProjectile() )
+		return false
+
+	string stickyEntWeaponClassName = ""
+
+
+
+
+	if ( stickyEnt instanceof C_Projectile )
+
+	{
+		stickyEntWeaponClassName = stickyEnt.ProjectileGetWeaponClassName()
+	}
+
+	var entClassname = ent.GetNetworkedClassName()
+	if ( entClassname == null )
+		return false
+
+	
+	
+	
+	
+	
+	string stickyThrowableName = stickyEntWeaponClassName == "" ? stickyEntScriptName : stickyEntWeaponClassName
+	int stickyValue = GetThrowableEntStickinessToEntity( stickyThrowableName, entScriptName )
+	if (  stickyValue != ITEM_NOT_FOUND_STICKINESS )
+		return stickyValue == ITEM_STICKS
+
+	
+	if ( entClassname == "phys_bone_follower" && stickyEntWeaponClassName == "mp_weapon_throwingknife" )
+		return false
+
+	if ( entClassname == "prop_lootroller" && stickyEntWeaponClassName != "" )
+		return true
+
+
+		if ( stickyEntWeaponClassName == "mp_weapon_charge_gauntlet" && entClassname == "npc_prowler" )
+			return false
+
+		if ( stickyEntWeaponClassName == "mp_weapon_charge_gauntlet" && entClassname == "npc_spider_ranged" )
+			return false
+
+
+	
+	if ( entClassname == "prop_death_box" && IsEntParentedToObjectOfScriptname( ent, HOVER_VEHICLE_SCRIPTNAME ) )
+		return false
+
+	
+	
+	if ( entScriptName == WRECKING_BALL_BALL_SCRIPT_NAME )
+		return true
+	
+	if ( stickyEntScriptName == RIOT_DRILL_SCRIPT_NAME )
+		return true
+
+	if ( stickyEntWeaponClassName == "mp_ability_fuse_bunker_buster" && stickyEnt.HasWeaponMod( "using_alt_fire" ) )
+		return true
+
+	if ( stickyEntWeaponClassName == "mp_ability_debuff_zone" && DebuffZone_GetAllowableStickyEnts( ent ) )
+		return true
+
+	if( IsForgedShadowsShield( ent ) )
+		return ShadowShield_IsAllowedStickyEnt( ent, stickyEnt, stickyEntWeaponClassName )
+
+	if( IsHaloShield( ent ) )
+		return Halo_IsAllowedStickyEnt( ent, stickyEnt, stickyThrowableName )
+
+	
+	if ( entScriptName == MOBILE_SHIELD_SCRIPTNAME )
+		return MobileShield_IsAllowedStickyEnt( ent, stickyEnt, stickyEntWeaponClassName )
+
+
+		
+		if ( entClassname == "phys_bone_follower" && IsValid( ent.GetOwner() ) )
+		{
+			entity cannonEnt = ent.GetOwner()
+
+			if ( cannonEnt.GetScriptName() == GetEnumString( "eSkydiveLauncherType", eSkydiveLauncherType.GRAVITY_CANNON ) )
+			{
+				
+				
+				if ( INVALID_GRAVITY_CANNON_PLACEABLES.contains( stickyEntWeaponClassName ) )
+				{
+					return false
+				}
+			}
+		}
+
+
+	if ( !(string( entClassname ) in STICKY_CLASSES) && !ent.IsNPC() )
+		return false
+
+
+
+
+
+
+
+
+
+	if ( stickyEntWeaponClassName != "" )
+	{
+		var stickPilot = GetWeaponInfoFileKeyField_Global( stickyEntWeaponClassName, "stick_pilot" )
+		if ( ent.IsPlayer() && stickPilot != 1 )
+			return false
+
+		var stickNpc = GetWeaponInfoFileKeyField_Global( stickyEntWeaponClassName, "stick_npc" )
+		if ( ent.IsNPC() && stickNpc != 1 )
+			return false
+
+		var stickDrone = GetWeaponInfoFileKeyField_Global( stickyEntWeaponClassName, "stick_drone" )
+		if ( ent.GetScriptName() == CRYPTO_DRONE_SCRIPTNAME && stickDrone != 1 )
+			return false
+		if ( ent.GetScriptName() == FRAG_DRONE_MOVER_SCRIPTNAME && stickDrone != 1 )
+			return false
+	}
+
+
+
+
+
+
+	return true
+}
+
+#if DEV
+void function DEV_DumpStickinessTable()
+{
+	bool dumpedEnts = false
+	foreach( string throwable, table<string, int> ent in file.throwableItemStickinessTable )
+	{
+		if ( !dumpedEnts )
+		{
+			printt("Ents: ")
+			foreach( string name, int stickiness in file.throwableItemStickinessTable[throwable] )
+			{
+				printt("-> " + name + ": stickiness == " + stickiness )
+			}
+			printt("Throwables: ")
+			dumpedEnts = true
+		}
+
+		printt("-> " + throwable)
+	}
+}
+#endif
+
+int function GetThrowableEntStickinessToEntity( string stickyThrowableName, string entScriptName )
+{
+	if ( stickyThrowableName in file.throwableItemStickinessTable &&
+			entScriptName in file.throwableItemStickinessTable[ stickyThrowableName ] )
+		return file.throwableItemStickinessTable[ stickyThrowableName ][ entScriptName ]
+
+	return ITEM_NOT_FOUND_STICKINESS
+}
+ 

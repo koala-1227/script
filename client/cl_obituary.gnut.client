@@ -1,0 +1,1839 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ClObituary_Init
+
+global function Obituary
+global function Obituary_GetEntityInfo
+global function Obituary_Print_Localized
+global function Obituary_Print_PlayerDeath
+global function Obituary_SetEnabled
+global function Obituary_SetIndexOffset
+
+
+
+global function Obituary_SetHorizontalOffset
+global function Obituary_SetVerticalOffset
+global function Obituary_ClearObituary
+global function ShouldShowObituaryLineForPlayer
+
+
+global function Obituary_Print_Control_ObjectivePing
+global function Obituary_Print_Control_Ping
+
+
+global function Obituary_Print_SquadEliminated
+global function Obituary_Print_Training_Ping
+
+global function TriggerObituaryInvisible
+global function TriggerResetOffset
+
+#if DEV
+global function DEV_Debug_ObitQueueDisplayDebug
+global function DEV_Debug_ObitQueueDisplayHUD
+global function DEV_Debug_ObitBurstTest 
+#endif
+
+global function ClientCodeCallback_Observer_SetObituaryFilter
+global function ClientCodeCallback_Observer_PrintObituaryMessage
+
+const NUM_OBITUARY_LINES = 4		
+const obituaryTextBoxWidth = 500
+const obituaryTextBoxHeight = 20
+const defaultCharacterWidth = 5
+const int MAX_OBITUARY_ENTRIES = 20
+
+const int STANDARD_OFFSET = 0
+const int MODAL_OFFSET = 160
+
+bool modalVisible = false
+
+const float OBITUARY_INTRO_ANIMATION_DURATION = 0.15 
+
+const string NAMETAG_RANGE_OBITUARY_PRINTS = "nametag_range_obituary_prints"
+
+
+const string OBITUARY_HNQ_QUEUE_KEY = "obituary_queue"
+
+
+
+
+
+
+
+
+
+
+const int OBITUARY_PRIORITY_CONTROL_OBJECTIVE = eHudNotificationQueuePriority.CRITICAL
+const int OBITUARY_PRIORITY_TRAINING_PING = eHudNotificationQueuePriority.CRITICAL
+const int OBITUARY_PRIORITY_ENEMY_NEARBY = eHudNotificationQueuePriority.HIGH
+const int OBITUARY_PRIORITY_SQUAD_WIPE = eHudNotificationQueuePriority.MEDIUM
+const int OBITUARY_PRIORITY_PLAYER_DEATH = eHudNotificationQueuePriority.MEDIUM
+const int OBITUARY_PRIORITY_LOCALIZED = eHudNotificationQueuePriority.MEDIUM
+
+struct
+{
+	bool obituariesEnabled = true
+	int indexOffest = 0
+	int horizontalOffset = 0
+
+
+
+
+	int verticalOffset = 0
+
+	int obituaryFilter = 0
+	int maxObitEntries = MAX_OBITUARY_ENTRIES
+	float obituaryDuration = OBITUARY_DURATION  
+	float obituaryStaggerStep = 0.17            
+	bool obituaryDynamicDurationEnabled = true  
+	bool holdUntilDurationOnBacklogClear = true 
+
+	int hnqQueueId = -1
+
+	
+	
+	int obitsPendingDispatch = 0
+	float lastObitQueueTime = 0.0
+
+
+#if DEV
+	
+	int debugObitRequested = 0
+	int debugObitDisplayed = 0
+	int debugObitCompleted = 0
+
+	
+	array<int> debugTypeShieldBreak = [0, 0]
+	array<int> debugTypePlayerDeath = [0, 0]
+	array<int> debugTypeSquadWipe = [0, 0]
+	array<int> debugTypeSquadLanded = [0, 0]
+	array<int> debugTypeKillLeader = [0, 0]
+	array<int> debugTypeOtherLocalized = [0, 0]
+
+	bool debugHUDActive = false
+#endif
+
+} file
+
+struct ObitEntityInfo
+{
+	string displayName = ""
+	vector displayColor = COLOR_OBITUARY_DEFAULT
+	string petDisplayName = ""
+}
+
+global struct ObitRankBadgeInfo
+{
+	bool shouldShowRank = false
+	asset attackerRankBadge = $""
+	asset victimRankBadge = $""
+}
+
+global struct ObitStringData
+{
+	string attackerName = ""
+	string attackerPetName = ""
+	string victimName = ""
+	string victimPetName = ""
+	string weaponLocalizedName = ""
+	string attackerLocalizedString = "#OBIT_PLAYER_STRING"
+	string victimLocalizedString = "#OBIT_PLAYER_STRING"
+	string weaponLocalizedString = "#OBIT_BRACKETED_STRING"
+}
+
+void function ClObituary_Init()
+{
+	AddOnSpectatorTagModeChangedCallback( OnSpectatorTagModeChanged )
+	file.maxObitEntries = GetCurrentPlaylistVarInt("max_obit_entries", MAX_OBITUARY_ENTRIES)
+	file.obituaryDuration = GetCurrentPlaylistVarFloat("obituary_duration", OBITUARY_DURATION)
+	file.obituaryStaggerStep = GetCurrentPlaylistVarFloat("obituary_stagger_step", file.obituaryStaggerStep)
+	file.obituaryDynamicDurationEnabled = GetCurrentPlaylistVarBool("obituary_dynamic_duration_enabled", true)
+
+	Obituary_HNQ_RegisterQueue()
+}
+
+
+
+
+void function Obituary_HNQ_RegisterQueue()
+{
+	file.hnqQueueId = HudNotificationQueue_CreateAndRegisterQueue( OBITUARY_HNQ_QUEUE_KEY )
+
+	HudNotificationQueueConfiguration config = HudNotificationQueue_GetConfigure( file.hnqQueueId )
+
+	
+	config.allowDirectUpdates = true
+	config.allowIndirectUpdates = false
+	config.allowDuplicates = true
+
+	
+	config.maxVisibleItems = file.maxObitEntries  
+
+	
+	
+	
+	if ( file.obituaryDynamicDurationEnabled )
+	{
+		config.backlogMaxCount = -1
+	}
+	else
+	{
+		config.backlogMaxCount = file.maxObitEntries
+		config.backlogPreservationStyle = eHudNotificationQueueBacklogPreservationStyle.LAST_IN
+	}
+	config.backlogMaxCountWhenBlocked = 40
+
+	
+	config.itemPositioningEnabled = false
+
+	
+	config.pauseOnLocalPlayerDeath = false
+
+	HudNotificationQueue_Configure( file.hnqQueueId, config )
+}
+
+
+bool function Obituary_HNQ_QueueBlocker_ModalVisible()
+{
+	return !modalVisible
+}
+
+
+bool function Obituary_HNQ_QueueBlocker_ObituariesEnabled()
+{
+	return file.obituariesEnabled
+}
+
+
+
+
+void function Obituary_HNQ_EvictOldestIfFull()
+{
+	array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+
+	
+	
+	int pendingCount = file.obituaryDynamicDurationEnabled ? file.obitsPendingDispatch : 0
+	int totalCount = visibleItems.len() + pendingCount
+	if ( totalCount < file.maxObitEntries )
+		return
+
+	if ( visibleItems.len() == 0 )
+		return
+
+	if ( file.obituaryDynamicDurationEnabled )
+	{
+		
+		Signal( visibleItems[ visibleItems.len() - 1 ].signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+	}
+	else
+	{
+		
+		int slotsNeeded = (totalCount + 1) - file.maxObitEntries
+		int toEvict = slotsNeeded < visibleItems.len() ? slotsNeeded : visibleItems.len()
+
+		for ( int i = 0; i < toEvict; i++ )
+		{
+			int idx = visibleItems.len() - 1 - i
+			if ( idx >= 0 )
+				Signal( visibleItems[idx].signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+		}
+	}
+}
+
+
+
+
+
+var function Obituary_HNQ_OnCreateVisualOverride( HudNotificationQueueItem item )
+{
+	
+	if ( file.obitsPendingDispatch > 0 )
+		file.obitsPendingDispatch--
+
+	float now = Time()
+	float requestTime = ( "requestTime" in item.miscArgs ) ? expect float( item.miscArgs["requestTime"] ) : now
+	float adjustedDuration = file.obituaryDuration
+
+	
+	
+	
+	bool isImmuneToCascade = ( "objectiveWaypoint" in item.miscArgs )
+	if ( file.obituaryDynamicDurationEnabled && !isImmuneToCascade )
+	{
+		float age = now - requestTime
+		bool hasBacklogPressure = age > 0.1 || file.obitsPendingDispatch > 0
+
+		if ( hasBacklogPressure )
+		{
+			int visibleCount = HudNotificationQueue_GetVisibleItems( file.hnqQueueId ).len()
+			int position = visibleCount - 1
+			if ( position < 0 )
+				position = 0
+
+			float step = file.obituaryStaggerStep
+			float staggerOffset = position * step
+			adjustedDuration = step + staggerOffset
+
+			if ( file.holdUntilDurationOnBacklogClear )
+			{
+				item.onPreOutro = Obituary_HNQ_OnPreOutro_HoldOnCatchUp
+			}
+		}
+	}
+
+#if DEV
+		file.debugObitDisplayed++
+		DEV_Debug_ObitTrackItemDisplayed( item )
+#endif
+
+	var rui = CreatePermanentCockpitPostFXRui( item.ruiAsset, HUD_Z_BASE )
+
+	if ( ObituaryHudIsDisabled() )
+		RuiSetBool( rui, "isVisible", false )
+
+	RuiSetGameTime( rui, "startTime", now )
+	RuiSetGameTime( rui, "updateTime", now )
+
+	RuiSetFloat( rui, "duration", adjustedDuration )
+
+	
+	item.duration = adjustedDuration
+	item.timeToStartOutro = now + adjustedDuration
+
+	RuiSetInt( rui, "offset", 0 )
+	RuiSetInt( rui, "horizontalOffset", file.horizontalOffset )
+	RuiSetInt( rui, "verticalOffset", file.verticalOffset )
+
+	
+	item.miscArgs["obituaryOffset"] <- -1
+	item.miscArgs["dispatchTime"] <- now
+
+	HudNotificationQueue_SetRuiArgs( rui, item.ruiArgs )
+
+	return rui
+}
+
+void function Obituary_HNQ_OnDestroyVisualOverride( HudNotificationQueueItem item )
+{
+	
+	
+	
+	int visibleCount = HudNotificationQueue_GetVisibleItems( file.hnqQueueId ).len()
+	bool burstIsOver = ( Time() - file.lastObitQueueTime ) > 0.1
+
+	if ( visibleCount < file.maxObitEntries && file.obitsPendingDispatch > 0 && burstIsOver )
+		file.obitsPendingDispatch = 0
+
+#if DEV
+		file.debugObitCompleted++
+#endif
+
+	
+	if ( item.ruiInstance != null )
+	{
+		RuiDestroyIfAlive( item.ruiInstance )
+		item.ruiInstance = null
+	}
+}
+
+
+bool function Obituary_HNQ_OnPreOutro_HoldOnCatchUp( HudNotificationQueueItem item )
+{
+	float dispatchTime = ( "dispatchTime" in item.miscArgs ) ? expect float( item.miscArgs["dispatchTime"] ) : 0.0
+	if ( (Time() - dispatchTime) >= file.obituaryDuration )
+		return true
+
+	int backlogCount = HudNotificationQueue_GetQueueItemCount( file.hnqQueueId )
+	if ( backlogCount > 0 )
+		return true
+
+	
+	int visibleCount = HudNotificationQueue_GetVisibleItems( file.hnqQueueId ).len()
+	if ( visibleCount < file.maxObitEntries )
+		return false
+
+	
+	if ( !( "holdExtended" in item.miscArgs ) )
+	{
+		item.miscArgs["holdExtended"] <- true
+		if ( item.ruiInstance != null && RuiIsAlive( item.ruiInstance ) )
+		{
+			float remainingTime = file.obituaryDuration - (Time() - dispatchTime)
+			RuiSetFloat( item.ruiInstance, "duration", remainingTime )
+			RuiSetGameTime( item.ruiInstance, "startTime", Time() - OBITUARY_INTRO_ANIMATION_DURATION )
+			RuiSetGameTime( item.ruiInstance, "updateTime", Time() )
+		}
+	}
+
+	return false
+}
+
+void function EntitiesDidLoad()
+{
+}
+
+ObitEntityInfo function Obituary_GetEntityInfo( entity ent, int damageSourceId, bool isAttacker )
+{
+	ObitEntityInfo info
+
+	if ( !IsValid( ent ) )
+	{
+		string name = GetAttackerDisplayNamesDamageSourceId( damageSourceId )
+		info.displayColor = GetKeyColor( COLORID_ENEMY ) 
+		info.displayName = name
+
+		return info
+	}
+
+	AttackerDisplayNameStruct names = GetAttackerDisplayNamesFromClassname( ent, isAttacker )
+	info.displayName = names.attackerName
+	info.petDisplayName = names.attackerPetName
+
+	entity localViewPlayer = GetLocalViewPlayer()
+	entity localClientPlayer = GetLocalClientPlayer()
+	int entTeam = ent.GetTeam()
+	int localViewPlayerTeam = localViewPlayer.GetTeam()
+
+	if ( ent.IsNPC() )
+	{
+		info.displayColor = <255, 255, 255>
+	}
+	else
+	{
+		if ( GetCurrentPlaylistVarBool( "show_team_color_obituary", false) && ent.IsPlayer() )
+		{
+			info.displayColor = GetPlayerInfoColor( ent )
+
+				if ( GetCurrentPlaylistVarBool( "show_team_color_obituary_enemies_red", false) && !IsFriendlyTeam( localViewPlayerTeam, entTeam ) )
+				{
+					info.displayColor = TEAM_COLOR_ENEMY
+				}
+		}
+		else
+		{
+			info.displayColor = localViewPlayerTeam == entTeam ? GetPlayerInfoColor( ent ) : <255, 255, 255>
+		}
+	}
+
+	
+	if ( AllianceProximity_IsUsingAlliances() )
+	{
+		if ( !AllianceProximity_IsTeamInAnAlliance( entTeam ) ) 
+		{
+			info.displayColor = <255, 255, 255>
+		}
+		else if ( GamemodeUtility_IsPlayerOnTeamObserver( localClientPlayer )  ) 
+		{
+			info.displayColor = Teams_GetTeamColor( entTeam ) * 255
+		}
+		else if ( localViewPlayerTeam != entTeam && IsFriendlyTeam( localViewPlayerTeam, entTeam ) ) 
+		{
+			info.displayColor = TEAM_COLOR_FRIENDLY
+		}
+
+		
+
+
+
+
+
+
+	}
+
+	return info
+}
+
+
+void function Obituary( entity attacker, string attackerClass, entity victim, int scriptDamageType, int damageSourceId, int obitFlags, bool victimIsOwnedTitan = false, bool forceDisplay = false )
+{
+	if ( GetConVarInt( "hud_setting_showObituary" ) == 0 )
+		return
+
+	bool isHeadShot = (obitFlags & OBIT_FLAG_HEADSHOT) > 0
+	bool isDownShot = (obitFlags & OBIT_FLAG_DOWNED) > 0
+
+	if ( !forceDisplay )
+	{
+		if ( victim.IsPlayer() )
+		{
+			
+			if ( OBITUARY_ENABLED_PLAYERS == 0 )
+				return
+		}
+		else if ( victim.IsTitan() )
+		{
+			
+			if ( OBITUARY_ENABLED_NPC_TITANS == 0 )
+				return
+		}
+		else
+		{
+			
+			if ( OBITUARY_ENABLED_NPC == 0 )
+				return
+		}
+	}
+
+	if ( damageSourceId == eDamageSourceId.round_end )
+		return
+
+	
+	
+	
+
+	bool isRelatedAttacker = (victim.GetTeam() == GetLocalClientPlayer().GetTeam())
+	ObitEntityInfo attackerInfo = Obituary_GetEntityInfo( attacker, damageSourceId, isRelatedAttacker )
+	ObitEntityInfo victimInfo = Obituary_GetEntityInfo( victim, damageSourceId, false )
+	bool isDeathSuicide = IsSuicide( attacker, victim, damageSourceId )
+
+	
+	if ( isDeathSuicide && victim.IsNPC() )
+		return
+
+	string sourceDisplayName = ""
+
+	bool isMainWeapon = false
+	string damageRef = GetRefFromDamageSourceID( damageSourceId )
+	if ( SURVIVAL_Loot_IsRefValid( damageRef ) )
+	{
+		LootData lootData = SURVIVAL_Loot_GetLootDataByRef( damageRef )
+		isMainWeapon = lootData.lootType == eLootType.MAINWEAPON
+	}
+	else if ( GetIsAdditionalMainWeapon( damageSourceId ) )
+	{
+		isMainWeapon = true
+	}
+
+	sourceDisplayName = GetObitFromDamageSourceID( damageSourceId )
+#if DEV
+		printt( FUNC_NAME() + "(): ----- Kill Weapon Info:" )
+		printt( FUNC_NAME() + "(): damageSourceID == " + damageSourceId  )
+		printt( FUNC_NAME() + "(): sourceDisplayName == " + sourceDisplayName  )
+#endif
+
+
+	int damageSourceId_ToUse = damageSourceId
+
+	
+	if( IsValid( attacker ) && !attacker.IsPlayer() && GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+	{
+		if( !PLV_FiringRange_DummieObits_On() )
+			return
+
+		string ornull attackerClassName = attacker.GetNetworkedClassName()
+		if( attackerClassName != null )
+		{
+			expect string( attackerClassName )
+			bool isDummie = attackerClassName.find( "dummie" ) >= 0
+			if( isDummie )
+			{
+				attackerInfo.displayName = Localize( "#FRDUMMIE" )
+				attackerInfo.displayColor = COLOR_RED
+
+				
+				if( sourceDisplayName.find( "lstar" ) >= 0 )
+				{
+					damageSourceId_ToUse = eDamageSourceId.mp_weapon_lstar
+				}
+				else if( sourceDisplayName.find( "THERMITE" ) >= 0 )
+				{
+					damageSourceId_ToUse = eDamageSourceId.mp_weapon_thermite_grenade
+				}
+				else if( sourceDisplayName.find( "shotgun" ) >= 0 )
+				{
+					damageSourceId_ToUse = eDamageSourceId.mp_weapon_energy_shotgun
+				}
+				else if( sourceDisplayName.find( "melee" ) >= 0 )
+				{
+					damageSourceId_ToUse = eDamageSourceId.mp_weapon_melee_survival
+				}
+				else if( sourceDisplayName.find( "hemlock" ) >= 0 )
+				{
+					damageSourceId_ToUse = eDamageSourceId.mp_weapon_hemlok
+				}
+				else
+				{
+#if DEV
+						printt( FUNC_NAME() + "(): Damage Source Unknown:" + sourceDisplayName  )
+#endif
+					damageSourceId_ToUse = eDamageSourceId.mp_weapon_hemlok
+					
+				}
+				
+				sourceDisplayName = GetObitFromDamageSourceID( damageSourceId_ToUse )
+				isMainWeapon = true
+			}
+		}
+	}
+
+	
+	
+	
+
+	bool printDebugInfo = false
+	string debugSourceDisplayName = sourceDisplayName
+
+	if ( sourceDisplayName == "" )
+	{
+		debugSourceDisplayName = GetObitFromDamageSourceID( eDamageSourceId.damagedef_unknownBugIt )
+		printDebugInfo = true
+	}
+
+	if ( attackerInfo.displayName == "" )
+	{
+		printDebugInfo = true
+	}
+
+	if ( victimInfo.displayName == "" )
+	{
+		printDebugInfo = true
+	}
+
+	if ( printDebugInfo )
+	{
+		printt( "------------------------------------------" )
+		printt( " FULL OBITUARY INFO COULD NOT BE RESOLVED " )
+		printt( "    attacker:", attacker )
+		if ( IsValid( attacker ) )
+		{
+			printt( "    attacker classname:", attacker.GetNetworkedClassName() )
+			entity attackerOwner = attacker.GetOwner()
+			printt( "    attackerOwner:", attackerOwner )
+			if ( IsValid( attackerOwner ) )
+				printt( "    attackerOwner classname:", attackerOwner.GetNetworkedClassName() )
+		}
+		printt( "    victim:", victim )
+		if ( IsValid( victim ) )
+		{
+			printt( "    victim classname:", victim.GetNetworkedClassName() )
+			entity victimOwner = victim.GetOwner()
+			printt( "    victimOwner:", victimOwner )
+			if ( IsValid( victimOwner ) )
+				printt( "    victimOwner classname:", victimOwner.GetNetworkedClassName() )
+		}
+		printt( "    scriptDamageType:", scriptDamageType )
+		printt( "    damageSourceId_ToUse:", damageSourceId_ToUse )
+		printt( "    sourceDisplayName:", debugSourceDisplayName )
+		printt( "------------------------------------------" )
+	}
+
+	
+	
+	
+
+	if ( isDeathSuicide )
+	{
+		attackerInfo.displayName = ""
+		attackerInfo.displayColor = victimInfo.displayColor
+	}
+
+	asset weaponIcon = GetObitImageFromDamageSourceID( damageSourceId_ToUse )
+	
+	
+
+	string attackerString
+	string weaponString
+	string victimString
+
+	if ( attackerInfo.petDisplayName != "" )
+	{
+		attackerString = Localize( "#OBIT_PLAYER_CONTROLLED_AI_STRING", attackerInfo.displayName, Localize( attackerInfo.petDisplayName ) )
+	}
+	else
+	{
+		attackerString = Localize( "#OBIT_PLAYER_STRING", attackerInfo.displayName )
+	}
+
+	if ( victimInfo.petDisplayName != "" )
+	{
+		victimString = Localize( "#OBIT_PLAYER_CONTROLLED_AI_STRING", victimInfo.displayName, Localize( victimInfo.petDisplayName ) )
+	}
+	else
+	{
+		victimString = Localize( "#OBIT_PLAYER_STRING", victimInfo.displayName )
+	}
+
+	string localizedObit = Localize( "#OBIT_ENT_WEAPON_ENT", attackerString, Localize( sourceDisplayName ), victimString )
+
+	float backgroundAlpha = (attacker == GetLocalClientPlayer() || victim == GetLocalClientPlayer()) ? 0.5 : 0.0
+
+	bool shouldShowForVictim = (IsValid( victim ) && victim.IsPlayer() && ShouldShowObituaryLineForPlayer( victim ) )
+	bool shouldShowForAttacker = (IsValid( attacker ) && attacker.IsPlayer() && ShouldShowObituaryLineForPlayer( attacker ) )
+	if ( !shouldShowForVictim && !shouldShowForAttacker )
+		return
+
+	asset modifierIcon = $""
+	if ( isDownShot )
+		modifierIcon = $"rui/hud/obituary/obituary_downed"
+	else if ( isHeadShot )
+		modifierIcon = $"rui/hud/obituary/obituary_headshot"
+
+	ObitRankBadgeInfo badgeInfo
+	if (GetCurrentPlaylistVarBool( "ranked_survival_showEmblemOnKill_enabled", true ))
+	{
+		if ( ShouldShowRankBadges (attacker, isDownShot) )
+		{
+			badgeInfo.shouldShowRank = true
+
+			
+			EHIScriptStruct attackerEHIScriptStruct =  GetEHIScriptStruct(ToEHI( attacker ))
+			int attackerLadderPos   = attackerEHIScriptStruct.rankedLadderPosition
+			int attackerLadderScore = attackerEHIScriptStruct.rankScore
+
+			EHIScriptStruct victimEHIScriptStruct =  GetEHIScriptStruct(ToEHI( victim ))
+			int victimLadderPos   = victimEHIScriptStruct.rankedLadderPosition
+			int victimLadderScore = victimEHIScriptStruct.rankScore
+
+			badgeInfo.attackerRankBadge = GetCurrentRankedDivisionFromScoreAndLadderPosition (attackerLadderScore , attackerLadderPos ).tier.icon
+			badgeInfo.victimRankBadge   = GetCurrentRankedDivisionFromScoreAndLadderPosition (victimLadderScore, victimLadderPos ).tier.icon
+		}
+	}
+
+	vector weaponColor = GetObitWeaponColorFromDamageSourceID( damageSourceId_ToUse )
+
+	if ( weaponIcon == $"" )
+	{
+		Obituary_Print_PlayerDeath( attackerString, weaponIcon, Localize( sourceDisplayName ), modifierIcon, victimString, badgeInfo, attackerInfo.displayColor, victimInfo.displayColor, weaponColor, false, obitFlags )
+	}
+	else
+	{
+		Obituary_Print_PlayerDeath( attackerString, weaponIcon, "", modifierIcon, victimString, badgeInfo, attackerInfo.displayColor, victimInfo.displayColor, weaponColor, isMainWeapon, obitFlags )
+	}
+}
+
+bool function ShouldShowRankBadges ( entity attacker, bool isDownShot )
+{
+	if ( Ranked_ShouldShowRankedBadge() == false )
+	{
+		return false
+	}
+
+	if (isDownShot)
+	{
+		return false
+	}
+
+
+	if (GameMode_IsActive( eGameModes.ARENAS ))
+	{
+		return false
+	}
+
+
+	if ( !IsValid( attacker )  )
+	{
+		return false
+	}
+
+	if ( !IsValid( GetLocalClientPlayer() ) )
+	{
+		return false
+	}
+
+	if ( !attacker.IsPlayer())
+	{
+		return false
+	}
+
+	if ( attacker.GetTeam() != GetLocalClientPlayer().GetTeam())
+	{
+		return false
+	}
+
+	return GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_RANKED )
+}
+
+bool function ShouldShowObituaryLineForPlayer( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+	if ( !IsValid( GetLocalClientPlayer() ) )
+		return false
+	if ( IsWatchingKillReplay() ) 
+		return false
+
+	int playerTeam = player.GetTeam()
+	int localTeam = GetLocalClientPlayer().GetTeam()
+	bool onlyTeammates = GetCurrentPlaylistVarBool( "obituary_only_teammates", false )
+	if ( onlyTeammates )
+	{
+		if ( IsEnemyTeam( playerTeam, localTeam ) )
+			return false
+	}
+
+	return true
+}
+
+
+void function Obituary_Print_Localized( string localizedPrint, vector altColor1 = <255,255,255>, vector altColor2 = <255,255,255>, vector altColor3 = <255,255,255>, vector backgroundColor = <255,255,255>, float backgroundAlpha = 0.0, bool bCheckForDuplicateEntry = false, int obitFlags = 0 )
+{
+	if ( !file.obituariesEnabled )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "obituary_filters_enabled", true ) && file.obituaryFilter > 0 && ( file.obituaryFilter & obitFlags ) == 0 )
+		return
+
+	if ( !file.obituaryDynamicDurationEnabled && modalVisible )
+		return
+
+	Obituary_HNQ_Print_Localized( localizedPrint, altColor1, altColor2, altColor3, bCheckForDuplicateEntry, obitFlags )
+}
+
+
+
+
+void function Obituary_HNQ_Print_Localized( string localizedPrint, vector altColor1, vector altColor2, vector altColor3, bool bCheckForDuplicateEntry, int obitFlags = 0 )
+{
+	
+	if ( !file.obituaryDynamicDurationEnabled && bCheckForDuplicateEntry )
+	{
+		array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+		foreach ( existingItem in visibleItems )
+		{
+			if ( "duplicateCheckString" in existingItem.miscArgs && expect string( existingItem.miscArgs["duplicateCheckString"] ) == localizedPrint )
+				return
+		}
+	}
+
+#if DEV
+		file.debugObitRequested++
+#endif
+
+	string itemKey = bCheckForDuplicateEntry ? localizedPrint : ""
+
+	HudNotificationQueueItem item = HudNotificationQueue_CreateEmptyItem()
+	item.key = itemKey
+	
+	if ( !file.obituaryDynamicDurationEnabled )
+		item.priority = OBITUARY_PRIORITY_LOCALIZED
+	else if ( (obitFlags & OBIT_FLAG_ENEMY_NEARBY) != 0 )
+		item.priority = OBITUARY_PRIORITY_ENEMY_NEARBY
+	else
+		item.priority = OBITUARY_PRIORITY_LOCALIZED 
+	item.duration = file.obituaryDuration
+	item.outroDuration = 0.0
+	item.ruiAsset = $"ui/obituary_crawl_localized.rpak"
+
+	item.onCreateVisualOverride = Obituary_HNQ_OnCreateVisualOverride
+	item.onDestroyVisualOverride = Obituary_HNQ_OnDestroyVisualOverride
+
+	item.onIntro = Obituary_HNQ_OnVisibleListChanged_CallBack
+	item.onComplete = Obituary_HNQ_OnVisibleListChanged_CallBack
+
+	
+	item.ruiArgs["obitString"] <- HudNotificationQueue_CreateRuiArg( "obitString", localizedPrint )
+	item.ruiArgs["string1Color"] <- HudNotificationQueue_CreateRuiArg( "string1Color", SrgbToLinear( altColor1 / 255.0 ) )
+	item.ruiArgs["string2Color"] <- HudNotificationQueue_CreateRuiArg( "string2Color", SrgbToLinear( altColor2 / 255.0 ) )
+	item.ruiArgs["string3Color"] <- HudNotificationQueue_CreateRuiArg( "string3Color", SrgbToLinear( altColor3 / 255.0 ) )
+	item.ruiArgs["showObitsDuringSpectate"] <- HudNotificationQueue_CreateRuiArg( "showObitsDuringSpectate", GetCurrentPlaylistVarBool( "show_obits_during_spectate", true ) )
+	item.ruiArgs["isVisible"] <- HudNotificationQueue_CreateRuiArg( "isVisible", !ObituaryHudIsDisabled() )
+
+#if DEV
+		DEV_Debug_ObitTagItemType( item, DEV_Debug_ObitClassifyLocalized( localizedPrint, obitFlags ) )
+#endif
+
+	
+	if ( bCheckForDuplicateEntry )
+		item.miscArgs["duplicateCheckString"] <- localizedPrint
+
+	Obituary_HNQ_EvictOldestIfFull()
+	item.miscArgs["requestTime"] <- Time()
+	HudNotificationQueue_QueueItem( file.hnqQueueId, item, ePersistenceContext.PLAYER )
+	file.lastObitQueueTime = Time()
+	file.obitsPendingDispatch++
+}
+
+void function Obituary_HNQ_Print_PlayerDeath( string attackerString, asset weaponIcon, string weaponDisplayName, asset modifierIcon, string victimString, ObitRankBadgeInfo badgeInfo, vector attackerColor, vector victimColor, vector weaponColor, bool tempIsMainWeapon )
+{
+#if DEV
+		file.debugObitRequested++
+#endif
+
+	HudNotificationQueueItem item = HudNotificationQueue_CreateEmptyItem()
+	item.key = ""
+	item.priority = OBITUARY_PRIORITY_PLAYER_DEATH
+	item.duration = file.obituaryDuration
+	item.outroDuration = 0.0
+	item.ruiAsset = $"ui/obituary_crawl_player_death.rpak"
+
+	item.onCreateVisualOverride = Obituary_HNQ_OnCreateVisualOverride
+	item.onDestroyVisualOverride = Obituary_HNQ_OnDestroyVisualOverride
+
+	item.onIntro = Obituary_HNQ_OnVisibleListChanged_CallBack
+	item.onComplete = Obituary_HNQ_OnVisibleListChanged_CallBack
+
+	item.ruiArgs["attackerString"] <- HudNotificationQueue_CreateRuiArg( "attackerString", attackerString )
+	item.ruiArgs["victimString"] <- HudNotificationQueue_CreateRuiArg( "victimString", victimString )
+	item.ruiArgs["weaponIcon"] <- HudNotificationQueue_CreateRuiArg( "weaponIcon", weaponIcon, eRuiArgType.IMAGE )
+	item.ruiArgs["weaponDisplayName"] <- HudNotificationQueue_CreateRuiArg( "weaponDisplayName", weaponDisplayName )
+	item.ruiArgs["modifierIcon"] <- HudNotificationQueue_CreateRuiArg( "modifierIcon", modifierIcon, eRuiArgType.IMAGE )
+	item.ruiArgs["attackerColor"] <- HudNotificationQueue_CreateRuiArg( "attackerColor", SrgbToLinear( attackerColor / 255.0 ) )
+	item.ruiArgs["victimColor"] <- HudNotificationQueue_CreateRuiArg( "victimColor", SrgbToLinear( victimColor / 255.0 ) )
+	item.ruiArgs["weaponColor"] <- HudNotificationQueue_CreateRuiArg( "weaponColor", SrgbToLinear( weaponColor / 255.0 ) )
+	item.ruiArgs["victimRankBadge"] <- HudNotificationQueue_CreateRuiArg( "victimRankBadge", badgeInfo.victimRankBadge, eRuiArgType.IMAGE )
+	item.ruiArgs["attackerRankBadge"] <- HudNotificationQueue_CreateRuiArg( "attackerRankBadge", badgeInfo.attackerRankBadge, eRuiArgType.IMAGE )
+	item.ruiArgs["showRank"] <- HudNotificationQueue_CreateRuiArg( "showRank", badgeInfo.shouldShowRank )
+	item.ruiArgs["tempIsMainWeapon"] <- HudNotificationQueue_CreateRuiArg( "tempIsMainWeapon", tempIsMainWeapon )
+	item.ruiArgs["tempHasModifier"] <- HudNotificationQueue_CreateRuiArg( "tempHasModifier", modifierIcon != $"" )
+	item.ruiArgs["showObitsDuringSpectate"] <- HudNotificationQueue_CreateRuiArg( "showObitsDuringSpectate", GetCurrentPlaylistVarBool( "show_obits_during_spectate", true ) )
+	item.ruiArgs["isVisible"] <- HudNotificationQueue_CreateRuiArg( "isVisible", !ObituaryHudIsDisabled() )
+
+#if DEV
+		DEV_Debug_ObitTagItemType( item, "PlayerDeath" )
+#endif
+
+	Obituary_HNQ_EvictOldestIfFull()
+	item.miscArgs["requestTime"] <- Time()
+	HudNotificationQueue_QueueItem( file.hnqQueueId, item, ePersistenceContext.PLAYER )
+	file.lastObitQueueTime = Time()
+	file.obitsPendingDispatch++
+}
+
+void function Obituary_HNQ_Print_Training_Ping( string localizedPrint, vector altColor1, vector altColor2, vector altColor3, bool bCheckForDuplicateEntry, int obitFlags = 0 )
+{
+	
+	if ( !file.obituaryDynamicDurationEnabled && bCheckForDuplicateEntry )
+	{
+		array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+		foreach ( existingItem in visibleItems )
+		{
+			if ( "duplicateCheckString" in existingItem.miscArgs && expect string( existingItem.miscArgs["duplicateCheckString"] ) == localizedPrint )
+				return
+		}
+	}
+
+#if DEV
+		file.debugObitRequested++
+#endif
+
+	
+	if ( !file.obituaryDynamicDurationEnabled && modalVisible )
+	{
+		Obituary_SetVerticalOffset( MODAL_OFFSET )
+	}
+
+	string itemKey = bCheckForDuplicateEntry ? localizedPrint : ""
+
+	HudNotificationQueueItem item = HudNotificationQueue_CreateEmptyItem()
+	item.key = itemKey
+	item.priority = OBITUARY_PRIORITY_TRAINING_PING
+	item.duration = file.obituaryDuration
+	item.outroDuration = 0.0
+	item.ruiAsset = $"ui/obituary_crawl_localized_tutorial.rpak"
+
+	item.onCreateVisualOverride = Obituary_HNQ_OnCreateVisualOverride
+	item.onDestroyVisualOverride = Obituary_HNQ_OnDestroyVisualOverride
+
+	item.onIntro = Obituary_HNQ_OnVisibleListChanged_CallBack
+	item.onComplete = Obituary_HNQ_OnVisibleListChanged_CallBack
+
+	
+	item.ruiArgs["obitString"] <- HudNotificationQueue_CreateRuiArg( "obitString", localizedPrint )
+	item.ruiArgs["string1Color"] <- HudNotificationQueue_CreateRuiArg( "string1Color", SrgbToLinear( altColor1 / 255.0 ) )
+	item.ruiArgs["string2Color"] <- HudNotificationQueue_CreateRuiArg( "string2Color", SrgbToLinear( altColor2 / 255.0 ) )
+	item.ruiArgs["string3Color"] <- HudNotificationQueue_CreateRuiArg( "string3Color", SrgbToLinear( altColor3 / 255.0 ) )
+	item.ruiArgs["showObitsDuringSpectate"] <- HudNotificationQueue_CreateRuiArg( "showObitsDuringSpectate", GetCurrentPlaylistVarBool( "show_obits_during_spectate", true ) )
+	item.ruiArgs["isVisible"] <- HudNotificationQueue_CreateRuiArg( "isVisible", !ObituaryHudIsDisabled() )
+
+	
+	if ( bCheckForDuplicateEntry )
+		item.miscArgs["duplicateCheckString"] <- localizedPrint
+
+	Obituary_HNQ_EvictOldestIfFull()
+	item.miscArgs["requestTime"] <- Time()
+	HudNotificationQueue_QueueItem( file.hnqQueueId, item, ePersistenceContext.GLOBAL )
+	file.lastObitQueueTime = Time()
+	file.obitsPendingDispatch++
+}
+
+void function Obituary_HNQ_OnVisibleListChanged_CallBack( HudNotificationQueueItem item )
+{
+	Obituary_HNQ_UpdateAllVisiblePositions()
+}
+
+void function Obituary_HNQ_UpdateAllVisiblePositions()
+{
+	if ( file.hnqQueueId < 0 )
+		return
+
+	array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+
+	
+	int baseOffset = file.indexOffest
+	if ( IsPVEMode() )
+	{
+		baseOffset += 1
+	}
+	if ( GetConVarInt( "net_netGraph2" ) == 1 )
+	{
+		baseOffset += 2
+	}
+
+
+		if ( GameMode_IsActive( eGameModes.CONTROL ) )
+		{
+			Obituary_HNQ_UpdateAllVisiblePositions_ControlMode( visibleItems, baseOffset )
+			return
+		}
+
+
+	
+	foreach ( index, queueItem in visibleItems )
+	{
+		Obituary_HNQ_SetItemOffset( queueItem, baseOffset + index )
+	}
+}
+
+void function Obituary_Print_PlayerDeath( string attackerString, asset weaponIcon, string weaponDisplayName, asset modifierIcon, string victimString, ObitRankBadgeInfo badgeInfo, vector attackerColor = <255,255,255>, vector victimColor = <255,255,255>, vector weaponColor = <255,255,255>, bool tempIsMainWeapon = false, int obitFlags = 0 )
+{
+	if ( !file.obituariesEnabled )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "obituary_filters_enabled", true ) && file.obituaryFilter > 0 && ( file.obituaryFilter & obitFlags ) == 0 )
+		return
+
+	if ( !file.obituaryDynamicDurationEnabled && modalVisible )
+		return
+
+	Obituary_HNQ_Print_PlayerDeath( attackerString, weaponIcon, weaponDisplayName, modifierIcon, victimString, badgeInfo, attackerColor, victimColor, weaponColor, tempIsMainWeapon )
+}
+
+void function Obituary_Print_SquadEliminated( string localizedPrint, vector altColor1 = <255,255,255>, vector altColor2 = <255,255,255>, vector altColor3 = <255,255,255>, vector backgroundColor = <255,255,255>, float backgroundAlpha = 0.0, bool bCheckForDuplicateEntry = false, int obitFlags = 0 )
+{
+	if ( !file.obituariesEnabled )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "obituary_filters_enabled", true ) && file.obituaryFilter > 0 && ( file.obituaryFilter & obitFlags ) == 0 )
+		return
+
+	if ( !file.obituaryDynamicDurationEnabled && modalVisible )
+		return
+
+	Obituary_HNQ_Print_SquadEliminated( localizedPrint, altColor1, altColor2, altColor3, bCheckForDuplicateEntry, obitFlags )
+}
+
+void function Obituary_HNQ_Print_SquadEliminated( string localizedPrint, vector altColor1, vector altColor2, vector altColor3, bool bCheckForDuplicateEntry, int obitFlags = 0 )
+{
+#if DEV
+		file.debugObitRequested++
+#endif
+
+	string itemKey = bCheckForDuplicateEntry ? localizedPrint : ""
+
+	HudNotificationQueueItem item = HudNotificationQueue_CreateEmptyItem()
+	item.key = itemKey
+	item.priority = OBITUARY_PRIORITY_SQUAD_WIPE
+	item.duration = file.obituaryDuration
+	item.outroDuration = 0.0
+	item.ruiAsset = $"ui/obituary_crawl_localized.rpak"
+
+	item.onCreateVisualOverride = Obituary_HNQ_OnCreateVisualOverride
+	item.onDestroyVisualOverride = Obituary_HNQ_OnDestroyVisualOverride
+
+	item.onIntro = Obituary_HNQ_OnVisibleListChanged_CallBack
+	item.onComplete = Obituary_HNQ_OnVisibleListChanged_CallBack
+
+	
+	item.ruiArgs["obitString"] <- HudNotificationQueue_CreateRuiArg( "obitString", localizedPrint )
+	item.ruiArgs["string1Color"] <- HudNotificationQueue_CreateRuiArg( "string1Color", SrgbToLinear( altColor1 / 255.0 ) )
+	item.ruiArgs["string2Color"] <- HudNotificationQueue_CreateRuiArg( "string2Color", SrgbToLinear( altColor2 / 255.0 ) )
+	item.ruiArgs["string3Color"] <- HudNotificationQueue_CreateRuiArg( "string3Color", SrgbToLinear( altColor3 / 255.0 ) )
+	item.ruiArgs["showObitsDuringSpectate"] <- HudNotificationQueue_CreateRuiArg( "showObitsDuringSpectate", GetCurrentPlaylistVarBool( "show_obits_during_spectate", true ) )
+	item.ruiArgs["isVisible"] <- HudNotificationQueue_CreateRuiArg( "isVisible", !ObituaryHudIsDisabled() )
+
+#if DEV
+		DEV_Debug_ObitTagItemType( item, DEV_Debug_ObitClassifyLocalized( localizedPrint, obitFlags ) )
+#endif
+
+	if ( bCheckForDuplicateEntry )
+		item.miscArgs["duplicateCheckString"] <- localizedPrint
+
+	
+	item.miscArgs["objectiveWaypoint"] <- true
+
+	Obituary_HNQ_EvictOldestIfFull()
+	item.miscArgs["requestTime"] <- Time()
+	
+	HudNotificationQueue_QueueItem( file.hnqQueueId, item, ePersistenceContext.GLOBAL )
+	file.lastObitQueueTime = Time()
+	file.obitsPendingDispatch++
+}
+
+void function Obituary_Print_Training_Ping( string localizedPrint, vector altColor1 = <255,255,255>, vector altColor2 = <255,255,255>, vector altColor3 = <255,255,255>, vector backgroundColor = <255,255,255>, float backgroundAlpha = 0.0, bool bCheckForDuplicateEntry = false, int obitFlags = 0 )
+{
+	if ( !file.obituariesEnabled )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "obituary_filters_enabled", true ) && file.obituaryFilter > 0 && ( file.obituaryFilter & obitFlags ) == 0 )
+		return
+
+	Obituary_HNQ_Print_Training_Ping( localizedPrint, altColor1, altColor2, altColor3, bCheckForDuplicateEntry, obitFlags )
+}
+
+void function Obituary_HNQ_SetItemOffset( HudNotificationQueueItem item, int newOffset )
+{
+	if ( item.ruiInstance == null || !RuiIsAlive( item.ruiInstance ) )
+		return
+
+	int currentOffset = ( "obituaryOffset" in item.miscArgs ) ? expect int( item.miscArgs["obituaryOffset"] ) : -1
+
+	if ( currentOffset != newOffset )
+	{
+		item.miscArgs["obituaryOffset"] <- newOffset
+		RuiSetInt( item.ruiInstance, "offset", newOffset )
+		RuiSetInt( item.ruiInstance, "horizontalOffset", file.horizontalOffset )
+		RuiSetInt( item.ruiInstance, "verticalOffset", file.verticalOffset )
+		RuiSetGameTime( item.ruiInstance, "updateTime", Time() )
+	}
+}
+
+void function TriggerObituaryInvisible()
+{
+	modalVisible = true
+	Obituary_SetVerticalOffset(MODAL_OFFSET)
+
+	
+	Obituary_ClearObituaryMessagesExceptPing()
+
+	
+	
+	if ( file.obituaryDynamicDurationEnabled )
+	{
+		HudNotificationQueue_AddQueueBlocker( file.hnqQueueId, Obituary_HNQ_QueueBlocker_ModalVisible )
+	}
+}
+
+void function Obituary_ClearObituaryMessagesExceptPing()
+{
+	if ( !file.obituaryDynamicDurationEnabled )
+	{
+		array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+		foreach ( item in visibleItems )
+		{
+			if ( item.ruiAsset != $"ui/obituary_crawl_localized_tutorial.rpak" )
+				Signal( item.signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+		}
+	}
+}
+
+void function TriggerResetOffset()
+{
+	Obituary_SetVerticalOffset(STANDARD_OFFSET)
+	modalVisible = false
+}
+
+
+
+void function Obituary_Print_Control_Ping( string localizedPrint, bool isAlliancePing = false, vector altColor1 = <255,255,255>, vector altColor2 = <255,255,255>, vector altColor3 = <255,255,255>, vector backgroundColor = <255,255,255>, float backgroundAlpha = 0.0, int obitFlags = 0 )
+{
+	if ( !file.obituariesEnabled )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "obituary_filters_enabled", true ) && file.obituaryFilter > 0 && ( file.obituaryFilter & obitFlags ) == 0 )
+		return
+
+	if ( !file.obituaryDynamicDurationEnabled && modalVisible )
+		return
+
+	Obituary_HNQ_Print_Control_Ping( localizedPrint, isAlliancePing, altColor1, altColor2, altColor3 )
+}
+
+
+
+
+
+void function Obituary_Print_Control_ObjectivePing( entity subjectEnt, string localizedPrint, vector altColor1 = <255,255,255>, vector altColor2 = <255,255,255>, vector altColor3 = <255,255,255>, vector backgroundColor = <255,255,255>, float backgroundAlpha = 0.0, int obitFlags = 0 )
+{
+	if ( !file.obituariesEnabled )
+		return
+
+	if ( !GameMode_IsActive( eGameModes.CONTROL ) )
+		return
+
+	if ( !IsValid( subjectEnt ) || !IsValid( subjectEnt.GetOwner() ) || subjectEnt.GetOwner().GetWaypointType() != eWaypoint.CONTROL_OBJECTIVE )
+		return
+
+	if ( GetCurrentPlaylistVarBool( "obituary_filters_enabled", true ) && file.obituaryFilter > 0 && ( file.obituaryFilter & obitFlags ) == 0 )
+		return
+
+	if ( !file.obituaryDynamicDurationEnabled && modalVisible )
+		return
+
+	Obituary_HNQ_Print_Control_ObjectivePing( subjectEnt, localizedPrint, altColor1, altColor2, altColor3 )
+}
+
+
+
+
+
+
+
+void function Obituary_HNQ_Print_Control_Ping( string localizedPrint, bool isAlliancePing, vector altColor1, vector altColor2, vector altColor3 )
+{
+#if DEV
+		file.debugObitRequested++
+#endif
+
+	HudNotificationQueueItem item = HudNotificationQueue_CreateEmptyItem()
+	item.key = ""  
+	item.priority = OBITUARY_PRIORITY_LOCALIZED
+	item.duration = file.obituaryDuration
+	item.outroDuration = 0.0
+	item.ruiAsset = $"ui/obituary_crawl_localized.rpak"
+
+	item.onCreateVisualOverride = Obituary_HNQ_OnCreateVisualOverride
+	item.onDestroyVisualOverride = Obituary_HNQ_OnDestroyVisualOverride
+
+	item.onIntro = Obituary_HNQ_OnVisibleListChanged_CallBack
+	item.onComplete = Obituary_HNQ_OnVisibleListChanged_CallBack
+
+	
+	item.ruiArgs["obitString"] <- HudNotificationQueue_CreateRuiArg( "obitString", localizedPrint )
+	item.ruiArgs["string1Color"] <- HudNotificationQueue_CreateRuiArg( "string1Color", SrgbToLinear( altColor1 / 255.0 ) )
+	item.ruiArgs["string2Color"] <- HudNotificationQueue_CreateRuiArg( "string2Color", SrgbToLinear( altColor2 / 255.0 ) )
+	item.ruiArgs["string3Color"] <- HudNotificationQueue_CreateRuiArg( "string3Color", SrgbToLinear( altColor3 / 255.0 ) )
+	item.ruiArgs["showObitsDuringSpectate"] <- HudNotificationQueue_CreateRuiArg( "showObitsDuringSpectate", GetCurrentPlaylistVarBool( "show_obits_during_spectate", true ) )
+	item.ruiArgs["isVisible"] <- HudNotificationQueue_CreateRuiArg( "isVisible", !ObituaryHudIsDisabled() )
+
+	
+	if ( isAlliancePing )
+	{
+		item.ruiArgs["defaultTextColor"] <- HudNotificationQueue_CreateRuiArg( "defaultTextColor", SrgbToLinear( TEAM_COLOR_FRIENDLY / 255.0 ) )
+	}
+
+	Obituary_HNQ_EvictOldestIfFull()
+	item.miscArgs["requestTime"] <- Time()
+	HudNotificationQueue_QueueItem( file.hnqQueueId, item, ePersistenceContext.PLAYER )
+	file.lastObitQueueTime = Time()
+	file.obitsPendingDispatch++
+}
+
+
+
+void function Obituary_HNQ_Print_Control_ObjectivePing( entity subjectEnt, string localizedPrint, vector altColor1, vector altColor2, vector altColor3 )
+{
+#if DEV
+		file.debugObitRequested++
+#endif
+
+	if ( !IsValid( subjectEnt ) || !IsValid( subjectEnt.GetOwner() ) )
+		return
+
+	entity objectiveWaypoint = subjectEnt.GetOwner()
+	if ( objectiveWaypoint.GetWaypointType() != eWaypoint.CONTROL_OBJECTIVE )
+		return
+
+	Obituary_HNQ_Print_Control_ObjectivePing_Native( subjectEnt, objectiveWaypoint, localizedPrint, altColor1, altColor2, altColor3 )
+}
+
+
+
+
+void function Obituary_HNQ_Print_Control_ObjectivePing_Native( entity subjectEnt, entity objectiveWaypoint, string localizedPrint, vector altColor1, vector altColor2, vector altColor3 )
+{
+	HudNotificationQueueItem item = Obituary_HNQ_CreateControlObjectivePingItem( subjectEnt, objectiveWaypoint, localizedPrint, altColor1, altColor2, altColor3 )
+
+	
+	item.allowIndirectUpdates = true
+	item.onUpdateOverride = Obituary_HNQ_OnControlObjectivePingUpdateOverride
+	item.onComplete = Obituary_HNQ_OnControlObjectivePingComplete_Native
+
+	Obituary_HNQ_EvictOldestIfFull()
+	item.miscArgs["requestTime"] <- Time()
+	HudNotificationQueue_QueueItem( file.hnqQueueId, item, ePersistenceContext.PLAYER )
+	file.lastObitQueueTime = Time()
+	file.obitsPendingDispatch++
+}
+
+
+
+
+HudNotificationQueueItem function Obituary_HNQ_CreateControlObjectivePingItem( entity subjectEnt, entity objectiveWaypoint, string localizedPrint, vector altColor1, vector altColor2, vector altColor3 )
+{
+	HudNotificationQueueItem item = HudNotificationQueue_CreateEmptyItem()
+	item.key = "control_objective_" + string( objectiveWaypoint.GetEntIndex() )
+	item.priority = OBITUARY_PRIORITY_CONTROL_OBJECTIVE
+	item.duration = file.obituaryDuration
+	item.outroDuration = 0.0
+	item.ruiAsset = $"ui/obituary_crawl_localized.rpak"
+
+	item.onCreateVisualOverride = Obituary_HNQ_OnCreateVisualOverride
+	item.onDestroyVisualOverride = Obituary_HNQ_OnDestroyVisualOverride
+
+	item.onIntro = Obituary_HNQ_OnVisibleListChanged_CallBack
+
+	
+	item.ruiArgs["obitString"] <- HudNotificationQueue_CreateRuiArg( "obitString", localizedPrint )
+	item.ruiArgs["string1Color"] <- HudNotificationQueue_CreateRuiArg( "string1Color", SrgbToLinear( altColor1 / 255.0 ) )
+	item.ruiArgs["string2Color"] <- HudNotificationQueue_CreateRuiArg( "string2Color", SrgbToLinear( altColor2 / 255.0 ) )
+	item.ruiArgs["string3Color"] <- HudNotificationQueue_CreateRuiArg( "string3Color", SrgbToLinear( altColor3 / 255.0 ) )
+	item.ruiArgs["showObitsDuringSpectate"] <- HudNotificationQueue_CreateRuiArg( "showObitsDuringSpectate", GetCurrentPlaylistVarBool( "show_obits_during_spectate", true ) )
+	item.ruiArgs["isVisible"] <- HudNotificationQueue_CreateRuiArg( "isVisible", !ObituaryHudIsDisabled() )
+
+	
+	entity localPlayer = GetLocalViewPlayer()
+	if ( IsValid( localPlayer ) && subjectEnt.GetTeam() != localPlayer.GetTeam() )
+	{
+		if ( IsFriendlyTeam( subjectEnt.GetTeam(), localPlayer.GetTeam() ) )
+		{
+			item.ruiArgs["defaultTextColor"] <- HudNotificationQueue_CreateRuiArg( "defaultTextColor", SrgbToLinear( TEAM_COLOR_FRIENDLY / 255.0 ) )
+		}
+	}
+
+	
+	item.miscArgs["objectiveWaypoint"] <- objectiveWaypoint
+	item.miscArgs["subjectEnt"] <- subjectEnt
+	item.miscArgs["team"] <- subjectEnt.GetTeam()
+
+	return item
+}
+
+
+
+
+void function Obituary_HNQ_OnControlObjectivePingUpdateOverride( bool isItemVisible, HudNotificationQueueItem existingItem, HudNotificationQueueItem ornull incomingItem )
+{
+	
+	
+	file.obitsPendingDispatch = maxint( 0, file.obitsPendingDispatch - 1 )
+
+	if ( incomingItem == null )
+		return
+
+	expect HudNotificationQueueItem( incomingItem )
+
+	
+	existingItem.ruiArgs = incomingItem.ruiArgs
+	existingItem.miscArgs = incomingItem.miscArgs
+	existingItem.duration = incomingItem.duration
+
+	
+	if ( isItemVisible )
+	{
+		existingItem.timeToStartOutro = Time() + existingItem.duration
+
+		
+		if ( existingItem.ruiInstance != null && RuiIsAlive( existingItem.ruiInstance ) )
+		{
+			HudNotificationQueue_SetRuiArgs( existingItem.ruiInstance, existingItem.ruiArgs )
+			RuiSetGameTime( existingItem.ruiInstance, "startTime", Time() )
+			RuiSetGameTime( existingItem.ruiInstance, "updateTime", Time() )
+		}
+	}
+
+	
+	Obituary_HNQ_UpdateAllVisiblePositions()
+}
+
+
+
+
+void function Obituary_HNQ_OnControlObjectivePingComplete_Native( HudNotificationQueueItem item )
+{
+	Obituary_HNQ_UpdateAllVisiblePositions()
+}
+
+
+
+int function Obituary_HNQ_GetPingCountForItem( HudNotificationQueueItem item )
+{
+	if ( !( "objectiveWaypoint" in item.miscArgs ) || !( "team" in item.miscArgs ) )
+		return 0
+
+	entity objectiveWaypoint = expect entity( item.miscArgs["objectiveWaypoint"] )
+	int team = expect int( item.miscArgs["team"] )
+
+	if ( !IsValid( objectiveWaypoint ) )
+		return 0
+
+	return CaptureObjectivePing_GetPingCountForObjectiveForTeamOrAlliance( objectiveWaypoint, AllianceProximity_GetAllianceFromTeam( team ) )
+}
+
+
+
+void function Obituary_HNQ_UpdateAllVisiblePositions_ControlMode( array<HudNotificationQueueItem> visibleItems, int baseOffset )
+{
+	
+	array<HudNotificationQueueItem> objectivePings = []
+	array<HudNotificationQueueItem> otherObits = []
+
+	foreach ( item in visibleItems )
+	{
+		if ( "objectiveWaypoint" in item.miscArgs )
+		{
+			objectivePings.append( item )
+		}
+		else
+		{
+			otherObits.append( item )
+		}
+	}
+
+	
+	if ( objectivePings.len() > 1 )
+	{
+		objectivePings.sort( int function( HudNotificationQueueItem a, HudNotificationQueueItem b )
+		{
+			int aPingCount = Obituary_HNQ_GetPingCountForItem( a )
+			int bPingCount = Obituary_HNQ_GetPingCountForItem( b )
+
+			if ( aPingCount > bPingCount )
+				return -1
+			if ( aPingCount < bPingCount )
+				return 1
+			return 0
+		} )
+	}
+
+	
+	int currentOffset = baseOffset
+
+	foreach ( item in objectivePings )
+	{
+		Obituary_HNQ_SetItemOffset( item, currentOffset )
+		currentOffset++
+	}
+
+	foreach ( item in otherObits )
+	{
+		Obituary_HNQ_SetItemOffset( item, currentOffset )
+		currentOffset++
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Obituary_ClearObituary()
+{
+	array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+	foreach ( item in visibleItems )
+	{
+		Signal( item.signalDummy, "Internal_HudNotificationQueue_ClearItem" )
+	}
+}
+
+void function Obituary_SetEnabled( bool state )
+{
+	file.obituariesEnabled = state
+	if ( !state )
+	{
+		HudNotificationQueue_AddQueueBlocker( file.hnqQueueId, Obituary_HNQ_QueueBlocker_ObituariesEnabled )
+	}
+}
+
+void function Obituary_SetIndexOffset( int offset )
+{
+	file.indexOffest = offset
+	Obituary_HNQ_UpdateAllVisiblePositions()
+}
+
+void function Obituary_SetHorizontalOffset( int offset )
+{
+	file.horizontalOffset = offset
+	Obituary_HNQ_UpdateAllVisiblePositions()
+}
+
+void function Obituary_SetVerticalOffset( int offset )
+{
+
+
+
+
+		file.verticalOffset = offset
+
+
+	Obituary_HNQ_UpdateAllVisiblePositions()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ObituaryHudIsDisabled()
+{
+	return GetCurrentPlaylistVarBool( "hide_ui_obituary", false )
+}
+
+void function ClientCodeCallback_Observer_SetObituaryFilter(int obitFlags, string message )
+{
+	file.obituaryFilter = 0 
+	Obituary_Print_Localized( Localize( message ) )
+	file.obituaryFilter = obitFlags
+}
+
+void function ClientCodeCallback_Observer_PrintObituaryMessage( string message )
+{
+	Obituary_Print_Localized( Localize( message ) )
+}
+
+void function OnSpectatorTagModeChanged( entity player, int newMode )
+{
+	if ( GetCurrentPlaylistVarBool( NAMETAG_RANGE_OBITUARY_PRINTS, true ) )
+	{
+		switch ( newMode )
+		{
+			case OBS_PLAYERTAG_RANGE_NONE:
+				Obituary_Print_Localized( Localize( "#NOTIFY_PLAYERTAG_RANGE_NONE" ) )
+				break
+
+			case OBS_PLAYERTAG_RANGE_TEAM:
+				Obituary_Print_Localized( Localize( "#NOTIFY_PLAYERTAG_RANGE_TEAM" ) )
+				break
+
+			case OBS_PLAYERTAG_RANGE_SMALL:
+				Obituary_Print_Localized( Localize( "#NOTIFY_PLAYERTAG_RANGE_SMALL" ) )
+				break
+
+			case OBS_PLAYERTAG_RANGE_MEDIUM:
+				Obituary_Print_Localized( Localize( "#NOTIFY_PLAYERTAG_RANGE_MEDIUM" ) )
+				break
+
+			case OBS_PLAYERTAG_RANGE_LARGE:
+				Obituary_Print_Localized( Localize( "#NOTIFY_PLAYERTAG_RANGE_LARGE" ) )
+				break
+
+			case OBS_PLAYERTAG_RANGE_INFINITE:
+				Obituary_Print_Localized( Localize( "#NOTIFY_PLAYERTAG_RANGE_INFINITE" ) )
+				break
+		}
+	}
+}
+
+
+
+#if DEV
+void function DEV_Debug_ObitTagItemType( HudNotificationQueueItem item, string obitType )
+{
+	item.miscArgs["debugObitType"] <- obitType
+
+	if ( obitType == "ShieldBreak" )        file.debugTypeShieldBreak[0]++
+	else if ( obitType == "PlayerDeath" )    file.debugTypePlayerDeath[0]++
+	else if ( obitType == "SquadWipe" )      file.debugTypeSquadWipe[0]++
+	else if ( obitType == "SquadLanded" )    file.debugTypeSquadLanded[0]++
+	else if ( obitType == "KillLeader" )     file.debugTypeKillLeader[0]++
+	else                                     file.debugTypeOtherLocalized[0]++
+}
+
+void function DEV_Debug_ObitTrackItemDisplayed( HudNotificationQueueItem item )
+{
+	if ( !( "debugObitType" in item.miscArgs ) )
+		return
+
+	string obitType = expect string( item.miscArgs["debugObitType"] )
+	if ( obitType == "ShieldBreak" )        file.debugTypeShieldBreak[1]++
+	else if ( obitType == "PlayerDeath" )    file.debugTypePlayerDeath[1]++
+	else if ( obitType == "SquadWipe" )      file.debugTypeSquadWipe[1]++
+	else if ( obitType == "SquadLanded" )    file.debugTypeSquadLanded[1]++
+	else if ( obitType == "KillLeader" )     file.debugTypeKillLeader[1]++
+	else                                     file.debugTypeOtherLocalized[1]++
+}
+
+string function DEV_Debug_ObitClassifyLocalized( string localizedPrint, int obitFlags )
+{
+	if ( (obitFlags & OBIT_FLAG_SQUAD_WIPE) != 0 )
+		return "SquadWipe"
+	else if ( (obitFlags & OBIT_FLAG_ENEMY_NEARBY) != 0 )
+		return "SquadLanded"
+	else if ( (obitFlags & OBIT_FLAG_KILL_LEADER) != 0 )
+		return "KillLeader"
+	else if ( localizedPrint.find( "Shield Broken" ) >= 0 || localizedPrint.find( "SHIELD" ) >= 0 )
+		return "ShieldBreak"
+
+	return "OtherLocalized"
+}
+
+void function DEV_Debug_ObitQueueDisplayDebug()
+{
+	int visibleCount = HudNotificationQueue_GetVisibleItems( file.hnqQueueId ).len()
+
+	printt( "[Obit Que Display Debug:] ========================================" )
+	printt( "[Obit Que Display Debug:] OBITUARY QUEUE DEBUG SUMMARY" )
+	printt( "[Obit Que Display Debug:] ========================================" )
+	printt( "[Obit Que Display Debug:] Max visible (playlist):  " + file.maxObitEntries )
+	printt( "[Obit Que Display Debug:] Currently visible:       " + visibleCount )
+	printt( "[Obit Que Display Debug:] Obituary duration:       " + file.obituaryDuration )
+	printt( "[Obit Que Display Debug:] Obituaries enabled:      " + file.obituariesEnabled )
+	printt( "[Obit Que Display Debug:] Modal visible (blocked): " + modalVisible )
+	printt( "[Obit Que Display Debug:] ----------------------------------------" )
+	int pendingInBacklog = file.debugObitDisplayed - file.debugObitCompleted
+	if ( pendingInBacklog < 0 )
+		pendingInBacklog = 0
+	int actualDropped = file.debugObitRequested - file.debugObitDisplayed - pendingInBacklog
+	if ( actualDropped < 0 )
+		actualDropped = 0
+
+	printt( "[Obit Que Display Debug:] Total requested:          " + file.debugObitRequested )
+	printt( "[Obit Que Display Debug:] Total displayed:          " + file.debugObitDisplayed )
+	printt( "[Obit Que Display Debug:] Total completed:          " + file.debugObitCompleted )
+	printt( "[Obit Que Display Debug:] Pending in backlog:       " + pendingInBacklog )
+	printt( "[Obit Que Display Debug:] Actual dropped (by HNQ):  " + actualDropped )
+	printt( "[Obit Que Display Debug:] ----------------------------------------" )
+
+	if ( file.debugObitRequested > 0 )
+	{
+		float dropRate = float( actualDropped ) / float( file.debugObitRequested ) * 100.0
+		printt( "[Obit Que Display Debug:] Drop rate: " + dropRate + "%" )
+	}
+
+	printt( "[Obit Que Display Debug:] ----------------------------------------" )
+	printt( "[Obit Que Display Debug:] Visible items detail:" )
+	array<HudNotificationQueueItem> visibleItems = HudNotificationQueue_GetVisibleItems( file.hnqQueueId )
+	foreach ( index, queueItem in visibleItems )
+	{
+		int itemOffset = ( "obituaryOffset" in queueItem.miscArgs ) ? expect int( queueItem.miscArgs["obituaryOffset"] ) : -1
+		printt( "[Obit Que Display Debug:]   [" + index + "] Priority: " + queueItem.priority + " | Offset: " + itemOffset + " | Key: " + queueItem.key + " | Asset: " + string( queueItem.ruiAsset ) )
+	}
+	printt( "[Obit Que Display Debug:] ========================================" )
+}
+
+void function DEV_Debug_ObitQueueDisplayHUD()
+{
+	file.debugHUDActive = !file.debugHUDActive
+	if ( !file.debugHUDActive )
+		return
+
+	thread DEV_Debug_ObitQueueDisplayHUD_Think()
+}
+
+void function DEV_Debug_ObitQueueDisplayHUD_Think()
+{
+	float startX     = 0.01
+	float startY     = 0.30
+	float lineHeight = 0.024
+	float fontSize   = 20.0
+	vector white     = COLOR_WHITE
+	vector green     = COLOR_GREEN
+	vector yellow    = COLOR_YELLOW
+	vector red       = COLOR_RED
+	vector blue      = COLOR_CYAN
+
+	while ( file.debugHUDActive )
+	{
+		int visibleCount = HudNotificationQueue_GetVisibleItems( file.hnqQueueId ).len()
+		int requested = file.debugObitRequested
+		int displayed = file.debugObitDisplayed
+		int completed = file.debugObitCompleted
+		int pending = displayed - completed
+		if ( pending < 0 )
+			pending = 0
+		int dropped = requested - displayed - pending
+		if ( dropped < 0 )
+			dropped = 0
+		float dropRate = requested > 0 ? float( dropped ) / float( requested ) * 100.0 : 0.0
+
+		float y = startY
+
+		
+		DebugDrawScreenTextFull( startX, y, "=== OBIT QUEUE DEBUG HUD ===", blue, fontSize, -1.0 )
+		y += lineHeight
+
+		
+		DebugDrawScreenTextFull( startX, y, format( "Visible: %d/%d | Pending: %d | Duration: %.1fs", visibleCount, file.maxObitEntries, file.obitsPendingDispatch, file.obituaryDuration ), white, fontSize, -1.0 )
+		y += lineHeight
+
+		
+		vector dropColor = dropRate > 40 ? red : ( dropRate > 20 ? yellow : green )
+		DebugDrawScreenTextFull( startX, y, format( "Req: %d | Disp: %d | Drop: %d (%.1f%%)", requested, displayed, dropped, dropRate ), dropColor, fontSize, -1.0 )
+		y += lineHeight * 1.5
+
+		
+		DebugDrawScreenTextFull( startX, y, format( "%-18s %5s %5s %5s", "TYPE", "REQ", "DISP", "DROP" ), blue, fontSize, -1.0 )
+		y += lineHeight
+
+		
+		DEV_Debug_ObitHUD_DrawTypeRow( startX, y, "Player Death", file.debugTypePlayerDeath, fontSize, white )
+		y += lineHeight
+		DEV_Debug_ObitHUD_DrawTypeRow( startX, y, "Shield Break", file.debugTypeShieldBreak, fontSize, white )
+		y += lineHeight
+		DEV_Debug_ObitHUD_DrawTypeRow( startX, y, "Squad Wipe", file.debugTypeSquadWipe, fontSize, white )
+		y += lineHeight
+		DEV_Debug_ObitHUD_DrawTypeRow( startX, y, "Squad Landed", file.debugTypeSquadLanded, fontSize, white )
+		y += lineHeight
+		DEV_Debug_ObitHUD_DrawTypeRow( startX, y, "Kill Leader", file.debugTypeKillLeader, fontSize, white )
+		y += lineHeight
+		DEV_Debug_ObitHUD_DrawTypeRow( startX, y, "Other", file.debugTypeOtherLocalized, fontSize, white )
+		y += lineHeight * 1.5
+
+		
+		string stateStr = ""
+		if ( !file.obituariesEnabled ) stateStr += " [DISABLED]"
+		if ( modalVisible ) stateStr += " [MODAL]"
+		if ( stateStr == "" ) stateStr = " [ACTIVE]"
+		DebugDrawScreenTextFull( startX, y, "State:" + stateStr, green, fontSize, -1.0 )
+
+		WaitFrame()
+	}
+}
+
+void function DEV_Debug_ObitHUD_DrawTypeRow( float x, float y, string label, array<int> counts, float fontSize, vector color )
+{
+	int req = counts[0]
+	int disp = counts[1]
+	int drop = req - disp
+	if ( drop < 0 )
+		drop = 0
+
+	vector rowColor = color
+	if ( req > 0 && drop > 0 )
+		rowColor = <1, 0.7, 0.4> 
+
+	DebugDrawScreenTextFull( x, y, format( "%-18s %5d %5d %5d", label, req, disp, drop ), rowColor, fontSize, -1.0 )
+}
+
+
+
+
+
+
+void function DEV_Debug_ObitBurstTest( int count = 30, float staggerOverride = -1.0 )
+{
+	if ( staggerOverride > 0.0 )
+	{
+		file.obituaryStaggerStep = staggerOverride
+		file.obituaryDynamicDurationEnabled = true
+	}
+
+	ObitRankBadgeInfo emptyBadge
+
+	for ( int i = 0; i < count; i++ )
+	{
+		int roll = RandomIntRange( 0, 7 )
+
+		switch ( roll )
+		{
+			case 0:
+				Obituary_Print_PlayerDeath( "TestPlayer", $"", "Melee", $"", "Bot" + i, emptyBadge )
+				break
+			case 1:
+				Obituary_Print_Localized( "Enemy Shield Broken  -  Bot" + i )
+				break
+			case 2:
+				Obituary_Print_Localized( "You Eliminated An Enemy Squad", <255, 244, 79>, COLOR_OBITUARY_DEFAULT, COLOR_OBITUARY_DEFAULT, COLOR_OBITUARY_DEFAULT, 0, false, OBIT_FLAG_SQUAD_WIPE )
+				break
+			case 3:
+				Obituary_Print_Localized( "Bot" + i + " - Squad landed nearby!", <255, 255, 255>, <255, 255, 255>, <255, 255, 255>, <255, 255, 255>, 0.0, false, OBIT_FLAG_ENEMY_NEARBY )
+				break
+			case 4:
+				Obituary_Print_Localized( "TestPlayer is the new Kill Leader with " + (i + 5) + " kills.", <255, 255, 255>, <255, 255, 255>, <255, 255, 255>, <255, 255, 255>, 0.0, false, OBIT_FLAG_KILL_LEADER )
+				break
+			case 5:
+				Obituary_Print_Training_Ping( "Training: Move to the marked location" )
+				break
+			case 6:
+				Obituary_Print_Localized( "Bot" + i + " has entered the game" )
+				break
+		}
+	}
+}
+
+#endif
+ 

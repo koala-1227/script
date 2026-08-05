@@ -1,0 +1,4268 @@
+global function SurvivalShip_Init
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Survival_RequireJumpmasterInPlane
+global function IsPlayerInPlane
+global function GetPlayersInPlaneCount
+
+
+
+global function AutoPlayer_GetDropShipDoorOpenFlag
+
+global function Sur_SetPlaneCenterEnt
+global function Sur_SetPlaneEnt
+global function Sur_GetPlaneCenterEnt
+global function Sur_GetPlaneEnt
+global function Survival_IsDropshipClampedToRing
+global function Survival_SetCallback_IsDropshipClampedToRing 
+global function Survival_GetPlaneMoveSpeed
+global function Survival_SetCallback_GetPlaneMoveSpeed 
+global function Survival_GetPlaneJumpDelay
+global function Survival_SetCallback_GetPlaneJumpDelay
+global function Survival_GetPlaneLeaveMapDurationMultiplier
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function PlayerPlaneStatusChanged
+global function JumpmasterStatusChanged
+global function PlaneCreated
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global const SURVIVAL_PLANE_MODEL = $"mdl/vehicles_r2/spacecraft/draconis/draconis_flying_small.rmdl"
+global const string SURVIVAL_PLANE_NAME = "planeEnt"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const string SQUAD_LEADER_SOUND = "UI_InGame_SquadLeader_Announce"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct
+{
+	entity                     planeCenterEnt
+	entity                     planeEnt
+	
+	int functionref() GetDropshipCount_Callback
+	float functionref() GetPlaneHeightMultiplier_Callback
+	bool functionref() IsDropshipClampedToRing_Callback
+	float functionref() GetPlaneMoveSpeed_Callback
+	float functionref() GetPlaneJumpDelay_Callback
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		var sqadLeaderBoxRui
+		bool adsPressed
+		bool registeredConCommandCallbacks
+		EnvironmentSpeaker& planeSpeaker
+
+
+
+
+
+} file
+
+void function SurvivalShip_Init()
+{
+	PrecacheModel( SURVIVAL_PLANE_MODEL )
+
+	Remote_RegisterServerFunction( "ClientCommand_Sur_MakeEligibleForJumpMaster" )
+	Remote_RegisterServerFunction( "ClientCommand_Sur_RelinquishJumpMaster" )
+	Remote_RegisterServerFunction( "ClientCommand_Sur_RemoveFromSquad" )
+	Remote_RegisterServerFunction( "ClientCommand_Sur_ReturnToSquad" )
+
+	RegisterNetworkedVariable( "isJumpmaster", SNDC_PLAYER_GLOBAL, SNVT_BOOL, false )
+	RegisterNetworkedVariable( "isJumpingWithSquad", SNDC_PLAYER_GLOBAL, SNVT_BOOL, false )
+	RegisterNetworkedVariable( "playerInPlane", SNDC_PLAYER_GLOBAL, SNVT_BOOL, false )
+	RegisterNetworkedVariable( "PlaneDoorsOpenTime", SNDC_GLOBAL, SNVT_TIME, -1 )
+	RegisterNetworkedVariable( "PlaneDoorsCloseTime", SNDC_GLOBAL, SNVT_TIME, -1 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		RegisterSignal( "PlayerPlaneStatusChanged" )
+		RegisterSignal( "CancelTryRelinquishSquadLeaderOrBreakFromSquad" )
+		RegisterSignal( "CreateSquadLeaderBox" )
+
+
+
+
+
+		AddEventNotificationCallback( eEventNotifications.SURVIVAL_DroppingSolo, SURVIVAL_DroppingSolo )
+		AddEventNotificationCallback( eEventNotifications.SURVIVAL_RelinquishedJumpmaster, SURVIVAL_RelinquishedJumpmaster )
+		AddEventNotificationCallback( eEventNotifications.SURVIVAL_NewJumpmaster, SURVIVAL_NewJumpmaster )
+		AddEventNotificationCallback( eEventNotifications.SURVIVAL_RejoinedSquad, SURVIVAL_RejoinedSquad )
+
+		AddCallback_OnViewPlayerChanged( OnLocalViewPlayerChanged )
+
+		AddTargetNameCreateCallback( SURVIVAL_PLANE_NAME, PlaneCreated )
+
+		RegisterNetVarBoolChangeCallback( "playerInPlane", PlayerPlaneStatusChanged )
+		RegisterNetVarBoolChangeCallback( "isJumpmaster", JumpmasterStatusChanged )
+		RegisterNetVarBoolChangeCallback( "isJumpingWithSquad", PlayerPlaneStatusChanged )
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsPlayerInPlane( entity player )
+{
+	return player.GetPlayerNetBool( "playerInPlane" )
+}
+
+int function GetPlayersInPlaneCount()
+{
+	int count = 0
+	foreach( entity player in GetPlayerArray() )
+	{
+		if ( player.GetPlayerNetBool( "playerInPlane" ) )
+			count++
+	}
+	return count
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Sur_SetPlaneCenterEnt( entity ent )
+{
+	file.planeCenterEnt = ent
+}
+
+void function Sur_SetPlaneEnt( entity ent )
+{
+	file.planeEnt = ent
+
+
+
+
+
+
+
+
+
+}
+
+bool function Survival_IsDropshipClampedToRing()
+{
+	if ( file.IsDropshipClampedToRing_Callback != null )
+		return file.IsDropshipClampedToRing_Callback()
+
+	return GetCurrentPlaylistVarBool( "dropship_bounds_clamp_to_ring", false )
+}
+
+void function Survival_SetCallback_IsDropshipClampedToRing( bool functionref() func )
+{
+	Assert( file.IsDropshipClampedToRing_Callback == null, "Tried setting a function override in " + FUNC_NAME() + " but one already exists" )
+	file.IsDropshipClampedToRing_Callback = func
+}
+
+float function Survival_GetPlaneMoveSpeed()
+{
+	if ( file.GetPlaneMoveSpeed_Callback != null )
+		return file.GetPlaneMoveSpeed_Callback()
+
+	return GetCurrentPlaylistVarFloat( "survival_plane_move_speed", DEFAULT_PLANE_MOVE_SPEED )
+}
+
+void function Survival_SetCallback_GetPlaneMoveSpeed( float functionref() func )
+{
+	Assert( file.GetPlaneMoveSpeed_Callback == null, "Tried setting a function override in " + FUNC_NAME() + " but one already exists" )
+	file.GetPlaneMoveSpeed_Callback = func
+}
+
+float function Survival_GetPlaneJumpDelay()
+{
+	if ( file.GetPlaneJumpDelay_Callback != null )
+		return file.GetPlaneJumpDelay_Callback()
+
+	return GetCurrentPlaylistVarFloat( "survival_plane_jump_delay", DEFAULT_PLANE_JUMP_DELAY )
+}
+
+void function Survival_SetCallback_GetPlaneJumpDelay( float functionref() func )
+{
+	Assert( file.GetPlaneJumpDelay_Callback == null, "Tried setting a function override in " + FUNC_NAME() + " but one already exists" )
+	file.GetPlaneJumpDelay_Callback = func
+}
+
+float function Survival_GetPlaneLeaveMapDurationMultiplier()
+{
+	return GetCurrentPlaylistVarFloat( "survival_plane_leave_map_duration_multiplier", 3.0 )
+}
+
+entity function Sur_GetPlaneCenterEnt()
+{
+	return file.planeCenterEnt
+}
+
+entity function Sur_GetPlaneEnt( int teamNum = -1 )
+{
+
+
+
+
+
+
+
+
+
+
+	return file.planeEnt
+}
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________MultiDropship___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Jumpmaster___________________________(){}
+#endif
+
+bool function Survival_RequireJumpmasterInPlane()
+{
+
+
+
+
+
+	if ( ForcedSpawn_Enabled() )
+		return false
+
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function JumpmasterStatusChanged( entity statusChangePlayer, bool newValue )
+{
+
+
+
+
+
+
+
+	{
+		PlayerPlaneStatusChanged( statusChangePlayer, newValue )
+	}
+
+	if ( newValue == false )
+		return
+
+	if ( statusChangePlayer != GetLocalClientPlayer() )
+		return
+
+#if AUTO_PLAYER_DEV
+	if ( Deathfield_GetDoesDeathfieldStartEnabled() && !DeathField_IsActive( statusChangePlayer.DeathFieldIndex() ) )
+		thread Autoplayer_JumpmasterPutInPlane_Thread( ToEHI( statusChangePlayer ) )
+	else
+		AutoPlayer_JumpmasterPutInPlane( statusChangePlayer )
+#endif
+
+
+	if( PlayerRecentlyFreespawned_Check( statusChangePlayer ) )
+		return
+
+
+	PlayBattleChatterToSelfOnClient( statusChangePlayer, "bc_imJumpmaster" )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Bots___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if AUTO_PLAYER_DEV
+void function Autoplayer_JumpmasterPutInPlane_Thread( EHI statusChangePlayerEHI )
+{
+	entity statusChangePlayer = FromEHI( statusChangePlayerEHI )
+	for ( int i = 0; i < 50; i++ )
+	{
+		if ( DeathField_IsActive( statusChangePlayer.DeathFieldIndex() ) )
+			break
+
+		wait 0.1
+		statusChangePlayer = FromEHI( statusChangePlayerEHI )
+	}
+
+	if ( IsValid( statusChangePlayer ) )
+		AutoPlayer_JumpmasterPutInPlane( statusChangePlayer )
+}
+#endif
+
+
+bool function AutoPlayer_GetDropShipDoorOpenFlag()
+{
+	if ( FlagExists( "PlaneDoorOpen" ) )
+	{
+		return Flag( "PlaneDoorOpen" )
+	}
+
+	return false
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Jump___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________JumpingWithSquad___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PlaneCreated( entity plane )
+{
+	file.planeSpeaker = RegisterEnvironmentSpeaker( plane )
+}
+
+
+
+
+void function PlayerPlaneStatusChanged( entity statusChangePlayer, bool newValue )
+{
+
+
+
+	{
+		__PlayerPlaneStatusChanged( statusChangePlayer )
+	}
+}
+
+
+
+void function OnLocalViewPlayerChanged( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	__PlayerPlaneStatusChanged( player )
+}
+
+
+
+void function __PlayerPlaneStatusChanged( entity statusChangePlayer )
+{
+	entity player = GetLocalClientPlayer()
+	bool isLocalPlayer = player == statusChangePlayer
+	var gamestateRui = ClGameState_GetRui()
+	Assert( gamestateRui != null )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	{
+		RuiSetInt( gamestateRui, "playersInPlane", IsPlayerInPlane( player ) ? GetPlayersInPlaneCount() : 0 )
+	}
+	if ( !IsPVEMode() )
+	{
+		{
+			RuiSetInt( GetFullmapGamestateRui(), "playersInPlane", IsPlayerInPlane( player ) ? GetPlayersInPlaneCount() : 0 )
+		}
+	}
+
+	if ( statusChangePlayer.GetTeam() != player.GetTeam() )
+		return
+
+	bool playerInPlane = player.GetPlayerNetBool( "playerInPlane" )
+
+	if ( isLocalPlayer )
+	{
+		Signal( player, "PlayerPlaneStatusChanged" )
+
+		if ( playerInPlane )
+		{
+			thread GamemodeUtility_ManageDVSTweakOnPlayer_OnRedeploy_Thread()
+		}
+	}
+
+	if ( playerInPlane )
+	{
+		
+		NotifyDropSequence( true )
+		SetSkydiveStartingConvars()
+		CreateSquadLeaderBox( player )
+		if ( statusChangePlayer == player )
+		{
+			thread UpdateDOFForPlayerView()
+			thread ADSZoomWhileInPlane()
+
+			if ( !file.registeredConCommandCallbacks )
+			{
+				file.registeredConCommandCallbacks = true
+				RegisterConCommandTriggeredCallback( "+duck", PlayerTryRelinquishSquadLeaderOrBreakFromSquad )
+				RegisterConCommandTriggeredCallback( "+toggle_duck", PlayerTryRelinquishSquadLeaderOrBreakFromSquad )
+				RegisterConCommandTriggeredCallback( "-duck", SignalReleasedTryRelinquishSquadLeaderOrBreakFromSquad )
+				RegisterConCommandTriggeredCallback( "-toggle_duck", SignalReleasedTryRelinquishSquadLeaderOrBreakFromSquad )
+			}
+		}
+	}
+	else
+	{
+		
+		DestroySquadLeaderBox( player )
+
+		if ( isLocalPlayer && file.registeredConCommandCallbacks )
+		{
+			DeregisterConCommandTriggeredCallback( "+duck", PlayerTryRelinquishSquadLeaderOrBreakFromSquad )
+			DeregisterConCommandTriggeredCallback( "+toggle_duck", PlayerTryRelinquishSquadLeaderOrBreakFromSquad )
+			DeregisterConCommandTriggeredCallback( "-duck", SignalReleasedTryRelinquishSquadLeaderOrBreakFromSquad )
+			DeregisterConCommandTriggeredCallback( "-toggle_duck", SignalReleasedTryRelinquishSquadLeaderOrBreakFromSquad )
+			file.registeredConCommandCallbacks = false
+		}
+	}
+}
+
+
+
+void function PlayDoorsOpenTimerSounds( entity player )
+{
+	Signal( player, "CreateSquadLeaderBox" )
+	EndSignal( player, "CreateSquadLeaderBox" )
+	EndSignal( player, "OnDestroy" )
+
+	float doorsOpenTime = GetGlobalNetTime( "PlaneDoorsOpenTime" )
+	float threeSecondWarningTime = doorsOpenTime - 3.0
+
+	while( GetGlobalNetTime( "PlaneDoorsOpenTime" ) < 0 )
+		WaitFrame()
+
+	if ( Time() > GetGlobalNetTime( "PlaneDoorsOpenTime" ) )
+		return
+
+	while( Time() < ( GetGlobalNetTime( "PlaneDoorsOpenTime" ) - 3.0 ) )
+	{
+		EmitSoundOnEntity( player, "UI_Survival_Intro_LaunchCountDown_10Seconds" )
+		wait 1.0
+	}
+
+	while( Time() < GetGlobalNetTime( "PlaneDoorsOpenTime" ) - 0.5 )
+	{
+		EmitSoundOnEntity( player, "UI_Survival_Intro_LaunchCountDown_3Seconds" )
+		wait 1.0
+	}
+
+	while( Time() < GetGlobalNetTime( "PlaneDoorsOpenTime" ) )
+		WaitFrame()
+
+	EmitSoundOnEntity( player, "UI_Survival_Intro_LaunchCountDown_Finish" )
+}
+
+
+
+void function CreateSquadLeaderBox( entity player )
+{
+	if ( file.sqadLeaderBoxRui == null )
+	{
+		file.sqadLeaderBoxRui = CreatePermanentCockpitPostFXRui(  $"ui/squad_leader_box.rpak", 0 )
+		RuiSetGameTime( file.sqadLeaderBoxRui, "squadLeaderStartShowTime", Time() + 1.25 )
+
+
+
+
+
+
+			RuiSetFloat( file.sqadLeaderBoxRui, "switchPanelHeight", 96.0 )
+			RuiSetFloat( file.sqadLeaderBoxRui, "ifSwitch", 0.0 )
+
+	}
+
+	entity jumpMasterPlayer = GetJumpmasterForTeam( player.GetTeam() )
+	if ( jumpMasterPlayer == player )
+		EmitSoundOnEntity( player, SQUAD_LEADER_SOUND )
+	RuiSetBool( file.sqadLeaderBoxRui, "isJumpMaster", jumpMasterPlayer == player )
+	RuiTrackFloat( file.sqadLeaderBoxRui, "doorsOpenTime", null, RUI_TRACK_SCRIPT_NETWORK_VAR_GLOBAL, GetNetworkedVariableIndex( "PlaneDoorsOpenTime" ) )
+	RuiTrackBool( file.sqadLeaderBoxRui, "pingEnabled", player, RUI_TRACK_SCRIPT_NETWORK_VAR_BOOL, GetNetworkedVariableIndex( "pingEnabled" ) )
+
+	thread PlayDoorsOpenTimerSounds( player )
+	EmitSoundOnEntity( player, "UI_InGame_SquadLeader_Announce" )
+
+
+	if ( IsBotModeMatch() && !AreMultipleHumansInTeam( player.GetTeam() ) )
+	{
+		RuiSetBool( file.sqadLeaderBoxRui, "showJumpMaster", false )
+		return
+	}
+
+
+	if ( IsValid( jumpMasterPlayer ) )
+	{
+		RuiSetString( file.sqadLeaderBoxRui, "squadLeaderName", jumpMasterPlayer.GetPlayerName() )
+		vector squadLeaderColor = GetPlayerInfoColor( jumpMasterPlayer )
+		RuiSetFloat3( file.sqadLeaderBoxRui, "squadLeaderColor", SrgbToLinear( squadLeaderColor / 255.0 ) )
+	}
+
+	if ( player.GetPlayerNetBool( "isJumpingWithSquad" ) )
+	{
+		RuiSetBool( file.sqadLeaderBoxRui, "isSoloJump", false )
+		if ( !IsValid( jumpMasterPlayer ) )
+			RuiSetBool( file.sqadLeaderBoxRui, "showJumpMaster", false )
+		else
+			RuiSetBool( file.sqadLeaderBoxRui, "showJumpMaster", true )
+	}
+	else
+	{
+		RuiSetBool( file.sqadLeaderBoxRui, "showJumpMaster", true )
+		RuiSetBool( file.sqadLeaderBoxRui, "isSoloJump", true )
+		vector squadLeaderColor = GetPlayerInfoColor( player )
+		if ( IsValid( jumpMasterPlayer ) )
+			squadLeaderColor = GetPlayerInfoColor( jumpMasterPlayer )
+		RuiSetFloat3( file.sqadLeaderBoxRui, "squadLeaderColor", SrgbToLinear( squadLeaderColor / 255.0 ) )
+	}
+
+	if ( MAX_TEAM_PLAYERS == 1 ) 
+		RuiSetBool( file.sqadLeaderBoxRui, "isSoloJump", true )
+
+	RuiSetBool( file.sqadLeaderBoxRui, "hasHoldButtonAction", HasHoldButtonAction() )
+
+	if ( ForcedSpawn_POIPreview_Enabled() )
+	{
+		RuiSetBool( file.sqadLeaderBoxRui, "dropZonesEnabled", true )
+	}
+
+
+
+
+
+
+
+
+
+
+		if ( Unhinged_IsModeActive() )
+		{
+			EmitSoundOnEntity( player, "duck_for_jumpasync" )
+		}
+
+}
+
+
+
+void function DestroySquadLeaderBox( entity vehicle )
+{
+	if ( file.sqadLeaderBoxRui != null )
+	{
+		RuiDestroyIfAlive( file.sqadLeaderBoxRui )
+		file.sqadLeaderBoxRui = null
+		entity player = GetLocalClientPlayer()
+
+		StopSoundOnEntity( player, "UI_Survival_Intro_LaunchCountDown_10Seconds" )
+		StopSoundOnEntity( player, "UI_Survival_Intro_LaunchCountDown_3Seconds" )
+		StopSoundOnEntity( player, "UI_Survival_Intro_LaunchCountDown_Finish" )
+
+
+			if ( Unhinged_IsModeActive() )
+			{
+				StopSoundOnEntity( player, "duck_for_jumpasync" )
+			}
+
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PlayerButtonInputs___________________________(){}
+#endif
+
+void function UpdateDOFForPlayerView()
+{
+	entity player = GetLocalClientPlayer()
+
+	EndSignal( player, "PlayerPlaneStatusChanged" )
+	EndSignal( player, "FreefallEnded" )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+
+	SetConVarFloat( "dof_variable_blur", 3.0 )
+	DoF_SetFarDepth( 10000, 150000 )
+
+	float traceDist = 100000.0
+
+	while( PlayerMatchState_GetFor( player ) < ePlayerMatchState.NORMAL )
+	{
+		vector start = player.CameraPosition()
+		vector end = start + ( AnglesToForward( player.CameraAngles() ) * traceDist )
+		TraceResults results = TraceLine( start, end, [ player ], TRACE_MASK_SOLID, TRACE_COLLISION_GROUP_NONE )
+		float dist = traceDist * results.fraction
+
+		DoF_SetFarDepth( dist + 3000, 900000 )
+		
+
+		WaitFrame()
+	}
+}
+
+
+
+void function ADSZoomWhileInPlane()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	RegisterConCommandTriggeredCallback( "+zoom", PlayerADSPressed )
+	RegisterConCommandTriggeredCallback( "-zoom", PlayerADSReleased )
+	RegisterConCommandTriggeredCallback( "+toggle_zoom", PlayerADSPressed )
+	RegisterConCommandTriggeredCallback( "-toggle_zoom", PlayerADSReleased )
+
+	OnThreadEnd(
+		function() : ( player )
+		{
+			DeregisterConCommandTriggeredCallback( "+zoom", PlayerADSPressed )
+			DeregisterConCommandTriggeredCallback( "-zoom", PlayerADSReleased )
+			DeregisterConCommandTriggeredCallback( "+toggle_zoom", PlayerADSPressed )
+			DeregisterConCommandTriggeredCallback( "-toggle_zoom", PlayerADSReleased )
+
+			if ( IsValid( player ) )
+				player.SetFOVScale( 1.0, 0.25 )
+		}
+	)
+
+	EndSignal( player, "PlayerPlaneStatusChanged" )
+	EndSignal( player, "FreefallStarted" )
+	EndSignal( player, "FreefallEnded" )
+	EndSignal( player, "OnDeath" )
+	EndSignal( player, "OnDestroy" )
+
+	while( PlayerMatchState_GetFor( player ) < ePlayerMatchState.SKYDIVE_FALLING )
+	{
+		player.SetFOVScale( file.adsPressed ? 0.5 : 1.0, file.adsPressed ? 0.25 : 0.5 )
+		WaitFrame()
+	}
+}
+
+
+
+void function PlayerADSPressed( entity player )
+{
+	file.adsPressed = true
+}
+
+
+
+void function PlayerADSReleased( entity player )
+{
+	file.adsPressed = false
+}
+
+
+
+void function PlayerTryRelinquishSquadLeaderOrBreakFromSquad( entity player )
+{
+	if ( !player.GetPlayerNetBool( "playerInPlane" ) )
+		return
+
+	if ( player.GetPlayerNetBool( "isJumpmaster" ) && player.GetPlayerNetBool( "isJumpingWithSquad" ) )
+	{
+		
+		thread HoldTryRelinquishSquadLeaderOrBreakFromSquadTimer( player, 1.0, "#SURVIVAL_INTRO_PROMPT_RELINQUISH", "ClientCommand_Sur_RelinquishJumpMaster" )
+	}
+	else if ( player.GetPlayerNetBool( "isJumpingWithSquad" ) )
+	{
+		
+		thread HoldTryRelinquishSquadLeaderOrBreakFromSquadTimer( player, 1.0, "#SURVIVAL_INTRO_PROMPT_LEAVE","ClientCommand_Sur_RemoveFromSquad" )
+	}
+	else if ( IsValid( GetJumpmasterForTeam( player.GetTeam() ) ) )
+	{
+		
+		thread HoldTryRelinquishSquadLeaderOrBreakFromSquadTimer( player, 0.5, "#SURVIVAL_INTRO_PROMPT_JOIN","ClientCommand_Sur_ReturnToSquad" )
+	}
+}
+
+
+
+void function SignalReleasedTryRelinquishSquadLeaderOrBreakFromSquad( entity player )
+{
+	player.Signal( "CancelTryRelinquishSquadLeaderOrBreakFromSquad" )
+}
+
+
+
+void function HoldTryRelinquishSquadLeaderOrBreakFromSquadTimer( entity player, float holdTime, string hint, string command )
+{
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "CancelTryRelinquishSquadLeaderOrBreakFromSquad" )
+
+	if ( !HasHoldButtonAction() )
+		return
+
+
+	if ( IsBotModeMatch() && !AreMultipleHumansInTeam( player.GetTeam() ) )
+	{
+		RuiSetBool( file.sqadLeaderBoxRui, "holdingButton", false )
+		return
+	}
+
+
+	float margin = 0.2
+
+	RuiSetString( file.sqadLeaderBoxRui, "holdButtonHint", hint )
+	RuiSetBool( file.sqadLeaderBoxRui, "holdingButton", true )
+	RuiSetGameTime( file.sqadLeaderBoxRui, "holdButtonStartTime", Time() )
+	RuiSetGameTime( file.sqadLeaderBoxRui, "holdButtonEndTime", Time() + holdTime + margin )
+
+	OnThreadEnd(
+		function() : ()
+		{
+			if ( IsValid( file.sqadLeaderBoxRui ) )
+			{
+				RuiSetBool( file.sqadLeaderBoxRui, "holdingButton", false )
+			}
+		}
+	)
+
+	wait holdTime
+
+	if ( !HasHoldButtonAction() )
+		return
+
+	Remote_ServerCallFunction( command )
+
+	wait margin
+}
+
+
+
+bool function HasHoldButtonAction( bool requirePlane = true )
+{
+	entity player = GetLocalClientPlayer()
+	int team = player.GetTeam()
+
+	if ( requirePlane && !player.GetPlayerNetBool( "playerInPlane" ) )
+		return false
+
+	
+	if ( player.GetPlayerNetBool( "isJumpmaster" ) )
+		return GetNumPlayersJumpingWithSquad( team ) > 1
+
+	
+	if ( !player.GetPlayerNetBool( "isJumpingWithSquad" ) )
+		return GetNumPlayersJumpingWithSquad( team ) > 0 && IsValid( GetJumpmasterForTeam( team ) )
+
+	
+	return true
+}
+
+
+
+void function SURVIVAL_DroppingSolo( entity ent, entity eventEntity )
+{
+	if ( IsValid( ent ) )
+		Obituary_Print_Localized( Localize( "#SURVIVAL_HUD_DROPPING_SOLO", ent.GetPlayerName() ), GetChatTitleColorForPlayer( ent ) )
+}
+
+
+
+void function SURVIVAL_RelinquishedJumpmaster( entity ent, entity otherPlayer )
+{
+	if ( IsValid( ent ) )
+		Obituary_Print_Localized( Localize( "#SURVIVAL_HUD_RELINQUISHED_LEADERSHIP", ent.GetPlayerName(), otherPlayer.GetPlayerName() ), GetChatTitleColorForPlayer( ent ) )
+}
+
+
+
+void function SURVIVAL_NewJumpmaster( entity ent, entity eventEntity )
+{
+	if ( IsValid( ent ) )
+		Obituary_Print_Localized( Localize( "#SURVIVAL_HUD_NEW_LEADERSHIP", ent.GetPlayerName() ), GetChatTitleColorForPlayer( ent ) )
+}
+
+
+
+void function SURVIVAL_RejoinedSquad( entity ent, entity eventEntity )
+{
+	if ( IsValid( ent ) )
+		Obituary_Print_Localized( Localize( "#SURVIVAL_HUD_REJOINED_SQUAD", ent.GetPlayerName() ), GetChatTitleColorForPlayer( ent ) )
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PlanePathLogic___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DevFunctions___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

@@ -1,0 +1,1149 @@
+global function AutoPlayerScript_PickBestHealingItem
+
+
+global function AutoPlayer_GetBestLoot
+
+global function AutoPlayer_GetWeaponCount
+global function AutoPlayer_IsLootUseful
+global function SetBotInventoryStackCount
+global function AutoPlayer_DropUselessItems
+global function AutoPlayerScript_CountItemStacksInInventory
+
+
+
+
+int TYPE1_AMMO_MAX_STACK = 5
+int TYPE2_AMMO_MAX_STACK = 3
+int GRENADES_MAX_STACK = 1
+int SHIELD_CELL_MAX_STACK = 2
+int SHIELD_BATTERY_MAX_STACK = 3
+int HEALTH_ITEMS_MAX_STACK = 1
+
+enum AutoPlayerState
+{
+	Loot,
+	EscapeRing
+}
+
+struct
+{
+	
+	table< entity, vector >         aimIntentions
+	table< entity, vector >         moveIntentions
+	table< entity, bool >           moveModes
+	table< entity, int >            autoPlayerStates
+	table< entity, array< entity> > visitedLoot
+} file
+
+
+bool function AutoPlayer_IsLootUseful( entity player, LootData lootData, array<string> neededAmmoTypes )
+{
+	
+	if ( lootData.ref == BLACK_MARKET_BANNER_REF )
+	{
+		return false
+	}
+	if ( lootData.lootType == eLootType.AMMO )
+	{
+		if ( neededAmmoTypes.len() == 0 ) 
+			return true
+
+		array< string > Type1Ammo = [HIGHCAL_AMMO,SPECIAL_AMMO,BULLET_AMMO]
+
+		if ( neededAmmoTypes.contains( lootData.ref ))
+		{
+			if ( Type1Ammo.contains(lootData.ref))
+			{
+				return AutoPlayerScript_CountItemStacksInInventory( player, lootData ) <= TYPE1_AMMO_MAX_STACK
+			}
+			else
+			{
+				return AutoPlayerScript_CountItemStacksInInventory( player, lootData ) <= TYPE2_AMMO_MAX_STACK
+
+			}
+		}
+		else
+		{
+			return false
+		}
+
+	}
+	else if ( lootData.lootType == eLootType.MAINWEAPON )
+	{
+		
+		if( lootData.ref == "mp_weapon_shotgun_pistol" || lootData.ref == "mp_weapon_semipistol" || lootData.ref == "mp_weapon_bow" )
+		{
+			return false
+		}
+
+		int weaponCount = AutoPlayer_GetWeaponCount( player )
+
+		if ( weaponCount == 1 )
+		{
+			entity weaponInSlot0 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+			if ( IsValid( weaponInSlot0 ) )
+			{
+				if ( lootData.ref == weaponInSlot0.GetWeaponClassName() )
+				{
+					return false
+				}
+
+				float w1OptRange = GetWeaponInfoFileKeyField_GlobalFloat(weaponInSlot0.GetWeaponClassName(),"ap_optimal_range")
+				float lootWeaponOptRange = GetWeaponInfoFileKeyField_GlobalFloat(lootData.baseWeapon,"ap_optimal_range")
+				if ( w1OptRange == lootWeaponOptRange )
+				{
+					return false
+				}
+			}
+
+		}
+
+		if ( weaponCount >= 2 )
+		{
+			return false
+		}
+	}
+	else if ( lootData.lootType == eLootType.ATTACHMENT )
+	{
+		entity weaponInSlot0 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+		if ( IsValid( weaponInSlot0 ) )
+		{
+			if ( AutoPlayerScript_IsAttachmentAnUpgrade(player,lootData,weaponInSlot0) )
+			{
+				AttachmentData ad = GetAttachmentData( lootData.ref )
+				if ( ad.compatibleWeapons.contains(GetWeaponClassName( weaponInSlot0 )))
+				{
+					return true
+				}
+
+
+
+
+			}
+		}
+
+		entity weaponInSlot1 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 )
+		if ( IsValid( weaponInSlot1 ) )
+		{
+			if ( AutoPlayerScript_IsAttachmentAnUpgrade(player,lootData,weaponInSlot1) )
+			{
+
+				AttachmentData ad = GetAttachmentData( lootData.ref )
+				if (ad.compatibleWeapons.contains(GetWeaponClassName( weaponInSlot1 )))
+				{
+					return true
+				}
+
+
+			}
+		}
+
+
+		return false
+	}
+	else if ( lootData.lootType == eLootType.ORDNANCE)
+	{
+		int ordnanceCount = 0
+
+		array<ConsumableInventoryItem> playerInventory = SURVIVAL_GetPlayerInventory( player )
+		for (int i = 0; i < playerInventory.len(); i++)
+		{
+			LootData lData = SURVIVAL_Loot_GetLootDataByIndex( playerInventory[i].type )
+			if ( lData.lootType == eLootType.ORDNANCE )
+			{
+				ordnanceCount++
+			}
+
+		}
+		if ( ordnanceCount >= GRENADES_MAX_STACK )
+		{
+			return false
+		}
+	}
+	else if (lootData.lootType == eLootType.HEALTH)
+	{
+		if ( lootData.ref == "health_pickup_combo_small" )
+		{
+			if ( AutoPlayerScript_CountItemStacksInInventory( player, lootData ) > SHIELD_CELL_MAX_STACK )
+			{
+				return false
+			}
+		}
+		else if ( lootData.ref == "health_pickup_combo_Large")
+		{
+			if ( AutoPlayerScript_CountItemStacksInInventory( player, lootData ) > SHIELD_BATTERY_MAX_STACK )
+			{
+				return false
+			}
+
+
+		}
+		else if	(lootData.ref == "health_pickup_health_small" || lootData.ref == "health_pickup_health_large")
+		{
+			if ( AutoPlayerScript_CountItemStacksInInventory( player, lootData ) > HEALTH_ITEMS_MAX_STACK)
+			{
+				return false
+			}
+		}
+		else if (lootData.ref == "health_pickup_ultimate")
+		{
+			return false
+		}
+	}
+	else if (lootData.lootType == eLootType.BACKPACK)
+	{
+		LootData currentEquipment = EquipmentSlot_GetEquippedLootDataForSlot( player, "backpack" )
+		if( currentEquipment.tier >= lootData.tier)
+		{
+			return false
+
+		}
+	}
+	else if ( lootData.lootType == eLootType.INCAPSHIELD)
+	{
+		LootData currentEquipment = EquipmentSlot_GetEquippedLootDataForSlot( player, "incapshield" )
+		if( currentEquipment.tier >= lootData.tier)
+		{
+			return false
+
+		}
+	}
+	else if ( lootData.lootType == eLootType.AUGMENT)
+	{
+		LootData currentEquipment = EquipmentSlot_GetEquippedLootDataForSlot( player, "augment" )
+		if( currentEquipment.tier >= lootData.tier)
+		{
+			return false
+
+		}
+	}
+
+
+	return true
+}
+
+int function AutoPlayer_CompareHealData( KitHealData a, KitHealData b )
+{
+	if ( a.totalAppliedHeal < 75 && a.totalOverheal > 75 && a.totalOverheal > b.totalOverheal )
+		return 1
+	else if ( b.totalAppliedHeal < 75 && b.totalOverheal > 75 && b.totalOverheal > a.totalOverheal )
+		return -1
+
+	if ( a.totalAppliedHeal > 0 && b.totalAppliedHeal == 0 )
+		return -1
+	else if ( b.totalAppliedHeal > 0 && a.totalAppliedHeal == 0 )
+		return 1
+
+	if ( a.possibleShieldAdd == 0 && b.possibleShieldAdd == 0 )
+	{
+		if ( a.possibleHealthAdd > b.possibleHealthAdd )
+			return -1
+		else if ( b.possibleHealthAdd > a.possibleHealthAdd )
+			return 1
+	}
+
+	if ( a.healthKit.interactionTime < b.healthKit.interactionTime )
+		return -1
+	else if ( a.healthKit.interactionTime > b.healthKit.interactionTime )
+		return 1
+
+	return 0
+}
+
+int function AutoPlayerScript_PickBestHealingItem(entity player)
+{
+
+
+
+	int pShield = player.GetShieldHealth()
+	int pHealth = player.GetHealth()
+	LootData batSmall = SURVIVAL_Loot_GetLootDataByRef("health_pickup_combo_small")
+	LootData batLarge = SURVIVAL_Loot_GetLootDataByRef("health_pickup_combo_large")
+	LootData healthSmall = SURVIVAL_Loot_GetLootDataByRef("health_pickup_health_small")
+	LootData healthLarge = SURVIVAL_Loot_GetLootDataByRef("health_pickup_health_large")
+	LootData phoenix = SURVIVAL_Loot_GetLootDataByRef("health_pickup_combo_full")
+
+	
+	if (pShield + pHealth < 75 && AutoPlayerScript_CountItemStacksInInventory(player, phoenix ) > 0)
+	{
+		return 4
+	}
+
+
+	if ( pShield < player.GetShieldHealthMax() )
+	{
+		if ( AutoPlayerScript_CountItemStacksInInventory(player, batLarge ) > 0 )
+		{
+			if ( player.GetShieldHealthMax() - pShield >= 50 )
+			{
+				return 1
+			}
+			else if(AutoPlayerScript_CountItemStacksInInventory(player, batSmall ) > 0)
+			{
+				return 0
+			}
+			else
+			{
+				return 1
+			}
+
+		}
+		else if(AutoPlayerScript_CountItemStacksInInventory(player, batSmall ) > 0)
+		{
+			return 0
+		}
+
+
+
+
+	}
+	if (pHealth < 100)
+	{
+		if ( AutoPlayerScript_CountItemStacksInInventory(player, healthLarge ) > 0 )
+		{
+			if ( 100 - pHealth >= 50 )
+			{
+				return 3
+			}
+			else if(AutoPlayerScript_CountItemStacksInInventory(player, healthSmall ) > 0)
+			{
+				return 2
+			}
+			else
+			{
+				return 3
+			}
+
+		}
+		else if(AutoPlayerScript_CountItemStacksInInventory(player, healthSmall ) > 0)
+		{
+			return 2
+		}
+
+
+
+
+	}
+
+
+
+	return -1
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function AutoPlayerScript_ShouldStartHealing(entity player)
+{
+	if ( player.GetShieldHealthMax() - player.GetShieldHealth() >= 25 )
+	{
+		return true
+	}
+
+	if ( player.GetHealth() <= 75 )
+	{
+		return true
+	}
+
+	return false
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct BotLootContext
+{
+	int weaponCount
+	entity weapon0
+	entity weapon1
+	int backpackTier
+	int incapshieldTier
+	int augmentTier
+	int ordnanceCount
+	array< ConsumableInventoryItem > playerInventory
+}
+
+BotLootContext function AutoPlayer_BuildLootContext( entity player )
+{
+	BotLootContext ctx
+	ctx.weapon0 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+	ctx.weapon1 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 )
+	ctx.weaponCount = ( IsValid( ctx.weapon0 ) ? 1 : 0 ) + ( IsValid( ctx.weapon1 ) ? 1 : 0 )
+	ctx.backpackTier = EquipmentSlot_GetEquippedLootDataForSlot( player, "backpack" ).tier
+	ctx.incapshieldTier = EquipmentSlot_GetEquippedLootDataForSlot( player, "incapshield" ).tier
+	ctx.augmentTier = EquipmentSlot_GetEquippedLootDataForSlot( player, "augment" ).tier
+	ctx.playerInventory = SURVIVAL_GetPlayerInventory( player )
+
+	ctx.ordnanceCount = 0
+	foreach ( item in ctx.playerInventory )
+	{
+		LootData lData = SURVIVAL_Loot_GetLootDataByIndex( item.type )
+		if ( lData.lootType == eLootType.ORDNANCE )
+			ctx.ordnanceCount++
+	}
+
+	return ctx
+}
+
+int function AutoPlayer_CountItemStacks_Cached( array< ConsumableInventoryItem > playerInventory, string ref )
+{
+	int count = 0
+	for ( int i = 0; i < playerInventory.len(); i++ )
+	{
+		LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( playerInventory[i].type )
+		if ( ref == lootData.ref )
+			count++
+	}
+	return count
+}
+
+bool function AutoPlayer_IsLootUseful_Cached( entity player, LootData lootData, array< string > neededAmmoTypes, BotLootContext ctx )
+{
+	if ( lootData.ref == BLACK_MARKET_BANNER_REF )
+		return false
+
+	if ( lootData.lootType == eLootType.AMMO )
+	{
+		if ( neededAmmoTypes.len() == 0 )
+			return true
+
+		array< string > Type1Ammo = [HIGHCAL_AMMO, SPECIAL_AMMO, BULLET_AMMO]
+
+		if ( neededAmmoTypes.contains( lootData.ref ) )
+		{
+			if ( Type1Ammo.contains( lootData.ref ) )
+				return AutoPlayer_CountItemStacks_Cached( ctx.playerInventory, lootData.ref ) <= TYPE1_AMMO_MAX_STACK
+			else
+				return AutoPlayer_CountItemStacks_Cached( ctx.playerInventory, lootData.ref ) <= TYPE2_AMMO_MAX_STACK
+		}
+		else
+		{
+			return false
+		}
+	}
+	else if ( lootData.lootType == eLootType.MAINWEAPON )
+	{
+		if ( lootData.ref == "mp_weapon_shotgun_pistol" || lootData.ref == "mp_weapon_semipistol" || lootData.ref == "mp_weapon_bow" )
+			return false
+
+		if ( ctx.weaponCount == 1 )
+		{
+			if ( IsValid( ctx.weapon0 ) )
+			{
+				if ( lootData.ref == ctx.weapon0.GetWeaponClassName() )
+					return false
+
+				float w1OptRange = GetWeaponInfoFileKeyField_GlobalFloat( ctx.weapon0.GetWeaponClassName(), "ap_optimal_range" )
+				float lootWeaponOptRange = GetWeaponInfoFileKeyField_GlobalFloat( lootData.baseWeapon, "ap_optimal_range" )
+				if ( w1OptRange == lootWeaponOptRange )
+					return false
+			}
+		}
+
+		if ( ctx.weaponCount >= 2 )
+			return false
+	}
+	else if ( lootData.lootType == eLootType.ATTACHMENT )
+	{
+		if ( IsValid( ctx.weapon0 ) )
+		{
+			if ( AutoPlayerScript_IsAttachmentAnUpgrade( player, lootData, ctx.weapon0 ) )
+			{
+				AttachmentData ad = GetAttachmentData( lootData.ref )
+				if ( ad.compatibleWeapons.contains( GetWeaponClassName( ctx.weapon0 ) ) )
+					return true
+			}
+		}
+
+		if ( IsValid( ctx.weapon1 ) )
+		{
+			if ( AutoPlayerScript_IsAttachmentAnUpgrade( player, lootData, ctx.weapon1 ) )
+			{
+				AttachmentData ad = GetAttachmentData( lootData.ref )
+				if ( ad.compatibleWeapons.contains( GetWeaponClassName( ctx.weapon1 ) ) )
+					return true
+			}
+		}
+
+		return false
+	}
+	else if ( lootData.lootType == eLootType.ORDNANCE )
+	{
+		if ( ctx.ordnanceCount >= GRENADES_MAX_STACK )
+			return false
+	}
+	else if ( lootData.lootType == eLootType.HEALTH )
+	{
+		if ( lootData.ref == "health_pickup_combo_small" )
+		{
+			if ( AutoPlayer_CountItemStacks_Cached( ctx.playerInventory, lootData.ref ) > SHIELD_CELL_MAX_STACK )
+				return false
+		}
+		else if ( lootData.ref == "health_pickup_combo_Large" )
+		{
+			if ( AutoPlayer_CountItemStacks_Cached( ctx.playerInventory, lootData.ref ) > SHIELD_BATTERY_MAX_STACK )
+				return false
+		}
+		else if ( lootData.ref == "health_pickup_health_small" || lootData.ref == "health_pickup_health_large" )
+		{
+			if ( AutoPlayer_CountItemStacks_Cached( ctx.playerInventory, lootData.ref ) > HEALTH_ITEMS_MAX_STACK )
+				return false
+		}
+		else if ( lootData.ref == "health_pickup_ultimate" )
+		{
+			return false
+		}
+	}
+	else if ( lootData.lootType == eLootType.BACKPACK )
+	{
+		if ( ctx.backpackTier >= lootData.tier )
+			return false
+	}
+	else if ( lootData.lootType == eLootType.INCAPSHIELD )
+	{
+		if ( ctx.incapshieldTier >= lootData.tier )
+			return false
+	}
+	else if ( lootData.lootType == eLootType.AUGMENT )
+	{
+		if ( ctx.augmentTier >= lootData.tier )
+			return false
+	}
+
+	return true
+}
+
+entity function AutoPlayer_GetBestLoot( entity player, UtilityLootingOptions lootingOptions )
+{
+#if AUTO_PLAYER
+	array< string > neededAmmoTypes = AutoPlayer_GetNeededAmmoTypes( player )
+	array< entity > allLoots = AutoPlayer_GetUnvisitedLoot( player )
+	array< entity > allPOI = AutoPlayer_GetUnvisitedPOI( player )
+	entity closestUsefulPOI
+
+	
+	
+	
+	BotLootContext ctx = AutoPlayer_BuildLootContext( player )
+
+	bool needsWeapon = ctx.weaponCount < 2
+	bool needsBackpack = !needsWeapon && ctx.backpackTier < 3
+
+	int currentUnixTimestamp = GetUnixTimestamp()
+	const int LootTargetLockedTimeOut = 15
+
+	
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+	
+	entity bestFallback
+	vector playerOrigin = player.GetOrigin()
+
+	foreach ( entity loot in allLoots )
+	{
+		if ( loot.GetSurvivalInt() == -1 )
+			continue
+
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( loot.GetSurvivalInt() )
+
+		if ( ( currentUnixTimestamp - data.targetLockedStartTime ) < LootTargetLockedTimeOut )
+			continue
+
+		if ( !AutoPlayer_IsLootUseful_Cached( player, data, neededAmmoTypes, ctx ) )
+			continue
+
+		
+		if ( needsWeapon && data.lootType == eLootType.MAINWEAPON )
+		{
+			SURVIVAL_Loot_SetLootTargetLockedStartTimeByIndex( loot.GetSurvivalInt() )
+			return loot
+		}
+
+		
+		if ( needsBackpack && data.lootType == eLootType.BACKPACK && Distance( loot.GetOrigin(), playerOrigin ) <= 700 )
+		{
+			SURVIVAL_Loot_SetLootTargetLockedStartTimeByIndex( loot.GetSurvivalInt() )
+			return loot
+		}
+
+		
+		if ( !IsValid( bestFallback ) )
+		{
+			SURVIVAL_Loot_SetLootTargetLockedStartTimeByIndex( loot.GetSurvivalInt() )
+			bestFallback = loot
+
+			
+			if ( !needsWeapon && !needsBackpack )
+				break
+		}
+	}
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+	bool prioPOIInteract = GetCurrentPlaylistVarBool( "dev_prio_POI_interact", false )
+	if ( IsValid( closestUsefulPOI ) && prioPOIInteract )
+		return closestUsefulPOI
+#endif
+
+	if ( !IsValid( bestFallback ) && IsValid( closestUsefulPOI ) )
+		return closestUsefulPOI
+
+	
+	
+	
+	array< entity > allBins = AutoPlayer_GetUnvisitedBins( player )
+	entity closestUsefulBin = ( allBins.len() > 0 ) ? allBins[0] : null
+
+	if ( !IsValid( bestFallback ) )
+		return closestUsefulBin
+
+	if ( !IsValid( closestUsefulBin ) )
+		return bestFallback
+
+	if ( Distance( bestFallback.GetOrigin(), playerOrigin ) < Distance( closestUsefulBin.GetOrigin(), playerOrigin ) )
+		return bestFallback
+	else
+		return closestUsefulBin
+
+#endif
+
+	return null
+}
+
+bool function AutoPlayer_DropUselessItems( entity player )
+{
+#if AUTO_PLAYER
+	array<ConsumableInventoryItem> playerInventory = SURVIVAL_GetPlayerInventory( player )
+	int inventoryLimit = SURVIVAL_GetInventoryLimit( player )
+	if ( (inventoryLimit - playerInventory.len()) > 1 ) 
+	{
+		return false
+	}
+
+	array<string> neededAmmoTypes = AutoPlayer_GetNeededAmmoTypes( player )
+
+	bool itemsDropped = false
+	foreach ( index, item in playerInventory )
+	{
+		LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( item.type )
+
+		if ( !AutoPlayer_IsLootUseful( player, lootData, neededAmmoTypes ) )
+		{
+			AutoPlayer_DropBackpackItem( player, lootData.ref, item.count )
+			itemsDropped = true
+		}
+	}
+
+	return itemsDropped
+#endif
+
+	return false
+}
+
+bool function AutoPlayerScript_IsAttachmentAnUpgrade( entity player, LootData lootData, entity weapon)
+{
+	string installed
+
+	LootData attachedData
+	attachedData.tier = -1
+
+
+	string attachPoint = GetAttachPointForAttachmentOnWeapon( GetWeaponClassNameWithLockedSet( weapon ), lootData.ref )
+	installed = GetInstalledWeaponAttachmentForPoint( weapon, attachPoint )
+
+	if ( SURVIVAL_Loot_IsRefValid( installed ) )
+	{
+		attachedData = SURVIVAL_Loot_GetLootDataByRef( installed )
+	}
+
+	return attachedData.tier < lootData.tier
+}
+
+int function AutoPlayerScript_CheckLootPriority(entity player, LootData item)
+{
+	array<string> neededAmmoTypes = AutoPlayer_GetNeededAmmoTypes( player )
+	if(!AutoPlayer_IsLootUseful(player, item, neededAmmoTypes))
+	{
+		return -1
+	}
+
+
+	switch (item.lootType)
+	{
+		case eLootType.MAINWEAPON:
+			return 1
+			break
+		case eLootType.ARMOR:
+			return 2
+			break
+		case eLootType.BACKPACK:
+			return 2
+			break
+		case eLootType.HELMET:
+			return 2
+			break
+		case eLootType.INCAPSHIELD:
+			return 2
+			break
+		case eLootType.AMMO:
+			return 3
+			break
+		case eLootType.HEALTH:
+			return 4
+			break
+		case eLootType.ATTACHMENT:
+			return 5
+			break
+		case eLootType.ORDNANCE:
+			return 6
+			break
+		default:
+			return -1
+			break
+
+
+	}
+
+
+
+
+	return -1
+
+
+}
+
+int function AutoPlayerScript_CountItemStacksInInventory(entity player, LootData item)
+{
+
+	int itemStacksCount = 0
+
+	array<ConsumableInventoryItem> playerInventory = SURVIVAL_GetPlayerInventory( player )
+	for (int i = 0; i < playerInventory.len(); i++)
+	{
+		LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( playerInventory[i].type )
+		if ( item.ref == lootData.ref )
+		{
+			itemStacksCount++
+		}
+
+
+	}
+
+	return itemStacksCount
+}
+
+int function AutoPlayer_GetWeaponCount( entity player )
+{
+	int count = 0
+	entity weaponInSlot0 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 )
+	if ( IsValid( weaponInSlot0 ) )
+		++count
+
+	entity weaponInSlot1 = player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 )
+	if ( IsValid( weaponInSlot1 ) )
+		++count
+
+	return count
+}
+
+array<string> function AutoPlayer_GetNeededAmmoTypes( entity player )
+{
+	array< entity > playerWeapons = player.GetMainWeapons()
+
+	array< string > neededAmmoTypes
+	foreach( entity weapon in playerWeapons )
+	{
+		string ammoType = GetWeaponAmmoTypeFromWeaponEnt( weapon )
+
+		if ( weapon.GetWeaponSettingBool( eWeaponVar.uses_ammo_pool ) )
+		{
+			neededAmmoTypes.append( ammoType )
+		}
+	}
+	return neededAmmoTypes
+}
+
+void function SetBotInventoryStackCount()
+{
+	TYPE1_AMMO_MAX_STACK = GetCurrentPlaylistVarInt( "TYPE1_AMMO_MAX_STACK", 5 )
+	TYPE2_AMMO_MAX_STACK = GetCurrentPlaylistVarInt( "TYPE2_AMMO_MAX_STACK", 3 )
+	GRENADES_MAX_STACK = GetCurrentPlaylistVarInt( "GRENADES_MAX_STACK", 1 )
+	SHIELD_CELL_MAX_STACK = GetCurrentPlaylistVarInt( "SHIELD_CELL_MAX_STACK", 2 )
+	SHIELD_BATTERY_MAX_STACK = GetCurrentPlaylistVarInt( "SHIELD_BATTERY_MAX_STACK", 3 )
+	HEALTH_ITEMS_MAX_STACK = GetCurrentPlaylistVarInt( "HEALTH_ITEMS_MAX_STACK", 1 )
+}
+
+string function AutoPlayer_GetLegendName( entity player )
+{
+	return ItemFlavor_GetCharacterRef( LoadoutSlot_GetItemFlavor( ToEHI( player ), Loadout_Character() ) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

@@ -1,0 +1,202 @@
+global function CLMinimapAnnouncementQueue_Init
+global function MinimapAnnouncement_QueueItem
+global function MinimapAnnouncement_QueueItem_MapZone
+global function MinimapAnnouncements_IsEnabled
+#if DEV
+global function DEV_MinimapAnnouncement_Test
+#endif
+
+
+global struct MapAnnouncementItem
+{
+	string message = ""
+	vector colorIn = < 1.0, 1.0, 1.0 >
+	asset icon = $""
+	asset iconShadow = $""
+	int priority = eHudNotificationQueuePriority.LOW
+	array< string > speakerDialogueLines = []
+}
+
+struct {
+	int queueIdTop = -1
+	int queueIdBottom = -1
+} file
+
+const TOP_ANNOUNCEMENT_WIDTH = 500
+const TOP_ANNOUNCEMENT_HEIGHT = 40
+const BOTTOM_ANNOUNCEMENT_WIDTH = 500
+const BOTTOM_ANNOUNCEMENT_HEIGHT = 40
+
+void function CLMinimapAnnouncementQueue_Init()
+{
+	
+	UISize screenSize = GetScreenSize()
+	float minimapSize = 240
+	float SCREEN_HEIGHT = float(screenSize.height)
+	float SCREEN_WIDTH = float(screenSize.width)
+	vector ANCHOR = ScreenFracToPixels( < 50/SCREEN_WIDTH, 50/SCREEN_HEIGHT, 0.0 > ) + < minimapSize, 0, 0 > + < 5, 0, 0 >
+
+#if SUPPORTS_COMPACT_UI
+
+        if ( IsUsingCompactUILayout() )
+
+        {
+        	minimapSize = 360
+        	ANCHOR = ScreenFracToPixels( < 25/SCREEN_WIDTH, 25/SCREEN_HEIGHT, 0.0 > ) + < minimapSize, 0, 0 >
+        }
+#endif
+
+	file.queueIdTop = HudNotificationQueue_CreateAndRegisterQueue( "MinimapAnnouncementTop" )
+	HudNotificationQueueConfiguration configSettingsTop = HudNotificationQueue_GetConfigure( file.queueIdTop )
+	configSettingsTop.maxVisibleItems = 1
+	configSettingsTop.allowIndirectUpdates = false
+	configSettingsTop.padding = 0
+	configSettingsTop.stackDirection = eHudNotificationQueueStackDirection.TOP_TO_BOTTOM
+	configSettingsTop.itemAnchorPin = <0, 0.0, 0>
+	configSettingsTop.screenSpacePin = <0.0, 0.0, 0.0>
+	configSettingsTop.startPosition = ANCHOR + < 0, ( minimapSize * 0.5 ) - ( ( TOP_ANNOUNCEMENT_HEIGHT + BOTTOM_ANNOUNCEMENT_HEIGHT ) / 2 ), 0.0 >
+	configSettingsTop.backlogPreservationStyle = eHudNotificationQueueBacklogPreservationStyle.PRIORITY
+	configSettingsTop.backlogMaxCountWhenBlocked = 1
+	HudNotificationQueue_Configure( file.queueIdTop, configSettingsTop )
+	DONOTUSE_HudNotificationQueue_AllowClearItemsOnQueue( file.queueIdTop )
+
+	file.queueIdBottom = HudNotificationQueue_CreateAndRegisterQueue( "MinimapAnnouncementBottom" )
+	HudNotificationQueueConfiguration configSettingsBottom = HudNotificationQueue_GetConfigure( file.queueIdBottom )
+	configSettingsBottom.maxVisibleItems = 1
+	configSettingsBottom.allowIndirectUpdates = false
+	configSettingsBottom.padding = 0
+	configSettingsBottom.stackDirection = eHudNotificationQueueStackDirection.TOP_TO_BOTTOM
+	configSettingsBottom.itemAnchorPin = <0, 0.0, 0>
+	configSettingsBottom.screenSpacePin = <0.0, 0.0, 0.0>
+	configSettingsBottom.startPosition = configSettingsTop.startPosition + < 0, TOP_ANNOUNCEMENT_HEIGHT, 0 > 
+	configSettingsBottom.backlogPreservationStyle = eHudNotificationQueueBacklogPreservationStyle.PRIORITY
+	configSettingsBottom.backlogMaxCountWhenBlocked = 3
+	HudNotificationQueue_Configure( file.queueIdBottom, configSettingsBottom )
+	DONOTUSE_HudNotificationQueue_AllowClearItemsOnQueue( file.queueIdBottom )
+}
+
+
+void function MinimapAnnouncement_QueueItem( MapAnnouncementItem mapAnnouncementItem )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	HudNotificationQueueItem queueItem
+	queueItem.ruiAsset = $"ui/minimap_announcement.rpak"
+	queueItem.key = "zone_name_subtext"
+	queueItem.size = <TOP_ANNOUNCEMENT_WIDTH, TOP_ANNOUNCEMENT_HEIGHT, 0>
+	queueItem.duration = 6.0
+	queueItem.outroDuration = 0.0
+	queueItem.priority = mapAnnouncementItem.priority
+	queueItem.speakerDialogueLines = mapAnnouncementItem.speakerDialogueLines
+	queueItem.uiDrawStage = eUIDrawStage.HUD
+
+	vector iconSize = GetImageSize( mapAnnouncementItem.icon ) * 0.85
+	vector iconShadowSize = GetImageSize( mapAnnouncementItem.iconShadow ) * 0.85
+
+	queueItem.ruiArgs = {
+		["message"] 			= HudNotificationQueue_CreateRuiArg( "message", Localize( mapAnnouncementItem.message ) ),
+		["colorIn"] 			= HudNotificationQueue_CreateRuiArg( "colorIn", mapAnnouncementItem.colorIn, eRuiArgType.COLOR ),
+		["icon"] 				= HudNotificationQueue_CreateRuiArg( "icon", mapAnnouncementItem.icon ),
+		["iconWidth"] 			= HudNotificationQueue_CreateRuiArg( "iconWidth", iconSize.x  ),
+		["iconHeight"] 			= HudNotificationQueue_CreateRuiArg( "iconHeight", iconSize.y  ),
+		["iconShadow"] 			= HudNotificationQueue_CreateRuiArg( "iconShadow", mapAnnouncementItem.iconShadow ),
+		["iconShadowWidth"] 	= HudNotificationQueue_CreateRuiArg( "iconShadowWidth", iconShadowSize.x  ),
+		["iconShadowHeight"] 	= HudNotificationQueue_CreateRuiArg( "iconShadowHeight", iconShadowSize.y  ),
+		["duration"] 			= HudNotificationQueue_CreateRuiArg( "duration", queueItem.duration ),
+	}
+
+	HudNotificationQueue_QueueItem( file.queueIdBottom, queueItem, ePersistenceContext.PLAYER )
+}
+
+void function MinimapAnnouncement_QueueItem_MapZone( string zoneDisplayName, int zoneTier, string zoneDisplaySubText )
+{
+	if ( !IsFullyConnected() )
+		return
+
+	if ( IsSpectating() ) 
+		return
+
+	HudNotificationQueueItem queueItem
+	queueItem.ruiAsset = $"ui/minimap_announcement_zone.rpak"
+	queueItem.key = "zone_name"
+	queueItem.size = <BOTTOM_ANNOUNCEMENT_WIDTH, BOTTOM_ANNOUNCEMENT_HEIGHT, 0>
+	queueItem.duration = 6.0
+	queueItem.outroDuration = 0.0
+	queueItem.priority = eHudNotificationQueuePriority.CRITICAL
+	queueItem.uiDrawStage = eUIDrawStage.HUD
+
+	bool shouldShowTier = true
+
+		if ( Unhinged_IsModeActive() )
+			shouldShowTier = false
+
+
+	queueItem.ruiArgs = {
+		["message"] 		= HudNotificationQueue_CreateRuiArg( "message", Localize( zoneDisplayName ) ),
+		["duration"] 		= HudNotificationQueue_CreateRuiArg( "duration", queueItem.duration ),
+	}
+
+	if ( Localize( zoneDisplayName ) != "" )
+	{
+		HudNotificationQueue_QueueItem( file.queueIdTop, queueItem, ePersistenceContext.PLAYER )
+	}
+
+	if ( shouldShowTier )
+	{
+		vector tierColor = ( zoneTier >= 0 ) ? GetKeyColor( COLORID_LOOT_TIER0, zoneTier ) / 255 : < 1.0, 1.0, 1.0 >
+
+		string zoneSubText = zoneDisplaySubText
+		if ( zoneTier == 0 )
+			zoneSubText = "#MAP_ZONE_LOOT_TIER_0"
+		if ( zoneTier == 1 )
+			zoneSubText = "#MAP_ZONE_LOOT_TIER_1"
+		if ( zoneTier == 2 )
+			zoneSubText = "#MAP_ZONE_LOOT_TIER_2"
+		if ( zoneTier == 3 )
+			zoneSubText = "#MAP_ZONE_LOOT_TIER_3"
+
+		MapAnnouncementItem mapAnnouncementItem
+		mapAnnouncementItem.message = zoneSubText
+		mapAnnouncementItem.colorIn = tierColor
+		mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_loot_tier"
+		mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_loot_tier_shadow"
+		mapAnnouncementItem.priority = eHudNotificationQueuePriority.CRITICAL
+
+		if ( zoneSubText != "" )
+		{
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+		}
+	}
+}
+
+#if DEV
+void function DEV_MinimapAnnouncement_Test()
+{
+	MapZones_ZoneIntroText( GetLocalClientPlayer(), "Artillery Underpass", 2 )
+
+	ServertoClient_LootBinAnnouncement()
+
+	MapAnnouncementItem mapAnnouncementItem
+	mapAnnouncementItem.message = "#EVO_STATIONS_ONLINE_ANNOUNCEMENT"
+	mapAnnouncementItem.colorIn =  < 255, 255, 0 > / 255.0
+	mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_evo_online"
+	mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_evo_online_shadow"
+	mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+	mapAnnouncementItem.speakerDialogueLines = [ PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.EVO_HARVESTERS_ACTIVATE ) ]
+	MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+
+	MapAnnouncementItem mapAnnouncementItem2
+	mapAnnouncementItem2.message = "#FREESPAWNSV2_OBIT_VICTIM_ISRESPAWNING_TOENEMIES"
+	mapAnnouncementItem2.colorIn =  < 245, 165, 35 > / 255.0
+	mapAnnouncementItem2.icon = $"rui/hud/small_announcements/icon_enemy_nearby"
+	mapAnnouncementItem2.iconShadow = $"rui/hud/small_announcements/icon_enemy_nearby_shadow"
+	mapAnnouncementItem2.priority = eHudNotificationQueuePriority.LOW
+	MinimapAnnouncement_QueueItem( mapAnnouncementItem2 )
+}
+#endif
+
+bool function MinimapAnnouncements_IsEnabled()
+{
+	return IsFullyConnected() && GetCurrentPlaylistVarBool( "secondary_announcement_location", false )
+} 

@@ -1,0 +1,657 @@
+global function PassiveVantage_Init
+global function PassiveVantage_IsInCompatibleWeaponConfig
+global function IsVantageBuffsEnabled
+
+
+
+
+
+global const string PASSIVE_RANGED_TRACKING_MELEE_MOD_NAME = "vantage_ads_melee"
+
+const bool VANTAGE_PAS_DEBUG_ENABLED 			= false
+
+const float PASSIVE_MAX_FOV 					= 70        
+const float PASSIVE_SCOPE_TRACKING_FOV 			= 3      	
+
+
+const float PASSIVE_RANGED_TRACKING_TIME_MAX 	= 10
+const float PASSIVE_RANGED_TRACKING_TIME_MIN 	= 2
+const asset PASSIVE_RANGED_TRACKING_ICON 		= $"rui/hud/character_abilities/vantage_gun_mark"
+
+
+
+
+
+const string VANTAGE_JET_DRIVE_MOD = "vantage_jet_drive_boost"
+const string WAYPOINTTYPE_VANTAGE_PASSIVE = "vantage_passive_waypoint"
+
+
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+	table< int, float > teamCooldowns 
+
+
+} file
+
+
+struct
+{
+	float maxTrackingRange 	= 50 * METERS_TO_INCHES
+
+	int maxTrackingTargets 	= 6
+	float ultChargeCooldown = 10.0
+	int ultChargeAmount		= 28
+
+
+
+} tuning
+
+
+global table < entity, array <entity> > vantageTargetTrackingList
+
+void function PassiveVantage_Init()
+{
+	AddCallback_OnPassiveChanged( ePassives.PAS_VANTAGE, Vantage_OnPassiveChanged )
+
+
+
+
+
+	SniperRangeAutoSet_Init()
+
+	RegisterSignal( "EndConditionalScopeTracking" )
+
+	AddCallback_OnPlayerZoomIn( Vantage_PlayerZoomInCallback )
+	AddCallback_OnPlayerZoomOut( Vantage_PlayerZoomOutCallback )
+
+
+		AddCallback_EditLootDesc( Vantage_EditScopesLootDesc )
+
+
+
+		AddCallback_OnSelectedWeaponChanged( OnVantageSelectedWeaponChanged )
+
+
+
+	Remote_RegisterServerFunction( "Vantage_ClientToServer_AddUltCharge" )
+	tuning.ultChargeCooldown 	= GetCurrentPlaylistVarFloat( "vantage_ult_charge_cooldown", tuning.ultChargeCooldown )
+	tuning.ultChargeAmount 		= GetCurrentPlaylistVarInt( "vantage_ult_charge_amount", tuning.ultChargeAmount )
+
+
+		Waypoints_RegisterCustomType( WAYPOINTTYPE_VANTAGE_PASSIVE, InstanceVantagePassiveTracker )
+
+
+
+	tuning.maxTrackingRange 	= GetCurrentPlaylistVarFloat( "vantage_max_tracking_range", tuning.maxTrackingRange )
+	tuning.maxTrackingTargets	= GetCurrentPlaylistVarInt( "vantage_max_tracking_targets", tuning.maxTrackingTargets )
+}
+
+void function Vantage_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( didHave )
+	{
+		player.Signal( "EndConditionalScopeTracking" )
+
+			SniperRangeAutoSet_Stop( player )
+
+
+
+
+
+
+		if( HasPlayerSettingMod( player, VANTAGE_JET_DRIVE_MOD ) )
+		{
+			TakePlayerSettingsMods( player, [ VANTAGE_JET_DRIVE_MOD ] )
+		}
+
+	}
+
+	if ( nowHas )
+	{
+
+
+
+
+
+
+
+
+
+
+		if ( !(player in vantageTargetTrackingList) )
+		{
+			array<entity> targets
+			vantageTargetTrackingList[player] <- targets
+		}
+
+		thread ScopeTrackingConditional( player, null, PASSIVE_SCOPE_TRACKING_FOV, false, false, vantageTargetTrackingList[player] )
+
+		if( !( HasPlayerSettingMod( player, VANTAGE_JET_DRIVE_MOD ) ) )
+		{
+			GivePlayerSettingsMods( player, [ VANTAGE_JET_DRIVE_MOD ] )
+		}
+
+	}
+}
+
+
+bool function IsVantageBuffsEnabled()
+{
+	return GetCurrentPlaylistVarBool( "vantage_s25_1_buffs_enabled", true )
+}
+
+
+void function OnVantageSelectedWeaponChanged( entity selectedWeapon )
+{
+
+	entity player = GetLocalViewPlayer()
+
+	if ( !IsAlive( player ) )
+		return
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_VANTAGE ) )
+		return
+
+	DeactivateSniperRecon( player )
+
+	if ( selectedWeapon == player.GetOffhandWeapon( eOffhandInv.ULTIMATE ) )
+	{
+		thread CL_SniperRecon_WeaponRui_Thread( player )
+	}
+	else
+	{
+		SniperReconWeaponRui_EndThread( player )
+	}
+}
+
+
+void function Vantage_PlayerZoomInCallback( entity player )
+{
+
+		if ( !IsAlive( player ) )
+			return
+
+		if ( !PlayerHasPassive( player, ePassives.PAS_VANTAGE ) )
+			return
+
+		if ( !IsFirstTimePredicted() )
+			return
+
+		ActivateSniperRecon( player )
+
+}
+
+void function ActivateSniperRecon( entity player )
+{
+
+	if ( player == GetLocalViewPlayer() )
+	{
+		entity weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+		if ( IsValid( weapon )
+				&& !Bleedout_IsBleedingOut( player ) )
+		{
+			bool isCompatibleWeaponConfig = PassiveVantage_IsInCompatibleWeaponConfig( weapon )
+			float currentFOV              = weapon.GetWeaponZoomFOV() 
+
+			if ( isCompatibleWeaponConfig )
+			{
+				thread SniperRangeAutoSet_Start( player )
+				thread CL_SniperRecon_UI_Thread( player )
+
+				CustomTutorialPopup( "vantage_passive" )
+			}
+		}
+	}
+
+}
+
+void function DeactivateSniperRecon( entity player )
+{
+
+		SniperRecon_EndThread( player )
+		SniperReconUI_EndThread( player )
+		SniperRangeAutoSet_Stop( player )
+
+}
+
+void function Vantage_PlayerZoomOutCallback( entity player )
+{
+
+		if( !IsFirstTimePredicted() )
+			return
+
+
+	DeactivateSniperRecon( player )
+}
+
+
+string function Vantage_EditScopesLootDesc( string lootRef, entity player, string originalDesc )
+{
+	string finalDesc = originalDesc
+
+
+		
+		if (Crafting_IsPlayerAtWorkbench(player))
+			return finalDesc
+
+
+	if ( PassiveVantage_isCompatibleOptic( lootRef )
+			&& IsValid( player )
+			&& LoadoutSlot_IsReady( ToEHI( player ), Loadout_Character() )
+			&& ItemFlavor_GetAsset( LoadoutSlot_GetItemFlavor( ToEHI( player ), Loadout_Character() ) ) == $"settings/itemflav/character/vantage.rpak" )
+	{
+		finalDesc = finalDesc + Localize( "#VANTAGE_PASSIVE_LOOT_HINT_DESC" )
+	}
+	return finalDesc
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ScopeTrackingConditional( entity player, entity weapon, float trackingFOV, bool lockMode, bool fromTac, array <entity> targetExcludeList )
+{
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( "EndConditionalScopeTracking" )
+
+	OnThreadEnd(
+		function() : ( player )
+		{
+			SniperReconUI_EndThread( player )
+			SniperRecon_EndThread( player )
+		}
+	)
+
+	bool scopeTrackingOn      = false
+	bool skipUpdate           = false
+	while ( true )
+	{
+		weapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+		bool fullyInAds = player.GetZoomFrac() > 0.99
+		if ( IsValid( weapon )
+				&& fullyInAds
+				&& !Bleedout_IsBleedingOut( player )
+				&& !StatusEffect_HasSeverity( player, eStatusEffect.silenced )
+				&& !player.Player_IsSkywardLaunching()
+				&& !StatusEffect_HasSeverity( player, eStatusEffect.is_boxing )
+		)
+		{
+			bool isCompatibleWeaponConfig = PassiveVantage_IsInCompatibleWeaponConfig( weapon )
+			float currentFOV              = weapon.GetWeaponZoomFOV()
+			if ( isCompatibleWeaponConfig && currentFOV <= PASSIVE_MAX_FOV )
+			{
+				if ( !scopeTrackingOn )
+				{
+					if ( weapon.GetWeaponClassName() == "mp_weapon_melee_survival" )
+					{
+						fromTac = true
+					}
+					thread SniperRecon_BeginThread( player, weapon, targetExcludeList )
+
+
+
+
+					scopeTrackingOn = true
+				}
+			}
+		}
+		else if ( scopeTrackingOn )
+		{
+			SniperRecon_EndThread( player )
+			scopeTrackingOn = false
+		}
+
+		WaitFrame()
+	}
+}
+
+
+bool function PassiveVantage_isCompatibleOptic( string opticRef )
+{
+	if ( opticRef == "" )
+		return false
+
+	if ( 	opticRef == "optic_cq_hcog_classic" || 		
+			opticRef == "optic_cq_holosight" || 		
+			opticRef == "optic_cq_holosight_variable" )
+	{
+		return true
+	}
+
+	if ( 	opticRef == "optic_cq_hcog_bruiser" || 		
+			opticRef == "optic_ranged_hcog" ||			
+			opticRef == "optic_ranged_aog_variable" || 	
+			opticRef == "optic_sniper" ||				
+			opticRef == "optic_sniper_variable" ||		
+			opticRef == "optic_sniper_threat")			
+	{
+		return true
+	}
+	return false
+}
+
+bool function PassiveVantage_IsInCompatibleWeaponConfig( entity weapon )
+{
+	string weaponClassName = weapon.GetWeaponClassName()
+	if ( weaponClassName == "mp_weapon_titan_sword" )
+		return false
+
+	if ( weaponClassName == WEAPON_POWER_SWORD_REF )
+		return false
+
+	return true
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ULT_CHARGE___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Vantage_ManageWaypointThread( entity wp, entity player )
+{
+	entity pingEnt = wp.GetParent()
+	if( !IsValid( pingEnt ) )
+		return
+
+	EndSignal( player, "OnDeath", "OnDestroy", "PlayerChangedClass" )
+	EndSignal( pingEnt, "OnDeath", "OnDestroy", "PlayerChangedClass" )
+
+	while( IsValid( wp ) && IsValid( player ) )
+	{
+		if( IsValid( wp ) && wp.wp.ruiHud != null )
+		{
+			float viewportFOV = GetCurrentPlayerFOV( player )
+			RuiSetFloat( wp.wp.ruiHud, "currentFOV", viewportFOV )
+
+			int team = pingEnt.GetTeam()
+			if( ! ( team in file.teamCooldowns ) )
+				RuiSetFloat( wp.wp.ruiHud, "fillFrac", 1 )
+			else
+				RuiSetFloat( wp.wp.ruiHud, "fillFrac", (Time() - file.teamCooldowns[ team ]) / tuning.ultChargeCooldown )
+		}
+		WaitFrame()
+	}
+}
+
+
+
+bool function Vantage_CanGainUltChargeFromTeam( int team )
+{
+	if( ! ( team in file.teamCooldowns ) )
+		return true
+
+	if( file.teamCooldowns[ team ] + tuning.ultChargeCooldown > Time() )
+		return false
+
+	return true
+}
+
+
+
+
+void function OnVantagePassiveTrackerDestroyed( entity wp )
+{
+	if ( wp.wp.ruiHud != null )
+		RuiSetBool( wp.wp.ruiHud, "isFinished", true )
+}
+
+void function InstanceVantagePassiveTrackerInternal( entity wp )
+{
+	if ( wp.IsPlayer() && wp.GetTeam() == TEAM_SPECTATOR && !IsLobby() )
+		return
+
+	entity player = wp.GetOwner()
+	entity localPlayer = GetLocalViewPlayer()
+	if( !IsValid( player ) || player.GetTeam() != localPlayer.GetTeam() )
+		return
+
+	entity pingEnt = wp.GetParent()
+	if( !IsValid( pingEnt ) )
+		return
+
+	if ( ! ( PlayerHasPassive( player, ePassives.PAS_VANTAGE ) ) )
+		return
+
+	int wpType = wp.GetWaypointType()
+
+	if( player == localPlayer )
+	{
+		entity ultWeapon = player.GetOffhandWeapon( eOffhandInv.ULTIMATE )
+
+		bool canGainAmmo = true
+		if ( IsValid( ultWeapon ) )
+		{
+			int ammoNow = ultWeapon.GetWeaponPrimaryClipCount()
+			int ammoMax = ultWeapon.GetWeaponPrimaryClipCountMax()
+			if ( ammoNow == ammoMax )
+			{
+				canGainAmmo = false
+			}
+		}
+
+
+		int team = pingEnt.GetTeam()
+		if( Vantage_CanGainUltChargeFromTeam( team ) && canGainAmmo )
+		{
+			Remote_ServerCallFunction( "Vantage_ClientToServer_AddUltCharge" )
+			file.teamCooldowns[ team ] <- Time()
+		}
+	}
+
+	var rui = CreateWaypointRui( $"ui/waypoint_vantage_passive.rpak", 200 )
+	thread Vantage_ManageWaypointThread( wp, player )
+
+	SetWaypointRui_HUD( wp, rui )
+	RuiKeepSortKeyUpdated( rui, true, "targetPos" )
+	RuiTrackFloat3( rui, "targetPos", wp, RUI_TRACK_OVERHEAD_FOLLOW )
+	AddEntityDestroyedCallback( wp, OnVantagePassiveTrackerDestroyed )
+}
+
+void function InstanceVantagePassiveTracker( entity wp )
+{
+	InstanceVantagePassiveTrackerInternal( wp )
+}
+
+
+       

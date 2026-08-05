@@ -1,0 +1,647 @@
+global function MpAbilityAshDash_Init
+
+global function AshDashEnabled
+
+global function ServerToSpectator_Ash_OnPlayerDash
+global function ServerToSpectator_Ash_OnPlayerLanded
+
+
+
+
+
+
+
+
+const asset FX_DASH_HUD = $"P_ash_player_boost_screen"
+
+
+
+const string KILL_DASH_FX_SIGNAL = "ash_dash_fx"
+
+
+const string FUNCNAME_ServerToSpectator_Ash_OnPlayerDash = "ServerToSpectator_Ash_OnPlayerDash"
+const string FUNCNAME_ServerToSpectator_Ash_OnPlayerLanded = "ServerToSpectator_Ash_OnPlayerLanded"
+
+
+
+
+
+
+struct
+{
+	bool holsterWeapons = false
+
+	bool breaksCloak = true
+
+
+
+
+
+
+
+
+	bool flipLeftRightVFX = true
+
+} tuning
+
+struct
+{
+
+
+
+		int numberOfDashCharges = 1
+		var dashPassiveRui
+
+} file
+
+bool function AshDashEnabled()
+{
+	return GetCurrentPlaylistVarBool( "ash_passive_dash_enabled", true )
+}
+
+void function MpAbilityAshDash_Init()
+{
+	if ( !AshDashEnabled() )
+		return
+
+
+
+
+
+
+	PrecacheParticleSystem( FX_DASH_HUD )
+
+
+	RegisterSignal( KILL_DASH_FX_SIGNAL )
+
+	RegisterTuningStruct( "tuning", "ash_dash_" )
+
+	Remote_RegisterClientFunction( FUNCNAME_ServerToSpectator_Ash_OnPlayerDash )
+	Remote_RegisterClientFunction( FUNCNAME_ServerToSpectator_Ash_OnPlayerLanded )
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_ASH, OnPassiveChanged )
+	AddCallback_OnPassiveChanged( ePassives.PAS_PAS_UPGRADE_TWO, OnUpgradeChanged )
+
+
+
+
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_ENDORSEMENT_ASH_DASH, OnPassiveChanged )
+	AddCallback_OnPassiveChanged( ePassives.PAS_ENDORSEMENT_ASH_DASH, OnUpgradeChanged )
+
+
+
+
+
+
+		AddCallback_CreatePlayerPassiveRui( CreateDashPassiveRui_Internal )
+		AddCallback_DestroyPlayerPassiveRui( DestroyDashPassiveRui )
+
+		AddCallback_OnYouRespawned( OnYouRespawned )
+
+
+
+
+
+
+
+
+
+}
+
+void function OnUpgradeChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+
+		if ( !IsValid( GetLocalClientPlayer() ) || player != GetLocalClientPlayer() )
+			return
+
+
+	if ( !PlayerHasPassive( player, ePassives.PAS_ASH ) )
+		return
+
+	string upgrade = "ash_dash_upgrade"
+	if ( passive == ePassives.PAS_ENDORSEMENT_ASH_DASH && GetCurrentPlaylistVarBool( "endorsement_ash_dash_allow_multiple_midair", true ) )
+	{
+		upgrade = "ash_dash_upgrade_endorsement" 
+	}
+
+	if ( didHave && !nowHas )
+	{
+
+
+
+
+
+
+		file.numberOfDashCharges = 1
+
+	}
+	else if ( nowHas && !didHave )
+	{
+
+
+
+		file.numberOfDashCharges = 2
+
+	}
+}
+
+
+void function OnYouRespawned()
+{
+	entity player = GetLocalViewPlayer()
+
+	if ( !HasDash( player ) )
+		return
+
+	if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.DODGE, OnPlayerDash ) )
+	{
+		AddPlayerMovementEventCallback( player, ePlayerMovementEvents.DODGE, OnPlayerDash )
+	}
+	if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, OnPlayerLanded ) )
+	{
+		AddPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, OnPlayerLanded )
+	}
+}
+
+
+void function OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+
+	if ( !IsValid( GetLocalClientPlayer() ) || player != GetLocalClientPlayer() )
+		return
+
+
+	if ( didHave && !nowHas )
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( HasPlayerMovementEventCallback( player, ePlayerMovementEvents.DODGE, OnPlayerDash ) )
+		{
+			RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.DODGE, OnPlayerDash )
+
+
+
+		}
+		if ( HasPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, OnPlayerLanded ) )
+		{
+			RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, OnPlayerLanded )
+		}
+	}
+	else if ( nowHas && !didHave )
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.DODGE, OnPlayerDash ) )
+		{
+			AddPlayerMovementEventCallback( player, ePlayerMovementEvents.DODGE, OnPlayerDash )
+
+
+
+		}
+		if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, OnPlayerLanded ) )
+		{
+			AddPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, OnPlayerLanded )
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function OnPlayerDash( entity player )
+{
+	if ( IsValid( player ) )
+	{
+
+		if ( player == GetLocalViewPlayer() )
+		{
+			thread DashScreenFx_Thread( player )
+
+			if ( tuning.holsterWeapons && InPrediction() )
+			{
+				
+				player.HolsterWeapon()
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function OnPlayerLanded( entity player )
+{
+	if ( IsValid( player ) )
+	{
+
+		if ( player == GetLocalViewPlayer() )
+
+		{
+			Signal( player, KILL_DASH_FX_SIGNAL )
+		}
+
+
+
+
+
+
+
+
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToSpectator_Ash_OnPlayerDash()
+{
+	entity player = GetLocalViewPlayer()
+
+	
+	if ( HasDash( player ) )
+	{
+		thread DashScreenFx_Thread( player )
+	}
+}
+
+void function ServerToSpectator_Ash_OnPlayerLanded()
+{
+	entity player = GetLocalViewPlayer()
+
+	
+	if ( HasDash( player ) )
+	{
+		OnPlayerLanded( player )
+	}
+}
+
+
+
+void function DashScreenFx_Thread( entity player )
+{
+	Signal( player, KILL_DASH_FX_SIGNAL )
+
+	EndSignal( player, "OnDeath", "OnDestroy", KILL_DASH_FX_SIGNAL )
+
+	PassByReferenceInt fxHandle
+	OnThreadEnd(
+		function(): ( player, fxHandle )
+		{
+			if ( EffectDoesExist( fxHandle.value ) )
+				EffectStop( fxHandle.value, false, true )
+		}
+	)
+
+
+	fxHandle.value = StartParticleEffectOnEntity( player.GetCockpit(), GetParticleSystemIndex( FX_DASH_HUD ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID)
+	EffectSetIsWithCockpit( fxHandle.value, true )
+
+	
+	WaitEndFrame()
+
+	vector velocityAngles = VectorToAngles( FlattenNormalizeVec( player.GetVelocity() ) )
+	vector entAngles    = player.EyeAngles()
+
+	float damageYaw = (velocityAngles.y + 180) - entAngles.y
+
+	damageYaw = AngleNormalize( damageYaw )
+
+	if ( damageYaw < 0 )
+		damageYaw += 360
+
+	if ( damageYaw < 45 )
+	{
+		EffectSetControlPointVector( fxHandle.value, 1, <0,0,0> )
+		EffectSetControlPointVector( fxHandle.value, 2, <0,0,0> )
+		EffectSetControlPointVector( fxHandle.value, 3, <1,0,0> )
+	}
+	else if ( damageYaw < 135 )
+	{
+		if ( tuning.flipLeftRightVFX )
+		{
+			EffectSetControlPointVector( fxHandle.value, 1, <1,0,0> )
+			EffectSetControlPointVector( fxHandle.value, 2, <0,0,0> )
+		}
+		else
+		{
+			EffectSetControlPointVector( fxHandle.value, 1, <0,0,0> )
+			EffectSetControlPointVector( fxHandle.value, 2, <1,0,0> )
+		}
+		EffectSetControlPointVector( fxHandle.value, 3, <0,0,0> )
+	}
+	else if ( damageYaw < 225 )
+	{
+		EffectSetControlPointVector( fxHandle.value, 1, <1,0,0> )
+		EffectSetControlPointVector( fxHandle.value, 2, <1,0,0> )
+		EffectSetControlPointVector( fxHandle.value, 3, <1,0,0> )
+	}
+	else if ( damageYaw < 315 )
+	{
+		if ( tuning.flipLeftRightVFX )
+		{
+			EffectSetControlPointVector( fxHandle.value, 1, <0,0,0> )
+			EffectSetControlPointVector( fxHandle.value, 2, <1,0,0> )
+		}
+		else
+		{
+			EffectSetControlPointVector( fxHandle.value, 1, <1,0,0> )
+			EffectSetControlPointVector( fxHandle.value, 2, <0,0,0> )
+		}
+		EffectSetControlPointVector( fxHandle.value, 3, <0,0,0> )
+	}
+	else
+	{
+		EffectSetControlPointVector( fxHandle.value, 1, <0,0,0> )
+		EffectSetControlPointVector( fxHandle.value, 2, <0,0,0> )
+		EffectSetControlPointVector( fxHandle.value, 3, <1,0,0> )
+	}
+
+	wait 1
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CreateDashPassiveRui_Internal( entity player )
+{
+	if ( !HasDash( player ) )
+		return
+
+	if( file.dashPassiveRui == null )
+	{
+		file.dashPassiveRui = CreateCockpitRui( $"ui/ash_dash_meter.rpak", 32000 )
+
+		RuiTrackFloat( file.dashPassiveRui, "bleedoutEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "bleedoutEndTime" ) )
+		RuiTrackFloat( file.dashPassiveRui, "reviveEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "reviveEndTime" ) )
+	}
+
+	RuiSetFloat( file.dashPassiveRui, "forceOffsetLeftRight", PlayerHasPassive( player, ePassives.PAS_SPARROW ) ? 0.7 : 0.0 )
+	RuiSetBool( file.dashPassiveRui, "hasAltCooldownSourceForShowHide", PlayerHasPassive( player, ePassives.PAS_SPARROW ) )
+
+	bool twoDashes = PlayerHasPassive( player, ePassives.PAS_PAS_UPGRADE_TWO )
+	twoDashes = PlayerHasPassive( player, ePassives.PAS_ASH ) && PlayerHasPassive( player, ePassives.PAS_ENDORSEMENT_ASH_DASH )
+	file.numberOfDashCharges = twoDashes ? 2 : 1
+
+	thread DisplayDashCounter( player )
+}
+
+void function DestroyDashPassiveRui( entity player )
+{
+	if ( !HasDash( player ) )
+	{
+		if ( file.dashPassiveRui != null )
+		{
+			RuiDestroyIfAlive( file.dashPassiveRui )
+			file.dashPassiveRui = null
+		}
+	}
+}
+
+void function DisplayDashCounter( entity player )
+{
+	player.EndSignal( "OnDeath", "OnDestroy" )
+
+	while( file.dashPassiveRui != null && IsValid( player ) )
+	{
+		
+		
+
+		RuiSetInt( file.dashPassiveRui, "numDashSegments", file.numberOfDashCharges )
+		RuiSetFloat( file.dashPassiveRui, "dashFrac", player.GetSuitPower() / 100.0 )
+
+		RuiSetFloat( file.dashPassiveRui, "altCooldownForShowHide", player.GetSuitJumpPower() / 100.0 )
+
+		WaitFrame()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function HasDash( entity player )
+{
+	bool hasNonAshPassive = false
+
+
+
+		hasNonAshPassive = hasNonAshPassive || PlayerHasPassive( player, ePassives.PAS_ENDORSEMENT_ASH_DASH )
+
+
+
+
+	return PlayerHasPassive( player, ePassives.PAS_ASH ) || hasNonAshPassive
+} 

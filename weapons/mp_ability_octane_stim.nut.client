@@ -1,0 +1,848 @@
+global function OctaneStim_Init
+
+
+global function CreateOctaneStimSurgeTacticalRui
+global function DestroyOctaneStimSurgeTacticalRui
+global function GetOctaneStimSurgeTacticalRui
+
+global function OctaneStim_OnWeaponActivate
+global function OctaneStim_OnWeaponDeactivate
+global function OctaneStim_OnWeaponChargeBegin
+global function OctaneStim_OnWeaponChargeEnd
+global function OctaneStim_OnWeaponAttemptOffhandSwitch
+
+global function OctaneStim_GetStimDuration
+
+const float STIM_DURATION 			 	= 6.0
+const int	STIM_HEALTH_COST 		 	= 20
+const int 	STIM_HEALTH_COST_UPGRADE 	= 5
+
+const float STIM_SURGE_ACTIVE_FADE_OUT	= 0.6
+const string STIM_SURGE_ACTIVE_MOD		= "octane_stim_surge_active"
+const string STIM_SURGE_INPUT_MOD		= "octane_stim_surge_input"
+const string STIM_SURGE_INPUT_STOP		= "octane_stim_surge_input_stop"
+const string STIM_SURGE_STOP	 		= "stim_surge_stop"
+const asset STIM_SURGE_3P_FX 			= $"P_pilot_stim_surge_hld"
+global const string STIM_WEAPON_NAME	= "mp_ability_octane_stim"
+
+const string STIM_SURGE_STOP_CLIENT		= "stim_surge_stop_client"
+const asset STIM_SURGE_1P_FX 			= $"P_octane_stim_surge_FP"
+
+
+global const string STIM_SURGE_AVAILABLE_TIME_NETVAR = "octane_stim_surge_cooldown_time"
+
+struct
+{
+
+	int colorCorrection
+	var stimSurgeRui
+
+	table< entity, bool > 	isTacHeld
+}file
+
+struct
+{
+	bool stimSurgeEnabled 			= true
+	bool stimSurgeFromHealth		= false
+	bool stimSurgeFromButton		= true
+	bool stimSurgeGivesFortified    = false
+	int stimSurgeHealthCost			= 0
+	float stimSurgeHealthThreshold 	= 0.5
+	float stimSurgeDuration 		= 6.0
+	float stimSurgeDamageScale		= 0.85
+	float stimSurgeCooldown			= 26.0
+	float legendExpertScalar		= 0.66
+	float stimSurgeExtraHPMaxTime	= 6.0
+	int stimUpgradeHealthReduction	= 5
+	int stimSurgeVOChance			= 30
+} tuning
+
+
+enum playTacAnim
+{
+	DONT_PLAY = 0,
+	EXTEND,
+	HIDE
+}
+
+
+void function OctaneStim_Init()
+{
+	RegisterTuningStruct( "tuning", "octane_tac_" )
+
+	RegisterSignal( STIM_SURGE_STOP )
+	RegisterSignal( STIM_SURGE_INPUT_STOP )
+	PrecacheParticleSystem( STIM_SURGE_3P_FX )
+	RegisterNetworkedVariable( STIM_SURGE_AVAILABLE_TIME_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_TIME , -1.0 )
+
+
+
+
+
+
+		RegisterSignal( STIM_SURGE_STOP_CLIENT )
+		PrecacheParticleSystem( STIM_SURGE_1P_FX )
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.octane_stim_surge, OctaneStimSurge_StartClientVisualEffect )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.octane_stim_surge, OctaneStimSurge_StopClientVisualEffect )
+		file.colorCorrection = ColorCorrection_Register( "materials/correction/octane_stim_surge.raw_hdr" )
+
+		AddCallback_CreatePlayerPassiveRui( CreateOctaneStimSurgeTacticalRui )
+		AddCallback_DestroyPlayerPassiveRui( DestroyOctaneStimSurgeTacticalRui )
+
+		AddCallback_OnWeaponStatusUpdate( StimSurge_WeaponStatusCheck )
+		RegisterNetVarTimeChangeCallback( STIM_SURGE_AVAILABLE_TIME_NETVAR, OctaneStimSurge_OnTimeNetvarChanged )
+
+}
+
+int function OctaneStim_GetHealthCost( entity weapon )
+{
+	int result = GetCurrentPlaylistVarInt( "octane_health_cost", STIM_HEALTH_COST )
+	entity owner = weapon.GetOwner()
+	if( !IsValid( weapon ) )
+		return result
+	if( !IsValid( owner ) )
+		return result
+	if( owner.HasPassive( ePassives.PAS_TAC_UPGRADE_ONE ) ) 
+	{
+		result -= tuning.stimUpgradeHealthReduction
+	}
+
+	return result
+}
+
+float function OctaneStim_GetStimDuration()
+{
+	float duration = GetCurrentPlaylistVarFloat( "octane_stim_duration", STIM_DURATION )
+	return duration
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________WEAPON_CALLBACKS___________________________(){}
+#endif
+void function OctaneStim_OnWeaponActivate( entity weapon )
+{
+	entity owner = weapon.GetWeaponOwner()
+	if ( !IsValid( owner ) )
+		return
+
+
+
+
+
+
+
+
+
+	if( InPrediction() && IsFirstTimePredicted() )
+
+	{
+		if( weapon.HasMod( STIM_SURGE_ACTIVE_MOD ) )
+		{
+			weapon.SetWeaponChargeFraction( 0.0 )
+		}
+		else
+		{
+
+
+
+		}
+	}
+	const string AKIMBO_ACTIVE_MOD = "akimbo_active"
+
+
+	if ( InPrediction() )
+
+	{
+		if ( owner.GetAkimboState() == AKIMBO_STATE_ACTIVE || owner.GetAkimboState() == AKIMBO_STATE_OFFHAND)
+		{
+			weapon.AddMod( AKIMBO_ACTIVE_MOD )
+
+				if ( owner == GetLocalViewPlayer() )
+					EmitSoundOnEntity( owner,  weapon.GetWeaponSettingString( eWeaponVar.charge_sound_1p ) )
+
+		}
+		else
+		{
+			weapon.RemoveMod( AKIMBO_ACTIVE_MOD )
+		}
+	}
+}
+
+void function OctaneStim_OnWeaponDeactivate( entity weapon )
+{
+
+
+
+
+
+
+
+
+
+
+}
+
+bool function OctaneStim_OnWeaponChargeBegin( entity weapon )
+{
+	entity owner = weapon.GetWeaponOwner()
+	if( !IsValid( owner ) )
+		return false
+
+
+
+
+
+	if( weapon.HasMod( STIM_SURGE_ACTIVE_MOD ) )
+	{
+		if( tuning.stimSurgeFromButton && StatusEffect_HasSeverity( owner, eStatusEffect.octane_stim_surge ) )
+			return false
+
+
+
+	}
+	else
+	{
+
+
+
+
+		float duration     = OctaneStim_GetStimDuration()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		StimPlayerWithOffhandWeapon( owner, duration, weapon )
+
+
+
+
+
+
+
+
+
+			Rumble_Play( "rumble_stim_activate", {} )
+
+	}
+	return true
+}
+
+
+void function OctaneStim_OnWeaponChargeEnd( entity weapon )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+bool function OctaneStim_OnWeaponAttemptOffhandSwitch( entity weapon )
+{
+	entity owner = weapon.GetWeaponOwner()
+	if( !IsValid( owner ) )
+		return false
+
+	entity activeTacWeapon = owner.GetActiveWeapon( eActiveInventorySlot.altHand )
+
+	entity activeAltHand = owner.GetActiveWeapon( eActiveInventorySlot.altHand )
+	bool isAltHandFree = !IsValid( activeAltHand ) || activeAltHand != weapon
+
+	if ( StatusEffect_HasSeverity( owner, eStatusEffect.octane_stim_surge ) )
+		return false
+
+	if( StatusEffect_HasSeverity( owner, eStatusEffect.stim_visual_effect ) )
+	{
+		if( weapon.HasMod( STIM_SURGE_ACTIVE_MOD ) )
+			return false
+		else if( Time() < owner.GetPlayerNetTime( STIM_SURGE_AVAILABLE_TIME_NETVAR ) )
+			return false
+		else if( weapon.HasMod( STIM_SURGE_INPUT_MOD ) )
+			return true
+	}
+	else if( !isAltHandFree )
+	{
+		return false
+	}
+
+
+	if( !IsValid( activeTacWeapon ) )
+		return true
+
+	if ( StatusEffect_HasSeverity( owner, eStatusEffect.stim_visual_effect ) )
+	{
+		return false
+	}
+
+	return true
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________STIM_SURGE___________________________(){}
+#endif
+bool function OctaneStimSurge_IsEnabled()
+{
+	
+	return tuning.stimSurgeEnabled
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function OctaneStimSurge_GetDuration( entity player )
+{
+	float duration = tuning.stimSurgeDuration
+	if ( PlayerHasPassive( player, ePassives.PAS_OCTANE ) && PlayerHasPassive( player, ePassives.PAS_PAS_UPGRADE_ONE ) ) 
+	{
+		float durationScalar = GraphCapped( player.GetHealth(), 0.0, player.GetMaxHealth(), 1.0, 0.0 )
+		duration += tuning.stimSurgeExtraHPMaxTime * durationScalar
+	}
+
+	return duration
+}
+
+float function OctaneStimSurge_GetCooldownDuration( entity player, bool hasLegendExpert )
+{
+	if( IsInfiniteAmmoEnabled() )
+	{
+		const float NO_COOLDOWN = 0.0
+		return NO_COOLDOWN
+	}
+
+	float stimSurgeCooldown = tuning.stimSurgeCooldown
+	if( hasLegendExpert )
+	{
+		stimSurgeCooldown  *= tuning.legendExpertScalar
+	}
+	return stimSurgeCooldown
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OctaneStimSurge_StartClientVisualEffect( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	thread OctaneStimSurge_ClientVisualEffectThread( player )
+	StimSurge_UpdateWidgetAnimation( playTacAnim.EXTEND )
+}
+
+void function OctaneStimSurge_StopClientVisualEffect( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	Signal( player, STIM_SURGE_STOP_CLIENT )
+	StimSurge_UpdateWidgetAnimation( playTacAnim.HIDE )
+}
+
+void function OctaneStimSurge_OnTimeNetvarChanged( entity player, float availableTime )
+{
+	thread OctaneStimSurge_PlayCooldownSoundThread( player, availableTime )
+}
+
+void function OctaneStimSurge_PlayCooldownSoundThread( entity player, float availableTime )
+{
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	wait availableTime - Time()
+
+	const string ABILITY_READY_SOUND = "survival_ui_tactical_ready"
+	EmitSoundOnEntity( player, ABILITY_READY_SOUND )
+}
+
+void function OctaneStimSurge_ClientVisualEffectThread( entity player )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+	EndSignal( player, "OnDeath", "OnDestroy", "BleedOut_OnStartDying" )
+	EndSignal( player, STIM_SURGE_STOP_CLIENT )
+
+	entity viewPlayer = GetLocalViewPlayer()
+	int stimSurge1pFx = StartParticleEffectOnEntity( viewPlayer, GetParticleSystemIndex( STIM_SURGE_1P_FX ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+
+	ColorCorrection_SetExclusive( file.colorCorrection, true )
+
+	const float COLOR_FADE_IN			= 0.1
+	const float COLOR_DURATION			 = 2.0
+	float fadeInEndTime					= Time() + COLOR_FADE_IN
+	float firstFadeTime					= Time() + COLOR_FADE_IN + COLOR_DURATION
+	float stimSurgeEndTime 				= Time() + OctaneStimSurge_GetDuration( player )
+	const float COLOR_MIN 				= 0.07
+	const float COLOR_DEFAULT			= 0.25
+	const float COLOR_MAX 				= 1.0
+
+	OnThreadEnd(
+		function() : ( player, stimSurge1pFx )
+		{
+			if ( IsValid( player ) )
+			{
+				if ( EffectDoesExist( stimSurge1pFx ) )
+				{
+					EffectStop( stimSurge1pFx, true, false )
+				}
+				thread OctaneStimSurge_FadeOutColor( player )
+			}
+		}
+	)
+
+	while( Time() < fadeInEndTime )
+	{
+		float colorWeight = GraphCapped( fadeInEndTime - Time(), COLOR_FADE_IN, 0, COLOR_MIN, COLOR_MAX )
+		ColorCorrection_SetWeight( file.colorCorrection, colorWeight )
+		WaitFrame()
+	}
+
+	ColorCorrection_SetWeight( file.colorCorrection, COLOR_MAX )
+
+	while( Time() <  firstFadeTime )
+	{
+		float colorWeight = GraphCapped( firstFadeTime - Time(), COLOR_DURATION, 0, COLOR_MAX, COLOR_DEFAULT )
+		ColorCorrection_SetWeight( file.colorCorrection, colorWeight )
+		WaitFrame()
+	}
+
+	WaitForever()
+}
+
+void function OctaneStimSurge_FadeOutColor( entity player)
+{
+	EndSignal( player, "OnDeath", "OnDestroy" )
+	OnThreadEnd(
+		function() : ()
+		{
+			ColorCorrection_SetWeight( file.colorCorrection, 0.0 )
+			ColorCorrection_SetExclusive( file.colorCorrection, false )
+		}
+	)
+
+	const float COLOR_FADE_OUT_DURATION = 0.2
+	const float COLOR_MAX 				= 1.0
+	float colorEndTime 					= Time() + COLOR_FADE_OUT_DURATION
+	while( Time() < colorEndTime )
+	{
+		float colorWeight = GraphCapped( colorEndTime - Time(), COLOR_FADE_OUT_DURATION, 0, COLOR_MAX, 0.0 )
+		ColorCorrection_SetWeight( file.colorCorrection, colorWeight )
+		WaitFrame()
+	}
+}
+
+var function GetOctaneStimSurgeTacticalRui()
+{
+	return file.stimSurgeRui
+}
+
+void function CreateOctaneStimSurgeTacticalRui( entity player )
+{
+	if( file.stimSurgeRui != null )
+		return
+
+	if ( OctaneStimSurge_IsEnabled() && PlayerHasPassive( player, ePassives.PAS_OCTANE ) )
+	{
+		file.stimSurgeRui = CreateCockpitPostFXRui( $"ui/octane_stim_surge_tactical.rpak", HUD_Z_BASE )
+		UpdateStimSurgeRui( player )
+
+
+
+	}
+}
+
+void function DestroyOctaneStimSurgeTacticalRui( entity player )
+{
+	if( !OctaneStimSurge_IsEnabled() || !PlayerHasPassive( player, ePassives.PAS_OCTANE ) )
+	{
+		if ( file.stimSurgeRui != null )
+		{
+			RuiDestroy( file.stimSurgeRui )
+			file.stimSurgeRui = null
+		}
+	}
+}
+
+void function StimSurge_WeaponStatusCheck( entity player, var rui, int slot )
+{
+	if ( !OctaneStimSurge_IsEnabled() || !PlayerHasPassive( player, ePassives.PAS_OCTANE ) )
+		return
+
+	if( slot == eOffhandInv.TACTICAL )
+	{
+		entity offhandWeapon = player.GetOffhandWeapon( eOffhandInv.TACTICAL )
+
+		if ( IsValid( offhandWeapon ) && file.stimSurgeRui != null )
+		{
+			UpdateStimSurgeRui( player )
+		}
+		
+		RuiSetBool( rui, "isVisible", false )
+	}
+
+}
+
+void function StimSurge_UpdateWidgetAnimation( int playMode )
+{
+	if (file.stimSurgeRui == null)
+		return
+
+	if ( playMode == playTacAnim.EXTEND )
+	{
+		RuiSetBool( file.stimSurgeRui, "extendSurgeWidgetFlag", true )
+		RuiSetFloat( file.stimSurgeRui, "surgeStartTime", Time() )
+	}
+	else if ( playMode == playTacAnim.HIDE )
+	{
+		RuiSetBool( file.stimSurgeRui, "hideSurgeWidgetFlag", true )
+	}
+	else
+	{
+		RuiSetBool( file.stimSurgeRui, "extendSurgeWidgetFlag", false )
+		RuiSetBool( file.stimSurgeRui, "hideSurgeWidgetFlag", false )
+	}
+}
+
+void function UpdateStimSurgeRui( entity player )
+{
+	if ( !IsValid( player ) || player != GetLocalViewPlayer() )
+		return
+
+	RuiTrackFloat( file.stimSurgeRui, "isInSurge", player, RUI_TRACK_STATUS_EFFECT_SEVERITY, eStatusEffect.octane_stim_surge )
+	RuiTrackFloat(file.stimSurgeRui, "isInStim", player, RUI_TRACK_STATUS_EFFECT_SEVERITY, eStatusEffect.stim_visual_effect )
+
+	RuiTrackFloat( file.stimSurgeRui, "cooldownTimeEnd", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( STIM_SURGE_AVAILABLE_TIME_NETVAR ) )
+
+	RuiSetFloat( file.stimSurgeRui, "totalCooldownTime", OctaneStimSurge_GetCooldownDuration( player, PlayerHasPassive( player, ePassives.PAS_AUGMENT_LEGEND_EXPERT ) ) )
+	if( !StatusEffect_HasSeverity( player, eStatusEffect.octane_stim_surge ) )
+	{
+		RuiSetFloat( file.stimSurgeRui, "stimsurgeDuration", OctaneStimSurge_GetDuration(  player ) )
+	}
+
+	RuiTrackFloat( file.stimSurgeRui, "bleedoutEndTime", player, RUI_TRACK_SCRIPT_NETWORK_VAR, GetNetworkedVariableIndex( "bleedoutEndTime" ) )
+
+
+		if ( StatusEffect_HasSeverity( player, eStatusEffect.is_boxing ) )
+			RuiSetBool( file.stimSurgeRui, "isBoxing", true )
+		else
+			RuiSetBool( file.stimSurgeRui, "isBoxing", false )
+
+
+
+}
+
+ 

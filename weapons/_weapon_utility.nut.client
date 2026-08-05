@@ -1,0 +1,5540 @@
+untyped
+
+
+global function WeaponUtility_Init
+
+global function ApplyVectorSpread
+global function DebugDrawMissilePath
+global function DegreesToTarget
+global function GetVectorFromPositionToCrosshair
+global function GetVelocityForDestOverTime
+global function GetPlayerVelocityForDestOverTime
+global function InitMissileForRandomDriftForVortexLow
+global function IsPilotShotgunWeapon
+global function EnergyChargeWeapon_OnWeaponChargeLevelIncreased
+global function EnergyChargeWeapon_OnWeaponChargeBegin
+global function EnergyChargeWeapon_OnWeaponChargeEnd
+global function Fire_EnergyChargeWeapon
+global function FireHitscanShotgunBlast
+global function FireProjectileShotgunBlast
+global function ProjectileShotgun_GetOuterSpread
+global function ProjectileShotgun_GetInnerSpread
+global function FireProjectileBlastPattern
+global function FireGenericBoltWithDrop
+global function OnWeaponPrimaryAttack_GenericBoltWithDrop_Player
+global function OnWeaponActivate_updateViewmodelAmmo
+global function WeaponCanCrit
+global function GetMaxTrackerCountForTitan
+global function FireBallisticRoundWithDrop
+global function PlayerUsedOffhand
+global function GetDistanceString
+global function IsWeaponInSingleShotMode
+global function IsWeaponInBurstMode
+global function IsWeaponOffhand
+global function IsWeaponInAutomaticMode
+global function IsMeleeWeaponNotFists
+global function OnWeaponReadyToFire_ability_tactical
+global function GetMeleeWeapon
+global function OnWeaponRegenEndGeneric
+global function Ultimate_OnWeaponRegenBegin
+global function OnWeaponActivate_RUIColorSchemeOverrides
+global function PlayDelayedShellEject
+global function IsABaseGrenade
+global function HandleDisappearingParent
+global function CalcProjectileTrajectory
+global function SolveBallisticArc
+global function GetCrosshairTargetData
+global function GetCrosshairTargetDataAngles
+global function AreAbilitiesSilenced
+global function GetNeededEnergizeConsumableCount
+global function HasEnoughEnergizeConsumable
+global function OnWeaponEnergizedStart
+global function AddCallback_OnWeaponEnergizedStart
+global function RemoveCallback_OnWeaponEnergizedStart
+global function IsWeaponSemiAuto
+global function PlayerHasWeapon
+global function PlayerCanUseWeapon
+global function GetWeaponClassName
+global function GetSlotForWeapon
+global function CanAttachToWeapon
+global function CanAttachToWeaponPlayerHas
+global function GetBaseWeaponRef
+global function GetLockedSetsDisabledByCrafting
+global function AttachmentPointSupported
+global function GetAttachmentPointStyle
+global function GetAttachmentsForPoint
+global function HasWeapon
+global function GetWeaponIndex
+global function SimpleShouldNotBlockReloadCallback
+global function ShouldAutoReload
+global function IsWeaponActivityIdle
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function UICallback_UpdateLaserSightColor
+
+
+global function Weapon_AddSingleCharge
+
+
+
+
+
+
+
+global function OnWeaponTryEnergize
+
+global function OnWeaponAttemptOffhandSwitch_Never
+
+#if DEV
+global function DevPrintAllStatusEffectsOnEnt
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function GlobalClientEventHandler
+global function UpdateViewmodelAmmo
+global function IsOwnerViewPlayerFullyADSed
+global function GetAmmoColorByType
+global function TryCharacterButtonCommonReadyChecks
+
+
+
+
+
+
+global function ShouldShowADSScopeView
+global function HasFullscreenScope
+
+
+
+global function DisplayCenterDotRui
+
+
+global function IsTurretWeapon
+global function IsHMGWeapon
+global function IsMeleeWeapon
+global function GetWeaponTypeString
+
+global function CanWeaponAkimbo
+
+
+global function GetInfiniteAmmo
+
+
+
+
+
+
+
+
+
+#if DEV
+global function DEV_Launch_HUD_Thread
+#endif
+
+
+global struct MarksmansTempoSettings
+{
+	int   requiredShots
+	float graceTimeBuildup
+	float graceTimeInTempo
+	int  fadeoffMatchGraceTime
+	float fadeoffOnPerfectMomentHit
+	float fadeoffOnFire
+
+	string weaponDeactivateSignal
+}
+
+global const string ENERGIZE_STATUS_RUI_ABORT_SIGNAL = "EnergizRuiThinkAbortSignal"
+global const string WEAPON_CHARGED_RUI_ABORT_SIGNAL = "ChargedRuiThinkAbortSignal"
+global const string ENERGIZED_WEAPON_DEACTIVATE_SIGNAL = "EnergizedWeaponDeactivate"
+
+
+global const bool PROJECTILE_PREDICTED = true
+global const bool PROJECTILE_NOT_PREDICTED = false
+
+global const bool PROJECTILE_LAG_COMPENSATED = true
+global const bool PROJECTILE_NOT_LAG_COMPENSATED = false
+
+global const PRO_SCREEN_IDX_MATCH_KILLS = 1
+global const PRO_SCREEN_IDX_AMMO_COUNTER_OVERRIDE_HACK = 2
+
+global const int DAMAGEARROW_WP_INT_INDEX_ID = 0
+global const int DAMAGEARROW_WP_INT_INDEX_TEAM = 1
+global const int DAMAGEARROW_WP_INT_INDEX_VISIBILITY_TYPE = 2
+global const int DAMAGEARROW_WP_INT_INDEX_LOS_TRACEMASK = 3
+
+global const int DAMAGEARROW_WP_ENT_OWNER = 0
+
+
+const float DEFAULT_SHOTGUN_SPREAD_INNEREXCLUDE_FRAC = 0.4
+const bool DEBUG_PROJECTILE_BLAST = false
+
+const float LASER_STUN_SEVERITY_SLOWTURN = 0.4
+const float LASER_STUN_SEVERITY_SLOWMOVE = 0.30
+
+const bool DEBUG_BURN_DAMAGE = false
+
+global const float GOLD_MAG_TIME_BEFORE_STOWED_RELOAD = 4.0
+
+
+global const float LOUD_WEAPON_AI_SOUND_RADIUS			= 4000.0
+global const float LOUD_WEAPON_AI_SOUND_RADIUS_MP		= 5000.0
+
+
+const asset CORRUPTED_ATTACHMENT_VFX = $"P_cor_attach_drop"
+
+
+
+
+
+
+
+#if DEV
+global const string SIGNAL_DEV_HEAT_HUD_UPDATE = "DEV_Heat_HUD_Update"
+#endif
+
+global struct RadiusDamageData
+{
+	int   explosionDamage
+	int   explosionDamageHeavyArmor
+	float explosionRadius
+	float explosionInnerRadius
+}
+
+global struct EnergyChargeWeaponData
+{
+	string fx_barrel_glow_attach
+	asset  fx_barrel_glow_final_1p
+	asset  fx_barrel_glow_final_3p
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global struct ArcSolution
+{
+	bool valid
+	vector fire_velocity
+	float duration
+}
+
+global struct CrosshairTargetData
+{
+	bool inRange
+	vector crosshairStart
+	vector groundTarget
+	vector groundTargetNormal
+	vector airburstTarget
+	float distanceToTarget
+	vector directionToTarget
+}
+
+#if DEV
+struct ScreenPos
+{
+	float xRatio
+	float yRatio
+}
+#endif
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		var satchelHintRUI = null
+
+	array<LootData> attachmentLootCache
+	table<string, array< LootData > > attachmentLootByPoint
+	table<string, string> attachmentPointStyleCache
+	array<void functionref( entity, string )> onWeaponEnergizedStart
+
+} file
+
+global int HOLO_PILOT_TRAIL_FX
+
+void function WeaponUtility_Init()
+{
+	file.attachmentLootCache.clear()
+	file.attachmentLootByPoint.clear()
+	file.attachmentPointStyleCache.clear()
+
+	level.trapChainReactClasses <- {}
+	level.trapChainReactClasses[ "mp_weapon_frag_grenade" ]            <- true
+	
+	
+	
+
+	
+	RegisterSignal( "CleanupPlayerPermanents" )
+	RegisterSignal( "PlayerChangedClass" )
+	RegisterSignal( "OnSustainedDischargeEnd" )
+	RegisterSignal( "EnergyWeapon_ChargeStart" )
+	RegisterSignal( "EnergyWeapon_ChargeReleased" )
+
+	RegisterSignal( "GoldMagPerkEnd" )
+
+
+	RegisterSignal( ENERGIZED_WEAPON_DEACTIVATE_SIGNAL )
+
+	Remote_RegisterServerFunction( "ClientCallback_UpdateLaserSightColor" )
+	Remote_RegisterClientFunction( "ServerCallback_AutoReloadComplete", "entity" )
+
+	Remote_RegisterClientFunction( "ServerCallback_UpdateHudWeaponData", "entity" )
+	Remote_RegisterClientFunction( "ServerCallback_UpdateHudWeaponDataNoEntity" )
+	Remote_RegisterClientFunction( "ServerCallback_UpdateOffhandRuis" )
+
+
+
+
+
+#if DEV
+		RegisterSignal( SIGNAL_DEV_HEAT_HUD_UPDATE )
+#endif
+
+
+
+
+
+
+
+
+
+
+	PrecacheImpactEffectTable( CLUSTER_ROCKET_FX_TABLE )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	HOLO_PILOT_TRAIL_FX = PrecacheParticleSystem( $"P_ar_holopilot_trail" )
+
+
+
+		PrecacheParticleSystem(  CORRUPTED_ATTACHMENT_VFX )
+		AddCreateCallback( "prop_survival", CorruptedAttachments_OnLootCreated )
+
+
+}
+
+
+
+
+void function GlobalClientEventHandler( entity weapon, string name )
+{
+	if ( name == "ammo_update" )
+		UpdateViewmodelAmmo( false, weapon )
+
+	if ( name == "ammo_full" )
+		UpdateViewmodelAmmo( true, weapon )
+}
+
+void function UpdateViewmodelAmmo( bool forceFull, entity weapon )
+{
+	Assert( weapon != null ) 
+
+	if ( !IsValid( weapon ) )
+		return
+	if ( !IsLocalViewPlayer( weapon.GetWeaponOwner() ) )
+		return
+
+	int bodyGroupCount = weapon.GetWeaponSettingInt( eWeaponVar.bodygroup_ammo_index_count )
+	if ( bodyGroupCount <= 0 )
+		return
+
+	int rounds                = weapon.GetWeaponPrimaryClipCount()
+	int maxRoundsForClipSize  = weapon.GetWeaponPrimaryClipCountMax()
+	int maxRoundsForBodyGroup = (bodyGroupCount - 1)
+	int maxRounds             = minint( maxRoundsForClipSize, maxRoundsForBodyGroup )
+
+	if ( forceFull || (rounds > maxRounds) )
+		rounds = maxRounds
+
+	
+	weapon.SetViewmodelAmmoModelIndex( rounds )
+}
+
+
+void function OnWeaponActivate_updateViewmodelAmmo( entity weapon )
+{
+
+		UpdateViewmodelAmmo( false, weapon )
+
+}
+
+
+
+void function OnWeaponActivate_RUIColorSchemeOverrides( entity weapon )
+{
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function Fire_EnergyChargeWeapon( entity weapon, WeaponPrimaryAttackParams attackParams, EnergyChargeWeaponData chargeWeaponData, bool playerFired = true, float patternScale = 1.0, bool ignoreSpread = true )
+{
+	int chargeLevel = EnergyChargeWeapon_GetChargeLevel( weapon )
+	
+	if ( chargeLevel == 0 )
+		return 0
+
+	
+	float spreadChokeFrac = 1.0
+	
+	switch( chargeLevel )
+	{
+		case 1:
+			spreadChokeFrac = weapon.GetWeaponInfoFileKeyFieldFloat( "projectile_spread_choke_frac_1", 1.0 )
+			break
+
+		case 2:
+			spreadChokeFrac = weapon.GetWeaponInfoFileKeyFieldFloat( "projectile_spread_choke_frac_2", 1.0 )
+			break
+
+		case 3:
+			spreadChokeFrac = weapon.GetWeaponInfoFileKeyFieldFloat( "projectile_spread_choke_frac_3", 1.0 )
+			break
+
+		case 4:
+			spreadChokeFrac = weapon.GetWeaponInfoFileKeyFieldFloat( "projectile_spread_choke_frac_4", 1.0 )
+			break
+
+		default:
+			Assert( false, "chargeLevel " + chargeLevel + " doesn't have matching weaponsetting for projectile_spread_choke_frac_" + chargeLevel )
+	}
+	patternScale *= spreadChokeFrac
+
+	float speedScale = 1.0
+	weapon.FireWeapon_Default( attackParams.pos, attackParams.dir, speedScale, patternScale, ignoreSpread )
+
+	if ( weapon.IsChargeWeapon() )
+		EnergyChargeWeapon_StopCharge( weapon, chargeWeaponData )
+
+	return weapon.GetWeaponSettingInt( eWeaponVar.ammo_per_shot )
+}
+
+
+int function EnergyChargeWeapon_GetChargeLevel( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return 0
+
+	entity owner = weapon.GetWeaponOwner()
+	if ( !IsValid( owner ) )
+		return 0
+
+	if ( !owner.IsPlayer() )
+		return 1
+
+	if ( !weapon.IsReadyToFire() )
+		return 0
+
+	if ( !weapon.IsChargeWeapon() )
+		return 1
+
+	int chargeLevel = weapon.GetWeaponChargeLevel()
+	return chargeLevel
+}
+
+
+bool function EnergyChargeWeapon_OnWeaponChargeLevelIncreased( entity weapon, EnergyChargeWeaponData chargeWeaponData )
+{
+
+		if ( InPrediction() && !IsFirstTimePredicted() )
+			return true
+
+
+
+
+
+
+	int level    = weapon.GetWeaponChargeLevel()
+	int maxLevel = weapon.GetWeaponChargeLevelMax()
+
+	string tickSound
+	string tickSound_3p
+
+	if ( level == maxLevel )
+	{
+		tickSound = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_final" ) )
+		tickSound_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_final_3p" ) )
+	}
+	else
+	{
+		switch ( level )
+		{
+			case 1:
+				tickSound = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_1" ) )
+				tickSound_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_1_3p" ) )
+
+				break
+
+			case 2:
+				if ( chargeWeaponData.fx_barrel_glow_attach != "" )
+					weapon.PlayWeaponEffect( chargeWeaponData.fx_barrel_glow_final_1p, chargeWeaponData.fx_barrel_glow_final_3p, chargeWeaponData.fx_barrel_glow_attach )
+
+				tickSound = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_2" ) )
+				tickSound_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_2_3p" ) )
+
+				break
+
+			case 3:
+				tickSound = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_3" ) )
+				tickSound_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_3_3p" ) )
+				break
+
+			case 4:
+				tickSound = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_4" ) )
+				tickSound_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_leveltick_4_3p" ) )
+				break
+		}
+	}
+
+	if ( tickSound != "" || tickSound_3p != "" )
+		weapon.EmitWeaponSound_1p3p( tickSound, tickSound_3p )
+
+	return true
+}
+
+
+void function EnergyChargeWeapon_StopCharge( entity weapon, EnergyChargeWeaponData chargeWeaponData )
+{
+	if ( chargeWeaponData.fx_barrel_glow_attach != "" )
+		weapon.StopWeaponEffect( chargeWeaponData.fx_barrel_glow_final_1p, chargeWeaponData.fx_barrel_glow_final_3p )
+
+	weapon.StopWeaponSound( expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_loop" ) ) )
+	weapon.StopWeaponSound( expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_loop_3p" ) ) )
+
+
+		
+		float chargeTime          = weapon.GetWeaponSettingFloat( eWeaponVar.charge_time )
+		int chargeLevels          = weapon.GetWeaponSettingInt( eWeaponVar.charge_levels )
+		int chargeLevelBase       = weapon.GetWeaponSettingInt( eWeaponVar.charge_level_base )
+		float chargeLevelsReduced   = (chargeLevels - chargeLevelBase).tofloat()
+		float weaponMinChargeTime = 0.0
+
+		if ( chargeLevelsReduced > 0.0 )
+		{
+			weaponMinChargeTime = chargeTime / chargeLevelsReduced
+		}
+
+		if ( Time() - weapon.w.startChargeTime >= weaponMinChargeTime )
+		{
+			weapon.EmitWeaponSound( expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_end" ) ) )
+		}
+
+
+
+
+
+
+
+}
+
+
+bool function EnergyChargeWeapon_OnWeaponChargeBegin( entity weapon )
+{
+	weapon.Signal( "EnergyWeapon_ChargeStart" )
+
+	if ( weapon.GetWeaponChargeFraction() == 0 )
+	{
+		weapon.w.startChargeTime = Time()
+
+		string chargeStart    = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_start" ) )
+		string chargeStart_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_start_3p" ) )
+		weapon.EmitWeaponSound_1p3p( chargeStart, chargeStart_3p )
+	}
+
+	string chargeLoop    = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_loop" ) )
+	string chargeLoop_3p = expect string( weapon.GetWeaponInfoFileKeyField( "sound_energy_charge_loop_3p" ) )
+	weapon.EmitWeaponSound_1p3p( chargeLoop, chargeLoop_3p )
+
+	return true
+}
+
+
+void function EnergyChargeWeapon_OnWeaponChargeEnd( entity weapon, EnergyChargeWeaponData chargeWeaponData )
+{
+	
+	weapon.Signal( "EnergyWeapon_ChargeReleased" )
+
+	thread EnergyChargeWeapon_StopCharge_Think( weapon, chargeWeaponData )
+}
+
+
+void function EnergyChargeWeapon_StopCharge_Think( entity weapon, EnergyChargeWeaponData chargeWeaponData )
+{
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( "EnergyWeapon_ChargeStart" )
+	weapon.EndSignal( "EnergyWeapon_ChargeReleased" )
+
+	while ( true )
+	{
+		WaitFrame()
+
+		if ( EnergyChargeWeapon_GetChargeLevel( weapon ) <= 1 )
+			break
+	}
+
+	EnergyChargeWeapon_StopCharge( weapon, chargeWeaponData )
+}
+
+
+void function FireHitscanShotgunBlast( entity weapon, vector pos, vector dir, int numBlasts, int damageType, float damageScaler = 1.0, float ornull maxAngle = null, float ornull maxDistance = null )
+{
+	Assert( numBlasts > 0 )
+	int numBlastsOriginal = numBlasts
+
+	
+
+
+
+
+
+
+	if ( maxDistance == null )
+		maxDistance = weapon.GetMaxDamageFarDist()
+	expect float( maxDistance )
+
+	if ( maxAngle == null )
+		maxAngle = weapon.GetAttackSpreadAngle() * 0.5
+	expect float( maxAngle )
+
+	entity owner                  = weapon.GetWeaponOwner()
+	array<entity> ignoredEntities = [ owner ]
+	int traceMask                 = TRACE_MASK_SHOT
+	int visConeFlags              = VIS_CONE_ENTS_TEST_HITBOXES | VIS_CONE_ENTS_CHECK_SOLID_BODY_HIT | VIS_CONE_ENTS_APPOX_CLOSEST_HITBOX | VIS_CONE_RETURN_HIT_VORTEX
+
+	entity antilagPlayer
+	if ( owner.IsPlayer() )
+	{
+		if ( owner.IsPhaseShifted() )
+			return
+
+		antilagPlayer = owner
+	}
+
+	
+	Assert( maxAngle > 0.0, "JFS returning out at this instance. We need to investigate when a valid mp_titanweapon_laser_lite weapon returns 0 spread" )
+	if ( maxAngle == 0.0 )
+		return
+
+	array<VisibleEntityInCone> results = FindVisibleEntitiesInCone( pos, dir, maxDistance, (maxAngle * 1.1), ignoredEntities, traceMask, visConeFlags, antilagPlayer, weapon )
+	foreach ( result in results )
+	{
+		float angleToHitbox = 0.0
+		if ( !result.solidBodyHit )
+			angleToHitbox = DegreesToTarget( pos, dir, result.approxClosestHitboxPos )
+
+		numBlasts -= HitscanShotgunBlastDamageEntity( weapon, pos, dir, result, angleToHitbox, maxAngle, numBlasts, damageType, damageScaler )
+		if ( numBlasts <= 0 )
+			break
+	}
+
+	
+	owner = weapon.GetWeaponOwner()
+	if ( !IsValid( owner ) )
+		return
+
+	
+	const int MAX_TRACERS = 16
+	bool didHitAnything   = ((numBlastsOriginal - numBlasts) != 0)
+	bool doTraceBrushOnly = (!didHitAnything)
+	if ( numBlasts > 0 )
+	{
+		WeaponFireBulletSpecialParams fireBulletParams
+		fireBulletParams.pos = pos
+		fireBulletParams.dir = dir
+		fireBulletParams.bulletCount = minint( numBlasts, MAX_TRACERS )
+		fireBulletParams.scriptDamageType = damageType
+		fireBulletParams.skipAntiLag = false
+		fireBulletParams.dontApplySpread = false
+		fireBulletParams.doDryFire = true
+		fireBulletParams.noImpact = false
+		fireBulletParams.noTracer = false
+		fireBulletParams.activeShot = false
+		fireBulletParams.doTraceBrushOnly = doTraceBrushOnly
+		weapon.FireWeaponBullet_Special( fireBulletParams )
+	}
+}
+
+
+vector function ApplyVectorSpread( vector vecShotDirection, float spreadDegrees, float bias = 1.0 )
+{
+	vector angles   = VectorToAngles( vecShotDirection )
+	vector vecUp    = AnglesToUp( angles )
+	vector vecRight = AnglesToRight( angles )
+
+	float sinDeg = deg_sin( spreadDegrees / 2.0 )
+
+	
+	float x
+	float y
+	float z
+
+	if ( bias > 1.0 )
+		bias = 1.0
+	else if ( bias < 0.0 )
+		bias = 0.0
+
+	
+	float shotBiasMin = -1.0
+	float shotBiasMax = 1.0
+
+	
+	float shotBias = ((shotBiasMax - shotBiasMin) * bias) + shotBiasMin
+	float flatness = (fabs( shotBias ) * 0.5)
+
+	while ( true )
+	{
+		x = RandomFloatRange( -1.0, 1.0 ) * flatness + RandomFloatRange( -1.0, 1.0 ) * (1 - flatness)
+		y = RandomFloatRange( -1.0, 1.0 ) * flatness + RandomFloatRange( -1.0, 1.0 ) * (1 - flatness)
+		if ( shotBias < 0 )
+		{
+			x = (x >= 0) ? 1.0 - x : -1.0 - x
+			y = (y >= 0) ? 1.0 - y : -1.0 - y
+		}
+		z = x * x + y * y
+
+		if ( z <= 1 )
+			break
+	}
+
+	vector addX        = vecRight * (x * sinDeg)
+	vector addY        = vecUp * (y * sinDeg)
+	vector m_vecResult = vecShotDirection + addX + addY
+
+	return m_vecResult
+}
+
+
+float function DegreesToTarget( vector origin, vector forward, vector targetPos )
+{
+	vector dirToTarget = targetPos - origin
+	dirToTarget = Normalize( dirToTarget )
+	float dot         = DotProduct( forward, dirToTarget )
+	float degToTarget = (acos( dot ) * 180 / PI)
+
+	return degToTarget
+}
+
+
+const SHOTGUN_ANGLE_MIN_FRACTION = 0.1
+const SHOTGUN_ANGLE_MAX_FRACTION = 1.0
+const SHOTGUN_DAMAGE_SCALE_AT_MIN_ANGLE = 0.8
+const SHOTGUN_DAMAGE_SCALE_AT_MAX_ANGLE = 0.1
+
+int function HitscanShotgunBlastDamageEntity( entity weapon, vector barrelPos, vector barrelVec, VisibleEntityInCone result, float angle, float maxAngle, int numPellets, int damageType, float damageScaler )
+{
+	entity target = result.ent
+
+	
+	if ( !target.IsTitan() && damageScaler > 1 )
+		damageScaler = max( damageScaler * 0.4, 1.5 )
+
+	entity owner = weapon.GetWeaponOwner()
+	
+	if ( !IsValid( target ) || !IsValid( owner ) )
+		return 0
+
+	
+	vector hitLocation = result.visiblePosition
+	vector vecToEnt    = (hitLocation - barrelPos)
+	vecToEnt.Norm()
+	if ( Length( vecToEnt ) == 0 )
+		vecToEnt = barrelVec
+
+	
+	WeaponFireBulletSpecialParams fireBulletParams
+	fireBulletParams.pos = barrelPos
+	fireBulletParams.dir = vecToEnt
+	fireBulletParams.bulletCount = 1
+	fireBulletParams.scriptDamageType = damageType
+	fireBulletParams.skipAntiLag = true
+	fireBulletParams.dontApplySpread = true
+	fireBulletParams.doDryFire = true
+	fireBulletParams.noImpact = false
+	fireBulletParams.noTracer = false
+	fireBulletParams.activeShot = false
+	fireBulletParams.doTraceBrushOnly = false
+	weapon.FireWeaponBullet_Special( fireBulletParams ) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	return 1
+}
+
+
+void function FireProjectileShotgunBlast( entity weapon, WeaponPrimaryAttackParams attackParams, bool playerFired, float outerSpread, float innerSpread, int numProjectiles )
+{
+	vector vecFwd   = attackParams.dir
+	vector vecRight = AnglesToRight( VectorToAngles( attackParams.dir ) )
+
+	array<vector> spreadVecs = GetProjectileShotgunBlastVectors( attackParams.pos, vecFwd, vecRight, outerSpread, innerSpread, numProjectiles )
+
+	for ( int i = 0; i < spreadVecs.len(); i++ )
+	{
+		vector spreadVec = spreadVecs[i]
+		attackParams.dir = spreadVec
+
+		bool ignoreSpread = true  
+		bool deferred     = i > (spreadVecs.len() / 2)
+		entity bolt       = FireBallisticRoundWithDrop( weapon, attackParams.pos, attackParams.dir, playerFired, ignoreSpread, i, deferred )
+	}
+}
+
+
+array<vector> function GetProjectileShotgunBlastVectors( vector pos, vector forward, vector right, float outerSpread, float innerSpead, int numSegments )
+{
+#if DEBUG_PROJECTILE_BLAST
+		DebugDrawLine( pos, pos + forward * 250, COLOR_RED, true, 3.0 )
+		array<vector> outerVecs
+		array<vector> innerVecs
+#endif
+
+	int numRadialSegments = numSegments - 1
+
+	float degPerSegment = 360.0 / numRadialSegments
+	array<vector> randVecs
+
+	
+	for ( int i = 0 ; i < numRadialSegments ; i++ )
+	{
+		vector randVec = VectorRotateAxis( forward, right, RandomFloatRange( innerSpead, outerSpread ) )
+		randVec = VectorRotateAxis( randVec, forward, RandomFloatRange( degPerSegment * i, degPerSegment * (i + 1) ) )
+		randVec.Norm()
+		randVecs.append( randVec )
+
+#if DEBUG_PROJECTILE_BLAST
+			vector innerVec = VectorRotateAxis( forward, right, innerSpead )
+			innerVec = VectorRotateAxis( innerVec, forward, degPerSegment * i )
+			innerVec.Norm()
+			innerVecs.append( innerVec )
+
+			vector outerVec = VectorRotateAxis( forward, right, outerSpread )
+			outerVec = VectorRotateAxis( outerVec, forward, degPerSegment * i )
+			outerVec.Norm()
+			outerVecs.append( outerVec )
+#endif
+	}
+
+	
+	
+	
+	
+	
+
+	
+	randVecs.append( forward )
+
+#if DEBUG_PROJECTILE_BLAST
+		for ( int i = 0 ; i < numRadialSegments ; i++ )
+		{
+			vector o1 = pos + outerVecs[i] * 250
+			vector o2 = (i == numRadialSegments - 1) ? pos + outerVecs[0] * 250 : pos + outerVecs[i + 1] * 250
+			vector i1 = pos + innerVecs[i] * 250
+			vector i2 = (i == numRadialSegments - 1) ? pos + innerVecs[0] * 250 : pos + innerVecs[i + 1] * 250
+
+			DebugDrawLine( o1, o2, COLOR_YELLOW, true, 3.0 )
+			DebugDrawLine( i1, i2, COLOR_YELLOW, true, 3.0 )
+			DebugDrawLine( i1, o1, COLOR_YELLOW, true, 3.0 )
+		}
+
+		foreach ( vector vec in randVecs )
+		{
+			DebugDrawSphere( pos + vec * 250, 1.0, COLOR_RED, true, 3.0, 3 )
+		}
+#endif
+
+	return randVecs
+}
+
+
+float function ProjectileShotgun_GetOuterSpread( entity weapon )
+{
+	return weapon.GetAttackSpreadAngle()
+}
+
+
+float function ProjectileShotgun_GetInnerSpread( entity weapon )
+{
+	float innerSpread = 0
+
+	var innerSpreadVar = expect float ornull( weapon.GetWeaponInfoFileKeyField( "shotgun_spread_radial_innerexclude" ) )
+	if ( innerSpreadVar == null )
+		innerSpread = ProjectileShotgun_GetOuterSpread( weapon ) * DEFAULT_SHOTGUN_SPREAD_INNEREXCLUDE_FRAC
+	else
+		innerSpread = expect float ( weapon.GetWeaponInfoFileKeyField( "shotgun_spread_radial_innerexclude" ) )
+
+	return innerSpread
+}
+
+
+void function FireProjectileBlastPattern( entity weapon, WeaponPrimaryAttackParams attackParams, bool playerFired, array<vector> blastPattern, float patternScale = 1.0, bool ignoreSpread = true )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	int projectilesPerShot = weapon.GetProjectilesPerShot()
+	int patternLength      = blastPattern.len()
+	Assert( projectilesPerShot <= patternLength, "Not enough blast pattern points (" + patternLength + ") for " + projectilesPerShot + " projectiles per shot" )
+
+	float defaultPatternScale = expect float( weapon.GetWeaponInfoFileKeyField( "projectile_blast_pattern_default_scale" ) )
+	patternScale *= defaultPatternScale
+#if DEBUG_PROJECTILE_BLAST
+		printt( "blast pattern scale:", defaultPatternScale )
+#endif
+
+	array<vector> scaledBlastPattern = clone blastPattern
+
+	if ( patternScale != 1.0 )
+	{
+		for ( int i = 0; i < scaledBlastPattern.len(); i++ )
+		{
+			scaledBlastPattern[i] *= patternScale
+		}
+	}
+
+	float patternZeroDistance = expect float( weapon.GetWeaponInfoFileKeyField( "projectile_blast_pattern_zero_distance" ) )
+
+	array<vector> spreadVecs = GetProjectileBlastPatternVectors( attackParams, scaledBlastPattern, patternZeroDistance )
+
+	for ( int i = 0; i < projectilesPerShot; i++ )
+	{
+		vector spreadVec = spreadVecs[i]
+		attackParams.dir = spreadVec
+
+		bool deferred = i > (spreadVecs.len() / 2)
+		entity bolt   = FireBallisticRoundWithDrop( weapon, attackParams.pos, attackParams.dir, playerFired, ignoreSpread, i, deferred )
+	}
+}
+
+
+array<vector> function GetProjectileBlastPatternVectors( WeaponPrimaryAttackParams attackParams, array<vector> blastPattern, float patternZeroDistance )
+{
+	vector startPos            = attackParams.pos
+	vector forward             = attackParams.dir
+	vector right               = AnglesToRight( VectorToAngles( attackParams.dir ) )
+	vector up                  = AnglesToUp( VectorToAngles( forward ) )
+	vector patternCenterAtZero = startPos + (forward * patternZeroDistance)
+
+	array<vector> patternVecs
+
+	foreach ( offsetVec in blastPattern )
+	{
+		vector offsetPos = patternCenterAtZero + (right * offsetVec.x)
+		offsetPos += (up * offsetVec.y)
+
+		vector vecToTarget = Normalize( offsetPos - startPos )
+		patternVecs.append( vecToTarget )
+
+#if DEBUG_PROJECTILE_BLAST
+			DebugDrawLine( startPos, offsetPos, COLOR_RED, true, 3.0 )
+#endif
+	}
+
+	return patternVecs
+}
+
+
+entity function FireBallisticRoundWithDrop( entity weapon, vector pos, vector dir, bool isPlayerFired, bool ignoreSpread, int projectileIndex, bool deferred )
+{
+	int boltSpeed   = int( weapon.GetWeaponSettingFloat( eWeaponVar.projectile_launch_speed ) )
+	int damageFlags = weapon.GetWeaponDamageFlags()
+
+	float boltGravity  = 0.0
+	if ( weapon.GetWeaponSettingBool( eWeaponVar.bolt_gravity_enabled ) )
+	{
+		var zeroDistance = weapon.GetWeaponSettingFloat( eWeaponVar.bolt_zero_distance )
+		if ( zeroDistance == null )
+			zeroDistance = 4096.0
+
+		expect float( zeroDistance )
+
+		boltGravity = weapon.GetWeaponSettingFloat( eWeaponVar.projectile_gravity_scale )
+		float worldGravity = GetConVarFloat( "sv_gravity" ) * boltGravity
+		float time         = zeroDistance / float( boltSpeed )
+
+		if ( DEBUG_BULLET_DROP <= 1 )
+			dir += (GetZVelocityForDistOverTime( zeroDistance, time, worldGravity ) / boltSpeed)
+	}
+
+	WeaponFireBoltParams fireBoltParams
+	fireBoltParams.pos = pos
+	fireBoltParams.dir = dir
+	fireBoltParams.speed = 1
+	fireBoltParams.scriptTouchDamageType = damageFlags
+	fireBoltParams.scriptExplosionDamageType = damageFlags
+	fireBoltParams.clientPredicted = isPlayerFired
+	fireBoltParams.additionalRandomSeed = 0
+	fireBoltParams.dontApplySpread = ignoreSpread
+	fireBoltParams.projectileIndex = projectileIndex
+	fireBoltParams.deferred = deferred
+	entity bolt = weapon.FireWeaponBoltAndReturnEntity( fireBoltParams )
+
+
+		Chroma_FiredWeapon( weapon )
+
+
+	return bolt
+}
+
+
+string function GetDistanceString( float distInches )
+{
+	float distFeet   = distInches / 12.0
+	float distYards  = distInches / 36.0
+	float distMeters = distInches / 39.3701
+
+	return format( "%.2fm %.2fy %.2ff %.2fin", distMeters, distYards, distFeet, distInches )
+}
+
+
+vector function GetZVelocityForDistOverTime( float distance, float duration, float gravity )
+{
+	float voz = 0.5 * gravity * duration * duration / duration
+	return <0, 0, voz>
+}
+
+
+int function FireGenericBoltWithDrop( entity weapon, WeaponPrimaryAttackParams attackParams, bool isPlayerFired )
+{
+
+		if ( !weapon.ShouldPredictProjectiles() )
+			return 1
+
+
+	weapon.EmitWeaponNpcSound( LOUD_WEAPON_AI_SOUND_RADIUS_MP, 0.2 )
+
+	const float PROJ_SPEED_SCALE = 1
+	const float PROJ_GRAVITY = 1
+	int damageFlags = weapon.GetWeaponDamageFlags()
+	WeaponFireBoltParams fireBoltParams
+	fireBoltParams.pos = attackParams.pos
+	fireBoltParams.dir = attackParams.dir
+	fireBoltParams.speed = PROJ_SPEED_SCALE
+	fireBoltParams.scriptTouchDamageType = damageFlags
+	fireBoltParams.scriptExplosionDamageType = damageFlags
+	fireBoltParams.clientPredicted = isPlayerFired
+	fireBoltParams.additionalRandomSeed = 0
+	entity bolt = weapon.FireWeaponBoltAndReturnEntity( fireBoltParams )
+	if ( bolt != null )
+	{
+		bolt.kv.gravity = PROJ_GRAVITY
+		bolt.kv.rendercolor = "0 0 0"
+		bolt.kv.renderamt = 0
+		bolt.kv.fadedist = 1
+	}
+
+		Chroma_FiredWeapon( weapon )
+
+
+
+	return 1
+}
+
+
+var function OnWeaponPrimaryAttack_GenericBoltWithDrop_Player( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	return FireGenericBoltWithDrop( weapon, attackParams, true )
+}
+
+
+var function OnWeaponPrimaryAttack_EPG( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	WeaponFireMissileParams fireMissileParams
+	fireMissileParams.pos = attackParams.pos
+	fireMissileParams.dir = attackParams.dir
+	fireMissileParams.speed = 1
+	fireMissileParams.scriptTouchDamageType = damageTypes.largeCaliberExp
+	fireMissileParams.scriptExplosionDamageType = damageTypes.largeCaliberExp
+	fireMissileParams.doRandomVelocAndThinkVars = false
+	fireMissileParams.clientPredicted = false
+	entity missile = weapon.FireWeaponMissile( fireMissileParams )
+	if ( missile )
+	{
+		EmitSoundOnEntity( missile, "Weapon_Sidwinder_Projectile" )
+		missile.InitMissileForRandomDriftFromWeaponSettings( attackParams.pos, attackParams.dir )
+	}
+
+	return missile
+}
+
+bool function IsABaseGrenade( entity ent )
+{
+
+		return (ent instanceof C_BaseGrenade)
+
+
+
+}
+
+void function HandleDisappearingParent( entity ent, entity parentEnt )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	parentEnt.EndSignal( "OnDeath" )
+	ent.EndSignal( "OnDestroy" )
+
+	parentEnt.WaitSignal( "StartPhaseShift", "DeathTotem_PreRecallPlayer" )
+
+	ent.ClearParent()
+
+}
+
+
+#if DEV
+void function ShowExplosionRadiusOnExplode( entity ent )
+{
+	ent.WaitSignal( "OnDestroy" )
+
+	float innerRadius = expect float( ent.GetWeaponInfoFileKeyField( "explosion_inner_radius" ) )
+	float outerRadius = expect float( ent.GetWeaponInfoFileKeyField( "explosionradius" ) )
+
+	vector org    = ent.GetOrigin()
+	vector angles = ZERO_VECTOR
+	thread DebugDrawCircle( org, angles, innerRadius, <255, 255, 51>, true, 3.0 )
+	thread DebugDrawCircle( org, angles, outerRadius, COLOR_WHITE, true, 3.0 )
+}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function WeaponCanCrit( entity weapon )
+{
+	
+	if ( !weapon )
+		return false
+
+	return weapon.GetWeaponSettingBool( eWeaponVar.critical_hit )
+}
+
+
+vector function GetVectorFromPositionToCrosshair( entity player, vector startPos )
+{
+	Assert( IsValid( player ) )
+
+	
+	vector traceStart        = player.EyePosition()
+	vector traceEnd          = traceStart + (player.GetViewVector() * 20000)
+	array<entity> ignoreEnts = [ player ]
+	TraceResults traceResult = TraceLine( traceStart, traceEnd, ignoreEnts, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE )
+
+	
+	vector vec = traceResult.endPos - startPos
+	vec = Normalize( vec )
+	return vec
+}
+
+
+
+
+
+
+
+
+
+
+void function InitMissileForRandomDriftForVortexHigh( entity missile, vector startPos, vector startDir )
+{
+	missile.InitMissileForRandomDrift( startPos, startDir, 8, 2.5, 0, 0, 100, 100, 0 )
+}
+
+
+void function InitMissileForRandomDriftForVortexLow( entity missile, vector startPos, vector startDir )
+{
+	missile.InitMissileForRandomDrift( startPos, startDir, 0.3, 0.085, 0, 0, 0.5, 0.5, 0 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vector function GetVelocityForDestOverTime( vector startPoint, vector endPoint, float duration )
+{
+	const GRAVITY = 750
+
+	float vox = (endPoint.x - startPoint.x) / duration
+	float voy = (endPoint.y - startPoint.y) / duration
+	float voz = (endPoint.z + 0.5 * GRAVITY * duration * duration - startPoint.z) / duration
+
+	return <vox, voy, voz>
+}
+
+
+vector function GetPlayerVelocityForDestOverTime( vector startPoint, vector endPoint, float duration )
+{
+	
+
+	float gravityScale = GetGlobalSettingsFloat( DEFAULT_PILOT_SETTINGS, "gravityScale" )
+	float GRAVITY      = 750 * gravityScale 
+
+	float vox = (endPoint.x - startPoint.x) / duration
+	float voy = (endPoint.y - startPoint.y) / duration
+	float voz = (endPoint.z + 0.5 * GRAVITY * duration * duration - startPoint.z) / duration
+
+	return <vox, voy, voz>
+}
+
+
+
+bool function IsOwnerViewPlayerFullyADSed( entity weapon )
+{
+	entity owner = weapon.GetOwner()
+	if ( !IsValid( owner ) )
+		return false
+
+	if ( !owner.IsPlayer() )
+		return false
+
+	if ( owner != GetLocalViewPlayer() )
+		return false
+
+	float zoomFrac = owner.GetZoomFrac()
+	if ( zoomFrac < 1.0 )
+		return false
+
+	return true
+}
+
+
+
+void function DebugDrawMissilePath( entity missile )
+{
+	EndSignal( missile, "OnDestroy" )
+	vector lastPos = missile.GetOrigin()
+	while ( true )
+	{
+		WaitFrame()
+		if ( !IsValid( missile ) )
+			return
+		DebugDrawLine( lastPos, missile.GetOrigin(), COLOR_GREEN, true, 20.0 )
+		lastPos = missile.GetOrigin()
+	}
+}
+
+
+bool function IsPilotShotgunWeapon( string weaponName )
+{
+	if ( IsWeaponKeyFieldDefined( weaponName, "weaponSubClass" ) && GetWeaponInfoFileKeyField_GlobalString( weaponName, "weaponSubClass" ) == "shotgun" )
+		return true
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+string ornull function FindEnumNameForValue( table searchTable, int searchVal )
+{
+	foreach ( string keyname, int value in searchTable )
+	{
+		if ( value == searchVal )
+			return keyname
+	}
+	return null
+}
+
+void function DevPrintAllStatusEffectsOnEnt( entity ent )
+{
+	printt( "Effects:", ent )
+	array<float> effects = StatusEffect_GetAllSeverity( ent )
+	int length           = effects.len()
+	int found            = 0
+	for ( int idx = 0; idx < length; idx++ )
+	{
+		float severity = effects[idx]
+		if ( severity <= 0.0 )
+			continue
+		string ornull name = FindEnumNameForValue( eStatusEffect, idx )
+		Assert( name )
+		expect string( name )
+		printt( " eStatusEffect." + name + ": " + severity )
+		found++
+	}
+	printt( found + " effects active.\n" )
+}
+#endif
+
+entity function GetMeleeWeapon( entity player )
+{
+	array<entity> weapons = player.GetMainWeapons()
+	foreach ( weaponEnt in weapons )
+	{
+		if ( weaponEnt.IsWeaponOffhandMelee() )
+			return weaponEnt
+	}
+
+	return null
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PlayerUsedOffhand( entity player, entity offhandWeapon, bool sendPINEvent = true, entity trackedProjectile = null, table pinAdditionalData = {} )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if ( offhandWeapon == player.GetOffhandWeapon( eOffhandInv.ULTIMATE ) )
+		{
+			if ( offhandWeapon.GetWeaponSettingFloat( eWeaponVar.regen_ammo_refill_rate ) == 0 )
+				UltimateWeaponStateSet( eUltimateState.CHARGING )
+			else
+				UltimateWeaponStateSet( eUltimateState.ACTIVE )
+		}
+		Chroma_PlayerUsedAbility( player, offhandWeapon )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GetMaxTrackerCountForTitan( entity titan )
+{
+	array<entity> primaryWeapons = titan.GetMainWeapons()
+	if ( primaryWeapons.len() > 0 && IsValid( primaryWeapons[0] ) )
+	{
+		if ( primaryWeapons[0].HasMod( "pas_lotech_helper" ) )
+			return 4
+	}
+
+	return 3
+}
+
+bool function IsWeaponInSingleShotMode( entity weapon )
+{
+	if ( weapon.GetWeaponSettingBool( eWeaponVar.attack_button_presses_melee ) )
+		return false
+
+	if ( !weapon.GetWeaponSettingBool( eWeaponVar.is_semi_auto ) )
+		return false
+
+	return weapon.GetWeaponSettingInt( eWeaponVar.burst_fire_count ) == 0
+}
+
+
+bool function IsWeaponInBurstMode( entity weapon )
+{
+	return weapon.GetWeaponSettingInt( eWeaponVar.burst_fire_count ) > 1
+}
+
+
+bool function IsWeaponOffhand( entity weapon )
+{
+	switch( weapon.GetWeaponSettingEnum( eWeaponVar.fire_mode, eWeaponFireMode ) )
+	{
+		case eWeaponFireMode.offhand:
+		case eWeaponFireMode.offhandInstant:
+		case eWeaponFireMode.offhandHybrid:
+			return true
+	}
+	return false
+}
+
+
+bool function IsWeaponInAutomaticMode( entity weapon )
+{
+	return !weapon.GetWeaponSettingBool( eWeaponVar.is_semi_auto )
+}
+
+bool function IsMeleeWeaponNotFists( entity player )
+{
+	if ( !IsValid(player) )
+		return false
+
+	entity meleeWeapon = player.GetOffhandWeapon( eOffhandInv.MELEE )
+	bool isHeirloom = meleeWeapon.GetWeaponSettingBool( eWeaponVar.is_heirloom )
+	bool isArtifact = meleeWeapon.GetWeaponSettingBool( eWeaponVar.is_artifact )
+
+	return isHeirloom || isArtifact
+}
+
+
+bool function OnWeaponAttemptOffhandSwitch_Never( entity weapon )
+{
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnWeaponReadyToFire_ability_tactical( entity weapon )
+{
+
+
+
+}
+
+
+void function OnWeaponRegenEndGeneric( entity weapon )
+{
+
+
+
+
+
+
+		entity owner = weapon.GetWeaponOwner()
+		if ( !IsValid( owner ) || !owner.IsPlayer() )
+			return
+		if ( owner.GetOffhandWeapon( eOffhandInv.ULTIMATE ) == weapon )
+			Chroma_UltimateReady()
+
+}
+
+
+void function Ultimate_OnWeaponRegenBegin( entity weapon )
+{
+
+		UltimateWeaponStateSet( eUltimateState.CHARGING )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PlayDelayedShellEject( entity weapon, float time, int count = 1, bool persistent = false )
+{
+	AssertIsNewThread()
+
+	weapon.EndSignal( "OnDestroy" )
+
+	asset vmShell      = weapon.GetWeaponSettingAsset( eWeaponVar.fx_shell_eject_view )
+	asset worldShell   = weapon.GetWeaponSettingAsset( eWeaponVar.fx_shell_eject_world )
+	string shellAttach = weapon.GetWeaponSettingString( eWeaponVar.fx_shell_eject_attach )
+
+	if ( shellAttach == "" )
+		return
+
+	for ( int i = 0; i < count; i++ )
+	{
+		wait time
+
+		if ( !IsValid( weapon ) )
+			return
+		entity viewmodel = weapon.GetWeaponViewmodel()
+		if ( !IsValid( viewmodel ) )
+			return
+		weapon.PlayWeaponEffect( vmShell, worldShell, shellAttach, persistent )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function UICallback_UpdateLaserSightColor()
+{
+	Remote_ServerCallFunction( "ClientCallback_UpdateLaserSightColor" )
+}
+
+bool function TryCharacterButtonCommonReadyChecks( entity player )
+{
+	if ( player != GetLocalViewPlayer() )
+		return false
+	if ( player != GetLocalClientPlayer() )
+		return false
+
+	if ( HoverVehicle_PlayerIsDriving( player ) )
+		return false
+
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ShouldShowADSScopeView( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( !HasFullscreenScope( weapon ) )
+		return false
+
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return false
+
+	if ( player.GetZoomFrac() < weapon.GetWeaponSettingFloat( eWeaponVar.ads_fov_zoomfrac_end ) )
+		return false
+
+	return true
+}
+
+
+bool function HasFullscreenScope( entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( weapon.GetWeaponSettingInt( eWeaponVar.bodygroup_ads_scope_set ) <= 0 )
+		return false
+
+	if ( weapon.GetWeaponInfoFileKeyField( "bodygroup_ads_scope_name" ) == null )
+		return false
+
+	return true
+}
+
+
+vector function GetAmmoColorByType( string ammoType )
+{
+	int colorID  = ammoColors[ammoType]
+	vector color = GetKeyColor( colorID ) / 255.0
+	return color
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vector function CalcProjectileTrajectory( vector startPos, vector targetPos, float desiredTravelTime, bool debugDraw )
+{
+	
+	
+	
+	
+
+	vector startToTarget     = targetPos - startPos
+	vector startToTargetFlat = FlattenVec( startToTarget )
+	float xDiff              = Length( startToTargetFlat )
+	float yDiff              = startToTarget.z
+
+
+	float velX = (xDiff) / desiredTravelTime
+
+	float gravity = GetConVarFloat( "sv_gravity" )
+
+	float velY = (yDiff + 0.5 * gravity * desiredTravelTime * desiredTravelTime) / desiredTravelTime
+
+	vector horizontalLaunchVel = Normalize( startToTargetFlat ) * velX
+
+	vector launchVel = <horizontalLaunchVel.x, horizontalLaunchVel.y, velY>
+
+	if ( debugDraw )
+	{
+		const float DRAW_TIME = 0.1
+		DebugDrawSphere( startPos, 5, COLOR_YELLOW, false, DRAW_TIME )
+		DebugDrawSphere( targetPos, 5, COLOR_YELLOW, false, DRAW_TIME )
+		DebugDrawArrow( startPos, startPos + launchVel, 10, COLOR_YELLOW, false, DRAW_TIME )
+	}
+
+	return launchVel
+}
+
+
+ArcSolution function SolveBallisticArc( vector launchOrigin, float launchSpeed, vector targetOrigin, float gravity, bool lowAngle = true )
+{
+	ArcSolution as
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+	vector diff = targetOrigin - launchOrigin
+	vector diffXZ =FlattenVec( diff );
+	float groundDist = Length( diffXZ );
+
+	float speed2 = launchSpeed*launchSpeed;
+	float speed4 = launchSpeed*launchSpeed*launchSpeed*launchSpeed;
+	float y = diff.z;
+	float x = groundDist;
+	float gx = gravity*x;
+
+	float root = speed4 - gravity*(gravity*x*x + 2*y*speed2);
+
+	
+	if (root < 0)
+		return as;
+
+	as.valid = true
+	root = sqrt( root );
+
+	float lowAng = atan2(speed2 - root, gx)
+	float highAng = atan2(speed2 + root, gx)
+
+	float goodAngle = ( lowAngle ) ? lowAng : highAng
+
+	vector groundDir = Normalize( diffXZ )
+	as.fire_velocity = ( groundDir * cos( goodAngle ) *launchSpeed ) + ( < 0, 0, 1 > * sin( goodAngle ) * launchSpeed )
+	float groundSpeed = Length( FlattenVec( as.fire_velocity ) )
+	groundSpeed = ( groundSpeed > 0 ) ? groundSpeed : 1.0
+	as.duration = groundDist / groundSpeed
+
+	return as;
+}
+
+CrosshairTargetData function GetCrosshairTargetData( entity player, float minDistance, float maxDistance, float airBurstHeight, bool capAtMaxRange = false )
+{
+	CrosshairTargetData data
+	data.crosshairStart = player.CameraPosition()
+	vector crosshairEnd = data.crosshairStart + player.GetViewForward() * maxDistance
+	DoTraceCoordCheck( false )
+	array< entity > ignoreEnts = [ player ]
+	ignoreEnts.extend( GetEntArrayByScriptName( CRYPTO_DRONE_SCRIPTNAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( DEATHBOX_FLYER_SCRIPT_NAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( JUMPTOWER_PING_NAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( REDEPLOY_BALLOON_INFLATABLE_SCRIPT_NAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( BANGALORE_SMOKESCREEN_SCRIPTNAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( RESPAWN_DROPSHIP_TARGETNAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( VANTAGE_COMPANION_SCRIPTNAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( CARE_PACKAGE_SCRIPTNAME ) )
+	ignoreEnts.extend( GetEntArrayByScriptName( WORKBENCH_CLUSTER_AIRDROPPED_SCRIPTNAME ) )
+	ignoreEnts.extend( GetPlayerArray_Alive() )
+	TraceResults crosshairResults = TraceLineHighDetail( data.crosshairStart, crosshairEnd, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+
+	data.groundTarget = crosshairResults.endPos
+	data.groundTargetNormal = crosshairResults.surfaceNormal
+	data.airburstTarget = data.groundTarget + < 0, 0, airBurstHeight >
+	data.distanceToTarget = Distance( data.groundTarget, data.crosshairStart )
+	data.directionToTarget =  Normalize( data.groundTarget - data.crosshairStart )
+	float flattenedDistanceToTarget = Distance2D( data.groundTarget, data.crosshairStart )
+	bool isPlayerAbove =  ( data.groundTarget.z  - data.crosshairStart.z ) <= 0
+
+	if( flattenedDistanceToTarget < minDistance )
+	{
+		data.groundTarget = crosshairResults.endPos + ( FlattenNormalizeVec ( data.directionToTarget ) * ( minDistance - flattenedDistanceToTarget ) )
+		vector downTraceEnd = < data.groundTarget.x, data.groundTarget.y, data.groundTarget.z - 250 >
+		TraceResults downTraceResults = TraceLineHighDetail( data.groundTarget, downTraceEnd, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+		if( downTraceResults.startSolid || downTraceResults.fraction < 1.0 )
+			data.groundTarget = downTraceResults.endPos
+		data.airburstTarget = data.groundTarget + < 0, 0, airBurstHeight >
+		data.distanceToTarget = Distance( data.groundTarget, data.crosshairStart )
+		data.inRange = CrosshairInRange( crosshairResults, player, isPlayerAbove )
+	}
+	else if ( capAtMaxRange && crosshairResults.fraction == 1.0 )
+	{
+		vector downTraceStart = data.crosshairStart + ( FlattenNormalizeVec ( data.directionToTarget ) *  maxDistance )
+		vector downTraceEnd = < data.groundTarget.x, data.groundTarget.y, data.groundTarget.z - 25000 >
+		TraceResults downTraceResults = TraceLineHighDetail( data.groundTarget, downTraceEnd, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+		if( downTraceResults.startSolid || downTraceResults.fraction < 1.0 )
+			data.groundTarget = downTraceResults.endPos
+		data.airburstTarget = data.groundTarget + < 0, 0, airBurstHeight >
+		data.distanceToTarget = Distance( data.groundTarget, data.crosshairStart )
+		data.inRange = true
+	}
+	else
+		data.inRange = CrosshairInRange( crosshairResults, player, isPlayerAbove )
+	DoTraceCoordCheck( true )
+
+	return data
+}
+
+bool function CrosshairInRange( TraceResults crosshairResults, entity player, bool isPlayerAbove  )
+{
+	bool inRange = false
+	const array< string > HOVER_TANK_ENTS = [ "_hover_tank_mover", "_hover_tank_interior"]
+
+	if( IsValid( crosshairResults.hitEnt ) && HOVER_TANK_ENTS.contains( crosshairResults.hitEnt.GetScriptName() ) )
+	{
+		entity ground = player.GetGroundEntity()
+		float velocity = Length( crosshairResults.hitEnt.GetVelocity() )
+		if( isPlayerAbove || velocity == 0.0 || ground == crosshairResults.hitEnt )
+			inRange = crosshairResults.fraction < 1.0
+		else
+			inRange = false
+	}
+	else
+		inRange = crosshairResults.fraction < 1.0
+
+	return inRange
+}
+
+CrosshairTargetData function GetCrosshairTargetDataAngles( entity player, float minDistance, float maxDistance, float airBurstHeight, bool capAtMaxRange = false )
+{
+	const bool DEBUG_AIRBUST_TARGET = false
+	CrosshairTargetData data
+
+	vector cameraAngles           = player.CameraAngles()
+	vector cameraFwd              = AnglesToForward( cameraAngles )
+	vector cameraFwdFlat          = FlattenNormalizeVec( cameraFwd )
+
+	DoTraceCoordCheck( false )
+	array< entity > ignoreEnts = [ player ]
+	ignoreEnts.extend( GetEntArrayByScriptName( CRYPTO_DRONE_SCRIPTNAME ) )
+	TraceResults testTrace = TraceLineHighDetail( player.CameraPosition(), player.CameraPosition() + cameraFwd*maxDistance*2.0, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+	float heightDiff = testTrace.endPos.z - player.CameraPosition().z
+	float PITCH_ADJUST = GraphCapped( heightDiff, 300, -1000, -10, 20 )
+
+	if ( DEBUG_AIRBUST_TARGET )
+		printt( "GetCrosshairTargetDataAngles - heightDiff: " + heightDiff + " PITCH_ADJUST: " + PITCH_ADJUST )
+
+	float MIN_PITCH = 25 + PITCH_ADJUST
+	float MAX_PITCH = -10  + PITCH_ADJUST
+
+	float desiredDistanceToTarget = GraphCapped( cameraAngles.x, MIN_PITCH, MAX_PITCH, minDistance, maxDistance )
+
+
+	data.crosshairStart = player.CameraPosition()
+	vector crosshairEnd = player.GetOrigin() + cameraFwdFlat*desiredDistanceToTarget
+
+	TraceResults initialCameraTrace = TraceLineHighDetail( data.crosshairStart, crosshairEnd, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+
+	if ( DEBUG_AIRBUST_TARGET )
+	{
+		DebugDrawLine( data.crosshairStart + <0, 0, 1>, crosshairEnd, COLOR_ORANGE, false, 0.1 )
+		DebugDrawSphere( crosshairEnd, 5, COLOR_ORANGE, true, 0.1 )
+		DebugDrawSphere( initialCameraTrace.endPos, 10, COLOR_GREEN, false, 0.1 )
+	}
+
+	data.groundTarget = initialCameraTrace.endPos
+	data.groundTargetNormal = initialCameraTrace.surfaceNormal
+	data.airburstTarget = data.groundTarget + < 0, 0, airBurstHeight >
+	data.distanceToTarget = Distance( data.groundTarget, data.crosshairStart )
+	data.directionToTarget =  Normalize( data.groundTarget - data.crosshairStart )
+
+	if ( initialCameraTrace.fraction < 1.0 ) 
+	{
+		if ( DEBUG_AIRBUST_TARGET )
+			DebugDrawText( initialCameraTrace.endPos, "Initial cant see", false, 0.1 )
+
+		
+		bool canTraceAbove = false
+		float heightMult = 0.0
+		TraceResults traceAbove
+		while ( !canTraceAbove && heightMult < 10.0)
+		{
+			heightMult += 1.0
+			traceAbove = TraceLineHighDetail( data.crosshairStart, crosshairEnd + < 0, 0, airBurstHeight*heightMult >, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+			canTraceAbove = traceAbove.fraction == 1.0
+		}
+
+		if ( canTraceAbove )
+		{
+			TraceResults traceDown = TraceLineHighDetail( traceAbove.endPos, crosshairEnd, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+			data.groundTarget = traceDown.endPos
+			data.groundTargetNormal = traceDown.surfaceNormal
+			data.airburstTarget = data.groundTarget + < 0, 0, airBurstHeight >
+			data.distanceToTarget = Distance( data.groundTarget, data.crosshairStart )
+			data.directionToTarget =  Normalize( data.groundTarget - data.crosshairStart )
+
+			if ( DEBUG_AIRBUST_TARGET )
+			{
+				DebugDrawText( traceAbove.endPos, "Can see this point", false, 0.1 )
+				DebugDrawLine( traceAbove.endPos, traceDown.endPos, COLOR_GREEN, false, 0.1)
+				DebugDrawSphere( traceDown.endPos, 10, COLOR_GREEN, false, 0.1 )
+			}
+		}
+
+	}
+	else
+	{
+		
+		TraceResults traceDown = TraceLineHighDetail( initialCameraTrace.endPos, initialCameraTrace.endPos - <0,0,6000>, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+		data.groundTarget = traceDown.endPos
+		data.groundTargetNormal = traceDown.surfaceNormal
+		data.airburstTarget = data.groundTarget + < 0, 0, airBurstHeight >
+
+		if ( DEBUG_AIRBUST_TARGET )
+		{
+			DebugDrawLine( initialCameraTrace.endPos, traceDown.endPos, COLOR_GREEN, false, 0.1)
+			DebugDrawSphere( traceDown.endPos, 10, COLOR_GREEN, false, 0.1 )
+		}
+
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	}
+
+
+	
+	TraceResults traceToAirburst = TraceLineHighDetail( player.GetWorldSpaceCenter(), data.airburstTarget, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+	if( traceToAirburst.fraction < 1.0 )
+	{
+		float heightMult = 1.0
+		while ( traceToAirburst.fraction < 1.0 &&  heightMult < 5.0 )
+		{
+			heightMult += 0.5
+			data.airburstTarget = data.groundTarget + < 0, 0, heightMult*airBurstHeight >
+			traceToAirburst = TraceLineHighDetail( player.GetWorldSpaceCenter(), data.airburstTarget, ignoreEnts, (TRACE_MASK_SHOT | CONTENTS_BLOCKLOS ) & ~CONTENTS_WINDOW, TRACE_COLLISION_GROUP_PROJECTILE )
+		}
+
+		data.distanceToTarget = Distance( data.groundTarget, data.crosshairStart )
+		data.directionToTarget =  Normalize( data.groundTarget - data.crosshairStart )
+
+		if ( DEBUG_AIRBUST_TARGET )
+		{
+			DebugDrawLine(player.GetWorldSpaceCenter(), data.airburstTarget, COLOR_PURPLE, false, 0.1  )
+			printt( "GetCrosshairTargetDataAngles - heightMult needed: " + heightMult )
+		}
+	}
+
+	data.inRange = true
+
+	DoTraceCoordCheck( true )
+
+
+	if ( DEBUG_AIRBUST_TARGET )
+	{
+		DebugDrawSphere( data.groundTarget , 5, COLOR_PURPLE, false, 0.1 )
+		DebugDrawText( data.groundTarget, "ground", false, 0.1 )
+		DebugDrawSphere( data.airburstTarget , 15, COLOR_PURPLE, false, 0.1 )
+		DebugDrawText( data.airburstTarget, "air", false, 0.1 )
+		DebugDrawLine( data.groundTarget, data.airburstTarget, COLOR_PURPLE, false, 0.1  )
+	}
+
+	return data
+}
+
+void function Weapon_AddSingleCharge( entity weapon )
+{
+	int ammoReq = weapon.GetAmmoPerShot()
+	int maxClip = weapon.GetWeaponPrimaryClipCountMax()
+	int fullAdd = weapon.GetWeaponPrimaryClipCount() + ammoReq
+	int newClip = minint( maxClip, fullAdd )
+	weapon.SetWeaponPrimaryClipCount( newClip )
+
+	if ( fullAdd > maxClip )
+	{
+		int diff = fullAdd - maxClip
+		int maxAmmo = weapon.GetWeaponPrimaryAmmoCountMax( AMMOSOURCE_STOCKPILE )
+		int fullAmmoAdd = weapon.GetWeaponPrimaryAmmoCount( AMMOSOURCE_STOCKPILE ) + diff
+		int newAmmo = minint( maxAmmo, fullAmmoAdd )
+		weapon.SetWeaponPrimaryAmmoCount( AMMOSOURCE_STOCKPILE, newAmmo )
+	}
+}
+
+
+bool function AreAbilitiesSilenced( entity player )
+{
+	if ( !IsValid( player ) )
+		return true
+
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.silenced ) )
+		return true
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.is_boxing ) )
+		return true
+
+	return false
+}
+
+
+int function GetNeededEnergizeConsumableCount( entity weapon, entity player )
+{
+	string weaponRef = weapon.GetWeaponClassName()
+	string consumableRef = GetWeaponInfoFileKeyField_GlobalString ( weaponRef, "energized_consumable" )
+	int consumableRequiredCount = GetWeaponInfoFileKeyField_GlobalInt ( weaponRef, "energized_consumable_needed_amount" )
+
+	int requiredCountWithPassive = consumableRequiredCount
+	
+	{
+		if ( consumableRef == "health_pickup_combo_small" )
+			requiredCountWithPassive = player.HasPassive( ePassives.PAS_BONUS_SMALL_HEAL ) ? maxint( 1, consumableRequiredCount - 1 ) : consumableRequiredCount
+	}
+
+	return requiredCountWithPassive
+}
+
+bool function HasEnoughEnergizeConsumable( entity weapon, entity player )
+{
+	string weaponRef = weapon.GetWeaponClassName()
+	string consumableRef = GetWeaponInfoFileKeyField_GlobalString ( weaponRef, "energized_consumable" )
+	if ( consumableRef == "" )
+		return false
+
+	int consumableRequiredCount = GetNeededEnergizeConsumableCount( weapon, player )
+	int consumableCurrentCount = SURVIVAL_CountItemsInInventory( player, consumableRef )
+
+	LootData lootData = SURVIVAL_Loot_GetLootDataByRef( consumableRef )
+
+	
+	if ( PlayerHasPassive( player, ePassives.PAS_INFINITE_HEAL ) && lootData.lootType == eLootType.HEALTH )
+		return true
+
+	return consumableCurrentCount >= consumableRequiredCount
+}
+
+bool function OnWeaponTryEnergize( entity weapon, entity player, bool suppressAnnouncements )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( !IsValid( weapon ) )
+		return false
+
+	
+	if ( player.AmmoPool_GetCount( weapon.GetWeaponAmmoPoolType() ) <= 0 && GetWeaponAmmoCount( weapon ) <= 0 && !GetInfiniteAmmo( weapon ) )
+	{
+
+			if ( !suppressAnnouncements )
+				AnnouncementMessageRight( player, Localize( "#HUD_NO_AMMO" ) )
+
+		return false
+	}
+
+	string weaponName = weapon.GetWeaponClassName()
+	float maxInputFrac = GetWeaponInfoFileKeyField_GlobalFloat( weaponName, "energized_max_reenergize_frac" )
+	float energizedDuration = GetWeaponInfoFileKeyField_GlobalFloat( weaponName, "energized_duration" )
+	float chargeFrac = max( weapon.GetEnergizedEndTime() - Time(), 0 ) / energizedDuration
+
+	if ( !(weapon.GetEnergizeState() == ENERGIZE_ENERGIZED && weapon.GetLastEnergizeState() == ENERGIZE_ENERGIZING) )
+	{
+		if ( chargeFrac > maxInputFrac )
+		{
+
+				string pingStringData = GetWeaponInfoFileKeyField_GlobalString ( weaponName, "energized_full_text" )
+				if ( !suppressAnnouncements )
+					AnnouncementMessageRight( player, Localize( pingStringData ) )
+
+			return false
+		}
+	}
+	bool isUltWeaponAndUltIsFull = IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_ULTIMATE ) && ( weapon.GetWeaponPrimaryClipCount() >= weapon.GetWeaponPrimaryClipCountMax() )
+	if ( isUltWeaponAndUltIsFull )
+	{
+
+			string pingStringData = GetWeaponInfoFileKeyField_GlobalString ( weaponName, "energized_full_text" )
+			if ( !suppressAnnouncements )
+				AnnouncementMessageRight( player, Localize( pingStringData ) )
+
+		return false
+	}
+
+	if( !HasEnoughEnergizeConsumable( weapon, player ) )
+	{
+
+		int consumableRequiredCount = GetNeededEnergizeConsumableCount( weapon, player )
+		string consumableName = GetWeaponInfoFileKeyField_GlobalString( weaponName, consumableRequiredCount > 1 ? "energized_consumable_name_plural" : "energized_consumable_name_singular" )
+		string pingStringData = GetWeaponInfoFileKeyField_GlobalString ( weaponName, "energized_consumable_required_hint" )
+
+		
+		if ( !suppressAnnouncements )
+		{
+			if ( weaponName == "mp_weapon_dragon_lmg" )
+				AnnouncementMessageRight( player, Localize( pingStringData, Localize( consumableName ) ) )
+			else
+				AnnouncementMessageRight( player, Localize( pingStringData, consumableRequiredCount, Localize( consumableName ) ) )
+
+			string commsData = GetWeaponInfoFileKeyField_GlobalString ( weaponName, "energized_comms" )
+			Quickchat( eCommsAction[commsData], null )
+		}
+
+
+		return false
+	}
+
+	return true
+}
+
+void function OnWeaponEnergizedStart( entity weapon, entity player, bool costConsumable )
+{
+	if ( !IsValid( weapon ) || !costConsumable )
+		return
+
+	string weaponRef = weapon.GetWeaponClassName()
+	string consumableRef = GetWeaponInfoFileKeyField_GlobalString ( weaponRef, "energized_consumable" )
+	int consumableRequiredCount = GetNeededEnergizeConsumableCount( weapon, player )
+
+
+
+
+
+
+
+
+	LootData lootData = SURVIVAL_Loot_GetLootDataByRef( consumableRef )
+
+	
+	if ( PlayerHasPassive( player, ePassives.PAS_INFINITE_HEAL ) && lootData.lootType == eLootType.HEALTH )
+		return
+
+	SURVIVAL_RemoveFromPlayerInventory( player, consumableRef, consumableRequiredCount )
+
+	foreach ( func in file.onWeaponEnergizedStart )
+	{
+		func( player, consumableRef )
+	}
+}
+
+void function AddCallback_OnWeaponEnergizedStart( void functionref( entity, string ) cb )
+{
+	Assert( !file.onWeaponEnergizedStart.contains( cb ) )
+	file.onWeaponEnergizedStart.append( cb )
+}
+
+void function RemoveCallback_OnWeaponEnergizedStart( void functionref( entity, string ) cb )
+{
+	Assert( file.onWeaponEnergizedStart.contains( cb ) )
+	file.onWeaponEnergizedStart.removebyvalue( cb )
+}
+
+
+void function DisplayCenterDotRui( entity weapon, string abortSignal, float appearDelay, float duration, float dotAlpha, float fadeInDuration, float fadeOutDuration )
+{
+	AssertIsNewThread()
+	if ( !IsValid( weapon ) )
+		return
+	entity player = weapon.GetWeaponOwner()
+	if ( !IsValid( player ) )
+		return
+
+	player.EndSignal( "OnDeath" )
+	weapon.EndSignal( "OnDestroy" )
+	weapon.EndSignal( abortSignal )
+
+	var rui = CreateCockpitPostFXRui( $"ui/crosshair_single_dot_helper.rpak" )
+	RuiSetBool( rui, "isActive", false )
+
+	OnThreadEnd(
+		function() : ( rui, weapon, player )
+		{
+			RuiDestroy( rui )
+		}
+	)
+
+	wait appearDelay
+
+	if ( !IsValid( weapon ) )
+		return
+
+	float endTime = Time() + duration
+
+	RuiSetBool( rui, "isActive", true )
+	RuiSetFloat( rui, "birthTime", Time() )
+	RuiSetFloat( rui, "deathTime", endTime )
+	RuiSetFloat( rui, "dotAlpha", dotAlpha )
+	RuiSetFloat( rui, "fadeInDuration", fadeInDuration )
+	RuiSetFloat( rui, "fadeOutDuration", fadeOutDuration )
+
+	while ( Time() < endTime )
+	{
+		WaitFrame()
+	}
+
+	RuiSetBool( rui, "isActive", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsTurretWeapon( entity weapon )
+{
+	if( !IsValid( weapon ) || !weapon.IsWeaponX() )
+		return false
+
+	return ( GetWeaponInfoFileKeyField_GlobalInt_WithDefault( weapon.GetWeaponClassName(), "is_turret_weapon" , 0 ) == 1 )
+}
+
+bool function IsHMGWeapon( entity weapon )
+{
+	if( !IsValid( weapon ) || !weapon.IsWeaponX() )
+		return false
+
+	return ( GetWeaponInfoFileKeyField_GlobalInt_WithDefault( weapon.GetWeaponClassName(), "is_hmg_weapon" , 0 ) == 1 )
+}
+
+bool function IsMeleeWeapon( entity weapon )
+{
+	if( !IsValid( weapon ) || !weapon.IsWeaponX() )
+		return false
+
+	return ( GetWeaponInfoFileKeyField_GlobalInt_WithDefault( weapon.GetWeaponClassName(), "is_melee_weapon_script" , 0 ) == 1 )
+}
+
+bool function IsWeaponSemiAuto( entity weapon )
+{
+	return weapon.GetWeaponSettingBool( eWeaponVar.is_semi_auto )
+}
+
+string function GetWeaponTypeString( entity weapon )
+{
+	if ( !IsValid(weapon) )
+		return "INVALID"
+
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_CONSUMABLE ) )
+		return "WPT_CONSUMABLE"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_GRENADE ) )
+		return "WPT_GRENADE"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_INCAP_SHIELD ) )
+		return "WPT_INCAP_SHIELD"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_MELEE ) )
+		return "WPT_MELEE"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_OTHER ) )
+		return "WPT_OTHER"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_PRIMARY ) )
+		return "WPT_PRIMARY"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_SURVIVAL ) )
+		return "WPT_SURVIVAL"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_TACTICAL ) )
+		return "WPT_TACTICAL"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_ULTIMATE ) )
+		return "WPT_ULTIMATE"
+	if ( IsBitFlagSet( weapon.GetWeaponTypeFlags(), WPT_VIEWHANDS ) )
+		return "WPT_VIEWHANDS"
+
+	return "UNKNOWN!!"
+}
+
+
+
+bool function GetInfiniteAmmo( entity weapon )
+{
+	return weapon.GetInfiniteAmmoState() != INFINITEAMMO_NONE
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function PlayerHasWeapon( entity player, string weaponName )
+{
+	array<entity> weapons = player.GetMainWeapons()
+	weapons.extend( player.GetOffhandWeapons() )
+
+	foreach ( weapon in weapons )
+	{
+		if ( weapon.GetWeaponClassName() == weaponName )
+			return true
+	}
+
+	return false
+}
+
+bool function PlayerCanUseWeapon( entity player, string weaponClass )
+{
+	return ((player.IsTitan() && weaponClass == "titan") || (!player.IsTitan() && weaponClass == "human"))
+}
+
+string function GetWeaponClassName( entity weaponOrProp )
+{
+	string weaponName
+	if ( weaponOrProp.GetNetworkedClassName() == "prop_survival" )
+	{
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( weaponOrProp.GetSurvivalInt() )
+		weaponName = data.ref
+	}
+	else
+	{
+		weaponName = weaponOrProp.GetWeaponClassName()
+	}
+
+	return weaponName
+}
+
+
+int function GetSlotForWeapon( entity player, entity weapon )
+{
+	array<int> slots = [ WEAPON_INVENTORY_SLOT_PRIMARY_0, WEAPON_INVENTORY_SLOT_PRIMARY_1, SLING_WEAPON_SLOT, WEAPON_INVENTORY_SLOT_ANTI_TITAN, WEAPON_INVENTORY_SLOT_DUALPRIMARY_0, WEAPON_INVENTORY_SLOT_DUALPRIMARY_1, SLING_AKIMBO_WEAPON_SLOT ]
+
+	foreach ( slot in slots )
+	{
+		if ( player.GetNormalWeapon( slot ) == weapon )
+			return slot
+	}
+
+	return -1
+}
+
+
+bool function CanAttachToWeapon( string attachment, string weaponName )
+{
+	if ( weaponName == "" )
+		return false
+
+	if ( !SURVIVAL_Loot_IsRefValid( weaponName ) )
+		return false
+
+	if ( !SURVIVAL_Loot_IsRefValid( attachment ) )
+		return false
+
+	
+	if ( !IsValidAttachment( attachment ) )
+		return false
+
+	bool isValidMode = true
+
+		if( GameMode_IsActive( eGameModes.ARENAS ) ) isValidMode = false
+
+
+	if ( SURVIVAL_Weapon_IsAttachmentLocked( weaponName ) && isValidMode )
+	{
+		if ( SURVIVAL_IsAttachmentPointLocked( weaponName, GetAttachPointForAttachmentOnWeapon( weaponName, attachment ) ) )
+			return false
+
+		weaponName = GetBaseWeaponRef( weaponName )
+	}
+
+	AttachmentData aData = GetAttachmentData( attachment )
+
+	
+	
+	return weaponName in aData.compatibleWeaponSet
+}
+
+bool function CanAttachToWeaponPlayerHas( entity player, string attachment )
+{
+	bool hasCompatibleWeapon = false
+
+	array<entity> weapons = SURVIVAL_GetPrimaryWeaponsSorted( player )
+	foreach ( weapon in weapons )
+	{
+		LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+		if ( CanAttachToWeapon( attachment, weaponData.baseWeapon ) )
+		{
+			hasCompatibleWeapon = true
+		}
+	}
+
+	return hasCompatibleWeapon
+
+}
+
+string function GetBaseWeaponRef( string weaponRef )
+{
+	if ( SURVIVAL_Loot_IsRefValid( weaponRef ) )
+	{
+		LootData weaponData = SURVIVAL_Loot_GetLootDataByRef( weaponRef )
+		return weaponData.baseWeapon != "" ? weaponData.baseWeapon : weaponRef 
+	}
+	return weaponRef
+}
+
+
+
+array<string> function GetLockedSetsDisabledByCrafting()
+{
+	array<string> sets
+
+	sets.append( WEAPON_LOCKEDSET_SUFFIX_WHITESET )
+	sets.append( WEAPON_LOCKEDSET_SUFFIX_BLUESET )
+	sets.append( WEAPON_LOCKEDSET_SUFFIX_PURPLESET )
+	sets.append( WEAPON_LOCKEDSET_SUFFIX_GOLD )
+
+	return sets
+}
+
+bool function AttachmentPointSupported( string attachmentPoint, string weaponName )
+{
+	LootData weaponData = SURVIVAL_Loot_GetLootDataByRef( weaponName )
+
+	array<string> allAttachPoints = weaponData.supportedAttachments
+	return allAttachPoints.contains( attachmentPoint )
+}
+
+void function InitAttachmentPointCaches()
+{
+	if ( file.attachmentLootByPoint.len() > 0 )
+		return
+
+	
+	file.attachmentLootCache = SURVIVAL_Loot_GetByType( eLootType.ATTACHMENT )
+
+	foreach ( LootData attachmentData in file.attachmentLootCache )
+	{
+		AttachmentData aData = GetAttachmentData( attachmentData.ref )
+		foreach ( string attachPoint in aData.attachPoints )
+		{
+			if ( !( attachPoint in file.attachmentLootByPoint ) )
+				file.attachmentLootByPoint[ attachPoint ] <- []
+
+			file.attachmentLootByPoint[ attachPoint ].append( attachmentData )
+		}
+	}
+}
+
+array<LootData> function GetAttachmentCandidatesForPoint( string attachmentPoint )
+{
+	InitAttachmentPointCaches()
+
+	if ( attachmentPoint in file.attachmentLootByPoint )
+		return file.attachmentLootByPoint[ attachmentPoint ]
+
+	return []
+}
+
+string function GetAttachmentPointStyleCacheKey( string attachmentPoint, string weaponName )
+{
+	return attachmentPoint + "|" + weaponName
+}
+
+string function GetAttachmentPointStyle( string attachmentPoint, string weaponName )
+{
+	string cacheKey = GetAttachmentPointStyleCacheKey( attachmentPoint, weaponName )
+	if ( cacheKey in file.attachmentPointStyleCache )
+		return file.attachmentPointStyleCache[ cacheKey ]
+
+	
+	switch ( attachmentPoint )
+	{
+		case "sight":
+			break
+
+		case "grip":
+			foreach ( LootData attachmentData in GetAttachmentCandidatesForPoint( attachmentPoint ) )
+			{
+				if ( !CanAttachToWeapon( attachmentData.ref, weaponName ) )
+					continue
+
+				file.attachmentPointStyleCache[ cacheKey ] <- attachmentData.attachmentStyle
+				return attachmentData.attachmentStyle
+			}
+			break
+
+		case "barrel":
+			foreach ( LootData attachmentData in GetAttachmentCandidatesForPoint( attachmentPoint ) )
+			{
+				if ( !CanAttachToWeapon( attachmentData.ref, weaponName ) )
+					continue
+
+				file.attachmentPointStyleCache[ cacheKey ] <- attachmentData.attachmentStyle
+				return attachmentData.attachmentStyle
+			}
+
+			break
+
+		case "mag":
+			LootData weaponData = SURVIVAL_Loot_GetLootDataByRef( weaponName )
+			if ( weaponData.ammoType == BULLET_AMMO )
+				return "mag_straight"
+			if ( weaponData.ammoType == SPECIAL_AMMO || weaponData.ammoType == ARROWS_AMMO )
+				return "mag_energy"
+			if ( weaponData.ammoType == SHOTGUN_AMMO )
+				return "mag_shotgun"
+			if ( weaponData.ammoType == SNIPER_AMMO )
+				return "mag_sniper"
+			if ( weaponData.ref == "mp_weapon_car" )
+				return "mag_car"
+
+
+
+
+
+			break
+
+
+
+
+
+
+
+		case "hopup":
+		case "hopupMulti_a":
+		case "hopupMulti_b":
+			string attachmentStyle = ""
+			bool moreThanOneHopup = false
+			foreach ( LootData attachmentData in GetAttachmentCandidatesForPoint( attachmentPoint ) )
+			{
+				if ( !CanAttachToWeapon( attachmentData.ref, weaponName ) )
+					continue
+
+				if ( attachmentStyle != "" && !attachmentData.lootTags.contains( "FakeHopup" ) )
+				{
+					moreThanOneHopup = true
+					break
+				}
+
+				if ( !attachmentData.lootTags.contains( "FakeHopup" ) )
+					attachmentStyle = attachmentData.attachmentStyle
+			}
+
+			if ( moreThanOneHopup )
+			{
+				file.attachmentPointStyleCache[ cacheKey ] <- attachmentPoint
+				return attachmentPoint
+			}
+			else if ( attachmentStyle != "" )
+			{
+				file.attachmentPointStyleCache[ cacheKey ] <- attachmentStyle
+				return attachmentStyle
+			}
+
+			break
+	}
+
+	file.attachmentPointStyleCache[ cacheKey ] <- attachmentPoint
+	return attachmentPoint
+}
+
+array<string> function GetAttachmentsForPoint( string attachmentPoint, string weaponName )
+{
+	array<string> attachmentRefs
+	switch ( attachmentPoint )
+	{
+		case "hopup":
+		case "hopupMulti_a":
+		case "hopupMulti_b":
+			foreach ( LootData attachmentData in GetAttachmentCandidatesForPoint( attachmentPoint ) )
+			{
+				if ( !CanAttachToWeapon( attachmentData.ref, weaponName ) )
+					continue
+
+				if ( attachmentData.lootTags.contains ( "FakeHopup" ) )
+					continue
+
+				attachmentRefs.append( attachmentData.ref )
+			}
+			break
+
+		default:
+			Assert( false, "attachmentPoint " + attachmentPoint + " is not supported, but could be." )
+	}
+
+	return attachmentRefs
+}
+
+bool function HasWeapon( entity ent, string weaponClassName, array<string> mods = [], bool checkMods = true )
+{
+	Assert( ent.IsPlayer() || ent.IsNPC() )
+
+	array<entity> weaponArray = ent.GetMainWeapons()
+	foreach ( weapon in weaponArray )
+	{
+		if ( weapon.GetWeaponClassName() == weaponClassName )
+		{
+			if ( !checkMods )
+				return true
+
+			if ( WeaponHasSameMods( weapon, mods ) )
+				return true
+		}
+	}
+
+	return false
+}
+
+int function GetWeaponIndex( entity player, entity weapon )
+{
+	array<int> primarySlots          = [ WEAPON_INVENTORY_SLOT_PRIMARY_0, WEAPON_INVENTORY_SLOT_PRIMARY_1 ]
+	foreach ( slot in primarySlots )
+	{
+		if ( player.GetNormalWeapon( slot ) == weapon )
+			return slot
+	}
+	return -1
+}
+
+bool function SimpleShouldNotBlockReloadCallback( entity player, entity ent )
+{
+	return false
+}
+
+bool function ShouldAutoReload( entity weapon )
+{
+	if( !IsValid( weapon ) )
+		return false
+	entity owner = weapon.GetOwner()
+	if ( !IsValid( owner ) )
+		return false
+
+	if( Perk_StowedReload_IsEnabled() && Perks_DoesPlayerHavePerk( owner, ePerkIndex.STOWED_RELOAD ) )
+		return true
+
+	if ( PlayerHasPassive( owner, ePassives.PAS_AUGMENT_RELOAD_EXPERT_STOWED ) )
+		return true
+
+
+
+
+
+
+
+
+
+
+	return false
+}
+
+bool function CanWeaponAkimbo( string baseWeapon )
+{
+	return IsWeaponKeyFieldDefined( baseWeapon, "is_akimbo_weapon" ) && GetWeaponInfoFileKeyField_GlobalBool( baseWeapon, "is_akimbo_weapon" )
+}
+
+bool function IsWeaponActivityIdle( entity weapon )
+{
+	return weapon.GetWeaponActivity() == ACT_VM_IDLE || weapon.GetWeaponActivity() == ACT_VM_IDLE_ALT1 || weapon.GetWeaponActivity() == ACT_VM_IDLE_ALT2 || weapon.GetWeaponActivity() == ACT_VM_IDLE_ALT3
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CorruptedAttachments_OnLootCreated( entity prop )
+{
+	int index = prop.GetSurvivalInt()
+
+	if ( !SURVIVAL_Loot_IsLootIndexValid( index ) )
+		return
+
+	
+	entity parentEnt = prop.GetParent()
+	if ( IsValid( parentEnt ) && parentEnt.GetNetworkedClassName() == "prop_death_box" )
+		return
+
+	LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( index )
+	if ( lootData.lootType != eLootType.ATTACHMENT )
+		return
+
+	if ( !IsAttachmentCorrupted( lootData ) )
+		return
+
+	vector color = COLOR_RED
+	int particleSystemIdx = GetParticleSystemIndex( CORRUPTED_ATTACHMENT_VFX )
+	int effectID = StartParticleEffectOnEntity( prop, particleSystemIdx, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetControlPointVector( effectID, 1, color )
+}
+
+
+
+#if DEV
+
+
+const int DEBUG_DISPLAY_WIDTH = 12
+void function DEV_Launch_HUD_Thread( entity weapon, bool hasCharge, bool hasHeat )
+{
+	Signal( weapon, SIGNAL_DEV_HEAT_HUD_UPDATE )
+	EndSignal( weapon, SIGNAL_DEV_HEAT_HUD_UPDATE )
+
+	ScreenPos ratios = DEV_Launch_HUD_GetScreenPos()
+	float progress = DEV_Launch_HUD_GetProgress( weapon, hasCharge, hasHeat )
+	string output = DEV_Launch_HUD_GetOutput( weapon, hasCharge, hasHeat )
+	while ( IsValid( weapon ) )
+	{
+		float newProgress = DEV_Launch_HUD_GetProgress( weapon, hasCharge, hasHeat )
+		if ( newProgress != progress )
+		{
+			output = DEV_Launch_HUD_GetOutput( weapon, hasCharge, hasHeat )
+			progress = newProgress
+		}
+
+		vector textColor = DEV_Launch_HUD_GetColor( progress, weapon, hasCharge )
+		DebugDrawScreenTextWithColor( ratios.xRatio, ratios.yRatio, output, textColor )
+
+		WaitFrame()
+	}
+}
+
+
+
+
+float function DEV_Launch_HUD_GetProgress( entity weapon, bool hasCharge, bool hasHeat )
+{
+	if ( hasCharge && weapon.GetWeaponChargeLevel() > 0 )
+	{
+		return weapon.GetWeaponChargeFraction()
+	}
+	else if ( hasHeat )
+	{
+		return weapon.GetHeatValue()
+	}
+	return 0.0
+}
+
+
+
+
+vector function DEV_Launch_HUD_GetColor( float progress, entity weapon, bool hasCharge )
+{
+	
+	vector textColor = COLOR_WHITE
+	if ( hasCharge && weapon.GetWeaponChargeLevel() > 0 )
+	{
+		textColor = COLOR_GREEN
+	}
+	else if (  progress >= 1.0 )
+	{
+		textColor = COLOR_GREEN
+	}
+
+	return textColor
+}
+
+
+
+
+string function DEV_Launch_HUD_GetOutput( entity weapon, bool hasCharge, bool hasHeat )
+{
+	string output = "["
+
+	float progress = DEV_Launch_HUD_GetProgress( weapon, hasCharge, hasHeat )
+	int showProgress = int( progress * DEBUG_DISPLAY_WIDTH )
+	for ( int i = 0; i < showProgress; i++ )
+	{
+		output += "="
+	}
+	for ( int i = showProgress; i < DEBUG_DISPLAY_WIDTH; i++ )
+	{
+		if ( i % 3 == 1 )
+		{
+			output += "-"
+		}
+		else
+		{
+			output += " "
+		}
+	}
+
+	output += ">"
+
+	return output
+}
+
+
+
+const int DEBUG_DISPLAY_TEXT_OFFSET_X = -57
+const int DEBUG_DISPLAY_TEXT_OFFSET_Y = 49
+const int DEBUG_DISPLAY_TEXT_OFFSET_Y_4K = 74
+
+ScreenPos function DEV_Launch_HUD_GetScreenPos()
+{
+	ScreenPos ratios
+	UISize screenSize = GetScreenSize()
+	ratios.xRatio = float( ( screenSize.width / 2 ) + DEBUG_DISPLAY_TEXT_OFFSET_X ) / float( screenSize.width )
+	ratios.yRatio = float( ( screenSize.height / 2 ) + DEBUG_DISPLAY_TEXT_OFFSET_Y ) / float( screenSize.height )
+	if ( screenSize.height >= 2160 )
+	{
+		ratios.yRatio = float( ( screenSize.height / 2 ) + DEBUG_DISPLAY_TEXT_OFFSET_Y_4K ) / float( screenSize.height )
+	}
+	return ratios
+}
+
+#endif
+ 

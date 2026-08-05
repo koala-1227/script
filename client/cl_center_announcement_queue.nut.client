@@ -1,0 +1,1423 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function CLCenterAnnouncements_Init
+
+
+global function CenterAnnouncements_QueueItem
+
+
+global function CenterAnnouncements_CreateBuilder
+global function CenterAnnouncements_CreateBuilderFromAnnouncementItems
+global function CenterAnnouncements_QueueBuilder
+
+
+global function CenterAnnouncements_IsActivelyDisplaying
+
+
+global function CenterAnnouncements_CreateEmptyStyle
+global function CenterAnnouncements_CreateNotchedStyle
+global function CenterAnnouncements_CreateGradientStyle
+global function CenterAnnouncements_CreateTerracedStyle
+global function CenterAnnouncements_CreateDeprecatedStyle
+
+global function CenterAnnouncements_CreateBoxStyle
+
+
+
+global function CenterAnnouncements_ImageContainer_SetEmptyStyle
+global function CenterAnnouncements_ImageContainer_SetNotchedStyle
+global function CenterAnnouncements_ImageContainer_SetSingleFrameStyle
+
+#if DEV
+global function DEV_PreviewCenterAnnouncementStyles
+global function DEV_PreviewCenterAnnouncementStyles_Delayed
+global function DEV_CenterAnnouncements_TestAnnouncements
+#endif
+
+const string CENTER_ANNOUNCEMENT_QUEUE_KEY = "center_announcements"
+const vector DEFAULT_SCREEN_SIZE = <1920, 1080, 0>
+const vector DEFAULT_ANNOUNCEMENT_SCREEN_POS = <0, 180, 0>
+
+const float DEFAULT_ANNOUNCEMENT_DURATION = 4.0
+const float DEFAULT_ANNOUNCEMENT_OUTRO_DURATION = 0.5
+
+const float DEFAULT_ANNOUNCEMENT_HEIGHT = 53.0
+const vector DEFAULT_ANNOUNCEMENT_SIZE = <DEFAULT_SCREEN_SIZE.x, DEFAULT_ANNOUNCEMENT_HEIGHT, 0>
+const float DEFAULT_CONTENT_TO_OUTER_EDGE_PADDING = 60.0
+const float DEFAULT_HORIZONTAL_IMAGE_PADDING = 8.0
+const float DEFAULT_CONTENT_VERTICAL_PADDING = 4.0
+
+const float DEFAULT_IMAGE_CONTAINER_HEIGHT = 54.0
+const float SINGLE_FRAME_STYLE_IMAGE_CONTAINER_HEIGHT = 130.0
+const float DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING = 40.0
+const float DEFAULT_IMAGE_CONTAINER_SPACING = 8.0
+const float DEFAULT_IMAGE_CONTAINER_VERTICAL_PADDING = 4.0
+const float DEFAULT_SPACE_BETWEEN_IMAGE_CONTAINER_AND_BODY = 0.0
+
+const string SFX_CENTER_ANNOUNCEMENT_STANDARD = "HUD_center_announcement_standard_1P"
+
+
+
+
+
+global struct CenterAnnouncementItem
+{
+	
+	string 		id = ""
+
+	int persistenceContext = ePersistenceContext.INVALID
+
+	asset		bannerRuiAsset = $""
+	vector		ruiSize = <0, 0, 0>	
+
+	
+	string 		superText = ""
+	vector		superTextColor = COLOR_DARK_GRAY / 255.0
+	bool		superTextIsUpper = false
+
+	
+	string 		mainText = ""
+	vector		mainTextColor = COLOR_WHITE / 255.0
+	bool		mainTextIsUpper = true
+	asset		mainTextFontFace = TITLE_BOLD_FONT
+	float		mainTextMinWidth = 0.0
+
+	
+	string 		subText = ""
+	vector		subTextColor = <0.8, 0.8, 0.8>
+	bool		subTextIsUpper = false
+	asset		subTextFontFace = HEADER_FONT
+
+	
+	asset 		mainIcon1 = $""
+	vector		mainIcon1Color = COLOR_WHITE / 255.0
+	float		mainIcon1Alpha = 1.0
+	vector		mainIcon1Size = <0, 0, 0>
+
+	asset 		mainIcon2 = $""
+	vector		mainIcon2Color = COLOR_WHITE / 255.0
+	float		mainIcon2Alpha = 1.0
+	vector		mainIcon2Size = <0, 0, 0>
+
+	asset 		mainIcon3 = $""
+	vector		mainIcon3Color = COLOR_WHITE / 255.0
+	float		mainIcon3Alpha = 1.0
+	vector		mainIcon3Size = <0, 0, 0>
+
+	
+	asset 		leftIcon = $""
+	vector		leftIconColor = COLOR_WHITE / 255.0
+	vector		leftIconSize = <0, 0, 0>
+
+	asset 		rightIcon = $""
+	vector		rightIconColor = COLOR_WHITE / 255.0
+	vector		rightIconSize = <0, 0, 0>
+
+	
+	vector		frameColor = COLOR_WHITE / 255.0
+	vector		backgroundColor = <0, 0, 0>
+	float		backgroundAlpha = 0.6
+
+	vector		textureColor = COLOR_WHITE / 255.0
+	float		textureAlpha = 0.9
+
+	float 		duration = DEFAULT_ANNOUNCEMENT_DURATION
+	float		outroDuration = DEFAULT_ANNOUNCEMENT_OUTRO_DURATION
+	float		stuckInQueueTimeOutDuration = 30.0
+	array< string > soundAliases = [ SFX_CENTER_ANNOUNCEMENT_STANDARD ]
+	array< string > speakerDialogueLines = []	
+
+	vector		offset = <0, 0, 0>		
+
+	
+	float 		announcementHeight = DEFAULT_ANNOUNCEMENT_HEIGHT	
+	float		scalar = 1.0	
+	float		leftEndPadding = DEFAULT_CONTENT_TO_OUTER_EDGE_PADDING
+	float		rightEndPadding = DEFAULT_CONTENT_TO_OUTER_EDGE_PADDING
+	float		horizontalImagePadding = DEFAULT_HORIZONTAL_IMAGE_PADDING
+	float		contentVerticalPaddingTop = DEFAULT_CONTENT_VERTICAL_PADDING
+	float		contentVerticalPaddingBottom = DEFAULT_CONTENT_VERTICAL_PADDING
+	vector		contentPivot = <0.5, 0.0, 0>	
+	float		paddingTop = 0.0	
+	float		paddingBottom = 0.0 
+	bool		allowIndirectUpdates = false
+
+	
+	bool functionref( HudNotificationQueueItem ) onPreIntro
+	var functionref( HudNotificationQueueItem ) onCreateVisualOverride
+	void functionref( HudNotificationQueueItem ) onIntro
+	bool functionref( HudNotificationQueueItem ) onPreOutro
+	void functionref( HudNotificationQueueItem ) onDestroyVisualOverride
+	void functionref( HudNotificationQueueItem ) onComplete
+	void functionref( bool, HudNotificationQueueItem, HudNotificationQueueItem ornull ) onUpdateOverride
+
+	
+	asset		leftEndMask = $""
+	vector		leftEndMaskSize = <0, 0, 0>
+	bool 		leftEndMaskFlip = false
+
+	asset		leftEndFrame = $""
+	vector		leftEndFrameSize = <0, 0, 0>
+	bool		leftEndFrameFlip = false
+
+	asset		rightEndMask = $""
+	vector		rightEndMaskSize = <0, 0, 0>
+	bool 		rightEndMaskFlip = true
+
+	asset		rightEndFrame = $""
+	vector		rightEndFrameSize = <0, 0, 0>
+	bool		rightEndFrameFlip = true
+
+	asset		leftCenterMask = $""
+	vector		leftCenterMaskSize = <0, 0, 0>
+
+	asset		rightCenterMask = $""
+	vector		rightCenterMaskSize = <0, 0, 0>
+
+	asset		leftCenterFrame = $""
+	vector		leftCenterFrameSize = <0, 0, 0>
+
+	asset		rightCenterFrame = $""
+	vector		rightCenterFrameSize = <0, 0, 0>
+
+	asset		leftTexture = $""
+	vector		leftTextureSize = <0, 0, 0>
+	bool 		leftTextureFlip = true
+
+	asset		rightTexture = $""
+	vector		rightTextureSize = <0, 0, 0>
+	bool 		rightTextureFlip = true
+
+	asset		leftIntensityTexture = $"rui/hud/splash/splash_chevron"
+	vector		leftIntensityTextureSize = <0, 0, 0>
+	bool		leftIntensityTextureFlip = false
+	int 		leftIntensityTextureCount = 0		
+	float		leftIntensityTexturePadding = 0.0
+	float		leftIntensityTextureSpacing = 0.0
+
+	asset		rightIntensityTexture = $"rui/hud/splash/splash_chevron"
+	vector		rightIntensityTextureSize = <0, 0, 0>
+	bool		rightIntensityTextureFlip = true
+	int 		rightIntensityTextureCount = 0		
+	float		rightIntensityTexturePadding = 0.0
+	float		rightIntensityTextureSpacing = 0.0
+
+	
+	float 		spaceBetweenContainerAndBody = DEFAULT_SPACE_BETWEEN_IMAGE_CONTAINER_AND_BODY
+	float 		imageContainerHeight = DEFAULT_IMAGE_CONTAINER_HEIGHT
+	float 		imageContainerSpacing = DEFAULT_IMAGE_CONTAINER_SPACING
+	float 		imageContainerLeftPadding = DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING
+	float 		imageContainerRightPadding = DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING
+	float 		imageContainerVerticalPadding = DEFAULT_IMAGE_CONTAINER_VERTICAL_PADDING
+
+	asset		leftImageContainerMask = $""
+	vector 		leftImageContainerMaskSize = <0, 0, 0>
+	bool 		leftImageContainerMaskFlip = false
+
+	asset		rightImageContainerMask = $""
+	vector 		rightImageContainerMaskSize = <0, 0, 0>
+	bool 		rightImageContainerMaskFlip = true
+
+	asset		centerImageContainerMask = $""
+	vector 		centerImageContainerMaskSize = <0, 0, 0>
+
+	asset		leftImageContainerFrame = $""
+	vector 		leftImageContainerFrameSize = <0, 0, 0>
+	bool 		leftImageContainerFrameFlip = false
+
+	asset		rightImageContainerFrame = $""
+	vector 		rightImageContainerFrameSize = <0, 0, 0>
+	bool 		rightImageContainerFrameFlip = true
+
+	asset		centerImageContainerFrame = $""
+	vector 		centerImageContainerFrameSize = <0, 0, 0>
+
+	asset		centerImageContainerSingleFrame = $""
+
+	vector 		imageContainerFrameColor = COLOR_WHITE / 255.0
+	vector		imageContainerMaskColor = <0, 0, 0>
+	float		imageContainerBackgroundAlpha = 0.6
+
+	asset		imageContainerImageBacker = $""
+	vector		imageContainerImageBackerColor1 = COLOR_WHITE / 255.0
+	float		imageContainerImageBackerAlpha1 = 0.8
+	vector		imageContainerImageBackerColor2 = COLOR_WHITE / 255.0
+	float		imageContainerImageBackerAlpha2 = 0.8
+	vector		imageContainerImageBackerColor3 = COLOR_WHITE / 255.0
+	float		imageContainerImageBackerAlpha3 = 0.8
+
+	vector 		centerImageContainerSingleFrameSize = <0, 0, 0>
+	bool   		useNotchedImageContainer = false
+	bool   		useSingleImageContainer = false
+
+
+	
+	int 		uiDrawStage	= eUIDrawStage.POSTEFFECTS
+	int 		priority = eHudNotificationQueuePriority.LOW
+	bool		drawOverScreenFade = false
+	bool 		isDeprecatedStyle = false	
+	AnnouncementData& deprecatedAnnouncementData
+}
+
+global struct AnnouncementBuilder
+{
+	
+	string 		id = ""
+
+	int persistenceContext = ePersistenceContext.INVALID
+
+	asset		ruiAsset = $""
+	vector		ruiSize = <0, 0, 0>	
+
+	vector		offset = <0, 0, 0>		
+
+	float 		duration = DEFAULT_ANNOUNCEMENT_DURATION
+	float		outroDuration = DEFAULT_ANNOUNCEMENT_OUTRO_DURATION
+	array< string >	soundAliases = [ SFX_CENTER_ANNOUNCEMENT_STANDARD ]
+	array< string > speakerDialogueLines = []
+
+	float		stuckInQueueTimeOutDuration = 30.0
+
+	
+	bool functionref( HudNotificationQueueItem ) onPreIntro
+	var functionref( HudNotificationQueueItem ) onCreateVisualOverride
+	void functionref( HudNotificationQueueItem ) onIntro
+	bool functionref( HudNotificationQueueItem ) onPreOutro
+	void functionref( HudNotificationQueueItem ) onDestroyVisualOverride
+	void functionref( HudNotificationQueueItem ) onComplete
+	void functionref( bool, HudNotificationQueueItem, HudNotificationQueueItem ornull ) onUpdateOverride
+
+	
+
+
+
+
+
+	array< CenterAnnouncementItem > announcementItems
+
+	
+	int 		uiDrawStage	= eUIDrawStage.POSTEFFECTS
+	int 		priority = eHudNotificationQueuePriority.LOW
+	bool		drawOverScreenFade = false
+	bool		allowIndirectUpdates = false
+}
+
+struct {
+	int queueId = -1
+} file
+
+void function CLCenterAnnouncements_Init()
+{
+	file.queueId = HudNotificationQueue_CreateAndRegisterQueue( CENTER_ANNOUNCEMENT_QUEUE_KEY )
+
+	HudNotificationQueueConfiguration configSettings = HudNotificationQueue_GetConfigure( file.queueId )
+	configSettings.maxVisibleItems = 1
+	configSettings.itemAnchorPin = <0.5, 0.0, 0>
+	configSettings.screenSpacePin = <0.5, 0.0, 0.0>
+	configSettings.startPosition = DEFAULT_ANNOUNCEMENT_SCREEN_POS
+	configSettings.itemPositioningEnabled = false
+	configSettings.backlogPreservationStyle = eHudNotificationQueueBacklogPreservationStyle.PRIORITY
+	configSettings.backlogMaxCountWhenBlocked = 3
+
+	
+	
+	configSettings.allowDuplicates = true
+
+	HudNotificationQueue_Configure( file.queueId, configSettings )
+
+	AddCallback_MenuStateChanged( CenterAnnouncements_ActiveMenuChanged )
+	AddCallback_FakeMenuStateChanged( CenterAnnouncements_ActiveFakeMenuChanged )
+
+	
+	DONOTUSE_HudNotificationQueue_AllowClearItemsOnQueue( file.queueId )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+AnnouncementBuilder function CenterAnnouncements_CreateBuilder()
+{
+	AnnouncementBuilder builder
+	builder.ruiAsset = $"ui/modular_announcement.rpak"
+	builder.ruiSize = <0, 0, 0>	
+	return builder
+}
+
+AnnouncementBuilder function CenterAnnouncements_CreateBuilderFromAnnouncementItems( array< CenterAnnouncementItem > announcementItems )
+{
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilder()
+	builder.announcementItems = announcementItems
+	return builder
+}
+
+
+HudNotificationQueueItem function CenterAnnouncements_QueueItem( CenterAnnouncementItem announcement, int persistenceContext )
+{
+	HudNotificationQueueItem queueItem
+
+	
+	if ( announcement.bannerRuiAsset == $"" && !announcement.isDeprecatedStyle )
+	{
+		queueItem.isValid = false
+		return queueItem
+	}
+
+	queueItem.ruiAsset = announcement.bannerRuiAsset
+	queueItem.size = announcement.ruiSize == <0, 0, 0> ? CenterAnnouncements_AutoCalculateRuiSizeWithImageContainer( announcement ) : announcement.ruiSize
+	queueItem.duration = announcement.duration
+	queueItem.outroDuration = announcement.outroDuration
+	queueItem.soundAliases = announcement.soundAliases
+	queueItem.speakerDialogueLines = announcement.speakerDialogueLines
+	queueItem.priority = announcement.priority
+	queueItem.uiDrawStage = announcement.uiDrawStage
+	queueItem.stuckInQueueTimeOutDuration = announcement.stuckInQueueTimeOutDuration
+	queueItem.drawOverScreenFade = announcement.drawOverScreenFade
+	queueItem.allowIndirectUpdates = announcement.allowIndirectUpdates
+
+	queueItem.ruiArgs = CenterAnnouncements_GenerateRuiArgsTableFromAnnouncementItem( announcement )
+
+	queueItem.onPreIntro.append( CenterAnnouncements_OnPreIntro )
+
+	if ( announcement.onPreIntro != null )
+	{
+		queueItem.onPreIntro.append( announcement.onPreIntro )
+	}
+
+	if ( announcement.onCreateVisualOverride != null )
+	{
+		queueItem.onCreateVisualOverride = announcement.onCreateVisualOverride
+	}
+
+	if ( announcement.onIntro != null )
+	{
+		queueItem.onIntro = announcement.onIntro
+	}
+
+	if ( announcement.onPreOutro != null )
+	{
+		queueItem.onPreOutro = announcement.onPreOutro
+	}
+
+	if ( announcement.onDestroyVisualOverride != null )
+	{
+		queueItem.onDestroyVisualOverride = announcement.onDestroyVisualOverride
+	}
+
+	if ( announcement.onComplete != null )
+	{
+		queueItem.onComplete = announcement.onComplete
+	}
+
+	if ( announcement.onUpdateOverride != null )
+	{
+		queueItem.onUpdateOverride = announcement.onUpdateOverride
+	}
+
+	if ( announcement.isDeprecatedStyle )
+	{
+		queueItem.deprecatedAnnouncementData = announcement.deprecatedAnnouncementData
+	}
+
+	queueItem.onComplete = CenterAnnouncements_OnComplete
+
+	HudNotificationQueue_QueueItem( file.queueId, queueItem, persistenceContext )
+	return queueItem
+}
+
+HudNotificationQueueItem function CenterAnnouncements_QueueBuilder( AnnouncementBuilder announcementBuilder, int persistenceContext )
+{
+	HudNotificationQueueItem queueItem
+
+	if ( announcementBuilder.announcementItems.len() == 0 )
+	{
+		queueItem.isValid = false
+		return queueItem
+	}
+
+	queueItem.key = announcementBuilder.id
+	queueItem.size = CenterAnnouncements_AutoCalculateBuilderRuiSize( announcementBuilder )
+	queueItem.ruiAsset = announcementBuilder.ruiAsset
+	queueItem.offset = announcementBuilder.offset
+	queueItem.duration = announcementBuilder.duration
+	queueItem.outroDuration = announcementBuilder.outroDuration
+	queueItem.soundAliases = announcementBuilder.soundAliases
+	queueItem.speakerDialogueLines = announcementBuilder.speakerDialogueLines
+	queueItem.priority = announcementBuilder.priority
+	queueItem.uiDrawStage = announcementBuilder.uiDrawStage
+	queueItem.stuckInQueueTimeOutDuration = announcementBuilder.stuckInQueueTimeOutDuration
+	queueItem.drawOverScreenFade = announcementBuilder.drawOverScreenFade
+	queueItem.allowIndirectUpdates = announcementBuilder.allowIndirectUpdates
+
+	queueItem.ruiArgs = {}
+
+	int childCount = 0
+	foreach ( CenterAnnouncementItem announcement in announcementBuilder.announcementItems )
+	{
+		if ( announcement.bannerRuiAsset == $"" )
+			continue
+
+		
+		queueItem.ruiArgs[ "paddingTop" + childCount ] <- HudNotificationQueue_CreateRuiArg( "paddingTop" + childCount, announcement.paddingTop )
+		queueItem.ruiArgs[ "paddingBottom" + childCount ] <- HudNotificationQueue_CreateRuiArg( "paddingBottom" + childCount, announcement.paddingBottom )
+
+		vector announcementChildSize = announcement.ruiSize == <0, 0, 0> ? CenterAnnouncements_AutoCalculateRuiSizeWithImageContainer( announcement ) : announcement.ruiSize * announcement.scalar
+		queueItem.ruiArgs[ "ruiSize" + childCount ] <- HudNotificationQueue_CreateRuiArg( "ruiSize" + childCount, announcementChildSize, eRuiArgType.FLOAT2 )
+
+		
+		queueItem.nestedRuiAssets.append( announcement.bannerRuiAsset )
+		queueItem.nestedRuiArgs.append( CenterAnnouncements_GenerateRuiArgsTableFromAnnouncementItem( announcement ) )
+
+		childCount++
+	}
+
+	queueItem.onPreIntro.append( CenterAnnouncements_OnPreIntro )
+
+	if ( announcementBuilder.onPreIntro != null )
+	{
+		queueItem.onPreIntro.append( announcementBuilder.onPreIntro )
+	}
+
+	if ( announcementBuilder.onCreateVisualOverride != null )
+	{
+		queueItem.onCreateVisualOverride = announcementBuilder.onCreateVisualOverride
+	}
+
+	if ( announcementBuilder.onIntro != null )
+	{
+		queueItem.onIntro = announcementBuilder.onIntro
+	}
+
+	if ( announcementBuilder.onPreOutro != null )
+	{
+		queueItem.onPreOutro = announcementBuilder.onPreOutro
+	}
+
+	if ( announcementBuilder.onDestroyVisualOverride != null )
+	{
+		queueItem.onDestroyVisualOverride = announcementBuilder.onDestroyVisualOverride
+	}
+
+	if ( announcementBuilder.onComplete != null )
+	{
+		queueItem.onComplete = announcementBuilder.onComplete
+	}
+
+	if ( announcementBuilder.onUpdateOverride != null )
+	{
+		queueItem.onUpdateOverride = announcementBuilder.onUpdateOverride
+	}
+
+	queueItem.onComplete = CenterAnnouncements_OnComplete
+
+	HudNotificationQueue_QueueItem( file.queueId, queueItem, persistenceContext )
+	return queueItem
+}
+
+bool function CenterAnnouncements_HasAnyMainImages( CenterAnnouncementItem announcementItem )
+{
+	return ( announcementItem.mainIcon1 != $"" || announcementItem.mainIcon2 != $"" || announcementItem.mainIcon3 != $"" )
+}
+
+vector function CenterAnnouncements_AutoCalculateRuiSizeWithImageContainer( CenterAnnouncementItem announcementItem )
+{
+	float imageContainerHeight = CenterAnnouncements_HasAnyMainImages( announcementItem ) ? announcementItem.imageContainerHeight : 0.0
+	return < DEFAULT_SCREEN_SIZE.x, ( announcementItem.announcementHeight + imageContainerHeight + announcementItem.spaceBetweenContainerAndBody ) * announcementItem.scalar, 0>
+}
+
+vector function CenterAnnouncements_AutoCalculateBuilderRuiSize( AnnouncementBuilder announcementBuilder )
+{
+	if ( announcementBuilder.announcementItems.len() == 0 )
+		return DEFAULT_SCREEN_SIZE
+
+	
+	float combinedAnnouncementHeights = 0.0
+	foreach ( CenterAnnouncementItem announcementItem in announcementBuilder.announcementItems )
+	{
+		vector announcementSize = announcementItem.ruiSize == <0, 0, 0> ? CenterAnnouncements_AutoCalculateRuiSizeWithImageContainer( announcementItem ) : announcementItem.ruiSize
+
+		combinedAnnouncementHeights += announcementSize.y
+		combinedAnnouncementHeights += announcementItem.paddingTop * announcementItem.scalar
+		combinedAnnouncementHeights += announcementItem.paddingBottom * announcementItem.scalar
+	}
+
+	return <DEFAULT_SCREEN_SIZE.x, combinedAnnouncementHeights, 0>
+}
+
+table< string, HudNotificationQueueRuiArg > function CenterAnnouncements_GenerateRuiArgsTableFromAnnouncementItem( CenterAnnouncementItem announcement )
+{
+	CenterAnnouncements_GenerateImageSizesIfNotProvided( announcement )
+
+	table< string, HudNotificationQueueRuiArg > ruiArgs = {
+		["scalar"] 				= HudNotificationQueue_CreateRuiArg( "scalar", announcement.scalar ),
+		["contentPivot"] 		= HudNotificationQueue_CreateRuiArg( "contentPivot", announcement.contentPivot, eRuiArgType.FLOAT2 ),
+
+		["superText"] 			= HudNotificationQueue_CreateRuiArg( "superText", announcement.superText ),
+		["superTextColor"] 		= HudNotificationQueue_CreateRuiArg( "superTextColor", announcement.superTextColor, eRuiArgType.COLOR ),
+		["superTextIsUpper"] 	= HudNotificationQueue_CreateRuiArg( "superTextIsUpper", announcement.superTextIsUpper ),
+
+		["mainText"] 			= HudNotificationQueue_CreateRuiArg( "mainText", announcement.mainText ),
+		["mainTextColor"] 		= HudNotificationQueue_CreateRuiArg( "mainTextColor", announcement.mainTextColor, eRuiArgType.COLOR ),
+		["mainTextIsUpper"] 	= HudNotificationQueue_CreateRuiArg( "mainTextIsUpper", announcement.mainTextIsUpper ),
+		["mainTextFontFace"]	= HudNotificationQueue_CreateRuiArg( "mainTextFontFace", announcement.mainTextFontFace ),
+		["mainTextMinWidth"]	= HudNotificationQueue_CreateRuiArg( "mainTextMinWidth", announcement.mainTextMinWidth ),
+
+		["subText"] 			= HudNotificationQueue_CreateRuiArg( "subText", announcement.subText ),
+		["subTextColor"] 		= HudNotificationQueue_CreateRuiArg( "subTextColor", announcement.subTextColor, eRuiArgType.COLOR ),
+		["subTextIsUpper"] 		= HudNotificationQueue_CreateRuiArg( "subTextIsUpper", announcement.subTextIsUpper ),
+		["subTextFontFace"]		= HudNotificationQueue_CreateRuiArg( "subTextFontFace", announcement.subTextFontFace ),
+
+		["frameColor"] 			= HudNotificationQueue_CreateRuiArg( "frameColor", announcement.frameColor, eRuiArgType.COLOR ),
+		["backgroundColor"] 	= HudNotificationQueue_CreateRuiArg( "backgroundColor", announcement.backgroundColor, eRuiArgType.COLOR ),
+		["backgroundAlpha"] 	= HudNotificationQueue_CreateRuiArg( "backgroundAlpha", announcement.backgroundAlpha ),
+		["textureColor"] 		= HudNotificationQueue_CreateRuiArg( "textureColor", announcement.textureColor, eRuiArgType.COLOR ),
+		["textureAlpha"] 		= HudNotificationQueue_CreateRuiArg( "textureAlpha", announcement.textureAlpha ),
+
+		["leftIcon"] 			= HudNotificationQueue_CreateRuiArg( "leftIcon", announcement.leftIcon ),
+		["leftIconColor"] 		= HudNotificationQueue_CreateRuiArg( "leftIconColor", announcement.leftIconColor, eRuiArgType.COLOR ),
+		["leftIconSize"] 		= HudNotificationQueue_CreateRuiArg( "leftIconSize", announcement.leftIconSize, eRuiArgType.FLOAT2 ),
+
+		["rightIcon"] 			= HudNotificationQueue_CreateRuiArg( "rightIcon", announcement.rightIcon ),
+		["rightIconColor"] 		= HudNotificationQueue_CreateRuiArg( "rightIconColor", announcement.rightIconColor, eRuiArgType.COLOR ),
+		["rightIconSize"] 		= HudNotificationQueue_CreateRuiArg( "rightIconSize", announcement.rightIconSize, eRuiArgType.FLOAT2 ),
+
+
+		
+		["announcementHeight"] 	= HudNotificationQueue_CreateRuiArg( "announcementHeight", announcement.announcementHeight ),
+		["leftEndPadding"] 		= HudNotificationQueue_CreateRuiArg( "leftEndPadding", announcement.leftEndPadding ),
+		["rightEndPadding"] 	= HudNotificationQueue_CreateRuiArg( "rightEndPadding", announcement.rightEndPadding ),
+		["horizontalImagePadding"] = HudNotificationQueue_CreateRuiArg( "horizontalImagePadding", announcement.horizontalImagePadding ),
+		["contentVerticalPaddingTop"] = HudNotificationQueue_CreateRuiArg( "contentVerticalPaddingTop", announcement.contentVerticalPaddingTop ),
+		["contentVerticalPaddingBottom"] = HudNotificationQueue_CreateRuiArg( "contentVerticalPaddingBottom", announcement.contentVerticalPaddingBottom ),
+
+
+		
+		["leftEndMask"] 		= HudNotificationQueue_CreateRuiArg( "leftEndMask", announcement.leftEndMask ),
+		["leftEndMaskSize"] 	= HudNotificationQueue_CreateRuiArg( "leftEndMaskSize", announcement.leftEndMaskSize, eRuiArgType.FLOAT2 ),
+		["leftEndMaskFlip"] 	= HudNotificationQueue_CreateRuiArg( "leftEndMaskFlip", announcement.leftEndMaskFlip ),
+
+		["rightEndMask"] 		= HudNotificationQueue_CreateRuiArg( "rightEndMask", announcement.rightEndMask ),
+		["rightEndMaskSize"] 	= HudNotificationQueue_CreateRuiArg( "rightEndMaskSize", announcement.rightEndMaskSize, eRuiArgType.FLOAT2 ),
+		["rightEndMaskFlip"] 	= HudNotificationQueue_CreateRuiArg( "rightEndMaskFlip", announcement.rightEndMaskFlip ),
+
+		["rightEndFrame"] 		= HudNotificationQueue_CreateRuiArg( "rightEndFrame", announcement.rightEndFrame ),
+		["rightEndFrameSize"] 	= HudNotificationQueue_CreateRuiArg( "rightEndFrameSize", announcement.rightEndFrameSize, eRuiArgType.FLOAT2 ),
+		["rightEndFrameFlip"] 	= HudNotificationQueue_CreateRuiArg( "rightEndFrameFlip", announcement.rightEndFrameFlip ),
+
+		["leftCenterMask"] 		= HudNotificationQueue_CreateRuiArg( "leftCenterMask", announcement.leftCenterMask ),
+		["leftCenterMaskSize"] 	= HudNotificationQueue_CreateRuiArg( "leftCenterMaskSize", announcement.leftCenterMaskSize, eRuiArgType.FLOAT2 ),
+
+		["rightCenterMask"] 	= HudNotificationQueue_CreateRuiArg( "rightCenterMask", announcement.rightCenterMask ),
+		["rightCenterMaskSize"] = HudNotificationQueue_CreateRuiArg( "rightCenterMaskSize", announcement.rightCenterMaskSize, eRuiArgType.FLOAT2 ),
+
+		
+		["leftEndFrame"] 		= HudNotificationQueue_CreateRuiArg( "leftEndFrame", announcement.leftEndFrame ),
+		["leftEndFrameSize"] 	= HudNotificationQueue_CreateRuiArg( "leftEndFrameSize", announcement.leftEndFrameSize, eRuiArgType.FLOAT2 ),
+		["leftEndFrameFlip"] 	= HudNotificationQueue_CreateRuiArg( "leftEndFrameFlip", announcement.leftEndFrameFlip ),
+
+		["rightEndFrame"] 		= HudNotificationQueue_CreateRuiArg( "rightEndFrame", announcement.rightEndFrame ),
+		["rightEndFrameSize"] 	= HudNotificationQueue_CreateRuiArg( "rightEndFrameSize", announcement.rightEndFrameSize, eRuiArgType.FLOAT2 ),
+		["rightEndFrameFlip"] 	= HudNotificationQueue_CreateRuiArg( "rightEndFrameFlip", announcement.rightEndFrameFlip ),
+
+		["leftCenterFrame"] 	= HudNotificationQueue_CreateRuiArg( "leftCenterFrame", announcement.leftCenterFrame ),
+		["leftCenterFrameSize"] = HudNotificationQueue_CreateRuiArg( "leftCenterFrameSize", announcement.leftCenterFrameSize, eRuiArgType.FLOAT2 ),
+
+		["rightCenterFrame"] 	= HudNotificationQueue_CreateRuiArg( "rightCenterFrame", announcement.rightCenterFrame ),
+		["rightCenterFrameSize"] = HudNotificationQueue_CreateRuiArg( "rightCenterFrameSize", announcement.rightCenterFrameSize, eRuiArgType.FLOAT2 ),
+
+		
+		["leftTexture"] 		= HudNotificationQueue_CreateRuiArg( "leftTexture", announcement.leftTexture ),
+		["leftTextureSize"] 	= HudNotificationQueue_CreateRuiArg( "leftTextureSize", announcement.leftTextureSize, eRuiArgType.FLOAT2 ),
+		["leftTextureFlip"] 	= HudNotificationQueue_CreateRuiArg( "leftTextureFlip", announcement.leftTextureFlip ),
+
+		["rightTexture"] 		= HudNotificationQueue_CreateRuiArg( "rightTexture", announcement.rightTexture ),
+		["rightTextureSize"] 	= HudNotificationQueue_CreateRuiArg( "rightTextureSize", announcement.rightTextureSize, eRuiArgType.FLOAT2 ),
+		["rightTextureFlip"] 	= HudNotificationQueue_CreateRuiArg( "rightTextureFlip", announcement.rightTextureFlip ),
+
+		["leftIntensityTexture"] 			= HudNotificationQueue_CreateRuiArg( "leftIntensityTexture", announcement.leftIntensityTexture ),
+		["leftIntensityTextureSize"] 		= HudNotificationQueue_CreateRuiArg( "leftIntensityTextureSize", announcement.leftIntensityTextureSize, eRuiArgType.FLOAT2 ),
+		["leftIntensityTextureFlip"] 		= HudNotificationQueue_CreateRuiArg( "leftIntensityTextureFlip", announcement.leftIntensityTextureFlip ),
+		["leftIntensityTextureCount"] 		= HudNotificationQueue_CreateRuiArg( "leftIntensityTextureCount", announcement.leftIntensityTextureCount ),
+		["leftIntensityTexturePadding"] 	= HudNotificationQueue_CreateRuiArg( "leftIntensityTexturePadding", announcement.leftIntensityTexturePadding ),
+		["leftIntensityTextureSpacing"] 	= HudNotificationQueue_CreateRuiArg( "leftIntensityTextureSpacing", announcement.leftIntensityTextureSpacing ),
+
+		["rightIntensityTexture"] 		= HudNotificationQueue_CreateRuiArg( "rightIntensityTexture", announcement.rightIntensityTexture ),
+		["rightIntensityTextureSize"] 	= HudNotificationQueue_CreateRuiArg( "rightIntensityTextureSize", announcement.rightIntensityTextureSize, eRuiArgType.FLOAT2 ),
+		["rightIntensityTextureFlip"] 	= HudNotificationQueue_CreateRuiArg( "rightIntensityTextureFlip", announcement.rightIntensityTextureFlip ),
+		["rightIntensityTextureCount"] 	= HudNotificationQueue_CreateRuiArg( "rightIntensityTextureCount", announcement.rightIntensityTextureCount ),
+		["rightIntensityTexturePadding"] 	= HudNotificationQueue_CreateRuiArg( "rightIntensityTexturePadding", announcement.rightIntensityTexturePadding ),
+		["rightIntensityTextureSpacing"] 	= HudNotificationQueue_CreateRuiArg( "rightIntensityTextureSpacing", announcement.rightIntensityTextureSpacing ),
+
+
+		
+		["mainIcon1"] 					= HudNotificationQueue_CreateRuiArg( "mainIcon1", announcement.mainIcon1 ),
+		["mainIcon1Color"] 				= HudNotificationQueue_CreateRuiArg( "mainIcon1Color", announcement.mainIcon1Color, eRuiArgType.COLOR, [ announcement.mainIcon1Alpha ] ),
+		["mainIcon1Size"] 				= HudNotificationQueue_CreateRuiArg( "mainIcon1Size", announcement.mainIcon1Size, eRuiArgType.FLOAT2 ),
+
+		["mainIcon2"] 					= HudNotificationQueue_CreateRuiArg( "mainIcon2", announcement.mainIcon2 ),
+		["mainIcon2Color"] 				= HudNotificationQueue_CreateRuiArg( "mainIcon2Color", announcement.mainIcon2Color, eRuiArgType.COLOR, [ announcement.mainIcon2Alpha ] ),
+		["mainIcon2Size"] 				= HudNotificationQueue_CreateRuiArg( "mainIcon2Size", announcement.mainIcon2Size, eRuiArgType.FLOAT2 ),
+
+		["mainIcon3"] 					= HudNotificationQueue_CreateRuiArg( "mainIcon3", announcement.mainIcon3 ),
+		["mainIcon3Color"] 				= HudNotificationQueue_CreateRuiArg( "mainIcon3Color", announcement.mainIcon3Color, eRuiArgType.COLOR, [ announcement.mainIcon3Alpha ] ),
+		["mainIcon3Size"] 				= HudNotificationQueue_CreateRuiArg( "mainIcon3Size", announcement.mainIcon3Size, eRuiArgType.FLOAT2 ),
+
+		["spaceBetweenContainerAndBody"] = HudNotificationQueue_CreateRuiArg( "spaceBetweenContainerAndBody", announcement.spaceBetweenContainerAndBody ),
+		["imageContainerHeight"] 		= HudNotificationQueue_CreateRuiArg( "imageContainerHeight", announcement.imageContainerHeight ),
+		["imageContainerSpacing"] 		= HudNotificationQueue_CreateRuiArg( "imageContainerSpacing", announcement.imageContainerSpacing ),
+		["imageContainerLeftPadding"] 	= HudNotificationQueue_CreateRuiArg( "imageContainerLeftPadding", announcement.imageContainerLeftPadding ),
+		["imageContainerRightPadding"] 	= HudNotificationQueue_CreateRuiArg( "imageContainerRightPadding", announcement.imageContainerRightPadding ),
+		["imageContainerVerticalPadding"] = HudNotificationQueue_CreateRuiArg( "imageContainerVerticalPadding", announcement.imageContainerVerticalPadding ),
+
+		["useNotchedImageContainer"] 	= HudNotificationQueue_CreateRuiArg( "useNotchedImageContainer", announcement.useNotchedImageContainer ),
+		["useSingleImageContainer"] 	= HudNotificationQueue_CreateRuiArg( "useSingleImageContainer", announcement.useSingleImageContainer ),
+
+		["leftImageContainerMask"] 		= HudNotificationQueue_CreateRuiArg( "leftImageContainerMask", announcement.leftImageContainerMask ),
+		["leftImageContainerMaskSize"] 	= HudNotificationQueue_CreateRuiArg( "leftImageContainerMaskSize", announcement.leftImageContainerMaskSize, eRuiArgType.FLOAT2 ),
+		["leftImageContainerMaskFlip"] 	= HudNotificationQueue_CreateRuiArg( "leftImageContainerMaskFlip", announcement.leftImageContainerMaskFlip ),
+
+		["rightImageContainerMask"] 	= HudNotificationQueue_CreateRuiArg( "rightImageContainerMask", announcement.rightImageContainerMask ),
+		["rightImageContainerMaskSize"] = HudNotificationQueue_CreateRuiArg( "rightImageContainerMaskSize", announcement.rightImageContainerMaskSize, eRuiArgType.FLOAT2 ),
+		["rightImageContainerMaskFlip"] = HudNotificationQueue_CreateRuiArg( "rightImageContainerMaskFlip", announcement.rightImageContainerMaskFlip ),
+
+		["centerImageContainerMask"] 	= HudNotificationQueue_CreateRuiArg( "centerImageContainerMask", announcement.centerImageContainerMask ),
+		["centerImageContainerMaskSize"] = HudNotificationQueue_CreateRuiArg( "centerImageContainerMaskSize", announcement.centerImageContainerMaskSize, eRuiArgType.FLOAT2 ),
+
+		["leftImageContainerFrame"] 	= HudNotificationQueue_CreateRuiArg( "leftImageContainerFrame", announcement.leftImageContainerFrame ),
+		["leftImageContainerFrameSize"] = HudNotificationQueue_CreateRuiArg( "leftImageContainerFrameSize", announcement.leftImageContainerFrameSize, eRuiArgType.FLOAT2 ),
+		["leftImageContainerFrameFlip"] = HudNotificationQueue_CreateRuiArg( "leftImageContainerFrameFlip", announcement.leftImageContainerFrameFlip ),
+
+		["rightImageContainerFrame"] 	 	= HudNotificationQueue_CreateRuiArg( "rightImageContainerFrame", announcement.rightImageContainerFrame ),
+		["rightImageContainerFrameSize"] 	= HudNotificationQueue_CreateRuiArg( "rightImageContainerFrameSize", announcement.rightImageContainerFrameSize, eRuiArgType.FLOAT2 ),
+		["rightImageContainerFrameFlip"] 	= HudNotificationQueue_CreateRuiArg( "rightImageContainerFrameFlip", announcement.rightImageContainerFrameFlip ),
+
+		["centerImageContainerFrame"] 		= HudNotificationQueue_CreateRuiArg( "centerImageContainerFrame", announcement.centerImageContainerFrame ),
+		["centerImageContainerFrameSize"] 	= HudNotificationQueue_CreateRuiArg( "centerImageContainerFrameSize", announcement.centerImageContainerFrameSize, eRuiArgType.FLOAT2 ),
+
+		["imageContainerFrameColor"] 		= HudNotificationQueue_CreateRuiArg( "imageContainerFrameColor", announcement.imageContainerFrameColor, eRuiArgType.COLOR ),
+		["imageContainerMaskColor"] 		= HudNotificationQueue_CreateRuiArg( "imageContainerMaskColor", announcement.imageContainerMaskColor, eRuiArgType.COLOR ),
+		["imageContainerBackgroundAlpha"] 	= HudNotificationQueue_CreateRuiArg( "imageContainerBackgroundAlpha", announcement.imageContainerBackgroundAlpha ),
+
+		["imageContainerImageBacker"] 		= HudNotificationQueue_CreateRuiArg( "imageContainerImageBacker", announcement.imageContainerImageBacker ),
+		["imageContainerImageBackerColor1"] = HudNotificationQueue_CreateRuiArg( "imageContainerImageBackerColor1", announcement.imageContainerImageBackerColor1, eRuiArgType.COLOR, [ announcement.imageContainerImageBackerAlpha1 ] ),
+		["imageContainerImageBackerColor2"] = HudNotificationQueue_CreateRuiArg( "imageContainerImageBackerColor2", announcement.imageContainerImageBackerColor2, eRuiArgType.COLOR, [ announcement.imageContainerImageBackerAlpha2 ] ),
+		["imageContainerImageBackerColor3"] = HudNotificationQueue_CreateRuiArg( "imageContainerImageBackerColor3", announcement.imageContainerImageBackerColor3, eRuiArgType.COLOR, [ announcement.imageContainerImageBackerAlpha3 ] ),
+
+		["centerImageContainerSingleFrame"] 		= HudNotificationQueue_CreateRuiArg( "centerImageContainerSingleFrame", announcement.centerImageContainerSingleFrame ),
+		["centerImageContainerSingleFrameSize"] 	= HudNotificationQueue_CreateRuiArg( "centerImageContainerSingleFrameSize", announcement.centerImageContainerSingleFrameSize, eRuiArgType.FLOAT2 ),
+	}
+
+	return ruiArgs
+}
+
+void function CenterAnnouncements_GenerateImageSizesIfNotProvided( CenterAnnouncementItem announcement )
+{
+	
+
+	
+	announcement.leftIconSize 				= ( announcement.leftIconSize != <0, 0, 0> ) ? announcement.leftIconSize : ( announcement.leftIcon != $"" ? GetImageSize( announcement.leftIcon ) : <0, 0, 0> )
+	announcement.rightIconSize 				= ( announcement.rightIconSize != <0, 0, 0> ) ? announcement.rightIconSize : ( announcement.rightIcon != $"" ? GetImageSize( announcement.rightIcon ) : <0, 0, 0> )
+
+	
+	announcement.mainIcon1Size 				= ( announcement.mainIcon1Size != <0, 0, 0> ) ? announcement.mainIcon1Size : ( announcement.mainIcon1 != $"" ? GetImageSize( announcement.mainIcon1 ) : <0, 0, 0> )
+	announcement.mainIcon2Size 				= ( announcement.mainIcon2Size != <0, 0, 0> ) ? announcement.mainIcon2Size : ( announcement.mainIcon2 != $"" ? GetImageSize( announcement.mainIcon2 ) : <0, 0, 0> )
+	announcement.mainIcon3Size 				= ( announcement.mainIcon3Size != <0, 0, 0> ) ? announcement.mainIcon3Size : ( announcement.mainIcon3 != $"" ? GetImageSize( announcement.mainIcon3 ) : <0, 0, 0> )
+
+	
+	announcement.leftEndMaskSize 			= ( announcement.leftEndMaskSize != <0, 0, 0> ) ? announcement.leftEndMaskSize : ( announcement.leftEndMask != $"" ? GetImageSize( announcement.leftEndMask ) : <0, 0, 0> )
+	announcement.rightEndMaskSize 			= ( announcement.rightEndMaskSize != <0, 0, 0> ) ? announcement.rightEndMaskSize : ( announcement.rightEndMask != $"" ? GetImageSize( announcement.rightEndMask ) : <0, 0, 0> )
+	announcement.leftEndFrameSize 			= ( announcement.leftEndFrameSize != <0, 0, 0> ) ? announcement.leftEndFrameSize : ( announcement.leftEndFrame != $"" ? GetImageSize( announcement.leftEndFrame ) : <0, 0, 0> )
+	announcement.rightEndFrameSize 			= ( announcement.rightEndFrameSize != <0, 0, 0> ) ? announcement.rightEndFrameSize : ( announcement.rightEndFrame != $"" ? GetImageSize( announcement.rightEndFrame ) : <0, 0, 0> )
+
+	announcement.leftCenterMaskSize 		= ( announcement.leftCenterMaskSize != <0, 0, 0> ) ? announcement.leftCenterMaskSize : ( announcement.leftCenterMask != $"" ? GetImageSize( announcement.leftCenterMask ) : <0, 0, 0> )
+	announcement.rightCenterMaskSize 		= ( announcement.rightCenterMaskSize != <0, 0, 0> ) ? announcement.rightCenterMaskSize : ( announcement.rightCenterMask != $"" ? GetImageSize( announcement.rightCenterMask ) : <0, 0, 0> )
+
+	announcement.leftCenterFrameSize 		= ( announcement.leftCenterFrameSize != <0, 0, 0> ) ? announcement.leftCenterFrameSize : ( announcement.leftCenterFrame != $"" ? GetImageSize( announcement.leftCenterFrame ) : <0, 0, 0> )
+	announcement.rightCenterFrameSize 		= ( announcement.rightCenterFrameSize != <0, 0, 0> ) ? announcement.rightCenterFrameSize : ( announcement.rightCenterFrame != $"" ? GetImageSize( announcement.rightCenterFrame ) : <0, 0, 0> )
+
+	announcement.leftTextureSize 			= ( announcement.leftTextureSize != <0, 0, 0> ) ? announcement.leftTextureSize : ( announcement.leftTexture != $"" ? GetImageSize( announcement.leftTexture ) : <0, 0, 0> )
+	announcement.rightTextureSize 			= ( announcement.rightTextureSize != <0, 0, 0> ) ? announcement.rightTextureSize : ( announcement.rightTexture != $"" ? GetImageSize( announcement.rightTexture ) : <0, 0, 0> )
+	announcement.leftIntensityTextureSize 	= ( announcement.leftIntensityTextureSize != <0, 0, 0> ) ? announcement.leftIntensityTextureSize : ( announcement.leftIntensityTexture != $"" ? GetImageSize( announcement.leftIntensityTexture ) : <0, 0, 0> )
+	announcement.rightIntensityTextureSize 	= ( announcement.rightIntensityTextureSize != <0, 0, 0> ) ? announcement.rightIntensityTextureSize : ( announcement.rightIntensityTexture != $"" ? GetImageSize( announcement.rightIntensityTexture ) : <0, 0, 0> )
+
+	announcement.leftImageContainerMaskSize 	= ( announcement.leftImageContainerMaskSize != <0, 0, 0> ) ? announcement.leftImageContainerMaskSize : ( announcement.leftImageContainerMask != $"" ? GetImageSize( announcement.leftImageContainerMask ) : <0, 0, 0> )
+	announcement.rightImageContainerMaskSize 	= ( announcement.rightImageContainerMaskSize != <0, 0, 0> ) ? announcement.rightImageContainerMaskSize : ( announcement.rightImageContainerMask != $"" ? GetImageSize( announcement.rightImageContainerMask ) : <0, 0, 0> )
+	announcement.centerImageContainerMaskSize 	= ( announcement.centerImageContainerMaskSize != <0, 0, 0> ) ? announcement.centerImageContainerMaskSize : ( announcement.centerImageContainerMask != $"" ? GetImageSize( announcement.centerImageContainerMask ) : <0, 0, 0> )
+	announcement.leftImageContainerFrameSize 	= ( announcement.leftImageContainerFrameSize != <0, 0, 0> ) ? announcement.leftImageContainerFrameSize : ( announcement.leftImageContainerFrame != $"" ? GetImageSize( announcement.leftImageContainerFrame ) : <0, 0, 0> )
+	announcement.rightImageContainerFrameSize 	= ( announcement.rightImageContainerFrameSize != <0, 0, 0> ) ? announcement.rightImageContainerFrameSize : ( announcement.rightImageContainerFrame != $"" ? GetImageSize( announcement.rightImageContainerFrame ) : <0, 0, 0> )
+	announcement.centerImageContainerFrameSize 	= ( announcement.centerImageContainerFrameSize != <0, 0, 0> ) ? announcement.centerImageContainerFrameSize : ( announcement.centerImageContainerFrame != $"" ? GetImageSize( announcement.centerImageContainerFrame ) : <0, 0, 0> )
+
+	announcement.centerImageContainerSingleFrameSize = ( announcement.centerImageContainerSingleFrameSize != <0, 0, 0> ) ? announcement.centerImageContainerSingleFrameSize : ( announcement.centerImageContainerSingleFrame != $"" ? GetImageSize( announcement.centerImageContainerSingleFrame ) : <0, 0, 0> )
+}
+
+bool function CenterAnnouncements_IsActivelyDisplaying()
+{
+	return clGlobal.centerAnnouncementsActivelyDisplaying
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CenterAnnouncementItem function CenterAnnouncements_CreateEmptyStyle()
+{
+	CenterAnnouncementItem banner
+	banner.bannerRuiAsset = $"ui/generic_center_announcement.rpak"
+	CenterAnnouncements_ImageContainer_SetEmptyStyle( banner )
+	return banner
+}
+
+CenterAnnouncementItem function CenterAnnouncements_CreateNotchedStyle()
+{
+	CenterAnnouncementItem banner
+	banner.bannerRuiAsset = $"ui/generic_center_announcement.rpak"
+
+	banner.leftEndMask = $"rui/hud/splash/splash_notched_frame_end_mask"
+	banner.leftEndMaskFlip = false
+
+	banner.rightEndMask = $"rui/hud/splash/splash_notched_frame_end_mask"
+	banner.rightEndMaskFlip = true
+
+	banner.leftEndFrame = $"rui/hud/splash/splash_notched_frame_end"
+	banner.leftEndFrameFlip = false
+
+	banner.rightEndFrame = $"rui/hud/splash/splash_notched_frame_end"
+	banner.rightEndFrameFlip = true
+
+	banner.leftCenterMask = $"rui/hud/splash/splash_notched_frame_center_mask"
+	banner.rightCenterMask = $"rui/hud/splash/splash_notched_frame_center_mask"
+
+	banner.leftCenterFrame = $"rui/hud/splash/splash_notched_frame_center"
+	banner.rightCenterFrame = $"rui/hud/splash/splash_notched_frame_center"
+
+	banner.leftTexture = $"rui/hud/splash/splash_dots"
+	banner.leftTextureFlip = true
+
+	banner.rightTexture = $"rui/hud/splash/splash_dots"
+	banner.rightTextureFlip = false
+
+	banner.leftIntensityTexture = $"rui/hud/splash/splash_chevron"
+	banner.leftIntensityTextureFlip = false
+	banner.leftIntensityTextureCount = 0		
+	banner.leftIntensityTexturePadding = -15.0
+	banner.leftIntensityTextureSpacing = -15.0
+
+	banner.rightIntensityTexture = $"rui/hud/splash/splash_chevron"
+	banner.rightIntensityTextureFlip = true
+	banner.rightIntensityTextureCount = 0		
+	banner.rightIntensityTexturePadding = -15.0
+	banner.rightIntensityTextureSpacing = -15.0
+
+	CenterAnnouncements_ImageContainer_SetNotchedStyle( banner )
+
+	return banner
+}
+
+CenterAnnouncementItem function CenterAnnouncements_CreateGradientStyle()
+{
+	CenterAnnouncementItem banner
+	banner.bannerRuiAsset = $"ui/generic_center_announcement.rpak"
+
+	banner.leftEndMask = $"rui/gradient_lr"
+	banner.leftEndMaskSize = <2, 1, 0>
+	banner.leftEndMaskFlip = true
+
+	banner.rightEndMask = $"rui/gradient_lr"
+	banner.rightEndMaskSize = <2, 1, 0>
+	banner.rightEndMaskFlip = false
+
+	banner.leftEndFrame = $""
+	banner.leftEndFrameFlip = false
+
+	banner.rightEndFrame = $""
+	banner.rightEndFrameFlip = false
+
+	banner.leftCenterMask = $"white"
+	banner.rightCenterMask = $"white"
+
+	banner.leftCenterFrame = $""
+	banner.rightCenterFrame = $""
+
+	banner.leftTexture = $""
+	banner.leftTextureFlip = false
+
+	banner.rightTexture = $""
+	banner.rightTextureFlip = false
+
+	banner.leftIntensityTexture = $""
+	banner.leftIntensityTextureFlip = false
+	banner.leftIntensityTextureCount = 0		
+	banner.leftIntensityTexturePadding = 0.0
+	banner.leftIntensityTextureSpacing = 0.0
+
+	banner.rightIntensityTexture = $""
+	banner.rightIntensityTextureFlip = true
+	banner.rightIntensityTextureCount = 0		
+	banner.rightIntensityTexturePadding = 0.0
+	banner.rightIntensityTextureSpacing = 0.0
+
+	return banner
+}
+
+CenterAnnouncementItem function CenterAnnouncements_CreateTerracedStyle()
+{
+	CenterAnnouncementItem banner
+	banner.bannerRuiAsset = $"ui/generic_center_announcement.rpak"
+	banner.announcementHeight = 65
+	banner.contentVerticalPaddingTop = 15.0
+	banner.contentVerticalPaddingBottom = 11.0
+
+	
+	banner.leftEndMask = $"rui/hud/splash/terraced/frame_end_mask"
+	banner.leftEndMaskFlip = false
+
+	banner.rightEndMask = $"rui/hud/splash/terraced/frame_end_mask"
+	banner.rightEndMaskFlip = true
+
+	banner.leftEndFrame = $"rui/hud/splash/terraced/frame_end"
+	banner.leftEndFrameFlip = false
+
+	banner.rightEndFrame = $"rui/hud/splash/terraced/frame_end"
+	banner.rightEndFrameFlip = true
+
+	banner.leftCenterMask = $"rui/hud/splash/terraced/frame_left_center_mask"
+	banner.rightCenterMask = $"rui/hud/splash/terraced/frame_right_center_mask"
+
+	banner.leftCenterFrame = $"rui/hud/splash/terraced/frame_left_center"
+	banner.rightCenterFrame = $"rui/hud/splash/terraced/frame_right_center"
+
+	banner.leftTexture = $"rui/hud/splash/terraced/dots_texture"
+	banner.leftTextureFlip = false
+
+	banner.rightTexture = $"rui/hud/splash/terraced/dots_texture"
+	banner.rightTextureFlip = true
+
+	banner.leftIntensityTexture = $"rui/hud/splash/terraced/intensity_texture"
+	banner.leftIntensityTextureFlip = false
+	banner.leftIntensityTextureCount = 0		
+	banner.leftIntensityTexturePadding = -15.0
+	banner.leftIntensityTextureSpacing = -11.0
+
+	banner.rightIntensityTexture = $"rui/hud/splash/terraced/intensity_texture"
+	banner.rightIntensityTextureFlip = true
+	banner.rightIntensityTextureCount = 0		
+	banner.rightIntensityTexturePadding = -15.0
+	banner.rightIntensityTextureSpacing = -11.0
+
+	CenterAnnouncements_ImageContainer_SetNotchedStyle( banner )
+
+	return banner
+}
+
+
+CenterAnnouncementItem function CenterAnnouncements_CreateBoxStyle()
+{
+	CenterAnnouncementItem banner
+	banner.bannerRuiAsset = $"ui/clockup_generic_center_announcement.rpak"
+
+	banner.leftEndMask = $"rui/hud/unitframes/clockup/clockup_splash_endcap"
+	banner.leftEndFrame = $"rui/hud/unitframes/clockup/clockup_splash_endcap"
+	banner.leftTexture = $""
+
+	banner.leftCenterMask = $"rui/hud/splash/splash_notched_frame_center_mask"
+	banner.leftCenterFrame = $"rui/hud/splash/splash_notched_frame_center"
+
+	banner.rightEndMask = $"rui/hud/unitframes/clockup/clockup_splash_endcap"
+	banner.rightEndFrame = $"rui/hud/unitframes/clockup/clockup_splash_endcap"
+	banner.rightTexture = $""
+
+	banner.rightCenterMask = $"rui/hud/splash/splash_notched_frame_center_mask"
+	banner.rightCenterFrame = $"rui/hud/splash/splash_notched_frame_center"
+	banner.rightEndMaskFlip = true
+	banner.rightEndFrameFlip = true
+
+	return banner
+}
+
+
+
+CenterAnnouncementItem function CenterAnnouncements_CreateDeprecatedStyle( AnnouncementData deprecatedAnnouncement )
+{
+	CenterAnnouncementItem banner
+	banner.ruiSize = DEFAULT_SCREEN_SIZE
+	banner.deprecatedAnnouncementData = deprecatedAnnouncement
+	banner.isDeprecatedStyle = true
+	banner.duration = deprecatedAnnouncement.duration
+
+	banner.onCreateVisualOverride = ( var function ( HudNotificationQueueItem queueItem )
+	{
+		return AnnouncementMessage_CreateStyleRUI( GetLocalClientPlayer(), queueItem.deprecatedAnnouncementData )
+	})
+
+	banner.onDestroyVisualOverride = ( void function ( HudNotificationQueueItem queueItem )
+	{
+		HudNotificationQueue_OnDestroyVisual_Base( queueItem )
+	})
+
+	return banner
+}
+
+
+
+void function CenterAnnouncements_ImageContainer_SetEmptyStyle( CenterAnnouncementItem announcement )
+{
+	announcement.spaceBetweenContainerAndBody = DEFAULT_SPACE_BETWEEN_IMAGE_CONTAINER_AND_BODY
+	announcement.imageContainerHeight = DEFAULT_IMAGE_CONTAINER_HEIGHT
+	announcement.imageContainerSpacing = DEFAULT_IMAGE_CONTAINER_SPACING
+
+	announcement.imageContainerLeftPadding = DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING
+	announcement.imageContainerRightPadding = DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING
+	announcement.imageContainerVerticalPadding = DEFAULT_IMAGE_CONTAINER_VERTICAL_PADDING
+
+	announcement.leftImageContainerMask = $""
+	announcement.leftImageContainerMaskFlip = false
+
+	announcement.rightImageContainerMask = $""
+	announcement.rightImageContainerMaskFlip = true
+
+	announcement.centerImageContainerMask = $""
+
+	announcement.leftImageContainerFrame = $""
+	announcement.leftImageContainerFrameFlip = false
+
+	announcement.rightImageContainerFrame = $""
+	announcement.rightImageContainerFrameFlip = true
+
+	announcement.centerImageContainerFrame = $""
+
+	announcement.imageContainerFrameColor = <1, 1, 1>
+	announcement.imageContainerMaskColor = <0, 0, 0>
+}
+
+void function CenterAnnouncements_ImageContainer_SetNotchedStyle( CenterAnnouncementItem announcement )
+{
+	announcement.spaceBetweenContainerAndBody = -8.0
+	announcement.imageContainerHeight = DEFAULT_IMAGE_CONTAINER_HEIGHT
+	announcement.imageContainerSpacing = DEFAULT_IMAGE_CONTAINER_SPACING
+
+	announcement.imageContainerLeftPadding = DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING
+	announcement.imageContainerRightPadding = DEFAULT_IMAGE_CONTAINER_CONTENT_TO_OUTER_EDGE_PADDING
+	announcement.imageContainerVerticalPadding = DEFAULT_IMAGE_CONTAINER_VERTICAL_PADDING
+
+	announcement.leftImageContainerMask = $"rui/hud/splash/notched_frame_end_thin_mask"
+	announcement.leftImageContainerMaskFlip = false
+
+	announcement.rightImageContainerMask = $"rui/hud/splash/notched_frame_end_thin_mask"
+	announcement.rightImageContainerMaskFlip = true
+
+	announcement.centerImageContainerMask = $"rui/hud/splash/notched_frame_center_thin_mask"
+
+	announcement.leftImageContainerFrame = $"rui/hud/splash/notched_frame_end_thin"
+	announcement.leftImageContainerFrameFlip = false
+
+	announcement.rightImageContainerFrame = $"rui/hud/splash/notched_frame_end_thin"
+	announcement.rightImageContainerFrameFlip = true
+
+	announcement.centerImageContainerFrame = $"rui/hud/splash/notched_frame_center_thin"
+
+	announcement.imageContainerFrameColor = <1, 1, 1>
+	announcement.imageContainerMaskColor = <0, 0, 0>
+
+	announcement.useNotchedImageContainer = true
+	announcement.useSingleImageContainer  = false
+}
+
+void function CenterAnnouncements_ImageContainer_SetSingleFrameStyle( CenterAnnouncementItem announcement )
+{
+	announcement.spaceBetweenContainerAndBody 			= -45.0
+	announcement.imageContainerVerticalPadding 			= 35.0
+	announcement.imageContainerHeight 					= SINGLE_FRAME_STYLE_IMAGE_CONTAINER_HEIGHT
+
+	announcement.leftImageContainerMask 				= $""
+	announcement.rightImageContainerMask 				= $""
+	announcement.centerImageContainerMask 				= $""
+	announcement.leftImageContainerFrame 				= $""
+	announcement.rightImageContainerFrame 				= $""
+	announcement.centerImageContainerFrame 				= $""
+
+	announcement.centerImageContainerSingleFrame     	= $"rui/hud/splash/splash_reticle"
+	announcement.centerImageContainerSingleFrameSize 	= <0, 0, 0>	
+	announcement.imageContainerFrameColor               = <1, 1, 1>
+	announcement.useNotchedImageContainer               = false
+	announcement.useSingleImageContainer                = true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function CenterAnnouncements_OnPreIntro( HudNotificationQueueItem queueItem )
+{
+	
+	Announcements_RequestPause()
+
+	
+	while ( Announcements_CurrentlyDisplaying() )
+	{
+		WaitFrame()
+	}
+
+	clGlobal.isAnnouncementActive = true
+	clGlobal.centerAnnouncementsActivelyDisplaying = true
+	SetAnnouncementIsActive()
+
+	return true
+}
+
+void function CenterAnnouncements_OnComplete( HudNotificationQueueItem queueItem )
+{
+	int visibleCount = HudNotificationQueue_GetVisibleQueueItemCount( file.queueId )
+	if ( visibleCount == 0 )
+	{
+		clGlobal.isAnnouncementActive = false
+		clGlobal.centerAnnouncementsActivelyDisplaying = false
+		ClearAnnouncementIsActive()
+	}
+
+	
+	int queueLength = HudNotificationQueue_GetQueueItemCount( file.queueId )
+	if ( queueLength == 0 )
+	{
+		Announcements_Unpause()
+	}
+}
+
+void function CenterAnnouncements_ActiveMenuChanged( string currentMenu )
+{
+	
+	if ( !IsAlive( GetLocalClientPlayer() ) )
+		return
+
+	if ( currentMenu != "" )
+	{
+		HudNotificationQueue_AddQueueBlocker( file.queueId, CenterAnnouncements_QueueBlocker_PauseInMenu )
+	}
+}
+
+
+void function CenterAnnouncements_ActiveFakeMenuChanged( string currentFakeMenuName )
+{
+	
+	if ( !IsAlive( GetLocalClientPlayer() ) )
+		return
+
+	if ( currentFakeMenuName != "" )
+	{
+		HudNotificationQueue_AddQueueBlocker( file.queueId, CenterAnnouncements_QueueBlocker_PauseInMenu )
+	}
+}
+
+bool function CenterAnnouncements_QueueBlocker_PauseInMenu()
+{
+	entity localPlayer = GetLocalClientPlayer()
+
+	
+	if ( IsValidPlayer( localPlayer ) && !IsAlive( localPlayer ) )
+		return true
+
+	float MENU_CLOSE_GRACE_PERIOD_SEC = 1.0
+	if ( clGlobal.isMenuOpen || clGlobal.isFakeMenuOpen )
+	{
+		return false	
+	}
+	else if ( clGlobal.lastMenuToggleTime > 0 || clGlobal.lastFakeMenuToggleTime > 0 )
+	{
+		if ( clGlobal.lastMenuToggleTime > 0 )
+		{
+			float timeSinceMenuToggle = Time() - clGlobal.lastMenuToggleTime
+			if ( timeSinceMenuToggle <= MENU_CLOSE_GRACE_PERIOD_SEC )
+				return false
+		}
+
+		if ( clGlobal.lastFakeMenuToggleTime > 0 )
+		{
+			float timeSinceFakeMenuToggle = Time() - clGlobal.lastFakeMenuToggleTime
+			if ( timeSinceFakeMenuToggle <= MENU_CLOSE_GRACE_PERIOD_SEC )
+				return false
+		}
+
+		return true
+	}
+
+	return true
+}
+
+
+
+#if DEV
+void function DEV_PreviewCenterAnnouncementStyles( bool includeSubheader = true )
+{
+	
+	CenterAnnouncementItem notchedBanner = CenterAnnouncements_CreateNotchedStyle()
+	notchedBanner.mainText = "Notched Style"
+	notchedBanner.subText = includeSubheader ? "This is an optional subtext line" : ""
+	notchedBanner.leftIntensityTextureCount = 3
+	notchedBanner.rightIntensityTextureCount = 3
+	notchedBanner.frameColor = <1, 1, 1>
+	notchedBanner.textureColor = <1, 1, 1>
+	notchedBanner.priority = eHudNotificationQueuePriority.LOW
+	notchedBanner.mainIcon1 = $"rui/ordnance_icons/grenade_frag"
+	notchedBanner.scalar = 1.0
+	CenterAnnouncements_QueueItem( notchedBanner, ePersistenceContext.PLAYER )
+
+
+	
+	CenterAnnouncementItem gradientBanner = CenterAnnouncements_CreateGradientStyle()
+	gradientBanner.mainText = "Gradient Style"
+	gradientBanner.subText = includeSubheader ? "This is an optional subtext line" : ""
+	gradientBanner.leftIntensityTextureCount = 3
+	gradientBanner.rightIntensityTextureCount = 3
+	gradientBanner.frameColor = <1, 1, 1>
+	gradientBanner.textureColor = <1, 1, 1>
+	gradientBanner.priority = eHudNotificationQueuePriority.LOW
+	gradientBanner.mainIcon1 = $"rui/ordnance_icons/grenade_frag"
+	gradientBanner.scalar = 1.0
+	CenterAnnouncements_QueueItem( gradientBanner, ePersistenceContext.PLAYER )
+
+
+	
+	CenterAnnouncementItem terracedBanner = CenterAnnouncements_CreateTerracedStyle()
+	terracedBanner.mainText = "Terraced Style"
+	terracedBanner.subText = includeSubheader ? "This is an optional subtext line" : ""
+	terracedBanner.leftIntensityTextureCount = 3
+	terracedBanner.rightIntensityTextureCount = 3
+	terracedBanner.frameColor = <1, 1, 1>
+	terracedBanner.textureColor = <1, 1, 1>
+	terracedBanner.priority = eHudNotificationQueuePriority.LOW
+	terracedBanner.mainIcon1 = $"rui/ordnance_icons/grenade_frag"
+	terracedBanner.scalar = 1.0
+	CenterAnnouncements_QueueItem( terracedBanner, ePersistenceContext.PLAYER )
+
+
+	
+	CenterAnnouncementItem builderExampleBanner1 = CenterAnnouncements_CreateNotchedStyle()
+	builderExampleBanner1.mainText = "Announcement Builder Example"
+	builderExampleBanner1.leftIntensityTextureCount = 3
+	builderExampleBanner1.rightIntensityTextureCount = 3
+	builderExampleBanner1.frameColor = <1, 1, 1>
+	builderExampleBanner1.textureColor = <1, 1, 1>
+	builderExampleBanner1.paddingBottom = 5.0
+	builderExampleBanner1.mainIcon1 = $"rui/ordnance_icons/grenade_frag"
+	builderExampleBanner1.mainIcon2 = $"rui/ordnance_icons/grenade_frag"
+	builderExampleBanner1.mainIcon3 = $"rui/ordnance_icons/grenade_frag"
+	builderExampleBanner1.scalar = 1.0
+
+	CenterAnnouncementItem builderExampleBanner2 = CenterAnnouncements_CreateGradientStyle()
+	builderExampleBanner2.mainText = "Any styles can be combined with announcement builders"
+	builderExampleBanner2.mainTextIsUpper = false
+	builderExampleBanner2.mainTextFontFace = HEADER_FONT
+	builderExampleBanner2.scalar = 0.7
+	builderExampleBanner2.paddingTop = 5.0
+	builderExampleBanner2.paddingBottom = 5.0
+
+	CenterAnnouncementItem builderExampleBanner3 = CenterAnnouncements_CreateNotchedStyle()
+	builderExampleBanner3.mainText = "This lets us create modular multiline announcements,"
+	builderExampleBanner3.subText = "even with subtext lines (use responsibly)!"
+	builderExampleBanner3.mainTextIsUpper = false
+	builderExampleBanner3.mainTextFontFace = HEADER_FONT
+	builderExampleBanner3.scalar = 0.7
+	builderExampleBanner3.paddingTop = 5.0
+
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ builderExampleBanner1, builderExampleBanner2, builderExampleBanner3 ] )
+	builder.priority = eHudNotificationQueuePriority.LOW
+
+	CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function DEV_PreviewCenterAnnouncementStyles_Delayed( bool includeSubheader = true )
+{
+	
+	thread ( void function() : ( includeSubheader )
+	{
+		wait 1.5
+		DEV_PreviewCenterAnnouncementStyles( includeSubheader )
+	})()
+}
+
+
+void function DEV_CenterAnnouncements_TestAnnouncements( int count, int persistenceContext = ePersistenceContext.PLAYER )
+{
+	
+	AnnouncementData announcement1 = Announcement_Create( "Deprecated Announcement 1" )
+	announcement1.duration = 4.0
+	announcement1.announcementStyle = ANNOUNCEMENT_STYLE_QUICK
+	AnnouncementFromClass( GetLocalClientPlayer(), announcement1 )
+
+	
+	AnnouncementData announcement2 = Announcement_Create( "Deprecated Announcement 2" )
+	announcement2.duration = 4.0
+	announcement2.announcementStyle = ANNOUNCEMENT_STYLE_SWEEP
+	AnnouncementFromClass( GetLocalClientPlayer(), announcement2 )
+
+	
+	for ( int i = 0; i < count; i++ )
+	{
+		int oneLine = RandomIntRange( 0, 2 )
+		int priority = RandomIntRange( 0, 150 )
+
+		if ( oneLine == 0 )
+		{
+			CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+			mainBanner.mainText = "Announcement " + i
+			mainBanner.subText = "Priority " + priority
+			mainBanner.leftIntensityTextureCount = 2
+			mainBanner.rightIntensityTextureCount = 2
+			mainBanner.frameColor = <1, 0, 0>
+			mainBanner.textureColor = <1, 0, 0>
+			mainBanner.priority = priority
+			mainBanner.mainIcon1 = $"rui/ordnance_icons/grenade_frag"
+			mainBanner.scalar = RandomFloatRange( 0.75, 1.5 )
+			mainBanner.soundAliases.append( "ui_mapping_item_1p" )
+
+			CenterAnnouncements_QueueItem( mainBanner, persistenceContext )
+		}
+		else
+		{
+			CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+			mainBanner.mainText = "Announcement " + i
+			mainBanner.leftIntensityTextureCount = 2
+			mainBanner.rightIntensityTextureCount = 2
+			mainBanner.frameColor = <1, 0, 0>
+			mainBanner.textureColor = <1, 0, 0>
+			mainBanner.paddingBottom = 5.0
+			mainBanner.mainIcon1 = $"rui/ordnance_icons/grenade_frag"
+			mainBanner.mainIcon2 = $"rui/ordnance_icons/grenade_frag"
+			mainBanner.mainIcon3 = $"rui/ordnance_icons/grenade_frag"
+			mainBanner.scalar = RandomFloatRange( 0.75, 1.5 )
+
+			CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+			subBanner.mainText = "Priority " + priority
+			subBanner.contentPivot = <0.5, 0.0, 0.0>
+			subBanner.scalar = 0.7
+			subBanner.paddingTop = 5.0
+
+			AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+			builder.priority = priority
+			builder.soundAliases.append( "ui_mapping_item_1p" )
+
+			CenterAnnouncements_QueueBuilder( builder, persistenceContext )
+		}
+	}
+
+	
+	AnnouncementData announcement
+	announcement = Announcement_Create( "" )
+	Announcement_SetSubText( announcement, GetAnnouncementSubtextString(1) )
+	Announcement_SetHeaderText( announcement, "#SURVIVAL_CIRCLE_WARNING" )
+	Announcement_SetDisplayEndTime( announcement, ClientTime() + 25 )
+	Announcement_SetStyle( announcement, ANNOUNCEMENT_STYLE_CIRCLE_WARNING )
+	Announcement_SetSoundAlias( announcement, "survival_circle_close_alarm_01" )
+	Announcement_SetTitleColor( announcement, COLOR_WHITE )
+	Announcement_SetFrameColor( announcement, SrgbToLinear( <1.0, 0.16, 0.1176> ) )
+	Announcement_SetPurge( announcement, true )
+	Announcement_SetPriority( announcement, 200 ) 
+	Announcement_SetDuration( announcement, 7 )
+
+	CenterAnnouncementItem deprecatedStyle = CenterAnnouncements_CreateDeprecatedStyle( announcement )
+	deprecatedStyle.priority = eHudNotificationQueuePriority.HIGH
+	CenterAnnouncements_QueueItem( deprecatedStyle, ePersistenceContext.PLAYER )
+}
+#endif
+ 

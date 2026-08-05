@@ -1,0 +1,1460 @@
+global function MpAbilityValkClusterMissile_Init
+global function OnWeaponActivate_ability_valk_cluster_missile
+global function OnProjectileCollision_ability_valk_cluster_missile
+global function OnWeaponAttemptOffhandSwitch_ability_valk_cluster_missile
+global function OnWeaponPrimaryAttack_valk_cluster_missile
+global function OnWeaponDeactivate_ability_valk_cluster_missile
+global function MpAbilityValkClusterMissile_GetExplosionForce
+
+
+global function OnClientAnimEvent_ability_valk_cluster_missile
+global function ClusterMissile_EntityShouldBeHighlighted
+
+
+
+const string VALK_TAC_WARNING_ENTITY_SCRIPTNAME = "valk_tac_warning_entity"
+global const string CLUSTER_MISSILE_WEAPON_NAME = "mp_ability_valk_cluster_missile"
+
+global const string VALK_UPGRADE_TAC_INCREASE_MISSILES = "upgrade_core_valk_tac_increase_missiles"
+
+
+
+const asset FX_BOMBARDMENT_MARKER = $"P_valk_rckt_AR_marker"
+const asset FX_BOMBARDMENT_LOCKED = $"P_valk_rckt_AR_lock"
+
+const asset FX_MUZZLE_FLASH_FP = $"P_wpn_mflash_bang_rocket_FP"
+const asset FX_MUZZLE_FLASH_3P = $"P_wpn_mflash_bang_rocket"
+const asset MISSILE_TRAIL = $"P_valk_rckt_stg2"
+const asset GRENADE_TRAIL = $"P_valk_rckt_stg1"
+
+
+const asset CREEPING_BOMBARDMENT_WEAPON_BOMB_MODEL = $"mdl/weapons_r5/misc_bangalore_rockets/bangalore_rockets_projectile.rmdl"
+const asset ROCKET_PROJECTILE = $"mdl/humans_r5/pilots_r5/pilot_valkyrie/w_valkyrie_rocket_projectile.rmdl"
+
+
+const bool MISSILE_PATH_DEBUG = false
+
+struct {
+
+
+
+
+
+
+
+
+		array<entity> valkTacWarnEntities
+		table<entity, float> playerHighlightEndTime
+
+} file
+
+struct
+{
+	float stunDuration = 2.0
+	float stunEasout = 1.5
+
+	float stunMoveSlow = 0.75 
+	float stunTurnSlow = 0.0
+
+	float highlightDuration = 1.5
+	bool teamHighlight = false
+
+	bool drainMovementPassives = true
+
+	bool selfDamage = false
+
+
+	float explosionDamage = 15
+	float explosionFollowupFactor = 0.2 
+
+
+
+
+	float explosionFollowUpTime = 5 
+	float explosionRadius = 150
+
+	float maxAttackRange = 125.0 * METERS_TO_INCHES 
+
+	float maxAttackRangeInSkydive = 250.0 * METERS_TO_INCHES
+	float maxTravelTimeInSkydive = 5.0
+	float minTravelTimeInSkydive = 0.3
+
+	float maxTravelTime = 4.0
+	float minAttackRange = 400.0 
+	float minTravelTime = 2.0
+
+	float verticalClearanceRequired = 0.0
+
+	int sideSteps = 2
+	int forwardSteps = 4
+	
+	int sideStepsWithUpgrade = 3
+	int forwardStepsWithUpgrade = 4
+
+	float fanoutOnLaunch = 0.1
+	float fanoutOnLaunchWithUpgrade = 0.06
+
+	float stepHeight = 250.0 
+	float sideStep = 163.16
+	float stepForward = 185.0 
+	float missileSpeed = 1600 
+
+	float grenadeLobTime = 0.75
+	float inRowDelay = 0.05
+	float rowToRowDelay = 0.15
+	float initialDelay = 0.75 
+} tuning
+
+struct ValkMissileInfo
+{
+	float  missileSpeed
+	vector phase1Vector
+	vector phase2Vector
+	vector phase3Vector
+	vector firePos
+	vector targetPos
+	float  phase1Time
+	float  phase1To2Time
+	float  phase2Time
+	float  phase2To3Time
+	float  phase3ToTarTime
+}
+
+array< float > fanAdjustments =
+[
+	-1.0,
+	1.0,
+	-2.0,
+	2.0,
+	-3.0,
+	3.0,
+	-4.0,
+	4.0,
+	-5.0,
+	5.0,
+	-6.0,
+	6.0,
+	-7.0,
+	7.0,
+	-8.0,
+	8.0,
+	-9.0,
+	10.0,
+	-11.0,
+	11.0,
+]
+
+
+struct TraceStepResult
+{
+	vector pos
+	vector normal
+}
+
+enum eCanFireTactical
+{
+	YES,
+	NO_CLEARANCE,
+	NO_OTHER
+}
+
+void function MpAbilityValkClusterMissile_Init()
+{
+	RegisterTuningStruct( "tuning", "valk_tac_" )
+
+	PrecacheModel( ROCKET_PROJECTILE )
+
+	PrecacheParticleSystem( FX_MUZZLE_FLASH_FP )
+	PrecacheParticleSystem( FX_MUZZLE_FLASH_3P )
+	PrecacheParticleSystem( FX_BOMBARDMENT_MARKER )
+	PrecacheParticleSystem( FX_BOMBARDMENT_LOCKED )
+	PrecacheParticleSystem( GRENADE_TRAIL )
+	PrecacheParticleSystem( MISSILE_TRAIL )
+
+	PrecacheScriptString( VALK_TAC_WARNING_ENTITY_SCRIPTNAME )
+
+	RegisterSignal( "ValkTacTargetingEnd" )
+
+
+
+
+
+		AddScriptNameCreateCallback( VALK_TAC_WARNING_ENTITY_SCRIPTNAME, ValkTacAddWarning )
+
+		if ( !tuning.teamHighlight )
+		{
+			AddLocalPlayerDidDamageCallback( ClusterMissile_OnLocalPlayerDidDamage )
+		}
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.valk_tac_scan, UpdateHighlightOnStatusEffectChange )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.valk_tac_scan, UpdateHighlightOnStatusEffectChange )
+
+
+
+	PrecacheImpactEffectTable( "exp_valk_rocket" )
+}
+
+void function ExtraSwarmMissile_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Damage___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function ClusterMissile_EntityShouldBeHighlighted( entity viewPlayer, entity hitPlayer )
+{
+	if ( !tuning.teamHighlight )
+	{
+		if ( !(hitPlayer in file.playerHighlightEndTime) )
+			return false
+
+		if ( file.playerHighlightEndTime[ hitPlayer ] < Time() )
+			return false
+	}
+
+	if ( !StatusEffect_HasSeverity( hitPlayer, eStatusEffect.valk_tac_scan ) )
+		return false
+
+	return true
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________WeaponActivate___________________________(){}
+#endif
+
+void function ClusterMissile_OnLocalPlayerDidDamage( entity attacker, entity target, vector damagePosition, int damageType, float damageAmount )
+{
+	if ( !IsAlive( attacker ) || !attacker.IsPlayer() )
+		return
+
+	if ( !target.IsPlayer() && !target.IsNPC() )
+		return
+
+	if ( attacker == target )
+		return
+
+	if ( !PlayerHasPassive( attacker, ePassives.PAS_VALK ) )
+		return
+
+	file.playerHighlightEndTime[ target ] <- ( Time() + tuning.highlightDuration )
+
+	if ( StatusEffect_HasSeverity( target, eStatusEffect.valk_tac_scan ) )
+	{
+		ManageHighlightEntity( target )
+	}
+}
+
+
+void function OnWeaponActivate_ability_valk_cluster_missile( entity weapon )
+{
+
+	entity owner = weapon.GetOwner()
+	if ( GetLocalViewPlayer() == owner )
+	{
+		thread ValkTacShowTargetLocsThread( owner, weapon )
+	}
+
+
+
+
+}
+
+bool function OnWeaponAttemptOffhandSwitch_ability_valk_cluster_missile( entity weapon )
+{
+	int canFire = ValkCanFireTactical( weapon )
+
+
+		if ( canFire == eCanFireTactical.NO_CLEARANCE )
+		{
+			entity owner = weapon.GetWeaponOwner()
+			AddPlayerHint( 1.0, 0.75, $"rui/hud/tactical_icons/tactical_valk", "#CLUSTER_MISSILE_CLEARANCE_FAIL" )
+			EmitSoundOnEntity( owner, "Valk_Hover_VerticalClearanceWarning_1P" )
+		}
+
+
+	return canFire == eCanFireTactical.YES
+}
+
+
+int function ValkCanFireTactical( entity weapon )
+{
+	if ( weapon.GetWeaponPrimaryClipCount() < weapon.GetWeaponPrimaryClipCountMax() )
+		return eCanFireTactical.NO_OTHER
+
+	entity owner = weapon.GetWeaponOwner()
+	if( !IsValid( owner ) )
+		return eCanFireTactical.NO_OTHER
+
+	if ( owner.IsPhaseShifted() )
+		return eCanFireTactical.NO_OTHER
+
+	if ( StatusEffect_HasSeverity( owner, eStatusEffect.skyward_embark ) )
+	{
+		return eCanFireTactical.NO_OTHER
+	}
+	if ( tuning.verticalClearanceRequired > 0.0 )
+	{
+		float traceDist      = 300
+		TraceResults results = TraceLine( owner.EyePosition(), owner.GetOrigin() + <0, 0, traceDist>, [ owner ], TRACE_MASK_SOLID, TRACE_COLLISION_GROUP_PLAYER )
+
+		float dist           = traceDist * results.fraction
+		if ( dist < tuning.verticalClearanceRequired )
+		{
+			return eCanFireTactical.NO_CLEARANCE
+		}
+	}
+
+	return eCanFireTactical.YES
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnWeaponDeactivate_ability_valk_cluster_missile( entity weapon )
+{
+	entity owner = weapon.GetOwner()
+	if ( IsValid( owner ) )
+		owner.Signal( "ValkTacTargetingEnd" )
+
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+		{
+			return
+		}
+
+
+	if ( weapon.HasMod( "block_melee_when_shooting" ) )
+	{
+		weapon.RemoveMod( "block_melee_when_shooting" )
+	}
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PickTargets___________________________(){}
+#endif
+array<WeaponMissileMultipleTargetData> function GetValkTacTargets( entity weapon, entity owner )
+{
+	vector attackDir = weapon.GetAttackDirection()
+	vector attackPos = weapon.GetAttackPosition()
+	int forwardSteps = tuning.forwardSteps
+	int sideSteps = tuning.sideSteps
+
+	if ( owner.Skydive_IsFollowing() )
+	{
+		attackDir = AnglesToForward( owner.CameraAngles() )
+		attackPos = owner.EyePosition()
+	}
+
+	if( owner.HasPassive( ePassives.PAS_EXTRA_SWARM_MISSILE ) )
+	{
+		forwardSteps = tuning.forwardStepsWithUpgrade
+		sideSteps = tuning.sideStepsWithUpgrade
+	}
+
+	float maxRange = tuning.maxAttackRange
+	if ( owner.Player_IsSkydiving() )
+	{
+		maxRange = tuning.maxAttackRangeInSkydive
+	}
+
+	array<WeaponMissileMultipleTargetData> targetLocs = weapon.GetWeaponMissileMultipleTargets( attackPos, attackDir, owner, forwardSteps, sideSteps, tuning.stepForward, tuning.sideStep, tuning.stepHeight, tuning.initialDelay, tuning.inRowDelay, tuning.rowToRowDelay, maxRange, tuning.minAttackRange )
+	return targetLocs
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ShowTargets___________________________(){}
+#endif
+
+
+
+
+void function ValkTacShowTargetLocsThread( entity owner, entity weapon )
+{
+	EndSignal( owner, "ValkTacTargetingEnd", "OnDeath" )
+	EndSignal( weapon, "OnDestroy" )
+	array<int> vfxRefs = []
+
+	OnThreadEnd( void function() : ( vfxRefs ) {
+		foreach ( ref in vfxRefs )
+		{
+			CleanupFXHandle( ref, true, false )
+		}
+	} )
+
+	
+
+	int systemIndex = GetParticleSystemIndex( FX_BOMBARDMENT_MARKER )
+
+	array<WeaponMissileMultipleTargetData> targetLocs = GetValkTacTargets( weapon, owner )
+	vector normalAngle
+
+	for ( int i = 0; i < targetLocs.len(); i++ )
+	{
+		WeaponMissileMultipleTargetData res = targetLocs[i]
+
+		normalAngle = VectorToAngles( res.normal )
+		normalAngle = FlattenVec( normalAngle )
+		int thisRef = StartParticleEffectInWorldWithHandle( systemIndex, res.pos, normalAngle )
+		
+		EffectSetDistanceCullingScalar( thisRef, 999.0 )
+		vfxRefs.append( thisRef )
+	}
+
+	
+	while ( true )
+	{
+		targetLocs = GetValkTacTargets( weapon, owner )
+
+		for ( int i = 0; i < targetLocs.len() && i < vfxRefs.len(); i++ )
+		{
+			WeaponMissileMultipleTargetData res = targetLocs[i]
+			normalAngle = VectorToAngles( res.normal )
+			EffectSetControlPointVector( vfxRefs[i], 0, res.pos )
+			EffectSetControlPointAngles( vfxRefs[i], 0, normalAngle )
+		}
+		WaitFrame()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ValkTacAddWarning( entity warnEntity )
+{
+	
+	file.valkTacWarnEntities.append( warnEntity )
+	thread Thread_WaitForWarnEntDeletion( warnEntity )
+
+	
+	if ( file.valkTacWarnEntities.len() == 1 )
+		thread ValkTacManageThreatIndicator()
+}
+
+
+
+void function Thread_WaitForWarnEntDeletion( entity warnEnt )
+{
+	warnEnt.EndSignal( "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( warnEnt )
+		{
+			file.valkTacWarnEntities.fastremovebyvalue( warnEnt )
+		}
+	)
+
+	WaitForever()
+}
+
+
+
+
+void function ValkTacManageThreatIndicator()
+{
+	entity localPlayer = GetLocalViewPlayer()
+	if ( !IsValid( localPlayer ) )
+		return
+
+	localPlayer.EndSignal( "OnDestroy" )
+
+	asset indicatorModel   = GRENADE_INDICATOR_GENERIC
+	vector indicatorOffset = <-5, 0, 0>
+
+	entity arrow = CreateClientSidePropDynamic( <0, 0, 0>, <0, 0, 0>, GRENADE_INDICATOR_ARROW_MODEL )
+	entity mdl   = CreateClientSidePropDynamic( <0, 0, 0>, <0, 0, 0>, indicatorModel )
+	EndSignal( arrow, "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( arrow, mdl )
+		{
+			if ( IsValid( arrow ) )
+			{
+				arrow.Destroy()
+			}
+			if ( IsValid( mdl ) )
+			{
+				mdl.Destroy()
+			}
+		}
+	)
+	entity cockpit = localPlayer.GetCockpit()
+	if ( !cockpit )
+		return
+
+	EndSignal( cockpit, "OnDestroy" )
+
+	arrow.SetParent( cockpit, "CAMERA_BASE" )
+	arrow.SetAttachOffsetOrigin( <25, 0, -4> )
+
+	mdl.SetParent( arrow, "BACK" )
+	mdl.SetAttachOffsetOrigin( indicatorOffset )
+
+	float lastVisibleTime = 0
+	bool shouldBeVisible  = true
+
+	while ( IsValid( localPlayer ) && file.valkTacWarnEntities.len() > 0 )
+	{
+		cockpit = localPlayer.GetCockpit()
+		vector playerOrigin = localPlayer.GetOrigin()
+
+		bool firstLoop = true
+		vector closestPoint
+		foreach ( warningLoc in file.valkTacWarnEntities )
+		{
+			if ( !IsValid( warningLoc ) )
+				continue
+
+			vector point = warningLoc.GetOrigin()
+			
+			if ( firstLoop )
+			{
+				closestPoint = point
+			}
+			else if ( DistanceSqr( playerOrigin, closestPoint ) > DistanceSqr( playerOrigin, point ) )
+			{
+				closestPoint = point
+			}
+			firstLoop = false
+		}
+		float dist = Distance( playerOrigin, closestPoint )
+		if ( dist > (tuning.explosionRadius * 1.3) || !cockpit || localPlayer.IsPhaseShifted() )
+		{
+			shouldBeVisible = false
+		}
+		else
+		{
+			TraceResults result = TraceLine( closestPoint, localPlayer.EyePosition(), [ localPlayer ], TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE )
+
+			if ( result.fraction == 1.0 )
+			{
+				lastVisibleTime = Time()
+			}
+			else
+			{
+				shouldBeVisible = false
+			}
+		}
+
+		if ( shouldBeVisible || Time() - lastVisibleTime < 0.25 )
+		{
+			arrow.EnableDraw()
+			mdl.EnableDraw()
+
+			arrow.kv.rendercolor = GetKeyColor( COLORID_HUD_INDICATOR_ARROW )
+			mdl.kv.rendercolor = GetKeyColor( COLORID_HUD_INDICATOR_GRENADE_MODEL )
+
+			arrow.DisableRenderWithViewModelsNoZoom()
+			arrow.EnableRenderWithCockpit()
+			arrow.EnableRenderWithHud()
+			mdl.DisableRenderWithViewModelsNoZoom()
+			mdl.EnableRenderWithCockpit()
+			mdl.EnableRenderWithHud()
+
+			vector damageArrowAngles = AnglesInverse( localPlayer.EyeAngles() )
+			vector vecToDamage       = closestPoint - (localPlayer.EyePosition() + (localPlayer.GetViewVector() * 20.0))
+
+			
+			if ( arrow.GetParent() == null )
+				arrow.SetParent( cockpit, "CAMERA_BASE", true )
+
+			arrow.SetAttachOffsetAngles( AnglesCompose( damageArrowAngles, VectorToAngles( vecToDamage ) ) )
+		}
+		else
+		{
+			mdl.DisableDraw()
+			arrow.DisableDraw()
+		}
+		WaitFrame()
+	}
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________FireMissiles___________________________(){}
+#endif
+
+var function OnWeaponPrimaryAttack_valk_cluster_missile( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+
+		if ( !InPrediction() || !IsFirstTimePredicted() )
+		{
+			return
+		}
+
+
+	entity owner     = weapon.GetOwner()
+	vector attackPos = attackParams.pos
+	vector attackDir = attackParams.dir
+
+	if ( attackParams.burstIndex == 0 )
+	{
+		weapon.AddMod( "block_melee_when_shooting" )
+
+		
+		owner.Signal( "ValkTacTargetingEnd" )
+
+			ClientScreenShake( 10, 100, 0.5, attackDir )
+			EmitSoundOnEntity( owner, "Valk_ShoulderRocket_Fire_Comp_1P" )
+
+
+		weapon.w.valkTac_targetData = GetValkTacTargets( weapon, owner )
+
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+	else
+	{
+
+
+
+	}
+
+	
+
+		if ( GetLocalViewPlayer() != owner )
+			return
+
+
+	if (weapon.w.valkTac_targetData.len() < 1)
+		return
+
+	if( attackParams.burstIndex >= weapon.w.valkTac_targetData.len() )
+		return
+
+	WeaponMissileMultipleTargetData thisResult = weapon.w.valkTac_targetData[attackParams.burstIndex]
+	vector curTar                              = thisResult.pos
+
+	
+	
+	
+
+	ValkMissileInfo thisMissileInfo
+
+	WeaponFireMissileParams fireMissileParams
+	fireMissileParams.pos                       = attackPos
+	fireMissileParams.scriptTouchDamageType     = damageTypes.projectileImpact
+	fireMissileParams.scriptExplosionDamageType = damageTypes.explosive
+	fireMissileParams.clientPredicted           = false
+	fireMissileParams.speed                     = 0
+
+	vector swarmVector = attackParams.dir
+	swarmVector = Normalize( swarmVector )
+
+	vector flatRight = RotateVector( attackParams.dir, <0, -90, 0> )
+	flatRight.z = 0
+	flatRight   = Normalize( flatRight )
+
+	float fanAdjust = fanAdjustments[attackParams.burstIndex]
+
+	bool hasMoreMissiles = owner.HasPassive( ePassives.PAS_EXTRA_SWARM_MISSILE )
+
+	
+	swarmVector += flatRight * fanAdjust * (hasMoreMissiles ? tuning.fanoutOnLaunchWithUpgrade : tuning.fanoutOnLaunch)
+	swarmVector.z = 0.7
+	swarmVector   = Normalize( swarmVector )
+
+
+	
+	vector dir2d = (curTar - attackPos);
+	dir2d.z = 0;
+	dir2d   = Normalize( dir2d )
+	vector phase1Vec = Normalize( swarmVector ) * 0.6
+	vector phase2Vec = Normalize ( dir2d + <0, 0, 0.7> ) * 0.8
+	vector phase3Vec = dir2d * 0.9
+	thisMissileInfo.phase1Vector = phase1Vec
+	thisMissileInfo.phase2Vector = phase2Vec
+	thisMissileInfo.phase3Vector = phase3Vec
+
+	
+	fireMissileParams.dir     = phase1Vec
+	fireMissileParams.pos     = attackPos
+	thisMissileInfo.firePos   = fireMissileParams.pos 
+	thisMissileInfo.targetPos = curTar
+
+	WeaponFireGrenadeParams fireGrenadeParams
+
+	
+	if ( fanAdjust < 0 )
+	{
+		fireGrenadeParams.pos = attackPos + (flatRight * -18) + <0, 0, 0>
+	}
+	else
+	{
+		fireGrenadeParams.pos = attackPos + (flatRight * 10) + <0, 0, 0>
+	}
+
+	fireGrenadeParams.angVel            = <180, 0, 0>
+	fireGrenadeParams.fuseTime          = 10
+	fireGrenadeParams.clientPredicted   = true
+	fireGrenadeParams.lagCompensated    = true
+	fireGrenadeParams.useScriptOnDamage = true
+
+	int sideSteps = tuning.sideSteps
+	if( owner.HasPassive( ePassives.PAS_EXTRA_SWARM_MISSILE ) )
+	{
+		sideSteps = tuning.sideStepsWithUpgrade
+	}
+
+	int rocketsInRow = 1 + ( sideSteps * 2)
+
+	
+	int row = attackParams.burstIndex / rocketsInRow
+
+	
+	float distance = (curTar - attackPos).Length()
+
+	float travelTime = log( distance )
+
+	float maxAttackRange = tuning.maxAttackRange
+	float maxTravelTime = tuning.maxTravelTime
+	float minTravelTime = tuning.minTravelTime
+	bool fromSkydive = false
+
+	if ( owner.Player_IsSkydiving() )
+	{
+		maxAttackRange = tuning.maxAttackRangeInSkydive
+		maxTravelTime = tuning.maxTravelTimeInSkydive
+		minTravelTime = tuning.minTravelTimeInSkydive
+		fromSkydive = true
+	}
+
+	travelTime = GraphCapped( travelTime, log( tuning.minAttackRange ), log( maxAttackRange ), minTravelTime, maxTravelTime )
+	travelTime += row * tuning.rowToRowDelay
+	int indexInRow = attackParams.burstIndex % rocketsInRow
+	travelTime += indexInRow * tuning.inRowDelay
+	
+	float thisLobTime          = tuning.grenadeLobTime + RandomFloatRange( -0.2, 0.1 ) 
+	fireGrenadeParams.vel      = (swarmVector + <0, 0, 0.75>) * (0.04 * (0.8 + thisLobTime))
+	
+	float rocketTravelTime     = travelTime - thisLobTime
+	float rocketTravelDistance = distance - 200 
+	float speed                = (rocketTravelDistance / rocketTravelTime) * 3
+
+
+	
+	float phase1Time      = 0.01
+	float phase1To2Time   = 0.01
+	float phase2Time      = rocketTravelTime * 0.1
+
+	float phase2To3Time   = rocketTravelTime * 0.16
+
+
+
+	float phase3ToTarTime = rocketTravelTime * 0.1
+	thisMissileInfo.phase1Time      = phase1Time
+	thisMissileInfo.phase1To2Time   = phase1To2Time
+	thisMissileInfo.phase2Time      = phase2Time
+	thisMissileInfo.phase2To3Time   = phase2To3Time
+	thisMissileInfo.phase3ToTarTime = phase3ToTarTime
+	thisMissileInfo.missileSpeed    = speed
+
+	
+	entity grenade    = weapon.FireWeaponGrenade( fireGrenadeParams )
+	if( IsValid(grenade) )
+	{
+		int grenadeHandle = grenade.GetEncodedEHandle()
+
+		grenade.SetPhysics( MOVETYPE_FLYGRAVITY )
+		grenade.SetAngles( FlattenAngles( VectorToAngles( attackParams.dir ) ) + <-15, 0, 0> ) 
+
+
+
+
+
+
+
+		grenade.SetProjectileLifetime( thisLobTime )
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	if ( weapon.HasMod( "arenas_tac_max" ) )
+	{
+		return weapon.GetAmmoPerShot()
+	}
+
+
+	
+	if ( attackParams.burstIndex == weapon.GetWeaponSettingInt( eWeaponVar.burst_fire_count ) - 1 )
+	{
+
+
+
+		int curAmmo = weapon.GetWeaponPrimaryClipCount()
+		owner.Signal( "ValkTacTargetingEnd" )
+		return curAmmo
+	}
+	else
+	{
+		return weapon.GetAmmoPerShot()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+void function DebugTimeMissile( entity missile, int burstNumber, float expectedTime )
+{
+	float startTime = Time()
+	missile.EndSignal( "OnDestroy" )
+	OnThreadEnd( function(): (missile, burstNumber, startTime, expectedTime)
+	{
+		float totalTravelTime = Time() - startTime
+
+
+
+	} )
+	WaitForever()
+}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnProjectileCollision_ability_valk_cluster_missile( entity projectile, vector pos, vector normal, entity hitEnt, int hitbox, bool isCritical, bool isPassthrough )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+void function OnClientAnimEvent_ability_valk_cluster_missile( entity weapon, string name )
+{
+	GlobalClientEventHandler( weapon, name )
+}
+
+
+int function MpAbilityValkClusterMissile_GetExplosionForce()
+{
+	return 10
+}
+ 

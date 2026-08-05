@@ -1,0 +1,828 @@
+
+
+global function ReservedInventory_Init
+global function ReservedInventory_IsEnabled
+global function ReservedInventory_GetMaxBackpackSlots
+global function ReservedInventory_GetVisibleBackpackSlots
+global function ReservedInventory_GetPlayerInventory
+global function ReservedInventory_GetInventorySlotCountForLootItem
+global function ReservedInventory_GetSlotsReservedForLootItem
+global function ReservedInventory_GetItemsInSlots
+global function ReservedInventory_IsInventorySlotReserved
+global function ReservedInventory_IsInventorySlotDisabled
+global function ReservedInventory_AddToInventory
+
+#if DEV
+global function DEV_ReservedInventory_BuildLookupData
+global function DEV_ReservedInventory_InitSlotData
+global function DEV_ReservedInventory_PrintSlotOverrides
+global function DEV_ReservedInventory_GetPlaylistOverrides
+#endif
+
+
+
+global function ReservedInventory_GetEmptySlotIcon_BySlotIndex
+global function ReservedInventory_UpdateSlotTooltipData
+global function ReservedInventory_GetCommsActionForSlot
+global function ReservedInventory_IsItemSwappable
+global function ReservedInventory_GetLootIndexForReservedSlot
+
+
+enum eSlotType
+{
+	ANY_ITEM,
+	LOOT_TYPE,
+	LOOT_REF,
+	ATTACHMENT_TYPE,
+	NONE
+}
+
+struct SlotData
+{
+	int slotIndex = -1
+	int slotType = eSlotType.ANY_ITEM
+	int lootType = -1
+	string lootRef = ""
+	int attachmentType = eWeaponAttachmentType.NONE
+	int lootIndex = -1
+	int maxStackCount = 1
+	bool startEnabled = true
+	asset emptySlotIcon = $""
+	string emptySlotName = ""
+	int emptySlotCommsAction = eCommsAction.BLANK
+	int filledSlotCommsAction = eCommsAction.BLANK
+
+#if DEV
+		string dev_overrides = ""
+#endif
+}
+
+struct
+{
+	array<SlotData> slotData
+
+	
+	array<int> reservedSlots
+	array<int> anyItemSlots
+	array<int> disabledSlots
+
+	table< int, SlotData > slotIndexToSlotData
+
+	table< int, int > lootIndexToSlotIndex
+	table< int, array<int> > lootTypeToSlotIndexArray
+	table< int, array<int> > attachmentTypeToSlotIndexArray
+} file
+
+
+
+bool function ReservedInventory_IsEnabled()
+{
+
+
+
+
+	return GetCurrentPlaylistVarBool( "reserved_inventory_enabled", false )
+}
+
+void function ReservedInventory_Init()
+{
+	if ( !ReservedInventory_IsEnabled() )
+		return
+
+
+
+
+
+	InitSlotData()
+
+	GetPlaylistOverrides()
+
+	BuildLookupData()
+}
+
+
+table< string, asset > RESERVED_INVENTORY_DATATABLES = {
+
+		[ "unhinged_reserved_inventory_slots" ] = $"datatable/unhinged_reserved_inventory_slots.rpak",
+
+}
+
+int function ReservedInventory_GetMaxBackpackSlots()
+{
+	int maxSlots = SURVIVAL_BACKPACK_LIMIT_MAX
+
+
+
+
+
+
+
+
+	return GetCurrentPlaylistVarInt( "reserved_inventory_max_slot_count", maxSlots )
+}
+
+int function ReservedInventory_GetVisibleBackpackSlots()
+{
+	return SURVIVAL_BACKPACK_LIMIT_MEDIUM
+}
+
+string function GetInventoryTableString()
+{
+	return GetCurrentPlaylistVarString( "reserved_inventory_table", "" )
+}
+
+asset ornull function GetInventoryTableAsset()
+{
+	string tableID = GetInventoryTableString()
+	asset ornull tableAsset = null
+	if ( tableID in RESERVED_INVENTORY_DATATABLES )
+		tableAsset = RESERVED_INVENTORY_DATATABLES[tableID]
+	return tableAsset
+}
+
+bool function GetAssertOnNoEligibleSlots()
+{
+	return GetCurrentPlaylistVarBool( "reserved_inventory_assert_on_no_eligible_slots", true )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function InitSlotData()
+{
+	file.slotData.clear()
+	for ( int i = 0; i < ReservedInventory_GetMaxBackpackSlots(); i++ )  
+	{
+		SlotData slotData
+		slotData.slotIndex = i
+		file.slotData.append( slotData )
+	}
+
+	asset ornull tableAsset = GetInventoryTableAsset()
+	Assert( tableAsset != null )
+	if ( tableAsset == null )
+		return
+	expect asset( tableAsset )
+
+	var dt = GetDataTable( tableAsset )
+	int rowCount = GetDataTableRowCount( dt )
+	int col_slotIndex = GetDataTableColumnByName( dt, "slotIndex" )
+	int col_slotType = GetDataTableColumnByName( dt, "slotType" )
+	int col_lootType = GetDataTableColumnByName( dt, "lootType" )
+	int col_lootRef = GetDataTableColumnByName( dt, "lootRef" )
+	int col_attachmentType = GetDataTableColumnByName( dt, "attachmentType" )
+	int col_maxStackCount = GetDataTableColumnByName( dt, "maxStackCount" )
+	int col_startEnabled = GetDataTableColumnByName( dt, "startEnabled" )
+	int col_emptySlotIcon = GetDataTableColumnByName( dt, "emptySlotIcon" )
+	int col_emptySlotName = GetDataTableColumnByName( dt, "emptySlotName" )
+	int col_emptySlotCommsAction = GetDataTableColumnByName( dt, "emptySlotCommsAction" )
+	int col_filledSlotCommsAction = GetDataTableColumnByName( dt, "filledSlotCommsAction" )
+
+	for ( int i = 0; i < rowCount; i++ )
+	{
+		int slotIndex = GetDataTableInt( dt, i, col_slotIndex )
+		bool enabled = GetCurrentPlaylistVarBool( "reserved_inventory_slot_enabled_" + slotIndex, GetDataTableBool( dt, i, col_startEnabled ) )		
+		if ( enabled ) 
+		{
+			Assert( slotIndex >= 0 && slotIndex < file.slotData.len() )
+		}
+		else 
+		{
+			continue
+		}
+
+		SlotData slotData = file.slotData[slotIndex]
+		slotData.startEnabled = slotData.slotType == eSlotType.NONE ? false : enabled
+		string slotTypeString = GetDataTableString( dt, i, col_slotType )
+		slotData.slotType = slotTypeString in eSlotType ? eSlotType[slotTypeString] : eSlotType.NONE
+
+		switch ( slotData.slotType )
+		{
+			case eSlotType.ANY_ITEM:
+				continue
+
+			case eSlotType.LOOT_TYPE:
+				string lootTypeString = GetDataTableString( dt, i, col_lootType )
+				slotData.lootType = SURVIVAL_Loot_GetLootTypeFromString( lootTypeString )
+				if ( lootTypeString == "" || slotData.lootType == eLootType.BLANK)
+				{
+					slotData.slotType = eSlotType.NONE
+					continue
+				}
+				slotData.maxStackCount = 1
+				slotData.emptySlotIcon = GetDataTableAsset( dt, i, col_emptySlotIcon )
+				slotData.emptySlotName = GetDataTableString( dt, i, col_emptySlotName )
+
+				string commsActionStr = GetDataTableString( dt, i, col_emptySlotCommsAction )
+				slotData.emptySlotCommsAction = GetCommsActionEnumForName( commsActionStr )
+
+				commsActionStr = GetDataTableString( dt, i, col_filledSlotCommsAction )
+				slotData.filledSlotCommsAction = GetCommsActionEnumForName( commsActionStr )
+				break
+
+			case eSlotType.LOOT_REF:
+				string ref = GetDataTableString( dt, i, col_lootRef )
+				if ( SURVIVAL_Loot_IsRefValid( ref ) )
+				{
+					LootData data = SURVIVAL_Loot_GetLootDataByRef( ref )
+					slotData.lootIndex = data.index
+					slotData.lootRef = ref
+				}
+				else
+				{
+					slotData.slotType = eSlotType.NONE
+					continue
+				}
+				slotData.maxStackCount = GetDataTableInt( dt, i, col_maxStackCount )
+				slotData.emptySlotIcon = GetDataTableAsset( dt, i, col_emptySlotIcon )
+				slotData.emptySlotName = GetDataTableString( dt, i, col_emptySlotName )
+
+				string commsActionStr = GetDataTableString( dt, i, col_emptySlotCommsAction )
+				slotData.emptySlotCommsAction = GetCommsActionEnumForName( commsActionStr )
+
+				commsActionStr = GetDataTableString( dt, i, col_filledSlotCommsAction )
+				slotData.filledSlotCommsAction = GetCommsActionEnumForName( commsActionStr )
+				break
+
+			case eSlotType.ATTACHMENT_TYPE:
+				string attachmentTypeStr = GetDataTableString( dt, i, col_attachmentType )
+				slotData.attachmentType = attachmentTypeStr in eWeaponAttachmentType ? eWeaponAttachmentType[attachmentTypeStr] : eWeaponAttachmentType.NONE
+				if ( slotData.attachmentType == eWeaponAttachmentType.NONE )
+				{
+					slotData.slotType = eSlotType.LOOT_TYPE
+					slotData.lootType = eLootType.ATTACHMENT
+				}
+				slotData.maxStackCount = 1
+				slotData.emptySlotIcon = GetDataTableAsset( dt, i, col_emptySlotIcon )
+				slotData.emptySlotName = GetDataTableString( dt, i, col_emptySlotName )
+
+				string commsActionStr = GetDataTableString( dt, i, col_emptySlotCommsAction )
+				slotData.emptySlotCommsAction = GetCommsActionEnumForName( commsActionStr )
+
+				commsActionStr = GetDataTableString( dt, i, col_filledSlotCommsAction )
+				slotData.filledSlotCommsAction = GetCommsActionEnumForName( commsActionStr )
+				break
+			case eSlotType.NONE:
+			default:
+				break
+		}
+	}
+}
+
+void function GetPlaylistOverrides()
+{
+	string maxStackCountOverridesString = GetCurrentPlaylistVarString( "reserved_inventory_slot_max_stack_count", "" )
+	foreach ( string pair in GetTrimmedSplitString( maxStackCountOverridesString, " " ) )
+	{
+		array<string> splitPair = GetTrimmedSplitString( pair, ":" )
+		Assert( splitPair.len() == 2 )
+
+		int slot = int( splitPair[0] )
+		Assert( slot >= 0 && slot < file.slotData.len() )
+		if ( slot < 0 || slot >= file.slotData.len() )
+			continue
+
+		SlotData slotData = file.slotData[slot]
+		Assert( slotData.slotType == eSlotType.LOOT_REF, "Cannot override maxStackCount for slot " + slot + ". Slot not of type LOOT_REF." )
+		if ( slotData.slotType != eSlotType.LOOT_REF )
+			continue
+
+		int newMaxStackCount = maxint( 0, int( splitPair[1] ) )
+#if DEV
+			int oldMaxStackCount = slotData.maxStackCount
+			slotData.dev_overrides += "maxStackCount: " + oldMaxStackCount + "->" + newMaxStackCount + "; "
+#endif
+		slotData.maxStackCount = newMaxStackCount
+	}
+
+	string slotEnabledString = GetCurrentPlaylistVarString( "reserved_inventory_slot_enabled", "" )
+	foreach ( string pair in GetTrimmedSplitString( slotEnabledString, " " ) )
+	{
+		array<string> splitPair = GetTrimmedSplitString( pair, ":" )
+		Assert( splitPair.len() == 2 )
+
+		int slot = int( splitPair[0] )
+		Assert( slot >= 0 && slot < file.slotData.len() )
+		if ( slot < 0 || slot >= file.slotData.len() )
+			continue
+
+		SlotData slotData = file.slotData[slot]
+		Assert( slotData.slotType != eSlotType.NONE, "Cannot set enabled/disabled on slot type NONE." )
+		if ( slotData.slotType == eSlotType.NONE )
+			continue
+
+		bool enabled = splitPair[1] == "0" ? false : true
+#if DEV
+			bool oldEnabled = slotData.startEnabled
+			slotData.dev_overrides += "startEnabled: " + oldEnabled + "->" + enabled + "; "
+#endif
+		slotData.startEnabled = enabled
+	}
+
+	 
+	 
+	 
+	 
+	 
+	string slotOverrideString = GetCurrentPlaylistVarString( "reserved_inventory_slot_override", "" )
+	foreach ( string override in GetTrimmedSplitString( slotOverrideString , " " ) )
+	{
+		array<string> fields = GetTrimmedSplitString( override, ":" )
+		Assert( fields.len() >= 2 )
+
+		int slot = int( fields[0] )
+		string slotTypeString = fields[1]
+		bool startEnabled = fields.len() > 2 ? ( fields[2] == "0" ? false : true ) : true
+		string refOrTypeName =  fields.len() > 3 ? fields[3] : ""
+		int maxStackCount = fields.len() > 4 ? int( fields[4] ) : 1
+		string emptySlotIconString = fields.len() > 5 ? fields[5] : ""
+		string emptySlotNameString = fields.len() > 6 ? fields[6] : ""
+		string emptySlotCommsActionString = fields.len() > 7 ? fields[7] : ""
+		string filledSlotCommsActionString = fields.len() > 8 ? fields[8] : ""
+
+		Assert( slot >= 0 && slot < file.slotData.len() )
+		if ( slot < 0 || slot >= file.slotData.len() )
+			continue
+
+		Assert( maxStackCount > 0 )
+		if ( maxStackCount <= 0 )
+			continue
+
+		SlotData slotData
+		slotData.slotIndex = slot
+		file.slotData[slot] = slotData
+		slotData.slotType = slotTypeString in eSlotType ? eSlotType[slotTypeString] : eSlotType.NONE
+		slotData.startEnabled = slotData.slotType == eSlotType.NONE ? false : startEnabled
+		asset emptySlotIcon = GetAssetFromString( emptySlotIconString )
+		int commsAction = GetCommsActionEnumForName( emptySlotCommsActionString )
+		int filledCommsAction = GetCommsActionEnumForName( filledSlotCommsActionString )
+
+#if DEV
+			slotData.dev_overrides = override
+#endif
+		switch ( slotData.slotType )
+		{
+			case eSlotType.ANY_ITEM:
+				continue
+
+			case eSlotType.LOOT_TYPE:
+				slotData.lootType = SURVIVAL_Loot_GetLootTypeFromString( refOrTypeName )
+				if ( refOrTypeName == "" || slotData.lootType == eLootType.BLANK )
+				{
+					slotData.slotType = eSlotType.NONE
+					continue
+				}
+				slotData.maxStackCount = 1
+				slotData.emptySlotIcon = emptySlotIcon
+				slotData.emptySlotName = emptySlotNameString
+				slotData.emptySlotCommsAction = commsAction
+				slotData.filledSlotCommsAction = filledCommsAction
+				break
+
+			case eSlotType.LOOT_REF:
+				if ( SURVIVAL_Loot_IsRefValid( refOrTypeName ) )
+				{
+					LootData data = SURVIVAL_Loot_GetLootDataByRef( refOrTypeName )
+					slotData.lootIndex = data.index
+					slotData.lootRef = refOrTypeName
+				}
+				else
+				{
+					slotData.slotType = eSlotType.NONE
+					continue
+				}
+				slotData.maxStackCount = maxStackCount
+				slotData.emptySlotIcon = emptySlotIcon
+				slotData.emptySlotName = emptySlotNameString
+				slotData.emptySlotCommsAction = commsAction
+				slotData.filledSlotCommsAction = filledCommsAction
+				break
+
+			case eSlotType.ATTACHMENT_TYPE:
+				slotData.attachmentType = refOrTypeName in eWeaponAttachmentType ? eWeaponAttachmentType[refOrTypeName] : eWeaponAttachmentType.NONE
+				if ( slotData.attachmentType == eWeaponAttachmentType.NONE )
+				{
+					slotData.slotType = eSlotType.LOOT_TYPE
+					slotData.lootType = eLootType.ATTACHMENT
+				}
+				slotData.maxStackCount = 1
+				slotData.emptySlotIcon = emptySlotIcon
+				slotData.emptySlotName = emptySlotNameString
+				slotData.emptySlotCommsAction = commsAction
+				slotData.filledSlotCommsAction = filledCommsAction
+				break
+			case eSlotType.NONE:
+			default:
+				break
+		}
+	}
+}
+
+void function BuildLookupData()
+{
+	
+	file.reservedSlots.clear()
+	file.anyItemSlots.clear()
+	file.disabledSlots.clear()
+
+	file.slotIndexToSlotData.clear()
+	file.lootIndexToSlotIndex.clear()
+	file.lootTypeToSlotIndexArray.clear()
+	file.attachmentTypeToSlotIndexArray.clear()
+
+	foreach ( SlotData slotData in file.slotData )
+	{
+		Assert( !(slotData.slotIndex in file.slotIndexToSlotData) )
+		file.slotIndexToSlotData[slotData.slotIndex] <- slotData
+
+		if ( !slotData.startEnabled || slotData.slotType == eSlotType.NONE )
+		{
+			file.disabledSlots.append( slotData.slotIndex )
+		}
+
+		switch ( slotData.slotType )
+		{
+			case eSlotType.LOOT_REF:
+				Assert( !(slotData.lootIndex in file.lootIndexToSlotIndex) )
+				file.lootIndexToSlotIndex[slotData.lootIndex] <- slotData.slotIndex
+				file.reservedSlots.append( slotData.slotIndex )
+				break
+
+			case eSlotType.LOOT_TYPE:
+				if ( !(slotData.lootType in file.lootTypeToSlotIndexArray) )
+				{
+					file.lootTypeToSlotIndexArray[slotData.lootType] <- []
+				}
+				Assert( !file.lootTypeToSlotIndexArray[slotData.lootType].contains( slotData.slotIndex ) )
+				file.lootTypeToSlotIndexArray[slotData.lootType].append( slotData.slotIndex )
+				file.reservedSlots.append( slotData.slotIndex )
+				break
+
+			case eSlotType.ANY_ITEM:
+				file.anyItemSlots.append( slotData.slotIndex )
+				break
+
+			case eSlotType.ATTACHMENT_TYPE:
+				if ( !(slotData.attachmentType in file.attachmentTypeToSlotIndexArray) )
+				{
+					file.attachmentTypeToSlotIndexArray[slotData.attachmentType] <- []
+				}
+				Assert( !file.attachmentTypeToSlotIndexArray[slotData.attachmentType].contains( slotData.slotIndex ) )
+				file.attachmentTypeToSlotIndexArray[slotData.attachmentType].append( slotData.slotIndex )
+				file.reservedSlots.append( slotData.slotIndex )
+			case eSlotType.NONE:
+			default:
+				break
+		}
+	}
+}
+
+array<int> function ReservedInventory_GetSlotsReservedForLootItem( LootData data )
+{
+	array<int> result = []
+
+	if ( data.index in file.lootIndexToSlotIndex )
+	{
+		result.append( file.lootIndexToSlotIndex[data.index ] )
+	}
+
+	if ( data.lootType in file.lootTypeToSlotIndexArray )
+	{
+		result.extend( file.lootTypeToSlotIndexArray[data.lootType] )
+	}
+
+	if ( data.lootType == eLootType.ATTACHMENT )
+	{
+		array<string> attachPoints = GetAttachPointsForAttachment( data.ref )
+		foreach ( string attachPoint in attachPoints )
+		{
+			int attachmentType = SURVIVAL_Loot_GetAttachmentType_Enum( attachPoint )
+			if ( attachmentType in file.attachmentTypeToSlotIndexArray )
+			{
+				result.extend( file.attachmentTypeToSlotIndexArray[attachmentType] )
+				break
+			}
+		}
+	}
+
+	return result
+}
+
+array<ConsumableInventoryItem> function ReservedInventory_GetItemsInSlots( entity player, array<int> slots )
+{
+	array<ConsumableInventoryItem> itemsInSlots
+	array<ConsumableInventoryItem> playerInventory = ReservedInventory_GetPlayerInventory( player )
+	int inventoryCount = playerInventory.len()
+	foreach ( int slotId in slots )
+	{
+		if ( slotId >= inventoryCount )
+			break
+
+		if ( ReservedInventory_IsInventorySlotDisabled( slotId ) )
+			continue
+
+		itemsInSlots.append( playerInventory[ slotId ] )
+	}
+	return itemsInSlots
+}
+
+
+bool function ReservedInventory_IsInventorySlotReserved( int index )
+{
+	return file.reservedSlots.contains( index )
+}
+
+bool function ReservedInventory_IsInventorySlotDisabled( int index )
+{
+	return file.disabledSlots.contains( index )
+}
+
+bool function SlotTakesAnyItem( int index )
+{
+	return file.anyItemSlots.contains( index )
+}
+
+array<ConsumableInventoryItem> function ReservedInventory_GetPlayerInventory( entity player )
+{
+	return ReservedInventory_PutInventoryInSlots( player, SURVIVAL_GetPlayerInventory( player ) )
+}
+
+
+array<ConsumableInventoryItem> function ReservedInventory_PutInventoryInSlots( entity player, array<ConsumableInventoryItem> inventory )
+{
+	if ( !IsValidPlayer( player ) )
+		return []
+
+	array<ConsumableInventoryItem> result
+
+	
+	int inventoryLimit = ReservedInventory_GetMaxBackpackSlots()  
+
+	ConsumableInventoryItem emptySlot
+	emptySlot.slot = -1
+	emptySlot.type = -1
+	emptySlot.count = 0
+
+	result.resize( inventoryLimit, emptySlot)
+
+	int numItemsInInventory = inventory.len()
+	int numItemsInReservedSlots = 0
+	int numItemsInNonReservedSlots = 0
+	int numEmptyItemSlots = 0
+
+	int anyItemSlotIndex = 0
+	for ( int i = 0; i < numItemsInInventory; i++ )
+	{
+		ConsumableInventoryItem item = inventory[i]
+
+		
+		if ( item.type < 0 )
+		{
+			numEmptyItemSlots++
+			continue
+		}
+
+		Assert( SURVIVAL_Loot_IsLootIndexValid( item.type ) )
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex(item.type)
+		array<int> reservedSlots = ReservedInventory_GetSlotsReservedForLootItem( data )
+
+		if ( reservedSlots.len() == 0 )
+		{
+			while ( anyItemSlotIndex < inventoryLimit && (!SlotTakesAnyItem( anyItemSlotIndex ) || ReservedInventory_IsInventorySlotDisabled( anyItemSlotIndex )) )
+			{
+				anyItemSlotIndex++
+			}
+
+			if ( anyItemSlotIndex < inventoryLimit )
+			{
+				result[anyItemSlotIndex++] = item
+				numItemsInNonReservedSlots++
+			}
+		}
+
+		foreach( int reservedSlotIndex in reservedSlots )
+		{
+			if ( ReservedInventory_IsInventorySlotDisabled( reservedSlotIndex ) )
+				continue
+
+			if ( result[reservedSlotIndex].type == -1 )
+			{
+				result[reservedSlotIndex] = item
+				numItemsInReservedSlots++
+				break
+			}
+		}
+	}
+
+	Assert( numItemsInReservedSlots + numItemsInNonReservedSlots + numEmptyItemSlots == numItemsInInventory )
+	return result
+}
+
+int function ReservedInventory_GetInventorySlotCountForLootItem( LootData data, entity player )
+{
+	array<int> reservedSlots = ReservedInventory_GetSlotsReservedForLootItem( data )
+
+	if ( reservedSlots.len() == 0 )
+		return data.inventorySlotCount
+
+	
+	
+	
+	
+
+	int totalCount = file.slotData[reservedSlots[0]].maxStackCount * data.countPerDrop
+
+	if ( IsValidPlayer( player ) && PlayerHasPassive( player, ePassives.PAS_EXTRA_GRENADES ) )
+	{
+		string lootRef = file.slotData[reservedSlots[0]].lootRef
+		if ( SURVIVAL_Weapon_IsOrdnance( lootRef ) )
+		{
+			totalCount += Passive_ExtraGrenades_Count()
+		}
+	}
+
+	return totalCount
+}
+
+int function ReservedInventory_AddToInventory( entity player, array<ConsumableInventoryItem> inventory, int inventoryLimit, LootData data, int itemCount, int itemSlotCount, bool doSorting )
+{
+	
+	array<ConsumableInventoryItem> slots = ReservedInventory_PutInventoryInSlots( player, inventory )
+	if ( slots.len() == 0 )
+		return 0
+
+	int numToAdd = itemCount
+	int numAdded = 0
+
+	bool addToAnyItemSlot = false
+	array<int> eligibleSlots = ReservedInventory_GetSlotsReservedForLootItem( data )
+	if ( eligibleSlots.len() == 0 )
+	{
+		eligibleSlots = file.anyItemSlots
+		addToAnyItemSlot = true
+	}
+
+	Assert( !GetAssertOnNoEligibleSlots() || eligibleSlots.len() > 0, "[ReservedInventory] attempting to add an item that is not allowed in inventory: " + data.ref )
+
+	array<int> availableEmptySlots = []
+	foreach ( int slot in eligibleSlots )
+	{
+		if ( numToAdd <= 0)
+			break
+
+		if ( ReservedInventory_IsInventorySlotDisabled( slot ) )
+			continue
+
+		Assert( slot < slots.len() )
+		bool slotIsEmpty = slots[slot].type == -1
+		if ( slotIsEmpty )
+		{
+			availableEmptySlots.append( slot )
+		}
+		else if ( slots[slot].type == data.index )
+		{
+			int currentSlotCount = slots[slot].count
+
+			if ( currentSlotCount >= itemSlotCount )
+				continue
+
+			int diff = itemSlotCount - currentSlotCount
+			int add = minint( numToAdd, diff )
+			slots[slot].count += add
+			numToAdd -= add
+			numAdded += add
+		}
+	}
+
+	foreach ( int emptySlot in availableEmptySlots )
+	{
+		if ( numToAdd <= 0 )
+			break
+
+		ConsumableInventoryItem newItem
+		newItem.slot = inventory.len()
+		newItem.type = data.index
+		int add = minint( numToAdd, itemSlotCount )
+		newItem.count = add
+		numToAdd -= add
+		numAdded += add
+
+		int insertPoint = inventory.len()
+		if ( addToAnyItemSlot && doSorting )
+		{
+			for ( int i = 0; i < inventory.len(); i++ )
+			{
+				int compare = SortByPriorityThenTier( newItem, inventory[i] )
+				if ( compare <= 0 )
+				{
+					insertPoint = i
+					break
+				}
+			}
+		}
+		inventory.insert( insertPoint, newItem )
+	}
+
+	return numAdded
+}
+
+
+asset function ReservedInventory_GetEmptySlotIcon_BySlotIndex( int index )
+{
+	return file.slotIndexToSlotData[index].emptySlotIcon
+}
+
+void function ReservedInventory_UpdateSlotTooltipData( var button, int index, bool isEmpty )
+{
+	SlotData slotData = file.slotIndexToSlotData[index]
+	RunUIScript( "SurvivalQuickInventory_SetEmptyTooltipForSlot", button, slotData.emptySlotName, isEmpty ? slotData.emptySlotCommsAction : slotData.filledSlotCommsAction, 0 )
+}
+
+int function ReservedInventory_GetCommsActionForSlot( int index, bool isEmpty )
+{
+	SlotData slotData = file.slotIndexToSlotData[index]
+	return isEmpty ? slotData.emptySlotCommsAction : slotData.filledSlotCommsAction
+}
+
+bool function ReservedInventory_IsItemSwappable( LootData data )
+{
+	
+	
+	
+	
+	
+
+	array<int> reservedSlots = ReservedInventory_GetSlotsReservedForLootItem( data )
+
+	for ( int i = reservedSlots.len() - 1; i >= 0; i-- )
+	{
+		if ( ReservedInventory_IsInventorySlotDisabled( reservedSlots[i] ) )
+		{
+			reservedSlots.remove( i )
+		}
+	}
+
+	if ( reservedSlots.len() > 0 )
+	{
+		foreach ( int slot in reservedSlots )
+		{
+			Assert ( slot < file.slotData.len() )
+			if ( file.slotData[slot].slotType != eSlotType.LOOT_REF )
+				return true
+		}
+		return false
+	}
+
+	foreach ( int slot in file.anyItemSlots )
+	{
+		if ( !ReservedInventory_IsInventorySlotDisabled( slot ) )
+			return true
+	}
+
+	return false
+}
+
+int function ReservedInventory_GetLootIndexForReservedSlot( int index )
+{
+	return file.slotIndexToSlotData[index].lootIndex
+}
+
+
+#if DEV
+void function DEV_ReservedInventory_BuildLookupData()
+{
+	BuildLookupData()
+}
+void function DEV_ReservedInventory_InitSlotData()
+{
+	InitSlotData()
+}
+
+void function DEV_ReservedInventory_GetPlaylistOverrides()
+{
+	GetPlaylistOverrides()
+}
+
+void function DEV_ReservedInventory_PrintSlotOverrides()
+{
+	foreach ( SlotData slotData in file.slotData )
+	{
+		if ( slotData.dev_overrides != "" )
+		{
+			printt("[ReservedInventory] slot: " + slotData.slotIndex + " " + slotData.dev_overrides )
+		}
+	}
+}
+#endif
+
+
+ 

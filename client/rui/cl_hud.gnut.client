@@ -1,0 +1,2023 @@
+global function CLHud_Init
+global function DamageFlyout
+
+global function ServerCallback_ScoreEvent
+global function ServerCallback_ScoreEventNoEnt
+global function ServerCallback_ScoreEventSquadWipe
+global function ServerCallback_ScoreEventWithXpOverride
+global function ServerCallback_ScoreEventWithXpOverrideAndEntity
+
+	global function ServerCallback_ScoreEventForEvoOrbs
+	global function AddScoreEventMessageForEvoOrbs
+
+
+global function ServerCallback_ScoreEventMythicWeapon
+
+global function ScoreEvents_SetEnabled
+global function AddGenericQueueMessage
+global function AddImageQueueMessage
+global function AddScoreEventMessage
+
+global function ScoreObit_SetRuiAssetForMessageType
+global function ScoreObit_SetMessageScaleForMessageType
+
+global function RegisterScriptNameToUseDamagePositionForDamageFlyouts
+
+global function DEV_DamageFlyout
+
+
+global function ServerCallback_ControlScoreEvent
+
+
+
+global function ServerCallback_FreeDMScoreEvent
+
+
+int bulletColorSeed = 0
+bool showTrainingHitIndicators = false 
+const asset TARGET_SPINNING_MODEL = $"mdl/barriers/shooting_range_target_02.rmdl"
+global function UICallback_ToggleTrainingHitIndicators
+global function SCB_ShowHitMarks_Set_ByNetvar
+global function ShouldShowTrainingHitIndicators
+
+#if DEV
+global function DEV_SpawnDamageDotsTest
+#endif
+
+const bool RUI_ENABLED = true
+global const string RUI_SQUAD_TRIOS_ICON = "%$rui/hud/common/squad_trios%"
+global const string RUI_SQUAD_SOLOS_ICON = "%$rui/hud/common/squad_solo%"
+global const string RUI_EVO_ICON = "%$rui/rui_screens/lgnd_upgrades/level_up/lgnd_upgrades_evo_station_icon%"
+
+
+
+global const string RUI_BLOCKED_ATTACK_ICON = $"rui/hud/wildcard_huds/snapback/snapback_damage_blocked"
+const string RUI_SHIELD_ICON = "%$rui/hud/character_abilities/conduit_shield_base%"
+const string RUI_HEALTH_REGEN_ICON = "%$rui/hud/unitframes/healthRegen_icon%"
+
+const string EVO_ORB_SCORE_EVENT_NAME = "Evo_Cache_Tiny"
+
+
+const string EVO_ACTION_DEFAULT_MESSAGING 	= "Unhinged_EvoEvolved_UI_EvoEarned_1P"
+const string EVO_ACTION_SQUADWIPE_MESSAGING = "Unhinged_EvoEvolved_UI_SquadWipe_1P"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global enum eScoreEventMessageType
+{
+	DEFAULT,
+	SPECIAL
+}
+
+struct MessageData
+{
+	int scoreEventId = -1
+	int scoreEventValue = 0
+	int scoreEventMessageType = eScoreEventMessageType.DEFAULT
+
+	float  messageScale = 1.0
+	string messageText = ""
+	string messageScoreText = ""
+	float  duration = 2.5
+
+	float startTime
+	asset icon
+
+	var rui
+
+	int squadMemberIndex = -1
+}
+
+const int NUM_OFFSETS = 4
+const int[NUM_OFFSETS] DAMAGE_OFFSETS = [0, 1, 0, -1]
+
+struct DamageData
+{
+	float creationTime
+	var   rui
+}
+
+struct DamageFlyoutData
+{
+	var stackingDamageRui
+
+	
+	float replayDelay
+	entity viewEntity
+
+	float lastDamageFlyoutTime
+	int   lastDamageFlyoutDamage
+	int   damageThisFrame
+
+	int lastShieldTier = 0
+	int lastShieldHealth = -1
+	float predictedShieldHealth = -1
+	float lastShieldFrac = -1
+
+	array<DamageData> floatingDamageData
+}
+
+struct MessageTypeConfiguration
+{
+	int messageType
+	asset ornull ruiAsset
+	float ornull messageScale
+}
+
+struct
+{
+	table<int, MessageTypeConfiguration> messageTypeConfigurations
+	array<MessageData> activeEventQueue = []
+
+	bool               eventQueueActive = false
+	array<MessageData> pendingEventQueue = []
+
+	int lastSortKey = 0
+
+	bool damageFlyoutEnabled = true
+
+	float            nextFloatingHitTime = 0.0
+	int              nextFloatHitOffset = 0
+	int[2]           nextFloatingDamageOffset = [0, 0]
+
+	bool scoreEventsEnabled = true
+
+	table<entity, DamageFlyoutData> entityDamageFlyouts
+
+	var rui_hitIndicator
+
+	array< string > scriptNamesToUseDamagePostionForDamageFlyouts
+
+	table < int, int > scoreEventIDToNumTimesTriggeredDuringMsgDelay
+
+	int maxActiveEvents
+
+	table<entity, int> totalShieldsToGive
+	table<entity, bool> startHealthRegen
+	table<entity, int> totalEvoEarnedThroughOrbs
+
+} file
+
+
+void function CLHud_Init()
+{
+	file.maxActiveEvents = GetCurrentPlaylistVarInt( "hud_max_active_events", 1 )
+	AddCallback_OnPlayerDisconnected( ClHud_OnPlayerDisconnected )
+}
+
+void function RegisterScriptNameToUseDamagePositionForDamageFlyouts( string scriptName )
+{
+	if( file.scriptNamesToUseDamagePostionForDamageFlyouts.contains( scriptName ) )
+	{
+		Assert( false, "Already registered " + scriptName + " in scriptNamesToUseDamagePostionForDamageFlyouts" )
+		return
+	}
+
+	file.scriptNamesToUseDamagePostionForDamageFlyouts.append( scriptName )
+}
+
+void function AddGenericQueueMessage( string messageText, float duration = 4.0 )
+{
+	MessageData messageData
+	messageData.messageText = Localize( messageText )
+	messageData.duration = duration
+
+	file.pendingEventQueue.append( messageData )
+
+	if ( file.eventQueueActive )
+		return
+
+	thread QueueMessageThink()
+}
+
+
+void function AddImageQueueMessage( string messageText, asset image, float duration = 4.0, int messageType = eScoreEventMessageType.DEFAULT, string scoreText = "" )
+{
+	MessageData messageData
+	messageData.messageText = Localize( messageText )
+	messageData.icon = image
+	messageData.duration = duration
+	messageData.scoreEventMessageType = messageType
+	messageData.messageScoreText = scoreText
+
+	float ornull messageScaleOverride = GetScoreMessageScaleForMessageType( messageType )
+	if ( messageScaleOverride != null )
+	{
+		expect float( messageScaleOverride )
+		messageData.messageScale = messageScaleOverride
+	}
+
+	file.pendingEventQueue.append( messageData )
+
+	if ( file.eventQueueActive )
+		return
+
+	thread QueueMessageThink()
+}
+
+
+int function SortPendingEvents( MessageData eventA, MessageData eventB )
+{
+	if ( eventA.messageScale > eventB.messageScale )
+		return 1
+	else if ( eventA.messageScale < eventB.messageScale )
+		return -1
+
+	return 0
+}
+
+
+int function SortPendingMedals( MessageData eventA, MessageData eventB )
+{
+	if ( eventA.messageScale > eventB.messageScale )
+		return 1
+	else if ( eventA.messageScale < eventB.messageScale )
+		return -1
+
+	return 0
+}
+
+void function ScoreObit_SetRuiAssetForMessageType( int messageType, asset ruiAsset )
+{
+	if ( !( messageType in file.messageTypeConfigurations ) )
+	{
+		MessageTypeConfiguration messageConfiguration
+		messageConfiguration.messageType = messageType
+		messageConfiguration.ruiAsset = ruiAsset
+		file.messageTypeConfigurations[ messageType ] <- messageConfiguration
+	}
+	else
+	{
+		file.messageTypeConfigurations[ messageType ].ruiAsset = ruiAsset
+	}
+}
+
+void function ScoreObit_SetMessageScaleForMessageType( int messageType, float messageScale )
+{
+	if ( !( messageType in file.messageTypeConfigurations ) )
+	{
+		MessageTypeConfiguration messageConfiguration
+		messageConfiguration.messageType = messageType
+		messageConfiguration.messageScale = messageScale
+		file.messageTypeConfigurations[ messageType ] <- messageConfiguration
+	}
+	else
+	{
+		file.messageTypeConfigurations[ messageType ].messageScale = messageScale
+	}
+}
+
+asset function GetRuiAssetForMessage( MessageData messageData )
+{
+	asset ruiAsset = $""
+	if ( GetScoreMessageRuiAssetForMode( messageData.scoreEventMessageType ) != $"" )
+		ruiAsset = GetScoreMessageRuiAssetForMode( messageData.scoreEventMessageType )
+	else if ( messageData.messageScale > 1.0 )
+	{
+		ruiAsset = $"ui/centerevent_info.rpak"
+	}
+	else
+		ruiAsset = $"ui/pickup_info.rpak"
+
+	return ruiAsset
+}
+
+
+void function QueueMessageThink()
+{
+	
+	file.eventQueueActive = true
+	WaitEndFrame()
+
+	file.pendingEventQueue.sort( SortPendingEvents )
+
+	while ( file.pendingEventQueue.len() > 0 )
+	{
+		if ( file.activeEventQueue.len() < file.maxActiveEvents )
+		{
+			MessageData messageData = file.pendingEventQueue[0]
+			file.pendingEventQueue.remove( 0 )
+
+			messageData.startTime = Time()
+
+			asset ruiAsset = GetRuiAssetForMessage( messageData )
+			var rui = GetCurrentPlaylistVarBool( "score_events_visible_during_skydive", false ) ? CreatePermanentCockpitPostFXRui( ruiAsset ) : CreateCockpitPostFXRui( ruiAsset )
+
+			RuiSetGameTime( rui, "startTime", messageData.startTime )
+			RuiSetFloat( rui, "duration", messageData.duration )
+			RuiSetString( rui, "messageText", Localize( messageData.messageText ) )
+			RuiSetBool( rui, "isBigText", messageData.messageScale > 1.0 )
+			RuiSetAsset( rui, "messageIcon", messageData.icon)
+			RuiSetInt( rui, "squadMemberIndex", messageData.squadMemberIndex )
+
+			if ( messageData.messageScoreText != "" && RuiHasStringArg( rui, "messageScoreText" ) )
+			{
+				RuiSetString( rui, "messageScoreText", messageData.messageScoreText )
+			}
+
+			messageData.rui = rui
+			thread MessageThink( messageData )
+
+			file.activeEventQueue.insert( 0, messageData )
+
+			float totalMessageScale = 0.0
+
+			for ( int index = 0; index < file.activeEventQueue.len(); index++ )
+			{
+				var messageRui = file.activeEventQueue[index].rui
+				RuiSetFloat( messageRui, "messageOffsetScale", totalMessageScale )
+				RuiSetGameTime( messageRui, "updateTime", Time() )
+
+				totalMessageScale += file.activeEventQueue[index].messageScale
+			}
+		}
+
+		wait 0.1
+	}
+
+	file.eventQueueActive = false
+}
+
+
+void function MessageThink( MessageData messageData )
+{
+	float endTime = messageData.startTime + messageData.duration
+
+	while ( Time() < endTime )
+	{
+		wait endTime - Time()
+		endTime = messageData.startTime + messageData.duration
+	}
+
+	file.activeEventQueue.removebyvalue( messageData )
+	RuiDestroy( messageData.rui )
+
+	float totalMessageScale = 0.0
+	for ( int index = 0; index < file.activeEventQueue.len(); index++ )
+	{
+		var messageRui = file.activeEventQueue[index].rui
+		RuiSetFloat( messageRui, "messageOffsetScale", totalMessageScale )
+		totalMessageScale += file.activeEventQueue[index].messageScale
+	}
+}
+
+
+asset function GetScoreMessageRuiAssetForMode( int messageType )
+{
+
+	if ( GameMode_IsActive( eGameModes.CONTROL ) )
+		return $"ui/control_score_info.rpak"
+
+
+
+	if ( GameModeVariant_IsActive( eGameModeVariants.FREEDM_LOCKDOWN ) )
+		return $"ui/lockdown_score_info.rpak"
+
+
+	if ( messageType in file.messageTypeConfigurations )
+	{
+		asset ornull ruiAsset = file.messageTypeConfigurations[messageType].ruiAsset
+		if ( ruiAsset != null )
+		{
+			expect asset( ruiAsset )
+			return ruiAsset
+		}
+	}
+
+	return $""
+}
+
+float ornull function GetScoreMessageScaleForMessageType( int messageType )
+{
+	if ( messageType in file.messageTypeConfigurations )
+		return file.messageTypeConfigurations[messageType].messageScale
+
+	return null
+}
+
+
+
+void function DEV_DamageFlyout( entity victim )
+{
+	DamageFlyout( 15, victim.GetWorldSpaceCenter(), victim, eHitType.NORMAL )
+}
+
+
+const GIBRALTAR_PASSIVE_ICON = $"rui/hud/character_abilities/gibraltar_passive_transparent"
+const RAMPART_AMPED_WALL_ICON = $"rui/hud/character_abilities/rampart_amped_wall_transparent"
+const DUMMY_SHIELD_ICON = $"rui/hud/loot/loot_armor_1"
+
+const STUN_GRENADE_ICON = $"rui/hud/character_abilities/fuse_stun_indicator" 
+const float STUN_GRENADE_ICON_TIMESCALE = 0.3
+
+#if DEV
+
+
+void function DEV_SpawnDamageDotsTest()
+{
+	entity player = GetLocalViewPlayer();
+	vector playerEyePos = player.EyePosition()
+	vector playerViewVector = player.GetViewVector()
+	vector playerViewRight = player.GetViewRight()
+	vector playerViewUp = player.GetViewUp()
+
+	vector origin = playerEyePos + ( playerViewVector * 200.0 )
+	DebugDrawSphere( origin, 10.0, <0, 200, 0>, true, 15.0 )
+
+	for ( int i = 0; i < 3; ++i )
+	{
+		vector hitDotPos = origin + ( playerViewRight * ( ( i - 1 )  * 10.0 ) )
+		var hitDotRui = RuiCreate( $"ui/projectile_hit_dot.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, 0 )
+		RuiSetResolutionToScreenSize( hitDotRui )
+		RuiSetGameTime( hitDotRui, "startTime", Time() )
+		RuiSetFloat3( hitDotRui, "pos", hitDotPos )
+		RuiSetBool( hitDotRui, "isCrit", false )
+	}
+}
+#endif
+
+void function DamageFlyout( float damageAmount, vector damagePosition, entity victim, int hitType, int damageFlags = 0, int damageType = 0, entity weapon = null, string extraText = "" )
+{
+	if ( !file.damageFlyoutEnabled )
+		return
+	if ( !IsValid( victim ) )
+		return
+
+	victim = CheckIfShouldReplaceWithBreachableGlass( victim, weapon, damagePosition )
+
+	const float FDT_DURATION = 1.0
+	const float FDT_STACK_THRESHOLD = 0.25
+	const float FDT_PREDICT_THRESHOLD = 0.25
+
+	DamageFlyoutData flyoutData
+
+	if ( victim in file.entityDamageFlyouts )
+		flyoutData = file.entityDamageFlyouts[victim]
+	else
+		file.entityDamageFlyouts[victim] <- flyoutData
+
+	bool showHitIndicator = GetConVarInt( "hud_setting_damageIndicatorStyle" ) > 0
+
+	const int DAMAGE_TEXT_STYLE_NONE = 0
+	const int DAMAGE_TEXT_STYLE_STACKING_ONLY = 1
+	const int DAMAGE_TEXT_STYLE_FLOATING_ONLY = 2
+	const int DAMAGE_TEXT_STYLE_BOTH = 3
+	int styleSetting = GetConVarInt( "hud_setting_damageTextStyle" )
+
+	bool showStackingDamageText = (styleSetting == DAMAGE_TEXT_STYLE_STACKING_ONLY || styleSetting == DAMAGE_TEXT_STYLE_BOTH)
+	bool showFloatingDamageText = (styleSetting == DAMAGE_TEXT_STYLE_FLOATING_ONLY || styleSetting == DAMAGE_TEXT_STYLE_BOTH)
+
+	bool isShieldShot     = bool(damageType & DF_SHIELD_DAMAGE) ? true : false
+	bool isCritShot       = bool(damageType & DF_CRITICAL) ? true : false
+	bool isHeadShot       = bool(damageType & DF_HEADSHOT) ? true : false
+	bool isKillShot       = bool(damageType & DF_KILLSHOT) ? true : false
+	bool isKOShieldShot   = bool(damageType & DAMAGEFLAG_VICTIM_HAS_VORTEX) ? true : false
+	bool isKnockdownShot  = bool(damageType & DF_KNOCKDOWN) ? true : false
+	bool isShieldBreak    = bool(damageType & DF_SHIELD_BREAK) ? true : false
+	bool isShadowShot     = bool(damageType & DF_SHADOW_DAMAGE) ? true: false
+	bool isOvershieldShot = bool(damageType & DF_OVERSHIELD) ? true : false
+	bool isSourShot 	  = bool(damageType & DF_SOUR) ? true : false
+	bool isStunned        = false 
+	bool isStructure 	  = false
+
+	bool isRedeployBalloon = false
+
+	bool isShadowForm	  = false
+	bool isExtraShieldShot = false
+	if( isOvershieldShot && GetPlayerExtraShields( victim ) > 0  )
+	{
+		isExtraShieldShot = true
+		isOvershieldShot = false
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	bool isBlockedAttack = WeaponUtilityBlock_IsAttackBlocked( victim, damageFlags, damageAmount)
+
+	int sortKey = (file.lastSortKey++) % 100
+
+	asset shieldIcon = $""
+	int shieldLevel  = 0
+	int shieldMaxHealth = victim.GetMaxHealth()
+	int shieldHealth = -1
+	float damagedShieldHealth = -1.0
+	float shieldFrac = -1.0
+	bool overshield = false
+	float timeScale = 1.0
+	if ( isShieldShot || isShieldBreak || isOvershieldShot || hitType == eHitType.ARMOR
+		|| isExtraShieldShot
+		)
+	{
+		if ( victim.IsPlayer() )
+		{
+			LootData shieldData = EquipmentSlot_GetEquippedLootDataForSlot( victim, "armor" )
+			shieldIcon = shieldData.hudIcon
+			shieldLevel = shieldData.tier
+			if( UpgradeCore_IsEquipmentArmorCore( shieldData.ref ) )
+			{
+				shieldIcon = $"rui/hud/loot/loot_armor_upgrade"
+				shieldLevel = UpgradeCore_GetPlayerArmorTier( victim, false )
+			}
+		}
+		else if ( victim.IsNPC() && IsTrainingDummie( victim ) )
+		{
+			shieldIcon = DUMMY_SHIELD_ICON
+			shieldLevel = victim.GetGrade() + 1
+		}
+	}
+
+	if ( !victim.IsPlayer() && (isKOShieldShot || hitType == eHitType.VORTEX) && !IsTrainingDummie( victim ) )
+	{
+		entity shieldOwner = victim.GetOwner()
+
+		if ( IsAmpedWallEnt( victim ) || IsMobileShieldEnt( victim ) || IsCastleWallEnt( victim ) )
+		{
+			shieldLevel = 1
+		}
+		else if ( IsLGMGunShieldEnt( victim ) )
+		{
+			shieldLevel = 1
+			shieldMaxHealth = int( floor( HopupGunshield_ShieldHealth( shieldOwner ) ) )
+		}
+		else if ( IsNewcastleReviveShieldEnt( victim ))
+		{
+			shieldLevel = PassiveAxiom_GetAxiomKDShieldTier( shieldOwner )
+			shieldMaxHealth =  PassiveAxiom_GetAxiomKDShieldHealthMax( shieldOwner )
+		}
+		else if ( IsGibraltarGunShieldEnt( victim ) )
+		{
+			shieldIcon = GIBRALTAR_PASSIVE_ICON
+			shieldLevel = 1
+			shieldMaxHealth = shieldOwner.GetSharedEnergyMax()
+			shieldHealth = shieldOwner.GetSharedEnergy()
+		}
+
+		else if ( IsRedeployBalloonEnt( victim ) )
+		{
+			isRedeployBalloon = true
+			shieldLevel = 1
+		}
+
+
+		else if ( EntIsHoverVehicle( victim ) )
+		{
+			shieldLevel = 1
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( IsForgedShadowsShield( victim ) )
+		{
+			isShadowForm = true
+		}
+
+
+
+
+
+
+
+		else if ( IsBreachableGlass( victim ) )
+		{
+			shieldLevel = 1
+		}
+		else if ( isSourShot )
+		{
+			isStructure = true
+		}
+		else
+		{
+			if ( IsValid( shieldOwner ) && shieldOwner.IsPlayer() )
+			{
+				if ( Bleedout_IsBleedingOut( shieldOwner ) )
+				{
+					LootData shieldData
+
+						if ( Integrated_IncapShield_Enabled () )
+						{
+							shieldData = SURVIVAL_Loot_GetLootDataByRef( "incapshield_pickup_lv" + IncapShield_GetShieldTier( shieldOwner ) )
+						}
+						else
+
+					shieldData = EquipmentSlot_GetEquippedLootDataForSlot( shieldOwner, "incapshield" )
+
+					shieldLevel = shieldData.tier
+					shieldMaxHealth = IncapShield_GetMaxShieldHealthFromTier( IncapShield_GetShieldTier( shieldOwner ) )
+				}
+				else
+				{
+					shieldIcon = GIBRALTAR_PASSIVE_ICON
+					shieldLevel = 1
+				}
+			}
+
+			else if( IsValid( shieldOwner ) && shieldOwner.IsNPC() )
+			{
+				shieldLevel = 1
+			}
+
+		}
+
+		if ( shieldHealth < 0 )
+		{
+			shieldHealth = victim.GetHealth()
+		}
+
+		
+		
+		
+		
+		
+		
+		bool mayUsePredictedShieldHealth = (flyoutData.lastShieldHealth == shieldHealth) && (flyoutData.predictedShieldHealth >= 0.0) && ((Time() - flyoutData.lastDamageFlyoutTime) <= FDT_PREDICT_THRESHOLD)
+
+		if ( mayUsePredictedShieldHealth )
+		{
+			damagedShieldHealth = flyoutData.predictedShieldHealth - damageAmount
+		}
+		else
+		{
+			damagedShieldHealth = shieldHealth - damageAmount
+		}
+
+		damagedShieldHealth = max( 0, damagedShieldHealth )
+
+		shieldFrac = (isKillShot || shieldMaxHealth <= 0) ? 0.0 : (damagedShieldHealth / shieldMaxHealth)
+	}
+
+	if ( victim.IsPlayer() && isOvershieldShot )
+	{
+		overshield = true
+	}
+
+
+
+
+
+
+
+
+
+	if ( victim.IsPlayer() && isStunned )
+	{
+		shieldIcon = STUN_GRENADE_ICON
+		shieldLevel = 1
+		timeScale = STUN_GRENADE_ICON_TIMESCALE
+	}
+
+
+
+
+
+
+
+
+
+		if ( TitanSword_Block_PlayerIsBlocking( victim ) && isSourShot )
+		{
+			
+			shieldIcon = GIBRALTAR_PASSIVE_ICON
+			isSourShot = false
+		}
+
+
+
+
+
+
+
+
+
+	if ( isBlockedAttack )
+	{
+		shieldIcon = RUI_BLOCKED_ATTACK_ICON
+	}
+
+	if ( victim.GetNetworkedClassName() == "vortex_sphere")
+	{
+		shieldLevel = 5
+	}
+
+	if ( showHitIndicator )
+	{
+		if ( file.rui_hitIndicator == null )
+		{
+			file.rui_hitIndicator = RuiCreate( $"ui/player_hit_indicator.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, 0 )
+			RuiSetResolutionToScreenSize( file.rui_hitIndicator )
+		}
+
+		var rui = file.rui_hitIndicator
+
+		RuiSetGameTime( rui, "startTime", Time() )
+		RuiSetInt( rui, "hitType", hitType )
+		RuiSetBool( rui, "isKillShot", (isKillShot || isKnockdownShot) )
+
+		if ( GetConVarInt( "hud_setting_damageIndicatorStyle" ) > 1 )
+		{
+			RuiSetImage( rui, "shieldIcon", shieldIcon )
+			RuiSetInt( rui, "shieldTier", shieldLevel )
+			RuiSetFloat( rui, "shieldFrac", shieldFrac )
+		}
+		else
+		{
+			RuiSetImage( rui, "shieldIcon", $"" )
+			RuiSetInt( rui, "shieldTier", 0 )
+		}
+
+		if ( isOvershieldShot )
+			RuiSetImage( rui, "shieldStatusIcon", $"rui/hud/character_abilities/conduit_tactical_enemy_shielded" )
+		else
+			RuiSetImage( rui, "shieldStatusIcon", $"" )
+
+		if( isExtraShieldShot )
+		{
+			int extraShieldTier = maxint( GetPlayerExtraShieldsTier( victim ), UpgradeCore_GetPlayerArmorTier( victim ) + 1 )
+			vector armorColor = GetFXRarityColorForTier( extraShieldTier ) / 255.0
+			RuiSetImage( rui, "shieldBorderIcon", $"rui/hud/gametype_icons/survival/sur_armor_icon" )
+			RuiSetColorAlpha( rui, "shieldBorderColor", armorColor, 1.0 )
+		}
+		else if( victim.IsPlayer() && victim.GetMaxHealth() > 100 && shieldIcon == $"" )
+		{
+			RuiSetImage( rui, "shieldBorderIcon", $"rui/hud/gametype_icons/survival/assault_outline" )
+			RuiSetColorAlpha( rui, "shieldBorderColor", <1.0, 0.0, 0.0>, 1.0 )
+		}
+		else if( StatusEffect_HasSeverity( victim, eStatusEffect.structure_damage_mitigation ) )
+		{
+			int armorTier = UpgradeCore_GetPlayerArmorTier( victim )
+			shieldMaxHealth = EvolvingArmor_GetCharacterShieldHealthMaxForArmorTier( victim, armorTier )
+			if( victim.GetShieldHealth() > shieldMaxHealth )
+			{
+				int extraShieldTier = maxint( GetPlayerExtraShieldsTier( victim ), UpgradeCore_GetPlayerArmorTier( victim ) + 1 )
+				vector armorColor = GetFXRarityColorForTier( extraShieldTier ) / 255.0
+				RuiSetImage( rui, "shieldBorderIcon", $"rui/hud/gametype_icons/survival/sur_armor_icon" )
+				RuiSetColorAlpha( rui, "shieldBorderColor", armorColor, 1.0 )
+			}
+			else
+			{
+				RuiSetColorAlpha( rui, "shieldBorderColor", <0.0,0.0,0.0>, 0.0 )
+			}
+		}
+		else
+		{
+			RuiSetColorAlpha( rui, "shieldBorderColor", <0.0,0.0,0.0>, 0.0 )
+		}
+
+
+
+
+		RuiSetBool( rui, "showFortified", PlayerHasPassive( victim, ePassives.PAS_FORTIFIED ) && !PlayerHasPassive( victim, ePassives.PAS_FORTIFIED_PERMANENT ) )
+
+
+		RuiSetFloat( rui, "timeScale", timeScale )
+		RuiSetBool( rui, "isShadowForm", isShadowForm )
+		RuiSetBool( rui, "isStructure", isStructure )
+	}
+
+	if ( ShouldShowProjectileHitDot( damageType, weapon ) )
+	{
+		var hitDotRui = RuiCreate( $"ui/projectile_hit_dot.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, 0 )
+		RuiSetResolutionToScreenSize( hitDotRui )
+		RuiSetGameTime( hitDotRui, "startTime", Time() )
+		RuiSetFloat3( hitDotRui, "pos", damagePosition )
+		RuiSetBool( hitDotRui, "isCrit", isHeadShot || isCritShot )
+	}
+
+	bool initNewStackingDamageText = Time() - flyoutData.lastDamageFlyoutTime > FDT_STACK_THRESHOLD || flyoutData.viewEntity != GetLocalViewPlayer() || flyoutData.replayDelay != GetReplayDelay() || !showStackingDamageText || !RuiIsAlive( flyoutData.stackingDamageRui )
+
+
+
+
+
+
+
+	bool simplifiedStackingDamageEnabled = GetConVarBool( "hud_simplifiedStackingDamageEnabled" )
+
+	
+	
+	
+	if ( simplifiedStackingDamageEnabled && !initNewStackingDamageText && flyoutData.lastShieldFrac < 0 && shieldFrac >= 0 )
+		initNewStackingDamageText = true
+
+	if ( initNewStackingDamageText )
+	{
+		flyoutData.lastDamageFlyoutTime = Time()
+		flyoutData.lastDamageFlyoutDamage = 0
+		flyoutData.replayDelay = GetReplayDelay()
+		flyoutData.viewEntity = GetLocalViewPlayer()
+	}
+
+	vector damageTextOffset = <-0.06, -0.02, 0>
+
+	if ( flyoutData.lastDamageFlyoutTime == Time() )
+		flyoutData.damageThisFrame += int( damageAmount )
+	else
+		flyoutData.damageThisFrame = int( damageAmount )
+
+	if ( showStackingDamageText )
+	{
+		var stackingRui
+		if ( initNewStackingDamageText )
+		{
+			asset ruiAsset
+			if ( simplifiedStackingDamageEnabled && shieldFrac < 0 )
+				ruiAsset = $"ui/stacking_damage_text_simple.rpak"
+			else
+				ruiAsset = $"ui/stacking_damage_text.rpak"
+
+			stackingRui = RuiCreate( ruiAsset, clGlobal.topoFullScreen, RUI_DRAW_HUD, sortKey + 100 )
+			RuiSetResolutionToScreenSize( stackingRui )
+		}
+		else
+		{
+			stackingRui = flyoutData.stackingDamageRui
+		}
+
+		RuiKeepSortKeyUpdated( stackingRui, true, "pos" )
+
+		bool victimModifiesDamagePosition = file.scriptNamesToUseDamagePostionForDamageFlyouts.contains( victim.GetScriptName() )
+		if ( victim.IsWorld() || victimModifiesDamagePosition )
+			RuiSetFloat3( stackingRui, "pos", damagePosition )
+		else
+			RuiTrackFloat3( stackingRui, "pos", victim, RUI_TRACK_OVERHEAD_FOLLOW )
+
+		RuiSetGameTime( stackingRui, "startTime", Time() )
+		RuiSetFloat( stackingRui, "duration", FDT_DURATION )
+		RuiSetFloat( stackingRui, "damageAmount", flyoutData.lastDamageFlyoutDamage + damageAmount )
+		RuiSetFloat2( stackingRui, "offset", damageTextOffset )
+		RuiSetInt( stackingRui, "hitType", hitType )
+		RuiSetAsset( stackingRui, "shieldIcon", shieldIcon )
+		RuiSetInt( stackingRui, "shieldTier", shieldLevel )
+		RuiSetFloat( stackingRui, "shieldFrac", shieldFrac )
+		RuiSetBool( stackingRui, "isCrit", isHeadShot || isCritShot )
+		RuiSetBool( stackingRui, "isSour", isSourShot )
+
+		if ( victim.IsPlayer() && victim.GetPlayerSettingsMods().contains( "targetinfo_ffa_squad" ) )
+			RuiSetFloat( stackingRui, "yOffset", -30 )
+
+		if ( victim.GetNetworkedClassName() == "prop_ferro_prop")
+			RuiSetFloat( stackingRui, "yOffset", 150 )
+
+		if ( victim.GetNetworkedClassName() == "vortex_sphere")
+		{
+			entity ornull victimParent = victim.GetParent()
+			if ( victimParent != null && IsValid( victimParent ) )
+			{
+				expect entity( victimParent )
+				RuiTrackFloat3( stackingRui, "pos", victimParent, RUI_TRACK_OVERHEAD_FOLLOW )
+			}
+		}
+
+		
+		
+		if ( isShieldBreak )
+		{
+			RuiSetGameTime( stackingRui, "shieldBreakTime", Time() )
+			RuiSetInt( stackingRui, "shieldBreakTier", shieldLevel )
+		}
+		RuiSetBool( stackingRui, "isStructure", isStructure )
+		RuiSetBool( stackingRui, "isRedeployBalloon", isRedeployBalloon )
+
+		if( isExtraShieldShot )
+		{
+			int extraShieldTier = maxint( GetPlayerExtraShieldsTier( victim ), UpgradeCore_GetPlayerArmorTier( victim ) + 1 )
+			RuiSetImage( stackingRui, "shieldBorderIcon", $"rui/hud/gametype_icons/survival/sur_armor_icon" )
+			vector armorColor = GetFXRarityColorForTier(  extraShieldTier ) / 255.0
+			RuiSetColorAlpha( stackingRui, "shieldBorderColor", armorColor, 1.0 )
+		}
+		else if( victim.IsPlayer() && victim.GetMaxHealth() > 100 && shieldIcon == $"" )
+		{
+			RuiSetImage( stackingRui, "shieldBorderIcon", $"rui/hud/gametype_icons/survival/assault_outline" )
+			RuiSetColorAlpha( stackingRui, "shieldBorderColor", <1.0, 0.0, 0.0>, 1.0 )
+		}
+		else if( StatusEffect_HasSeverity( victim, eStatusEffect.structure_damage_mitigation ) )
+		{
+			int armorTier = UpgradeCore_GetPlayerArmorTier( victim )
+			shieldMaxHealth = EvolvingArmor_GetCharacterShieldHealthMaxForArmorTier( victim, armorTier )
+			if( victim.GetShieldHealth() > shieldMaxHealth )
+			{
+				int extraShieldTier = maxint( GetPlayerExtraShieldsTier( victim ), UpgradeCore_GetPlayerArmorTier( victim ) + 1 )
+				vector armorColor = GetFXRarityColorForTier( extraShieldTier ) / 255.0
+				RuiSetImage( stackingRui, "shieldBorderIcon", $"rui/hud/gametype_icons/survival/sur_armor_icon" )
+				RuiSetColorAlpha( stackingRui, "shieldBorderColor", armorColor, 1.0 )
+			}
+			else
+			{
+				RuiSetColorAlpha( stackingRui, "shieldBorderColor", <0.0,0.0,0.0>, 0.0 )
+			}
+		}
+		else
+		{
+			RuiSetColorAlpha( stackingRui, "shieldBorderColor", <0.0,0.0,0.0>, 0.0 )
+		}
+
+
+
+
+		RuiSetBoolIfExists( stackingRui, "showFortified", PlayerHasPassive( victim, ePassives.PAS_FORTIFIED ) && !PlayerHasPassive( victim, ePassives.PAS_FORTIFIED_PERMANENT ) )
+
+
+		if ( overshield )
+			RuiSetImage( stackingRui, "shieldStatusIcon", $"rui/hud/character_abilities/conduit_tactical_enemy_shielded" )
+		else
+			RuiSetImage( stackingRui, "shieldStatusIcon", $"" )
+
+
+		RuiSetBool( stackingRui, "isShadowForm", isShadowForm )
+
+		if ( isCritShot && isHeadShot && GoldenHorsePurple_HasMod( weapon ) )
+		{
+			RuiSetString( stackingRui, "extraText", "#WPN_HOPUP_GOLDEN_HORSE_PURPLE_CRIT" )
+		}
+
+
+
+
+
+
+		else if ( isCritShot && isHeadShot && GetLocalViewPlayer().HasPassive( ePassives.PAS_ENDORSEMENT_CRITCHANCE ) )
+		{
+			
+			RuiSetString( stackingRui, "extraText", "#WPN_HOPUP_GOLDEN_HORSE_PURPLE_CRIT" )
+		}
+
+
+
+
+
+
+		else if ( isCritShot && isHeadShot && GetLocalViewPlayer().HasPassive( ePassives.PAS_ENDORSEMENT_BRAINFREEZE ) )
+		{
+			RuiSetString( stackingRui, "extraText", "#ENDORSEMENT_BRAIN_FREEZE_HUD" )
+			RuiSetColorAlpha( stackingRui, "extraTextColor", SrgbToLinear( UNHINGED_COLOR_UI ), 0.0 )
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		else if ( isBlockedAttack )
+		{
+			RuiSetFloat( stackingRui, "damageAmount", 0 )
+			RuiSetString( stackingRui, "extraText", "#BLOCK_UTILITY_BLOCKED" )
+		}
+		else
+		{
+			RuiSetString( stackingRui, "extraText", "" )
+			RuiSetColorAlpha( stackingRui, "extraTextColor", <0.0,0.0,0.0>, 0.0 )
+		}
+
+
+
+
+
+
+
+			bool validProgressiveCrit = PlayerHasPassive( GetLocalViewPlayer(), ePassives.PAS_ENDORSEMENT_PROGRESSIVE_CRITS ) && isCritShot
+			RuiSetBoolIfExists( stackingRui, "critFromProgressive", validProgressiveCrit )
+
+
+		flyoutData.stackingDamageRui = stackingRui
+
+		damageTextOffset += <0, -0.025, 0>
+	}
+
+	bool isFirstStackingDamage = showStackingDamageText && initNewStackingDamageText
+	if ( showFloatingDamageText && !isFirstStackingDamage && damageAmount > 1 )
+	{
+		float timeDelta = Time() - flyoutData.lastDamageFlyoutTime
+		if ( timeDelta == 0 && !initNewStackingDamageText )
+		{
+			if ( flyoutData.floatingDamageData.len() > 0 && flyoutData.floatingDamageData[0].creationTime == Time() )
+			{
+				RuiSetFloat( flyoutData.floatingDamageData[0].rui, "damageAmount", float( flyoutData.damageThisFrame ) )
+			}
+		}
+		else
+		{
+			var floatingRui = RuiCreate( $"ui/floating_damage_text.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, sortKey )
+			RuiSetResolutionToScreenSize( floatingRui )
+
+			RuiSetGameTime( floatingRui, "startTime", Time() )
+			RuiSetFloat( floatingRui, "duration", FDT_DURATION )
+			RuiSetFloat( floatingRui, "damageAmount", damageAmount )
+			RuiKeepSortKeyUpdated( floatingRui, true, "pos" )
+
+			if ( victim.IsWorld() )
+				RuiSetFloat3( floatingRui, "pos", damagePosition )
+			else
+				RuiTrackFloat3( floatingRui, "pos", victim, RUI_TRACK_OVERHEAD_FOLLOW )
+
+			RuiSetFloat2( floatingRui, "offset", damageTextOffset )
+			RuiSetImage( floatingRui, "shieldIcon", shieldIcon )
+			RuiSetInt( floatingRui, "shieldTier", shieldLevel )
+			RuiSetBool( floatingRui, "isCrit", isHeadShot || isCritShot )
+			RuiSetBool( floatingRui, "isSour", isSourShot )
+			RuiSetBool( floatingRui, "showStacking", showStackingDamageText )
+			RuiSetBool( floatingRui, "isStructure", isStructure )
+			RuiSetBool( floatingRui, "isRedeployBalloon", isRedeployBalloon )
+
+			RuiSetBool( floatingRui, "overshield", overshield )
+
+			RuiSetBool( floatingRui, "isShadowForm", isShadowForm )
+
+			if (victim.IsPlayer() && victim.GetPlayerSettingsMods().contains( "targetinfo_ffa_squad" ) )
+				RuiSetFloat( floatingRui, "yOffset", -30 )
+
+			if ( isCritShot && isHeadShot && GoldenHorsePurple_HasMod( weapon ) )
+			{
+				RuiSetString( floatingRui, "extraText", "#WPN_HOPUP_GOLDEN_HORSE_PURPLE_CRIT" )
+			}
+			else if ( isCritShot && isHeadShot && GetLocalViewPlayer().HasPassive( ePassives.PAS_ENDORSEMENT_BRAINFREEZE ) )
+			{
+				RuiSetString( floatingRui, "extraText", "#ENDORSEMENT_BRAIN_FREEZE_HUD" )
+				RuiSetColorAlpha( floatingRui, "extraTextColor", SrgbToLinear( UNHINGED_COLOR_UI ), 0.0 )
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+				else if ( isBlockedAttack )
+				{
+					RuiSetString( floatingRui, "extraText", "#BLOCK_UTILITY_BLOCKED" )
+				}
+				else
+				{
+					RuiSetString( floatingRui, "extraText", "" )
+					RuiSetColorAlpha( floatingRui, "extraTextColor", <0.0,0.0,0.0>, 0.0 )
+				}
+
+			DamageData newDamageData
+			newDamageData.rui = floatingRui
+			newDamageData.creationTime = Time()
+
+			flyoutData.floatingDamageData.insert( 0, newDamageData )
+			int lastValidIndex = 0
+			foreach ( index, damageData in flyoutData.floatingDamageData )
+			{
+				if ( Time() - damageData.creationTime > FDT_DURATION )
+					continue
+
+				if ( timeDelta < 0.33 )
+				{
+					
+					
+					RuiSetInt( damageData.rui, "index", index )
+				}
+				lastValidIndex = index
+			}
+
+			flyoutData.floatingDamageData.resize( lastValidIndex + 1 )
+		}
+	}
+
+	flyoutData.lastShieldTier = shieldLevel
+	flyoutData.lastShieldHealth = shieldHealth
+	flyoutData.predictedShieldHealth = damagedShieldHealth
+	flyoutData.lastShieldFrac = shieldFrac
+	flyoutData.lastDamageFlyoutTime = Time()
+
+
+
+
+
+
+
+	flyoutData.lastDamageFlyoutDamage = int( flyoutData.lastDamageFlyoutDamage + damageAmount )
+}
+
+bool function ShouldShowProjectileHitDot( int damageType, entity weapon )
+{
+	if ( !IsValid( weapon ) )
+		return false
+
+	if ( ShouldShowTrainingHitIndicators() )
+		return false
+
+	
+	if ( weapon.GetWeaponClassName() == "mp_weapon_alternator_smg" )
+		return false
+
+#if DEV
+		
+		if ( GetCurrentPlaylistVarBool( "hud_projectile_hit_dots_disabled", false ) )
+			return false
+#endif
+
+	return (weapon.GetProjectilesPerShot() > 1)
+}
+
+bool function ShouldShowTrainingHitIndicators ()
+{
+	if ( !GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+		return false
+
+	if (!showTrainingHitIndicators)
+		return false
+
+	if (!FiringRangeHasHitIndictators())
+		return false
+
+	return true
+}
+
+int function GetArmorLevelFromDamageFlags( int damageFlags )
+{
+	if ( IsBitFlagSet(  damageFlags, DAMAGEFLAG_ARMOR1 ) )
+	{
+		return 1
+	}
+	else if ( IsBitFlagSet( damageFlags, DAMAGEFLAG_ARMOR2 ) )
+	{
+		return 2
+	}
+	else if ( IsBitFlagSet( damageFlags, DAMAGEFLAG_ARMOR3 ) )
+	{
+		return 3
+	}
+
+	return 0
+}
+
+void function ServerCallback_ScoreEventSquadWipe( int scoreEventId, int displayType, entity associatedEntity, int killAssistBitFlag )
+{
+	if ( !file.scoreEventsEnabled )
+		return
+
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventId )
+	string eventText = ScoreEvent_GetSplashText( scoreEvent )
+
+	entity player = GetLocalClientPlayer()
+
+	eventText = GetFormattedEventText( scoreEvent, 0, associatedEntity, 0, 0 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	{
+		if( scoreEvent.xpValue > 0 )
+		{
+			string imageStr = scoreEvent.isTeamXp ? RUI_SQUAD_TRIOS_ICON : RUI_SQUAD_SOLOS_ICON
+
+			if( EvoXp_IsProgressionLocked_ForPlayer( GetLocalViewPlayer() ) )
+			{
+				eventText += "`0 " + "#SCORE_EVENT_PROGRESSION_LOCKED" + " " + imageStr
+			}
+			else
+			{
+				eventText += "`0 + " + scoreEvent.xpValue + " " + RUI_EVO_ICON + " " + imageStr
+
+
+
+
+
+
+
+			}
+		}
+		if( ScoreEvent_GetEventName( scoreEvent ) == "Sur_SquadWipe" && IsValid( associatedEntity ) )
+		{
+			eventText += "\n ( "
+			array<entity> teammates = GetPlayerArrayOfTeam( associatedEntity.GetTeam() )
+			bool shouldAddComma = false
+			for( int i=0; i < teammates.len(); i++ )
+			{
+				if( teammates[i] != associatedEntity && !IsAlive( teammates[i] ) )
+					continue
+				if( shouldAddComma )
+				{
+					eventText += ", "
+				}
+				else
+				{
+					shouldAddComma = true
+				}
+				entity teammate = teammates[i]
+				bool isKillingPlayer = ( killAssistBitFlag & ( 1 << i ) ) > 0
+				if( isKillingPlayer )
+					eventText += "%$rui/hud/gamestate/player_kills_icon% `1"
+				else
+				{
+					bool isAssistingPlayer = ( killAssistBitFlag & ( 1 << ( i + teammates.len() ) ) ) > 0
+					if( isAssistingPlayer )
+					{
+						eventText += "%$rui/hud/gamestate/assist_count_icon2%"
+					}
+				}
+				eventText += GetDisplayablePlayerNameFromEHI( ToEHI( teammate ) ) + "`0"
+			}
+			eventText += " ) "
+		}
+
+		MessageData messageData
+		messageData.scoreEventId = ScoreEvent_GetEventId( scoreEvent )
+		messageData.scoreEventValue = 0
+		messageData.messageText = eventText
+		messageData.messageScale = 1.51
+
+		ScoreAction_PlayEarnedSFX( player, "Sur_SquadWipe" )
+
+		if ( !IsBitFlagSet( displayType, eEventDisplayType.BIG ) )
+			return
+
+		file.pendingEventQueue.append( messageData )
+
+		if ( file.eventQueueActive )
+			return
+
+		thread QueueMessageThink()
+	}
+}
+
+void function ServerCallback_ScoreEventWithXpOverride( int scoreEventId, int displayType, float valueA, int xpOverride, bool isTeam )
+{
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventId )
+	ScoreEvent_SetXpValue( scoreEvent, xpOverride, isTeam )
+	ServerCallback_ScoreEvent( scoreEventId, displayType, null, valueA )
+}
+
+void function ServerCallback_ScoreEventWithXpOverrideAndEntity( int scoreEventId, int displayType, float valueA, int xpOverride, bool isTeam, entity associatedEntity )
+{
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventId )
+	ScoreEvent_SetXpValue( scoreEvent, xpOverride, isTeam )
+	ServerCallback_ScoreEvent( scoreEventId, displayType, associatedEntity, valueA )
+}
+
+void function ServerCallback_ScoreEventForEvoOrbs( int scoreEventId, int displayType, float valueA, int xpOverride, bool isTeam, int valueB, bool supplementalBool )
+{
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventId )
+
+	if ( scoreEvent.name == EVO_ORB_SCORE_EVENT_NAME)
+	{
+		entity player = GetLocalClientPlayer()
+
+		if ( !( player in file.totalShieldsToGive ) )
+			file.totalShieldsToGive[player] <- 0
+
+		if ( !( player in file.startHealthRegen ) )
+			file.startHealthRegen[player] <- false
+
+		file.totalShieldsToGive[player]	+= valueB
+
+		if ( file.startHealthRegen[player] == false )
+		{
+			
+			file.startHealthRegen[player]	= supplementalBool
+		}
+
+		if ( !( player in file.totalEvoEarnedThroughOrbs ) )
+			file.totalEvoEarnedThroughOrbs[player] <- 0
+
+		file.totalEvoEarnedThroughOrbs[player] += xpOverride
+	}
+
+	ServerCallback_ScoreEvent( scoreEventId, displayType, null, valueA )
+}
+
+void function AddScoreEventMessageForEvoOrbs( ScoreEvent scoreEvent, int displayType, int totalPointValue, float totalEarnedValue, float totalOwnedValue )
+{
+	EvoXPEvent evoXpEvent = EvoXp_GetEvoXPEventOffActionID( eUpgradeXPActions.XPCACHE_TINY )
+
+	string eventText = ScoreEvent_GetSplashText( scoreEvent )
+
+	entity player = GetLocalClientPlayer()
+	string imageStr = evoXpEvent.baseIsTeamXP ? RUI_SQUAD_TRIOS_ICON : RUI_SQUAD_SOLOS_ICON
+
+	int totalEvo = file.totalEvoEarnedThroughOrbs[player]
+
+	eventText = GetFormattedEventText( scoreEvent, totalEvo, null, totalEarnedValue, totalOwnedValue )
+
+	if( EvoXp_UsePersonalObituaryNotifications() )
+	{
+		if( totalEvo > 0 )
+		{
+			if( EvoXp_IsProgressionLocked_ForPlayer( GetLocalClientPlayer() ) )
+			{
+				eventText += "`0 " + "#SCORE_EVENT_PROGRESSION_LOCKED" + " " + imageStr
+			}
+			else
+			{
+				eventText += "`0 + " + totalEvo + " " + RUI_EVO_ICON
+			}
+		}
+		if( ScoreEvent_GetEventName( scoreEvent ) == EVO_ORB_SCORE_EVENT_NAME )
+		{
+			int shieldsToDisplay = file.totalShieldsToGive[player]
+			if ( shieldsToDisplay > 0)
+			{
+				eventText += " +" + shieldsToDisplay + RUI_SHIELD_ICON
+			}
+			if ( file.startHealthRegen[player] )
+			{
+				eventText += " +" + RUI_HEALTH_REGEN_ICON
+
+				file.startHealthRegen[player] = false
+			}
+		}
+
+		eventText += " " + imageStr
+
+
+
+
+
+
+
+
+	}
+
+	MessageData messageData
+	messageData.scoreEventId = ScoreEvent_GetEventId( scoreEvent )
+	messageData.scoreEventValue = totalEvo
+	messageData.messageText = eventText
+	messageData.messageScale = IsBitFlagSet( displayType, eEventDisplayType.BIG ) ? 1.01 : 1.0
+
+	ScoreAction_PlayEarnedSFX( player )
+
+	if ( !IsBitFlagSet( displayType, eEventDisplayType.BIG ) )
+		return
+
+	file.pendingEventQueue.append( messageData )
+
+	file.totalShieldsToGive[player] = 0
+	file.totalEvoEarnedThroughOrbs[player] = 0
+
+	if ( file.eventQueueActive )
+		return
+
+	thread QueueMessageThink()
+}
+
+
+
+void function ServerCallback_ScoreEventNoEnt( int scoreEventId, int displayType, float valueA )
+{
+	ServerCallback_ScoreEvent( scoreEventId, displayType, null, valueA )
+}
+
+void function ServerCallback_ScoreEvent( int scoreEventId, int displayType, entity ent, float valueA )
+{
+	if ( !file.scoreEventsEnabled )
+		return
+
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventId )
+
+	if ( IsBitFlagSet( displayType, eEventDisplayType.CENTER ) )
+	{
+		
+		
+		
+		if ( scoreEvent.messagingDelay > 0.0 )
+		{
+			if ( scoreEventId in file.scoreEventIDToNumTimesTriggeredDuringMsgDelay )
+			{
+				int numTimesTriggered = file.scoreEventIDToNumTimesTriggeredDuringMsgDelay[ scoreEventId ]
+				numTimesTriggered++
+				file.scoreEventIDToNumTimesTriggeredDuringMsgDelay[ scoreEventId ] = numTimesTriggered
+			}
+			else
+			{
+				file.scoreEventIDToNumTimesTriggeredDuringMsgDelay[ scoreEventId ] <- 1
+				thread AddScoreEventMessageDelayed_Thread( scoreEvent, ent, displayType, 0, valueA, 0 )
+			}
+		}
+		else 
+		{
+
+
+
+
+
+
+
+
+			{
+				AddScoreEventMessage( scoreEvent, ent, displayType, 0, valueA, 0 )
+			}
+
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerCallback_ScoreEventMythicWeapon( int scoreEventID, int displayType, entity associatedEntity, float valueA, int overrideXP )
+{
+	if ( !file.scoreEventsEnabled )
+		return
+
+	ScoreEventMythicWeapon( scoreEventID, displayType, associatedEntity, valueA, overrideXP )
+}
+
+void function ScoreEventMythicWeapon( int scoreEventID, int displayType, entity associatedEntity, float valueA, int overrideXP )
+{
+	
+	
+	
+
+	entity player = GetLocalClientPlayer()
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventID )
+	string eventText = ScoreEvent_GetSplashText( scoreEvent )
+
+	switch( scoreEvent.name )
+	{
+
+		case "Evo_Mythic_Weapon_S26_01":
+		case "Evo_Mythic_Weapon_S26_03":
+			ServerCallback_ScoreEventWithXpOverride( scoreEventID, displayType, valueA, overrideXP, false )
+			break
+		case "Evo_Mythic_Weapon_S26_02":
+			EvoXPEvent evoXpEvent = EvoXp_GetEvoXPEventOffActionID( eUpgradeXPActions.EVENT_MYTHIC_WEAPON_S26_02 )
+
+			if ( GetPlaylistVar_VinsonMythicS26_Enabled() && IsValid( associatedEntity ) && scoreEvent.splashText == "#MYTHIC_FLATLINE_EVO_ACTION_2" )
+			{
+				eventText = GetFormattedEventText( scoreEvent, overrideXP, associatedEntity, 0, 0 )
+				eventText = VinsonMythicS26_EventMythicWeapon02_Helper( scoreEventID, evoXpEvent, associatedEntity, overrideXP, eventText )
+
+				PostEventTextSet_Actions( player, scoreEventID, displayType, eventText, overrideXP )
+			}
+			break
+
+
+
+
+
+
+
+
+
+		default:
+#if DEV
+			Warning( FUNC_NAME() + " : No Score Event Data set up for scoreEventID : " + scoreEventID )
+#endif
+			break
+	}
+}
+
+
+const float READY_INFO_DURATION = 2.5
+
+void function AddScoreEventMessage( ScoreEvent scoreEvent, entity associatedEntity, int displayType, int pointValue, float earnedValue, float ownedValue )
+{
+	string eventText = ScoreEvent_GetSplashText( scoreEvent )
+
+	entity player = GetLocalClientPlayer()
+
+	eventText = GetFormattedEventText( scoreEvent, pointValue, associatedEntity, earnedValue, ownedValue )
+
+	if( EvoXp_UsePersonalObituaryNotifications() )
+	{
+		if( scoreEvent.xpValue > 0 )
+		{
+			string imageStr = scoreEvent.isTeamXp ? RUI_SQUAD_TRIOS_ICON : RUI_SQUAD_SOLOS_ICON
+
+			if( EvoXp_IsProgressionLocked_ForPlayer( GetLocalViewPlayer() ) )
+			{
+				eventText += "`0 " + "#SCORE_EVENT_PROGRESSION_LOCKED" + " " + imageStr
+			}
+			else
+			{
+				eventText += "`0 + " + scoreEvent.xpValue + " " + RUI_EVO_ICON + " " + imageStr
+
+
+
+
+
+
+
+			}
+		}
+		if( ScoreEvent_GetEventName( scoreEvent ) == "Sur_DownedPilot" )
+		{
+			eventText += "\n" + Localize( "#SCORE_EVENT_SUR_DOWNED_PILOT_DAMAGE_INFLICTED", earnedValue )
+		}
+		else if( ScoreEvent_GetEventName( scoreEvent ) == "Sur_SquadWipe" && IsValid( associatedEntity ) )
+		{
+			int bitFlag = int( earnedValue )
+			eventText += "\n ( "
+			array<entity> teammates = GetPlayerArrayOfTeam( associatedEntity.GetTeam() )
+			for( int i=0; i < teammates.len(); i++ )
+			{
+				if( i > 0 )
+				{
+					eventText += ", "
+				}
+				entity teammate = teammates[i]
+				bool isKillingPlayer = ( bitFlag & ( 1 << i ) ) > 0
+				if( isKillingPlayer )
+					eventText += "`1"
+				eventText += GetDisplayablePlayerNameFromEHI( ToEHI( teammate ) ) + "`0"
+			}
+			eventText += " ) "
+		}
+	}
+
+
+	MessageData messageData
+	messageData.scoreEventId = ScoreEvent_GetEventId( scoreEvent )
+	messageData.scoreEventValue = pointValue
+	messageData.messageText = eventText
+	messageData.messageScale = IsBitFlagSet( displayType, eEventDisplayType.BIG ) ? 1.01 : 1.0
+	if ( ScoreEvent_GetEventName( scoreEvent ) == "Sur_DownedPilot" || ScoreEvent_GetEventName( scoreEvent ) == "Sur_DownedPilotAssist" )
+		messageData.messageScale = 1.5
+
+
+	if ( IsValid( associatedEntity ) && ( player.GetTeam() == associatedEntity.GetTeam() ) && ScoreEvent_GetEventName( scoreEvent ) == "Evo_MaxLevel_Shared" )
+	{
+		int teammateIndex = associatedEntity.GetTeamMemberIndex()
+		messageData.squadMemberIndex = teammateIndex
+	}
+
+
+	ScoreAction_PlayEarnedSFX( player )
+
+	if ( !IsBitFlagSet( displayType, eEventDisplayType.BIG ) )
+		return
+
+	file.pendingEventQueue.append( messageData )
+
+	if ( file.eventQueueActive )
+		return
+
+	thread QueueMessageThink()
+}
+
+
+void function AddScoreEventMessageDelayed_Thread( ScoreEvent scoreEvent, entity associatedEntity, int displayType, int pointValue, float earnedValue, float ownedValue )
+{
+#if DEV
+		Assert( IsNewThread(), "Must be threaded off" )
+#endif
+
+	int eventID = scoreEvent.eventId
+	if ( !( eventID in file.scoreEventIDToNumTimesTriggeredDuringMsgDelay ) )
+	{
+		Assert( false, "SCORE EVENT: " + FUNC_NAME() + " was run with eventID: " + eventID + " that wasn't entered in the file.scoreEventIDToNumTimesTriggeredDuringMsgDelay table first." )
+		return
+	}
+
+	if ( GetGameState() > eGameState.Playing )
+		return
+
+	if ( !IsValid( clGlobal.levelEnt ) )
+		return
+
+	EndSignal( clGlobal.levelEnt, "OnDestroy" )
+
+	entity localPlayer = GetLocalClientPlayer()
+	if ( !IsValid( localPlayer ) )
+		return
+
+	EndSignal( localPlayer, "OnDestroy", "OnDeath" )
+
+	OnThreadEnd(
+		function() : ( eventID )
+		{
+			delete file.scoreEventIDToNumTimesTriggeredDuringMsgDelay[ eventID ]
+		}
+	)
+
+	int currentNumTimesTriggered = file.scoreEventIDToNumTimesTriggeredDuringMsgDelay[ eventID ]
+	int updatedNumTimesTriggered = currentNumTimesTriggered
+
+	
+	float messagingDelay = scoreEvent.messagingDelay
+	while ( true )
+	{
+		wait messagingDelay
+
+		updatedNumTimesTriggered = file.scoreEventIDToNumTimesTriggeredDuringMsgDelay[ eventID ]
+
+		if ( currentNumTimesTriggered == updatedNumTimesTriggered ) 
+			break
+
+		
+		currentNumTimesTriggered = updatedNumTimesTriggered
+	}
+
+	int totalPointValue = currentNumTimesTriggered * pointValue
+	float totalEarnedValue = currentNumTimesTriggered * earnedValue
+	float totalOwnedValue = currentNumTimesTriggered * ownedValue
+
+	if ( EvoXp_UsePersonalObituaryNotifications() && scoreEvent.xpValue > 0 )
+	{
+		scoreEvent.xpValue *= currentNumTimesTriggered
+	}
+
+	if ( scoreEvent.name == EVO_ORB_SCORE_EVENT_NAME )
+	{
+		AddScoreEventMessageForEvoOrbs( scoreEvent, displayType, totalPointValue, totalEarnedValue, totalOwnedValue )
+	}
+	else
+
+	{
+
+
+
+
+
+
+
+			{
+				AddScoreEventMessage( scoreEvent, associatedEntity, displayType, totalPointValue, totalEarnedValue, totalOwnedValue )
+			}
+
+	}
+}
+
+
+
+string function GetFormattedEventText( ScoreEvent scoreEvent, int pointValue, entity targetEntity, float valueA, float valueB )
+{
+	string eventText = ScoreEvent_GetSplashText( scoreEvent )
+
+	string targetEntityText = Localize( "#DISCONNECTED" )
+
+	if ( IsValid( targetEntity ) )
+	{
+		if( targetEntity.IsPlayer() )
+		{
+			targetEntityText = GetDisplayablePlayerNameFromEHI( ToEHI( targetEntity ) )
+		}
+		else
+		{
+			entity bossPlayer = targetEntity.GetBossPlayer()
+			if ( IsValid( bossPlayer ) )
+				targetEntityText = GetDisplayablePlayerNameFromEHI( ToEHI( bossPlayer ) )
+			else
+				targetEntityText = targetEntity.GetBossPlayerName()
+		}
+	}
+
+	return Localize( eventText, targetEntityText, valueA, valueB )
+}
+
+
+void function ScoreEvents_SetEnabled( bool state )
+{
+	file.scoreEventsEnabled = state
+}
+
+
+
+void function ServerCallback_ControlScoreEvent( int scoreEventId, bool isExpEvent, int pointsValue, int associatedEntityHandle )
+{
+	if ( !file.scoreEventsEnabled )
+		return
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) )
+		return
+
+	ScoreEvent scoreEvent = ScoreEvent_FromId( scoreEventId )
+	if ( pointsValue <= 0 || ScoreEvent_GetEventName( scoreEvent ) == CONTROL_EXPEVENT_EXPRESET )
+		return
+
+	
+	string splashText = ScoreEvent_GetSplashText( scoreEvent )
+	string messageText = ""
+
+	
+	if ( associatedEntityHandle != 0 )
+	{
+		EHI associatedEHI = EncodedEHandleToEHI( associatedEntityHandle )
+		string targetEntityText = Localize( "#DISCONNECTED" )
+		entity targetEntity = FromEHI( associatedEHI )
+		if ( IsValid( targetEntity ) && !targetEntity.IsPlayer() )
+		{
+			entity bossPlayer = targetEntity.GetBossPlayer()
+			if ( IsValid( bossPlayer ) )
+				targetEntityText = GetDisplayablePlayerNameFromEHI( ToEHI( bossPlayer ) )
+			else
+				targetEntityText = targetEntity.GetBossPlayerName()
+		}
+		else if ( EHIHasValidScriptStruct( associatedEHI ) )
+		{
+			targetEntityText = GetDisplayablePlayerNameFromEHI( associatedEHI )
+		}
+
+		messageText = Localize( splashText, targetEntityText, pointsValue )
+	}
+	else
+	{
+		messageText = Localize( splashText, pointsValue )
+	}
+
+	MessageData messageData
+	messageData.scoreEventId = scoreEventId
+	messageData.scoreEventValue = pointsValue
+	messageData.messageText = messageText
+	messageData.duration = CONTROL_MESSAGE_DURATION
+	messageData.messageScale = isExpEvent ? 1.0 : 1.01
+
+	messageData.icon = ScoreEvent_GetMedalIcon( scoreEvent )
+	
+	if ( isExpEvent )
+	{
+		Control_PlayEXPGainSFX()
+		file.pendingEventQueue.append( messageData )
+		if ( !file.eventQueueActive )
+			thread QueueMessageThink()
+	}
+	else
+	{
+		vector friendlyObjectiveCol = GamemodeUtility_GetColorVectorForCaptureObjectiveState( eGamemodeUtilityCaptureObjectiveColorState.FRIENDLY_OWNED )
+		Obituary_Print_Localized( messageText,friendlyObjectiveCol, friendlyObjectiveCol )
+	}
+}
+
+
+
+
+void function ServerCallback_FreeDMScoreEvent( int scoreEventId )
+{
+	if ( !file.scoreEventsEnabled )
+		return
+
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) )
+		return
+
+	ScoreEvent scoreEvent = ScoreEvent_FromId(scoreEventId)
+	Obituary_Print_Localized( ScoreEvent_GetMedalText(scoreEvent) )
+}
+
+
+void function UICallback_ToggleTrainingHitIndicators ()
+{
+	showTrainingHitIndicators = !( FRS_NetVar_Get_Bool( GetLocalViewPlayer(), eFRSettingType.SHOWHITMARKS ) )
+	Remote_ServerCallFunction( "UCB_SV_FRSetting_HitMarks_Toggle" )
+}
+
+void function SCB_ShowHitMarks_Set_ByNetvar()
+{
+	showTrainingHitIndicators = FRS_NetVar_Get_Bool( GetLocalViewPlayer(), eFRSettingType.SHOWHITMARKS )
+}
+
+void function ClHud_OnPlayerDisconnected( entity player )
+{
+
+		if ( player in file.totalEvoEarnedThroughOrbs )
+			delete file.totalEvoEarnedThroughOrbs[player]
+
+		if ( player in file.startHealthRegen )
+			delete file.startHealthRegen[player]
+
+		if ( player in file.totalShieldsToGive )
+			delete file.totalShieldsToGive[player]
+
+}
+
+void function ScoreAction_PlayEarnedSFX( entity player, string action = "" )
+{
+	string audio = ""
+
+
+	if ( Unhinged_IsModeActive() )
+	{
+		switch ( action )
+		{
+			case "Sur_SquadWipe":
+				audio = EVO_ACTION_SQUADWIPE_MESSAGING
+				break
+
+			default:
+				audio = EVO_ACTION_DEFAULT_MESSAGING
+				break
+		}
+	}
+
+
+	if ( audio != "" )
+	{
+		EmitUISound( audio )
+	}
+}
+
+void function PostEventTextSet_Actions( entity player, int scoreEventID, int displayType, string eventText, int xp )
+{
+	if ( !IsBitFlagSet( displayType, eEventDisplayType.BIG ) )
+		return
+
+	MessageData messageData
+	messageData.scoreEventId = scoreEventID
+	messageData.scoreEventValue = xp
+	messageData.messageText = eventText
+	messageData.messageScale = IsBitFlagSet( displayType, eEventDisplayType.BIG ) ? 1.01 : 1.0
+
+	ScoreAction_PlayEarnedSFX( player )
+
+	file.pendingEventQueue.append( messageData )
+
+	if ( file.eventQueueActive )
+		return
+
+	thread QueueMessageThink()
+}
+ 

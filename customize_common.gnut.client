@@ -1,0 +1,2006 @@
+
+
+
+global function CustomizeCommon_Init
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function CustomizeMenu_GetRewardButtonImage
+global function CustomizeMenu_GetGenericRewardButtonImage
+global function GetAppropriateLoadoutSlotsForItemFlavor
+global function IsItemFlavorEquippable
+global function EquipItemFlavorInAppropriateLoadoutSlot
+global function GetLocalizedItemFlavorDescriptionForOfferButton
+global function GetLocalizedItemFlavorDescriptionForPlacard
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const array<vector> skydiveSmokeColors = [
+	<110, 49, 1>, 
+	<10, 88, 106>, 
+	<6, 131, 149>, 
+	
+	<27, 71, 105>, 
+	<31, 84, 205>, 
+	
+	<68, 42, 96>, 
+	<110, 44, 111>, 
+	
+	<173, 45, 119>, 
+	
+	<176, 28, 81>, 
+	
+	<195, 0, 11>, 
+	<197, 67, 32>, 
+	<120, 30, 19>, 
+	<159, 59, 13>, 
+	<119, 75, 0>, 
+	<204, 121, 19>, 
+	<150, 125, 0>, 
+	
+	<133, 147, 10>, 
+	<73, 88, 3>, 
+	<112, 151, 67>, 
+	<57, 137, 52>, 
+	<47, 90, 26>, 
+	
+	<0, 116, 88> 
+]
+global function GetSkydiveSmokeColorForTeam
+
+const array<string> thematicTeamNames = [
+	"#TEAM_1",
+	"#TEAM_2",
+	"#TEAM_3",
+	"#TEAM_4",
+	"#TEAM_5",
+	"#TEAM_6",
+	"#TEAM_7",
+	"#TEAM_8",
+	"#TEAM_9",
+	"#TEAM_10",
+	"#TEAM_11",
+	"#TEAM_12",
+	"#TEAM_13",
+	"#TEAM_14",
+	"#TEAM_15",
+	"#TEAM_16",
+	"#TEAM_17",
+	"#TEAM_18",
+	"#TEAM_19",
+	"#TEAM_20",
+	"#TEAM_21",
+	"#TEAM_22",
+	"#TEAM_23",
+	"#TEAM_24",
+	"#TEAM_25",
+	"#TEAM_26",
+	"#TEAM_27",
+	"#TEAM_28",
+	"#TEAM_29",
+	"#TEAM_30"
+]
+global function UseThematicTeamNames
+
+global function GetThematicTeamName
+
+
+
+
+
+
+
+
+
+
+void function CustomizeCommon_Init()
+{
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vector function GetSkydiveSmokeColorForTeam( int team )
+{
+	vector teamSkyDiveColor = skydiveSmokeColors[ team % skydiveSmokeColors.len() ]
+	return teamSkyDiveColor
+}
+
+bool function UseThematicTeamNames()
+{
+	return GetCurrentPlaylistVarBool( SURVIVAL_HUD_USETHEMATICTEAMNAMES_PVAR, false )
+}
+
+
+string function GetThematicTeamName( int teamIndex )
+{
+	int squadIndex = Squads_GetSquadUIIndex( teamIndex )
+	return thematicTeamNames[ squadIndex % thematicTeamNames.len() ]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array<LoadoutEntry> function GetAppropriateLoadoutSlotsForItemFlavor( ItemFlavor itemFlav )
+{
+	int itemType = ItemFlavor_GetType( itemFlav )
+	switch ( itemType )
+	{
+		case eItemType.character_skin:
+			return [ Loadout_CharacterSkin( CharacterSkin_GetCharacterFlavor( itemFlav ) ) ]
+
+		case eItemType.weapon_skin:
+			return [ Loadout_WeaponSkin( WeaponSkin_GetWeaponFlavor( itemFlav ) ) ]
+
+		case eItemType.gladiator_card_frame:
+			ItemFlavor character = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_Character() )
+			if ( !GladiatorCardFrame_IsSharedBetweenCharacters( itemFlav ) )
+				character = expect ItemFlavor( GladiatorCardFrame_GetCharacterFlavor( itemFlav ) )
+
+			return [ Loadout_GladiatorCardFrame( character ) ]
+
+		case eItemType.gladiator_card_stance:
+			return [ Loadout_GladiatorCardStance( GladiatorCardStance_GetCharacterFlavor( itemFlav ) ) ]
+
+		case eItemType.character_execution:
+			return [ Loadout_CharacterExecution( CharacterExecution_GetCharacterFlavor( itemFlav ) ) ]
+
+		case eItemType.gladiator_card_intro_quip:
+			return [ Loadout_CharacterIntroQuip( CharacterIntroQuip_GetCharacterFlavor( itemFlav ) ) ]
+
+		case eItemType.gladiator_card_kill_quip:
+			return [ Loadout_CharacterKillQuip( CharacterKillQuip_GetCharacterFlavor( itemFlav ) ) ]
+
+		case eItemType.melee_skin:
+			ItemFlavor character = LoadoutSlot_GetItemFlavor( LocalClientEHI(), Loadout_Character() )
+			if ( MeleeSkin_HasSpecificCharacterFlavor( itemFlav ) )
+				character = MeleeSkin_GetCharacterFlavor( itemFlav )
+
+			return [ Loadout_MeleeSkin( character ) ]
+
+		case eItemType.music_pack:
+			return [ Loadout_MusicPack() ]
+
+		case eItemType.loadscreen:
+			return [ Loadout_Loadscreen() ]
+	}
+
+	return []
+}
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsItemFlavorEquippable( ItemFlavor itemFlav )
+{
+	if ( !IsItemFlavorRegistrationFinished() )
+		return false
+
+	if ( GetAppropriateLoadoutSlotsForItemFlavor( itemFlav ).len() == 0 )
+		return false
+
+	if ( !GRX_IsItemOwnedByPlayer_AllowOutOfDateData( itemFlav ) )
+		return false
+
+	return true
+}
+
+
+
+
+void function EquipItemFlavorInAppropriateLoadoutSlot( ItemFlavor itemFlav )
+{
+	Assert( IsItemFlavorEquippable( itemFlav ) )
+
+	RequestSetItemFlavorLoadoutSlot(
+		LocalClientEHI(),
+		GetAppropriateLoadoutSlotsForItemFlavor( itemFlav )[ 0 ],
+		itemFlav )
+}
+
+
+
+
+string function GetLocalizedItemFlavorDescriptionForOfferButton( ItemFlavor itemFlav, bool withQuality )
+{
+	ItemFlavor ornull associatedFlav = GetItemFlavorAssociatedCharacterOrWeapon( itemFlav )
+	string qualityName       = (withQuality && ItemFlavor_HasQuality( itemFlav )) ? ItemFlavor_GetQualityName( itemFlav ) : ""
+	string assocatedFlavName = associatedFlav != null ? ItemFlavor_GetShortName( expect ItemFlavor( associatedFlav ) ) : ""
+	string typeName          = ItemFlavor_GetTypeName( itemFlav )
+
+	if ( qualityName == "" && assocatedFlavName == "" )
+	{
+		return Localize( "#OFFER_ITEM_DESC_N_1", Localize( typeName ) )
+	}
+	else if ( qualityName == "" )
+	{
+		return Localize( "#OFFER_ITEM_DESC_N_2", Localize( assocatedFlavName ), Localize( typeName ) )
+	}
+	else
+	{
+		return Localize( "#OFFER_ITEM_DESC", Localize( qualityName ), Localize( assocatedFlavName ), Localize( typeName ) )
+	}
+	unreachable
+}
+
+
+
+
+string function GetLocalizedItemFlavorDescriptionForPlacard( ItemFlavor itemFlav )
+{
+	if ( ItemFlavor_GetType( itemFlav ) == eItemType.account_currency )
+		return ItemFlavor_GetShortName( itemFlav )
+
+	if ( ItemFlavor_GetType( itemFlav ) == eItemType.account_currency_bundle )
+		return ItemFlavor_GetShortName( GRXCurrencyBundle_GetCurrencyFlav( itemFlav ) )
+
+	return ItemFlavor_GetTypeName( itemFlav )
+}
+
+
+
+
+asset function CustomizeMenu_GetRewardButtonImage( ItemFlavor flavor )
+{
+	int itemType      = ItemFlavor_GetType( flavor )
+	asset buttonImage = $""
+
+	switch ( itemType )
+	{
+		case eItemType.account_pack:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			if ( buttonImage == $"" )
+			{
+				buttonImage = $"rui/menu/buttons/battlepass/apex_pack"
+			}
+			break
+
+		case eItemType.account_flag:
+		case eItemType.battlepass:
+		case eItemType.image_2d:
+		case eItemType.skydive_emote:
+		case eItemType.character_execution:
+		case eItemType.voucher:
+		case eItemType.quest_mission:
+		case eItemType.quest_comic:
+		case eItemType.melee_skin:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			break
+
+		case eItemType.emote_icon:
+			buttonImage = $"rui/menu/buttons/battlepass/icon_holospray"
+			break
+
+		case eItemType.character_skin:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			if ( buttonImage == $"" )
+			{
+				ItemFlavor character = CharacterSkin_GetCharacterFlavor( flavor )
+				buttonImage = ItemFlavor_GetIcon( character )
+			}
+			break
+		case eItemType.character_emote:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			break
+		case eItemType.character:
+			buttonImage = CharacterClass_GetCharacterUnlockedStoreIcon( flavor )
+			break
+
+		case eItemType.weapon_skin:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			if ( buttonImage == $"" )
+			{
+				ItemFlavor weapon = WeaponSkin_GetWeaponFlavor( flavor )
+				buttonImage = ItemFlavor_GetIcon( weapon )
+			}
+			break
+
+		case eItemType.skydive_trail:
+			buttonImage = $"rui/menu/buttons/weapon_categories/more_skydive_trails"
+			break
+
+		case eItemType.gladiator_card_frame:
+			buttonImage = $"rui/menu/buttons/battlepass/banner_frame"
+			break
+
+		case eItemType.gladiator_card_stance:
+			buttonImage = $"rui/menu/buttons/battlepass/banner_pose"
+			break
+
+		case eItemType.music_pack:
+			buttonImage = $"rui/menu/buttons/battlepass/music_pack"
+			break
+
+		case eItemType.loadscreen:
+			buttonImage = $"rui/menu/buttons/battlepass/loadscreen"
+			break
+
+		case eItemType.gladiator_card_intro_quip:
+			buttonImage = $"rui/hud/chat_icons/icon_chat_introquip"
+			break
+
+		case eItemType.gladiator_card_kill_quip:
+			buttonImage = $"rui/hud/chat_icons/icon_chat_killquip"
+			break
+
+		case eItemType.gladiator_card_stat_tracker:
+			buttonImage = $"rui/menu/buttons/battlepass/tracker"
+			break
+
+		case eItemType.weapon_charm:
+			buttonImage = $"rui/menu/buttons/battlepass/weapon_charm"
+			break
+
+		case eItemType.gladiator_card_badge:
+			buttonImage = $"rui/menu/buttons/battlepass/badge"
+			break
+
+		case eItemType.account_currency:
+			buttonImage = GRXCurrency_GetRewardIcon( flavor )
+			break
+
+		case eItemType.apex_coins:
+			buttonImage = $"rui/menu/buttons/battlepass/currency_coins"
+			break
+
+		case eItemType.battlepass_purchased_xp:
+			buttonImage = $"rui/menu/challenges/challenges_icon_levelup"
+			break
+
+		case eItemType.sticker:
+			buttonImage = $"rui/menu/buttons/battlepass/sticker"
+			break
+
+
+
+
+
+		case eItemType.artifact_component_deathbox:
+			buttonImage = $"rui/menu/buttons/battlepass/icon_deathbox"
+			break
+		case eItemType.account_currency_bundle:
+			int quality = ItemFlavor_GetQuality( flavor )
+			if ( quality != eRarityTier.MYTHIC )
+			{
+				buttonImage = ItemFlavor_GetIcon( GRX_CURRENCIES[GRX_CURRENCY_CRAFTING] )
+			}
+			else
+			{
+				buttonImage = ItemFlavor_GetIcon( GRX_CURRENCIES[GRX_CURRENCY_HEIRLOOM] )
+			}
+			break
+		case eItemType.character_select:
+			buttonImage = $"rui/menu/common/icon_character_select"
+			break
+		case eItemType.digital_garment:
+			buttonImage = $"rui/menu/buttons/garments/ranked_garments"
+			break
+		default:
+			Warning( "Unknown item type passed to CustomizeMenu_GetRewardButtonImage() " + DEV_GetEnumStringSafe( "eItemType", itemType ) )
+			break
+	}
+
+	if ( buttonImage == $"" )
+		Warning( "CustomizeMenu_GetRewardButtonImage() returning empty image for %s", string(ItemFlavor_GetAsset( flavor )) )
+
+	return buttonImage
+}
+asset function CustomizeMenu_GetGenericRewardButtonImage( ItemFlavor flavor ) 
+{
+	int itemType      = ItemFlavor_GetType( flavor )
+	asset buttonImage = $""
+
+	switch ( itemType )
+	{
+		case eItemType.account_pack:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			if ( buttonImage == $"" )
+			{
+				buttonImage = $"rui/menu/buttons/battlepass/apex_pack"
+			}
+			break
+
+		case eItemType.battlepass:
+		case eItemType.battlepass_presale_voucher:
+		case eItemType.skydive_emote:
+		case eItemType.character_execution:
+		case eItemType.voucher:
+		case eItemType.quest_mission:
+		case eItemType.quest_comic:
+		case eItemType.melee_skin:
+		case eItemType.image_2d:
+		case eItemType.reward_set_tracker:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			break
+
+		case eItemType.emote_icon:
+			buttonImage = $"rui/menu/buttons/battlepass/icon_holospray"
+			break
+
+		case eItemType.character_skin:
+			ItemFlavor character = CharacterSkin_GetCharacterFlavor( flavor )
+			buttonImage = ItemFlavor_GetIcon( character )
+			break
+		case eItemType.character_emote:
+			buttonImage = ItemFlavor_GetIcon( flavor )
+			break
+		case eItemType.character:
+			buttonImage = CharacterClass_GetCharacterUnlockedStoreIcon( flavor )
+			break
+
+		case eItemType.weapon_skin:
+			ItemFlavor weapon = WeaponSkin_GetWeaponFlavor( flavor )
+			buttonImage = ItemFlavor_GetIcon( weapon )
+			break
+
+		case eItemType.gladiator_card_frame:
+			buttonImage = $"rui/menu/buttons/battlepass/banner_frame"
+			break
+
+		case eItemType.gladiator_card_stance:
+			buttonImage = $"rui/menu/buttons/battlepass/banner_pose"
+			break
+
+		case eItemType.music_pack:
+			buttonImage = $"rui/menu/buttons/battlepass/music_pack"
+			break
+
+		case eItemType.loadscreen:
+			buttonImage = $"rui/menu/buttons/battlepass/loadscreen"
+			break
+
+		case eItemType.gladiator_card_intro_quip:
+			buttonImage = $"rui/hud/chat_icons/icon_chat_introquip"
+			break
+
+		case eItemType.gladiator_card_kill_quip:
+			buttonImage = $"rui/hud/chat_icons/icon_chat_killquip"
+			break
+
+		case eItemType.gladiator_card_stat_tracker:
+			buttonImage = $"rui/menu/buttons/battlepass/tracker"
+			break
+
+		case eItemType.weapon_charm:
+			buttonImage = $"rui/menu/buttons/battlepass/weapon_charm"
+			break
+
+		case eItemType.gladiator_card_badge:
+			buttonImage = $"rui/menu/buttons/battlepass/badge"
+			break
+
+		case eItemType.account_currency:
+			buttonImage = GRXCurrency_GetRewardIcon( flavor )
+			break
+
+		case eItemType.apex_coins:
+			buttonImage = $"rui/menu/buttons/battlepass/currency_coins"
+			break
+
+		case eItemType.battlepass_purchased_xp:
+			buttonImage = $"rui/menu/challenges/challenges_icon_levelup"
+			break
+
+		case eItemType.sticker:
+			buttonImage = $"rui/menu/buttons/battlepass/sticker"
+			break
+
+		case eItemType.account_currency_bundle:
+			int quality = ItemFlavor_GetQuality( flavor )
+			if ( quality != eRarityTier.MYTHIC )
+			{
+				buttonImage = ItemFlavor_GetIcon( GRX_CURRENCIES[GRX_CURRENCY_CRAFTING] )
+			}
+			else
+			{
+				buttonImage = ItemFlavor_GetIcon( GRX_CURRENCIES[GRX_CURRENCY_HEIRLOOM] )
+			}
+			break
+		case eItemType.character_select:
+			buttonImage = $"rui/menu/common/icon_character_select"
+			break
+		case eItemType.digital_garment:
+			buttonImage = $"rui/menu/buttons/garments/ranked_garments"
+			break
+		default:
+			Warning( "Unknown item type passed to CustomizeMenu_GetRewardButtonImage() " + DEV_GetEnumStringSafe( "eItemType", itemType ) )
+			break
+	}
+
+	if ( buttonImage == $"" )
+		Warning( "CustomizeMenu_GetRewardButtonImage() returning empty image for %s", string(ItemFlavor_GetAsset( flavor )) )
+
+	return buttonImage
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

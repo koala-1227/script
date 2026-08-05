@@ -1,0 +1,336 @@
+global function CLPassiveAdrenaline_Init
+
+const string PAS_ADRENALINE_STOP_SIGNAL = "PassiveAdrenaline_StopEffects"
+const asset DEFAULT_ADRENALINE_SCREEN_FX = $"P_adrenaline_screen_CP"
+const asset DEFAULT_ADRENALINE_RUI = $"ui/passive_trailblazer_generic.rpak"
+const string DEFAULT_ADRENALINE_SOUND_START 	= "Bangalore_DoubleTime_Activate"
+const string DEFAULT_ADRENALINE_COLOR_CORR = "materials/correction/adrenaline_passive.raw_hdr"
+
+
+const asset CONDUIT_ADRENALINE_SCREEN_FX = $"P_con_passive_boost"
+const string CONDUIT_ADRENALINE_SOUND_START 	= "Conduit_Pass_Alert_1p"
+const string CONDUIT_ADRENALINE_SOUND_START_SKIRMISHER = "Conduit_Pass_Alert_Skirmisher_1p"
+
+global function PassiveAdrenaline_InstanceWP
+global function PassiveAdrenaline_HasFastRevive
+const string STOP_HEALTH_BAR_SIGNAL = "adrenaline_health_bar_stop"
+
+const asset DEFAULT_ICON = $"rui/hud/passive_icons/passive_bangalore_triggered"
+
+struct
+{
+	int colorCorrection
+	int ScreenFxId
+} file
+
+struct
+{
+	float conduitSFXDelay = 0.3
+	bool errorMessaging = false
+} tuning
+
+
+void function CLPassiveAdrenaline_Init()
+{
+	RegisterTuningStruct( "tuning", "passive_adrenaline_" )
+
+	file.ScreenFxId = PrecacheParticleSystem( DEFAULT_ADRENALINE_SCREEN_FX )
+	file.colorCorrection = ColorCorrection_Register( DEFAULT_ADRENALINE_COLOR_CORR )
+
+	
+	PrecacheParticleSystem( CONDUIT_ADRENALINE_SCREEN_FX )
+
+
+	RegisterSignal( PAS_ADRENALINE_STOP_SIGNAL )
+
+	StatusEffect_RegisterEnabledCallback( eStatusEffect.adrenaline_visuals, PassiveAdrenaline_StartVisualEffect )
+	StatusEffect_RegisterDisabledCallback( eStatusEffect.adrenaline_visuals, PassiveAdrenaline_StopVisualEffect )
+	RegisterSignal( STOP_HEALTH_BAR_SIGNAL )
+	AddCreateCallback( PLAYER_WAYPOINT_CLASSNAME, OnWaypointCreated )
+}
+
+bool function PassiveAdrenaline_HasFastRevive( entity player )
+{
+	return PlayerHasPassive( player, ePassives.PAS_ADRENALINE ) && PlayerHasPassive( player, ePassives.PAS_PAS_UPGRADE_ONE )
+}
+
+void function OnWaypointCreated( entity wp )
+{
+	const int INDEX_WAYPOINT_ENTITY_ALLY = 0
+	const int INDEX_WAYPOINT_ENTITY_ATTACKER = 1
+	int wpType = wp.GetWaypointType()
+
+	if ( wpType == eWaypoint.PASSIVE_ADRENALINE )
+	{
+		entity ally = wp.GetWaypointEntity( INDEX_WAYPOINT_ENTITY_ALLY )
+		entity attacker = wp.GetWaypointEntity( INDEX_WAYPOINT_ENTITY_ATTACKER )
+		if( IsValid( ally ) && IsValid( attacker ) )
+		{
+			thread PassiveAdrenaline_ShowHealthBarThread( ally, attacker )
+		}
+	}
+}
+
+void function PassiveAdrenaline_InstanceWP( entity wp )
+{
+	const float FULLMAP_SIZE_BIG = 12 
+	const float FULLMAP_SIZE_SMALL = 9 
+	var newRui = CreateWaypointRui( $"ui/waypoint_basic_entpos.rpak", 200 )
+	SetWaypointRui_HUD( wp, newRui )
+
+	RuiKeepSortKeyUpdated( newRui, true, "targetPos" )
+
+	RuiTrackFloat3( newRui, "playerAngles", GetLocalViewPlayer(), RUI_TRACK_CAMANGLES_FOLLOW )
+
+	RuiTrackString( newRui, "promptText", wp, RUI_TRACK_WAYPOINT_STRING, 0 )
+	RuiTrackImage( newRui, "iconImage", wp, RUI_TRACK_WAYPOINT_IMAGE, 0 )
+
+	RuiSetBool( newRui, "showStatusTextWhenNotClamped", true )
+	vector targetPos = wp.GetWaypointVector( 0 )
+	RuiSetFloat3( newRui, "targetPos", targetPos )
+
+	Assert( wp.wp.ruiFullmap == null )
+
+	var rui = FullMap_CommonAdd( $"ui/in_world_minimap_square_simple.rpak" )
+	if ( rui == null )
+	{
+		Warning( "Couldn't add ping icon to fullmap." )
+	}
+	else
+	{
+		
+		RuiTrackFloat3( rui, "objectPos", wp, RUI_TRACK_WAYPOINT_VECTOR, 0 )
+		RuiTrackImage( rui, "iconImage", wp, RUI_TRACK_WAYPOINT_IMAGE, 0 )
+		RuiSetFloat( rui, "objectSize", FULLMAP_SIZE_BIG )
+		RuiSetBool( rui, "doAnnounceEffect", true )
+
+		wp.wp.ruiFullmap = rui
+		Fullmap_AddRui( rui )
+	}
+}
+
+void function PassiveAdrenaline_ShowHealthBarThread( entity player, entity victim )
+{
+	const HEALTH_BAR_DURATION = 5.0
+	if( !IsValid( victim ) || !victim.IsPlayer() )
+		return
+
+	EndSignal( victim, "OnDeath" )
+	EndSignal( victim, "OnDestroy" )
+	Signal( victim, STOP_HEALTH_BAR_SIGNAL )
+	EndSignal( victim, STOP_HEALTH_BAR_SIGNAL )
+
+	var rui = ReconScan_ShowHudForTarget( player, victim, eShowHealthbarMode.ALWAYS, false, $"ui/recon_scan_target.rpak", null )
+	OnThreadEnd(
+		function() : ( player, victim )
+		{
+			ReconScan_RemoveHudForTarget( player, victim, eShowHealthbarMode.ALWAYS )
+		}
+	)
+
+	float endTime = Time() + HEALTH_BAR_DURATION
+	while ( Time() < endTime )
+	{
+		if ( IsValid( victim ) )
+		{
+			if( ShouldHideHealthForPlayer( victim ) )
+			{
+				RuiSetBool( rui, "isVisible", false )
+				endTime = Time()
+			}
+		}
+		WaitFrame()
+	}
+}
+
+void function PassiveAdrenaline_StartVisualEffect( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( ent != GetLocalViewPlayer() )
+		return
+
+	entity viewPlayer = ent
+	bool isSpecator = viewPlayer != GetLocalClientPlayer()
+	if( isSpecator && viewPlayer.HasPassive( ePassives.PAS_CONDUIT ) && !IsValid( viewPlayer.GetPlayerNetEnt( CONDUIT_PASSIVE_BEST_TARGET_NETVAR ) ))
+	{
+		thread DelayAdrenalineFXThread( viewPlayer, statusEffect )
+	}
+	else
+	{
+		ApplyAdrenalineFX( viewPlayer, statusEffect )
+	}
+}
+
+void function DelayAdrenalineFXThread( entity viewPlayer, int statusEffect )
+{
+	EndSignal( viewPlayer, "OnDeath" )
+	EndSignal( viewPlayer, "OnDestroy" )
+
+	wait tuning.conduitSFXDelay
+
+	ApplyAdrenalineFX( viewPlayer, statusEffect )
+}
+
+void function ApplyAdrenalineFX( entity viewPlayer, int statusEffect )
+{
+	string soundName = DEFAULT_ADRENALINE_SOUND_START
+	int screenEffectID = file.ScreenFxId
+	asset adrenalineRui = DEFAULT_ADRENALINE_RUI
+	bool showRUI = true
+	bool playSound = true
+	asset icon = DEFAULT_ICON
+
+	if ( viewPlayer.HasPassive( ePassives.PAS_CONDUIT ) )
+	{
+		soundName =  CONDUIT_ADRENALINE_SOUND_START
+		screenEffectID =  GetParticleSystemIndex( CONDUIT_ADRENALINE_SCREEN_FX)
+		icon = $"rui/hud/passive_icons/passive_conduit"
+		entity target = viewPlayer.GetPlayerNetEnt( CONDUIT_PASSIVE_BEST_TARGET_NETVAR )
+		if( IsValid( target ) )
+		{
+			if ( target.IsPlayer() && Perks_DoesPlayerHavePerk( target, ePerkIndex.TRAILBLAZER ) )
+			{
+				soundName = CONDUIT_ADRENALINE_SOUND_START_SKIRMISHER
+			}
+		}
+		else if( tuning.errorMessaging )
+		{
+			ReportNonFatalErrorMsg( "Conduit PSV: Target is invalid for " + GetLocalClientPlayer() )
+		}
+	}
+	if ( viewPlayer.HasPassive( ePassives.PAS_FUSE ) )
+	{
+		soundName =  CONDUIT_ADRENALINE_SOUND_START
+	}
+	if ( StatusEffect_HasSeverity( viewPlayer, eStatusEffect.endorsement_fast_slide ) && viewPlayer.HasPassive( ePassives.PAS_ENDORSEMENT_FAST_SLIDE ) )
+	{
+		showRUI = false
+		soundName = "Unhinged_Wildcard_SlipNSlide_Activate_1p"
+
+		if ( MatchModifiers_IsModifierActive( "MATCHMOD_COMBO_ADRENALINE_RUSH" ) )
+		{
+			soundName = "Wildcard_Juiced_AdrenalineRush_SlideBoost_1p"
+		}
+
+
+		icon = $"rui/hud/passive_icons/passive_bangalore_triggered"
+	}
+	if ( StatusEffect_HasSeverity( viewPlayer, eStatusEffect.endorsement_revive_speed_boost ) && viewPlayer.HasPassive( ePassives.PAS_ENDORSEMENT_REVIVE_SPEED_BOOST ) )
+	{
+		showRUI = false
+		soundName = "Skirmisher_Perk_Trailblazer_LP_1P"
+		icon = $"rui/hud/passive_icons/passive_bangalore_triggered"
+	}
+	if ( viewPlayer.HasPassive( ePassives.PAS_CRYPTO ) )
+	{
+		icon = $"rui/hud/gametype_icons/survival/classes_perks/perk_skirmisher_trailblazer"
+	}
+
+	if ( viewPlayer.HasPassive( ePassives.PAS_ADRENALINE ) )
+	{
+		CustomTutorialPopup ( "passive_bangalore" )
+	}
+
+	if ( playSound )
+	{
+		EmitSoundOnEntity( viewPlayer, soundName )
+	}
+
+	if ( showRUI )
+	{
+		CreatePassiveAdrenalineRUI(adrenalineRui, icon )
+	}
+	thread PassiveAdrenaline_UpdatePlayerScreenColorCorrection( viewPlayer )
+
+
+	int fxHandle = StartParticleEffectOnEntityWithPos( viewPlayer, screenEffectID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, viewPlayer.EyePosition(), <0,0,0> )
+	EffectSetIsWithCockpit( fxHandle, true )
+
+	thread PassiveAdreneline_EffectsThread( viewPlayer, fxHandle, soundName, statusEffect )
+}
+
+void function PassiveAdrenaline_StopVisualEffect( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( ent != GetLocalViewPlayer() )
+		return
+
+	ent.Signal( PAS_ADRENALINE_STOP_SIGNAL )
+}
+
+void function CreatePassiveAdrenalineRUI( asset ruiAsset, asset icon )
+{
+	
+	var rui = CreateTransientCockpitRui( ruiAsset, HUD_Z_BASE )
+	RuiSetImage( rui, "icon", icon )
+}
+
+void function PassiveAdrenaline_UpdatePlayerScreenColorCorrection( entity player )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+	Assert ( player == GetLocalViewPlayer() )
+
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( PAS_ADRENALINE_STOP_SIGNAL )
+
+	OnThreadEnd(
+		function() : ( player )
+		{
+			ColorCorrection_SetWeight( file.colorCorrection, 0.0 )
+		}
+	)
+
+	ColorCorrection_SetWeight( file.colorCorrection, 1.0 )
+
+	const LERP_IN_TIME = 0.0125	
+	float startTime = Time()
+
+	while ( true )
+	{
+		
+		float weight = StatusEffect_GetSeverity( player, eStatusEffect.adrenaline_visuals )
+		
+		weight = GraphCapped( Time() - startTime, 0, LERP_IN_TIME, 0, weight )
+		ColorCorrection_SetWeight( file.colorCorrection, weight )
+
+		WaitFrame()
+	}
+}
+
+
+void function PassiveAdreneline_EffectsThread( entity viewPlayer, int fxHandle, string soundName, int statusEffect )
+{
+	EndSignal( viewPlayer, "OnDeath" )
+	EndSignal( viewPlayer, PAS_ADRENALINE_STOP_SIGNAL )
+
+	OnThreadEnd(
+		function() : ( viewPlayer, soundName, fxHandle )
+		{
+			if ( IsValid( viewPlayer ) )
+				StopSoundOnEntity( viewPlayer, soundName )
+
+			if ( !EffectDoesExist( fxHandle ) )
+				return
+
+			EffectStop( fxHandle, false, true )
+		}
+	)
+
+	while( true )
+	{
+		float severity = StatusEffect_GetSeverity( viewPlayer, statusEffect )
+		
+
+		if ( !EffectDoesExist( fxHandle ) )
+			break
+
+		EffectSetControlPointVector( fxHandle, 1, <severity,999,0> )
+		WaitFrame()
+	}
+}
+ 

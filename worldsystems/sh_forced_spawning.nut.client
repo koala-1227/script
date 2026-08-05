@@ -1,0 +1,2449 @@
+
+global function ForcedSpawn_Init
+global function ForcedSpawn_GetMode
+global function ForcedSpawn_Enabled
+global function ForcedSpawn_POIPreview_Enabled
+global function ForcedSpawn_POIPreview_Duration
+
+global function ForcedSpawn_ShowEnemyStartPings
+global function ForcedSpawn_ShowFriendlyStartPings
+global function ForcedSpawn_EvoHarvesterTimegateOverride
+global function ForcedSpawn_GetPreviewPingDisplayTime
+
+
+const string 	FORCEDSPAWN_WP_NAME = "ForcedSpawn_Waypoint"
+const int 		FORCEDSPAWN_WP_INDEX_NAME = 0
+const int		FORCEDSPAWN_WP_INDEX_POS = 1
+
+const asset 	DROPZONE_MAKER_FX_BEAM 	= $"P_ar_hot_zone_far"
+const asset		DROPZONE_MARKER_FX_RING 	= $"P_ar_target_fuse_instant"
+const asset 	DROPZONE_MARKER_FX_CENTER 	= $"P_ar_loot_drop_point_cp"
+const asset 	DROPZONE_MARKER_FX_BEACON 	= $"P_smoke_dropzone_marker"
+const asset		DROPZONE_MARKER_FX_RADIUS 	= $"P_ui_dropzone_marker"
+
+const string 	DROPZONE_VO_PREFIX		 	= "diag_ap_aiNotify_poi"
+const string 	DROPZONE_ANNOUNCER_INTRO 	= "diag_ap_aiNotify_poiAnncIntro"
+
+const float PREVIEW_DISTANCE_TO_MOVE_BACKWARDS = 14000
+
+const vector FRIENDLY_SPAWNPOINT_BEAM_VFX_COLOR = < 0, 255, 255 >
+
+const vector FRIENDLY_SPAWNPOINT_FLARE_VFX_COLOR = < 40, 80, 10 > 
+const vector ENEMY_SPAWNPOINT_FLARE_VFX_COLOR = < 110, 20 , 20> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ForcedSpawn_Assignments_ClientGet
+global function ForcedSpawn_Assignments_ClientUpdate
+
+global function ServerToClient_ForcedSpawn_SpawnLocationBeams
+global function ServerToClient_ForcedSpawn_Begin_Overhead_PreviewForClient
+global function ServerToClient_ForcedSpawn_Begin_MapView_PreviewForClient
+global function ServerToClient_ForcedSpawn_DisplayPOIName_Overhead_Preview
+global function ServerToClient_ForcedSpawn_SpinUp_DropZoneMarker_FX
+global function ServerToClient_ForcedSpawn_LandingMarkers_CleanUp
+
+global function ServerToClient_ForcedSpawn_WarningSystem_DisplayWarningAnnouncement
+
+global function ForcedSpawn_SetMapViewValues
+
+global function ServerToClient_ForcedSpawn_Set_EnemySpawnPoints
+
+global function ServerToClient_SimulatePreviewCamera
+
+
+global enum eForcedSpawnMode
+{
+	NONE 		  		= 0 
+	LEGACY     			= 1 
+	AUTOMATIC     		= 2 
+	
+}
+
+global enum eForcedSpawnGamemode
+{
+	RANKED 			= 1
+	ALGS			= 2
+}
+
+
+global enum eForcedSpawnPointGamemodeType
+{
+	ALL_MODES		= 0 
+	RANKED_ONLY		= 1
+	ALGS_ONLY		= 2
+	NO_MODES		= 3 
+}
+
+global enum ePOIPreviewState
+{
+	INCOMPLETE,
+	INPROGRESS,
+	COMPLETE
+}
+
+global enum ePOIPreviewType
+{
+	INVALID = -1,
+
+	
+	OVERHEAD,
+	MAPVIEW,
+	HYBRID
+}
+
+global enum ePOIInvasionWarningType
+{
+	NONE,
+	ENEMY,
+	BOTH
+}
+
+struct Tuning
+{
+	int spawnMode = eForcedSpawnMode.NONE
+	int gamemodeType = eForcedSpawnGamemode.RANKED
+
+	int previewType = ePOIPreviewType.HYBRID
+
+	bool do_dropship_fly_in_sequence = true
+	float spawn_height = 10000 
+	bool use_jumpmaster = false
+
+	float drop_zone_radius = 300 * METERS_TO_INCHES
+
+	bool multiple_teams_per_poi_enabled = true
+	int max_teams_per_poi = 3
+
+	bool show_enemy_start_pings = true
+	bool show_friendly_start_pings = true
+	bool show_team_spawn_beams = true
+	bool show_pings_near_dropships = true
+
+	bool show_enemy_spawn_previews = true
+	bool show_only_primary_threat_preview = false
+	bool show_drop_radius_preview = true
+
+	int zone_invasion_warning_configuration = ePOIInvasionWarningType.ENEMY
+	float zone_invasion_radius = 185 * METERS_TO_INCHES 
+	int zone_invasion_max_warnings = 5
+	float zone_invasion_debounce_duration = 8.0
+	float zone_invasion_warning_system_lifetime = 40.0
+	float zone_invasion_warning_duration = 3.0
+
+	float evoharvester_timegate_override = 50.0
+
+	bool differentiate_enemy_starts_by_distance = true
+	bool show_secondary_threat_start_pings = false
+	float maximum_distance_to_primary_threat_starts = 22500 
+
+	float ring_wait_time_after_spawn = 20.0
+	float contested_spawn_radius = 500.0
+	float preview_ping_display_time = 45.0
+
+	bool skip_preview_phase = false
+	float pre_game_preview_duration = 15.0
+
+	bool preview_stagger_info_reveal_enabled = true
+	float preview_stagger_delay_time = 2.8
+
+	bool drop_zone_flare_enabled = true
+	bool drop_zone_radius_shown_in_skydive = true
+	bool drop_zone_skydive_radius_never_delete = false
+	float drop_zone_ground_vfx_duration = 55.0
+
+	bool warning_trigger_debug_draw_enabled = false
+
+	bool preview_camera_preview_spawn_point = true
+	float preview_camera_distance = 20000.0
+	float preview_camera_angle = 45.0
+
+	float preview_camera_hybrid_screen_offset = 0.3
+
+	bool forced_spawning_noisy_logging_enabled = false
+}
+Tuning tuning
+
+bool devOut = true 
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		string poiName
+
+		entity assignedSpawnWaypoint
+
+		vector mapViewCenter
+		float mapViewVectorScalar
+		float mapViewOffsetHeight
+
+		entity playerPOIPreviewCamera
+
+		array< int > DropZoneMarker_FX_Beams
+
+		array< int > DropZoneMarker_FX_Flares
+		array< int > DropZoneMarker_FX_Radii
+
+		array < vector > enemySpawnPoints
+
+		array < var > fullmapPreviewRuis
+
+} file
+
+
+void function ForcedSpawn_Init()
+{
+#if DEV
+		DevOut( FUNC_NAME() + "():> Entered." )
+#endif
+
+	ForcedSpawn_Tuning_Init()
+
+	if ( !ForcedSpawn_Enabled() )
+		return
+
+	ForcedSpawn_Networking_Init()
+
+	AddCallback_EntitiesDidLoad( ForcedSpawn_EntitiesDidLoad )
+
+	PrecacheParticleSystem( DROPZONE_MAKER_FX_BEAM )
+	PrecacheParticleSystem( DROPZONE_MARKER_FX_RING )
+	PrecacheParticleSystem( DROPZONE_MARKER_FX_CENTER )
+	PrecacheParticleSystem( DROPZONE_MARKER_FX_BEACON )
+	PrecacheParticleSystem( DROPZONE_MARKER_FX_RADIUS )
+
+
+
+
+
+
+
+
+
+
+
+		Waypoints_RegisterCustomType( FORCEDSPAWN_WP_NAME, CL_ForcedSpawnNameEnt_Created )
+
+
+
+		
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.DROP_ZONE_RADIUS,
+			MINIMAP_OBJ_AREA_RUI, void function( entity ent, var rui ) {
+				SetupMapRui( ent, rui, false )
+			},
+			$"ui/in_world_minimap_objective_area.rpak", void function( entity ent, var rui ) {
+				SetupMapRui( ent, rui, true )
+			}
+		)
+
+}
+
+void function ForcedSpawn_EntitiesDidLoad()
+{
+#if DEV
+		DevOut( FUNC_NAME() + "():> Entered." )
+
+
+
+#endif
+}
+
+void function ForcedSpawn_Networking_Init()
+{
+	Remote_RegisterClientFunction( "ForcedSpawn_Assignments_ClientUpdate", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_SpawnLocationBeams" )
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_DisplayPOIName_Overhead_Preview" )
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_SpinUp_DropZoneMarker_FX" )
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_LandingMarkers_CleanUp" )
+
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_WarningSystem_DisplayWarningAnnouncement", "bool" )
+
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_Begin_Overhead_PreviewForClient", "vector", -FLT_MAX, FLT_MAX, 32, "vector", -FLT_MAX, FLT_MAX, 32, "float", 0.0, 200.0, 32 )
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_Begin_MapView_PreviewForClient", "vector", -FLT_MAX, FLT_MAX, 32, "float", 0.0, FLT_MAX, 32 )
+	Remote_RegisterClientFunction( "ServerToClient_ForcedSpawn_Set_EnemySpawnPoints", "vector", -FLT_MAX, FLT_MAX, 32 )
+
+	Remote_RegisterClientFunction( "ServerToClient_SimulatePreviewCamera", "vector", -FLT_MAX, FLT_MAX, 32, "bool", "float", 0.0, 180.0, 32, "float", 0.0, 6000.0, 32 )
+	RegisterSignal( "EndSimulatePreviewCamera" )
+
+	RegisterNetworkedVariable( "ForcedSpawnPreviewStartTime", SNDC_GLOBAL, SNVT_TIME, -1 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ForcedSpawn_Tuning_Init()
+{
+	Tuning defaults
+	tuning.spawnMode = GetCurrentPlaylistVarInt( "forced_spawn_mode", defaults.spawnMode )
+	tuning.gamemodeType = GetCurrentPlaylistVarInt( "forced_spawn_gamemode", defaults.gamemodeType )
+	tuning.previewType = GetCurrentPlaylistVarInt( "forced_spawn_preview_type", defaults.previewType )
+	tuning.do_dropship_fly_in_sequence = GetCurrentPlaylistVarBool( "forced_spawn_do_dropship_fly_in_sequence", defaults.do_dropship_fly_in_sequence  )
+	tuning.spawn_height = GetCurrentPlaylistVarFloat( "forced_spawn_height", defaults.spawn_height )
+	tuning.drop_zone_radius = GetCurrentPlaylistVarFloat( "forced_spawn_drop_zone_radius", defaults.drop_zone_radius )
+	tuning.use_jumpmaster = GetCurrentPlaylistVarBool( "forced_spawn_use_jumpmaster", defaults.use_jumpmaster )
+	tuning.multiple_teams_per_poi_enabled = GetCurrentPlaylistVarBool( "forced_spawn_multiple_teams_per_poi_enabled", defaults.multiple_teams_per_poi_enabled )
+	tuning.max_teams_per_poi = GetCurrentPlaylistVarInt( "forced_spawn_max_teams_per_poi", defaults.max_teams_per_poi )
+	tuning.show_enemy_start_pings = GetCurrentPlaylistVarBool( "forced_spawn_show_enemy_start_pings", defaults.show_enemy_start_pings )
+	tuning.show_friendly_start_pings = GetCurrentPlaylistVarBool( "forced_spawn_show_friendly_start_pings", defaults.show_friendly_start_pings )
+	tuning.pre_game_preview_duration = GetCurrentPlaylistVarFloat( "pre_game_preview_duration", defaults.pre_game_preview_duration )
+
+	tuning.preview_stagger_info_reveal_enabled = GetCurrentPlaylistVarBool( "forced_spawn_preview_stagger_info_reveal_enabled", defaults.preview_stagger_info_reveal_enabled )
+	tuning.preview_stagger_delay_time = GetCurrentPlaylistVarFloat( "forced_spawn_preview_stagger_delay_time", defaults.preview_stagger_delay_time )
+
+	tuning.differentiate_enemy_starts_by_distance = GetCurrentPlaylistVarBool( "forced_spawn_differentiate_enemy_starts_by_distance", defaults.differentiate_enemy_starts_by_distance )
+	tuning.show_secondary_threat_start_pings = GetCurrentPlaylistVarBool( "forced_spawn_show_secondary_threat_start_pings", defaults.show_secondary_threat_start_pings )
+	tuning.maximum_distance_to_primary_threat_starts = GetCurrentPlaylistVarFloat( "forced_spawn_maximum_distance_to_primary_threat_starts", defaults.maximum_distance_to_primary_threat_starts )
+	tuning.evoharvester_timegate_override = GetCurrentPlaylistVarFloat( "force_spawn_evoharvester_timegate_override", defaults.evoharvester_timegate_override )
+	tuning.ring_wait_time_after_spawn = GetCurrentPlaylistVarFloat( "forced_spawn_ring_wait_time_after_spawn", defaults.ring_wait_time_after_spawn )
+	tuning.contested_spawn_radius = GetCurrentPlaylistVarFloat( "forced_spawn_contested_spawn_radius", defaults.contested_spawn_radius )
+	tuning.preview_ping_display_time = GetCurrentPlaylistVarFloat( "forced_spawn_preview_ping_display_time", defaults.preview_ping_display_time )
+	tuning.show_team_spawn_beams = GetCurrentPlaylistVarBool( "forced_spawn_show_team_spawn_beams", defaults.show_team_spawn_beams )
+	tuning.skip_preview_phase = GetCurrentPlaylistVarBool( "forced_spawn_skip_preview_phase", defaults.skip_preview_phase )
+
+	tuning.show_enemy_spawn_previews = GetCurrentPlaylistVarBool( "forced_spawn_show_enemy_spawn_previews", defaults.show_enemy_spawn_previews )
+	tuning.show_only_primary_threat_preview = GetCurrentPlaylistVarBool( "forced_spawn_show_only_primary_threat_preview", defaults.show_only_primary_threat_preview )
+	tuning.show_drop_radius_preview = GetCurrentPlaylistVarBool( "forced_spawn_show_drop_radius_preview", defaults.show_drop_radius_preview )
+
+	tuning.zone_invasion_warning_configuration = GetCurrentPlaylistVarInt( "forced_spawn_zone_invasion_warning_configuration", defaults.zone_invasion_warning_configuration )
+	tuning.zone_invasion_max_warnings = GetCurrentPlaylistVarInt( "forced_spawn_zone_invasion_max_warnings", defaults.zone_invasion_max_warnings )
+	tuning.zone_invasion_radius = GetCurrentPlaylistVarFloat( "forced_spawn_zone_invasion_radius", defaults.zone_invasion_radius )
+
+	tuning.zone_invasion_debounce_duration = GetCurrentPlaylistVarFloat( "forced_spawn_zone_invasion_debounce_duration", defaults.zone_invasion_debounce_duration )
+	tuning.zone_invasion_warning_system_lifetime = GetCurrentPlaylistVarFloat( "forced_spawn_zone_invasion_warning_system_lifetime", defaults.zone_invasion_warning_system_lifetime )
+	tuning.zone_invasion_warning_duration = GetCurrentPlaylistVarFloat( "forced_spawn_zone_invasion_warning_duration", defaults.zone_invasion_warning_duration )
+
+	tuning.drop_zone_flare_enabled = GetCurrentPlaylistVarBool( "forced_spawn_show_drop_zone_flares", defaults.drop_zone_flare_enabled )
+	tuning.drop_zone_radius_shown_in_skydive = GetCurrentPlaylistVarBool( "forced_spawn_drop_zone_radius_shown_in_skydive", defaults.drop_zone_radius_shown_in_skydive )
+	tuning.drop_zone_ground_vfx_duration = GetCurrentPlaylistVarFloat( "forced_spawn_drop_zone_ground_vfx_duration", defaults.drop_zone_ground_vfx_duration )
+
+
+#if DEV
+		tuning.drop_zone_skydive_radius_never_delete = GetCurrentPlaylistVarBool( "forced_spawn_drop_zone_skydive_radius_never_delete", defaults.drop_zone_skydive_radius_never_delete )
+#else
+		tuning.drop_zone_skydive_radius_never_delete = defaults.drop_zone_skydive_radius_never_delete
+#endif
+
+	tuning.preview_camera_preview_spawn_point = GetCurrentPlaylistVarBool( "forced_spawn_preview_camera_preview_spawn_point", defaults.preview_camera_preview_spawn_point )
+	tuning.preview_camera_distance = GetCurrentPlaylistVarFloat( "forced_spawn_preview_camera_distance", defaults.preview_camera_distance )
+	tuning.preview_camera_angle = GetCurrentPlaylistVarFloat( "forced_spawn_preview_camera_angle", defaults.preview_camera_angle )
+	tuning.preview_camera_hybrid_screen_offset = GetCurrentPlaylistVarFloat( "forced_spawn_preview_hybrid_screen_offset", defaults.preview_camera_hybrid_screen_offset )
+
+	tuning.forced_spawning_noisy_logging_enabled = GetCurrentPlaylistVarBool( "forced_spawning_noisy_logging_enabled", defaults.forced_spawning_noisy_logging_enabled )
+}
+
+int function ForcedSpawn_GetMode()
+{
+	return tuning.spawnMode
+}
+
+bool function ForcedSpawn_Enabled()
+{
+	return ForcedSpawn_GetMode() != eForcedSpawnMode.NONE
+}
+
+bool function ForcedSpawn_POIPreview_Enabled()
+{
+	return ForcedSpawn_GetMode() == eForcedSpawnMode.AUTOMATIC
+}
+
+bool function ForcedSpawn_ShowEnemyStartPings()
+{
+	return ForcedSpawn_Enabled() && tuning.show_enemy_start_pings
+}
+
+bool function ForcedSpawn_ShowFriendlyStartPings()
+{
+	return ForcedSpawn_Enabled() && tuning.show_friendly_start_pings
+}
+
+float function ForcedSpawn_EvoHarvesterTimegateOverride()
+{
+	return tuning.evoharvester_timegate_override
+}
+
+float function ForcedSpawn_GetPreviewPingDisplayTime()
+{
+	return tuning.preview_ping_display_time
+}
+
+float function ForcedSpawn_POIPreview_Duration()
+{
+	return tuning.pre_game_preview_duration
+}
+
+
+
+string function ForcedSpawn_Assignments_ClientGet()
+{
+	return file.poiName
+}
+
+
+void function CL_ForcedSpawnNameEnt_Created( entity wp )
+{
+	if( !IsValid( wp ) )
+		return
+
+	string poiName = NameEnt_GetName( wp )
+	printt( "():> Custom Waypoint created for POI: " + poiName )
+
+
+}
+
+
+void function ForcedSpawn_Assignments_ClientUpdate( entity wp )
+{
+	if( !IsValid( wp ) )
+		return
+
+	string poiName = NameEnt_GetName( wp )
+	file.poiName = poiName
+
+	file.assignedSpawnWaypoint = wp
+
+#if DEV
+		DevOut( FUNC_NAME() + "(): poiName == " + poiName )
+#endif
+}
+
+void function ServerToClient_ForcedSpawn_SpawnLocationBeams()
+{
+	thread ForcedSpawn_Manage_SpawnLocationBeams_thread()
+}
+
+void function ServerToClient_ForcedSpawn_DisplayPOIName_Overhead_Preview()
+{
+	string poiName = Localize( ForcedSpawn_Assignments_ClientGet() )
+	string message         = Localize( "#SPAWNING_IN_SPAWNING_AT_LOBBY", poiName )
+
+	entity localViewPlayer = GetLocalViewPlayer()
+
+	AnnouncementData announcement = Announcement_Create( message )
+	announcement.useColorOnSubtext = true
+	announcement.announcementStyle = ANNOUNCEMENT_STYLE_BIG
+	announcement.duration          = tuning.pre_game_preview_duration
+
+	AnnouncementFromClass( localViewPlayer, announcement )
+}
+
+void function ForcedSpawn_Manage_SpawnLocationBeams_thread()
+{
+	if ( !tuning.show_team_spawn_beams )
+		return
+
+	if( !IsValid( file.assignedSpawnWaypoint ) )
+		return
+
+	CL_DropZoneMarkerFX_Setup( file.assignedSpawnWaypoint )
+
+	wait tuning.pre_game_preview_duration + 1.0
+	CL_DropZoneMarkerFX_Destroy()
+}
+
+void function CL_DropZoneMarkerFX_Setup( entity waypoint, asset beamParticleSystem = DROPZONE_MAKER_FX_BEAM )
+{
+	if ( !IsValid( waypoint ) )
+		return
+
+	
+	int beamIndex       = GetParticleSystemIndex( beamParticleSystem )
+	vector location 	= waypoint.GetWaypointVector( FORCEDSPAWN_WP_INDEX_POS )
+	int beamFx       = StartParticleEffectInWorldWithHandle( beamIndex, location, <0, 0, 0> + <90, 0, 0> ) 
+	EffectSetControlPointVector( beamFx, 1, FRIENDLY_SPAWNPOINT_FLARE_VFX_COLOR )
+
+	file.DropZoneMarker_FX_Beams.append( beamFx )
+}
+
+void function CL_DropZoneMarkerFX_Destroy()
+{
+	foreach( beamFX in file.DropZoneMarker_FX_Beams )
+	{
+		if ( EffectDoesExist( beamFX ) )
+		{
+			EffectStop( beamFX, true, true )
+		}
+	}
+	file.DropZoneMarker_FX_Beams.clear()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+string function NameEnt_GetName( entity wp )
+{
+	string name = wp.GetWaypointString( FORCEDSPAWN_WP_INDEX_NAME )
+	return( name )
+}
+
+#if DEV
+
+void function DevOut( string str, string prefix = ":> " )
+{
+	if( !devOut )
+		return
+
+	printt( prefix + str )
+}
+
+#endif
+
+
+void function ForcedSpawn_SetMapViewValues( vector origin, float scalar, float heightOffset = 37620 )
+{
+	file.mapViewCenter = origin
+	file.mapViewVectorScalar = scalar 
+	file.mapViewOffsetHeight = heightOffset
+}
+
+
+
+void function ServerToClient_ForcedSpawn_Set_EnemySpawnPoints( vector enemySpawnPos )
+{
+	if ( enemySpawnPos == < 0, 0, 0 > )
+	{
+		return
+	}
+
+	file.enemySpawnPoints.append( enemySpawnPos )
+}
+
+void function ServerToClient_ForcedSpawn_Begin_Overhead_PreviewForClient( vector cameraPosition, vector cameraAngles, float fov )
+{
+	thread function() : ( cameraPosition, cameraAngles, fov)
+	{
+		entity player = GetLocalViewPlayer()
+		EHI playerEHI = ToEHI( player )
+
+		
+		WaitFrame() 
+		
+		
+
+		if ( !IsValid( FromEHI( playerEHI ) ) )
+			return
+
+		thread SetupPreviewCamera_Thread( playerEHI, cameraPosition, cameraAngles, fov )
+	}()
+}
+
+
+void function SetupPreviewCamera_Thread( EHI playerEHI, vector cameraPosition, vector cameraAngles, float fov )
+{
+	Assert( IsNewThread(), "Must be threaded off" )
+
+	entity player = FromEHI( playerEHI )
+
+	entity camera      = CreateClientSidePointCamera( cameraPosition, cameraAngles, fov )
+
+	file.playerPOIPreviewCamera = camera
+
+	OnThreadEnd(
+		function() : ( playerEHI, camera )
+		{
+			entity player = FromEHI( playerEHI )
+			if ( IsValid( player ) )
+			{
+				player.ClearMenuCameraEntity()
+			}
+			if ( IsValid( camera ) )
+			{
+				camera.Destroy()
+			}
+		}
+	)
+
+	if ( tuning.preview_camera_preview_spawn_point )
+	{
+		entity spawnWaypoint = file.assignedSpawnWaypoint
+		if ( IsValid( spawnWaypoint ) )
+		{
+			bool hybridCameraConfig = (tuning.previewType == ePOIPreviewType.HYBRID)
+			vector targetPos = spawnWaypoint.GetWaypointVector( FORCEDSPAWN_WP_INDEX_POS )
+
+			OptimizeInitialCameraViewPosition( targetPos, hybridCameraConfig, fov )
+		}
+	}
+
+	player.SetMenuCameraEntity( camera )
+
+	float timeToWait = max( 0, tuning.pre_game_preview_duration - ( Time() - GetGlobalNetTime( "ForcedSpawnPreviewStartTime" ) ) )
+
+	wait timeToWait
+}
+
+void function OptimizeInitialCameraViewPosition( vector targetPos, bool hybridCameraConfig, float fov )
+{
+	float distance = tuning.preview_camera_distance
+	float angle = tuning.preview_camera_angle
+
+	vector mapCenterToTargetPos = targetPos - file.mapViewCenter
+	mapCenterToTargetPos.z = 0
+
+	vector dirMapCenterToTargetPos = Normalize( mapCenterToTargetPos )
+	vector perp = AnglesToRight( VectorToAngles( dirMapCenterToTargetPos ) )
+
+	vector dirTargetPosToCamera = VectorRotateAxis( dirMapCenterToTargetPos, perp, angle )
+	vector cameraPosition = targetPos + dirTargetPosToCamera * distance
+
+	vector cameraForward = -dirTargetPosToCamera
+	vector cameraAngles = VectorToAngles( cameraForward )
+
+	if ( hybridCameraConfig )
+	{
+		
+
+		float fovScalingFactor = 1.3  
+		float parallaxFactor = tan( fov * 0.5 * DEG_TO_RAD ) * fovScalingFactor
+		float screenOffset = Clamp( tuning.preview_camera_hybrid_screen_offset, 0.0, 1.0 )  
+		float remappedScreenOffset = -1 + 2 * screenOffset    
+		float lateralShift = distance * parallaxFactor * remappedScreenOffset
+		vector cameraRight = AnglesToRight( cameraAngles )
+		cameraPosition = cameraPosition - cameraRight * lateralShift
+	}
+
+	file.playerPOIPreviewCamera.SetAngles( cameraAngles )
+	file.playerPOIPreviewCamera.SetOrigin( cameraPosition )
+}
+
+void function ServerToClient_ForcedSpawn_Begin_MapView_PreviewForClient( vector spawnPosition, float dropZoneRadius )
+{
+	thread function() : ( spawnPosition, dropZoneRadius)
+	{
+		entity player = GetLocalViewPlayer()
+		EHI playerEHI = ToEHI( player )
+
+		
+		WaitFrame() 
+		
+		
+
+		if ( !IsValid( FromEHI( playerEHI ) ) )
+			return
+
+		thread SetupMapViewPreview_Thread( playerEHI, spawnPosition, dropZoneRadius )
+	}()
+}
+
+void function SetupMapViewPreview_Thread( EHI playerEHI, vector spawnPosition, float dropZoneRadius )
+{
+	printt( "[Forced Spawns] Begining the Map View Preview for Drop Zones..." )
+	var screenRui = CreatePermanentCockpitPostFXRui( $"ui/drop_zones_prematch.rpak", RUI_DRAW_POSTEFFECTS - 1 )
+
+	OnThreadEnd(
+		function() : ( screenRui )
+		{
+			foreach ( mapRui in file.fullmapPreviewRuis )
+			{
+				if ( IsValid ( mapRui ) )
+				{
+					Fullmap_RemoveRui( mapRui )
+					RuiDestroyIfAlive( mapRui )
+				}
+			}
+
+			Fullmap_SetVisible_MapOnly( false, eMapState.PregamePOIPreview )
+			Fullmap_ToggleInteractivity( false )
+
+			if( screenRui != null )
+			{
+				RuiDestroyIfAlive( screenRui )
+			}
+		}
+	)
+
+	Fullmap_SetVisible_MapOnly( true, eMapState.PregamePOIPreview )
+	Fullmap_ToggleInteractivity( true )
+
+	string poiName = Localize( ForcedSpawn_Assignments_ClientGet() )
+	RuiSetString( screenRui, "spawnLocation", poiName )
+	RuiSetString( screenRui, "gameModeString", GetCurrentPlaylistVarString( "name", "#PLAYLIST_UNAVAILABLE" ) )
+	RuiSetString( screenRui, "mapName", GetCurrentPlaylistVarString( "map_name", "#PLAYLIST_UNAVAILABLE" ) )
+	RuiSetImage( screenRui , "gameModeIcon", GetGamemodeLogoFromImageMap( GetCurrentPlaylistVarString( "gamemode_logo", "BATTLE_ROYALE" )) )
+
+	if ( tuning.preview_stagger_info_reveal_enabled )
+	{
+		
+		int positionInStaggerSequence = 1
+
+		float waitTime = tuning.preview_stagger_delay_time * float( positionInStaggerSequence )
+
+		wait waitTime
+	}
+
+	
+	var fRui = FullMap_CommonAdd( $"ui/in_world_minimap_square_simple.rpak" )
+	if ( fRui == null )
+	{
+		Warning( "[Forced Spawn] Couldn't add Icon icon to fullmap." )
+		return
+	}
+
+	RuiSetFloat( fRui, "objectSize", 8 )
+	RuiSetFloat3( fRui, "objColor", GetKeyColor( COLORID_COLORSWATCH_GREEN ) * ( 1.0 / 255.0 ) )
+	RuiSetImage( fRui, "iconImage", $"rui/hud/gametype_icons/survival/friendly_dropzone_icon" )
+
+	RuiSetFloat3( fRui, "objectAngles", < 0,0,0 > )
+	RuiSetFloat3( fRui, "objectPos", spawnPosition )
+	Fullmap_AddRui( fRui )
+	file.fullmapPreviewRuis.append( fRui )
+
+	
+	
+	
+	
+	
+	
+
+	
+	
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	
+
+	if ( tuning.preview_stagger_info_reveal_enabled )
+	{
+		int positionInStaggerSequence = 2
+
+		float waitTime = tuning.preview_stagger_delay_time * float( positionInStaggerSequence )
+
+		wait waitTime
+	}
+
+	
+	if ( file.enemySpawnPoints.len() > 0 )
+	{
+		if ( tuning.show_enemy_spawn_previews )
+		{
+			foreach ( vector enemyPos in file.enemySpawnPoints )
+			{
+				if ( DistanceSqr( enemyPos, spawnPosition ) < tuning.maximum_distance_to_primary_threat_starts * tuning.maximum_distance_to_primary_threat_starts )
+				{
+					var enemyRui = FullMap_CommonAdd( $"ui/in_world_minimap_square_simple.rpak" )
+					if ( enemyRui == null )
+					{
+						Warning( "[Forced Spawn] Couldn't add Icon icon to fullmap." )
+						return
+					}
+
+					RuiSetFloat( enemyRui, "objectSize", 8 )
+					RuiSetFloat3( enemyRui, "objColor", GetKeyColor( COLORID_COLORSWATCH_RED ) * ( 1.0 / 255.0 ) )
+					RuiSetImage( enemyRui, "iconImage", $"rui/hud/gametype_icons/survival/enemy_dropzone_icon" ) 
+
+					RuiSetFloat3( enemyRui, "objectAngles", < 0,0,0 > )
+					RuiSetFloat3( enemyRui, "objectPos", enemyPos )
+					Fullmap_AddRui( enemyRui )
+					file.fullmapPreviewRuis.append( enemyRui )
+				}
+			}
+		}
+	}
+
+	if ( tuning.preview_stagger_info_reveal_enabled )
+	{
+		float waitTime = tuning.preview_stagger_delay_time
+
+		wait waitTime
+	}
+
+	if ( file.enemySpawnPoints.len() > 0 )
+	{
+		if ( tuning.show_enemy_spawn_previews && !tuning.show_only_primary_threat_preview )
+		{
+			foreach ( vector enemyPos in file.enemySpawnPoints )
+			{
+				if ( DistanceSqr( enemyPos, spawnPosition ) > tuning.maximum_distance_to_primary_threat_starts * tuning.maximum_distance_to_primary_threat_starts )
+				{
+					var secondaryEnemyRui = FullMap_CommonAdd( $"ui/in_world_minimap_square_simple.rpak" )
+					if ( secondaryEnemyRui == null )
+					{
+						Warning( "[Forced Spawn] Couldn't add Icon icon to fullmap." )
+						return
+					}
+
+					RuiSetFloat( secondaryEnemyRui, "objectSize", 8 )
+					RuiSetFloat3( secondaryEnemyRui, "objColor", GetKeyColor( COLORID_COLORSWATCH_RED ) * ( 1.0 / 255.0 ) )
+					RuiSetImage( secondaryEnemyRui, "iconImage", $"rui/hud/gametype_icons/survival/enemyfar_dropzone_icon" )
+
+					RuiSetFloat3( secondaryEnemyRui, "objectAngles", < 0,0,0 > )
+					RuiSetFloat3( secondaryEnemyRui, "objectPos", enemyPos )
+					Fullmap_AddRui( secondaryEnemyRui )
+					file.fullmapPreviewRuis.append( secondaryEnemyRui )
+				}
+			}
+		}
+	}
+
+	float remainingTime = tuning.pre_game_preview_duration
+
+	
+	if ( tuning.preview_stagger_info_reveal_enabled )
+	{
+		remainingTime = tuning.pre_game_preview_duration - ( tuning.preview_stagger_delay_time * 4 )
+	}
+
+	float timeToWait = max( 0, remainingTime ) 
+
+	wait timeToWait
+}
+
+
+void function SetupMapRui( entity ent, var rui, bool isFullMap )
+{
+	RuiSetAsset( rui, "areaImage", $"rui/hud/gametype_icons/survival/drop_zone_radius" )
+	RuiSetFloat( rui, "areaImageAlpha",
+		GetLocalClientPlayer().GetTeam() == TEAM_SPECTATOR ? 0.2 : 0.5 )
+	RuiSetImage( rui, "clampedImage", $"" )
+
+	
+	string areaColorArgName = "objColor"
+	if ( !isFullMap )
+	{
+		RuiSetBool( rui, "useOverrideColor", true )
+		areaColorArgName = "overrideColor"
+	}
+	RuiSetColorAlpha( rui, areaColorArgName, <0.168, 0.696, 0.199>, 1 )
+	
+
+	if ( ent.IsClientOnly() )
+	{
+		RuiSetImage( rui, "centerImage", $"" )
+		RuiSetFloat( rui, "objectRadius", ent.e.clientEntMinimapScale )
+	}
+	else
+	{
+		RuiSetImage( rui, "centerImage", $"rui/hud/gametype_icons/survival/loba_ult_map_icon" )
+		RuiTrackFloat( rui, "objectRadius", ent, RUI_TRACK_MINIMAP_SCALE )
+	}
+}
+
+
+
+
+void function ServerToClient_ForcedSpawn_SpinUp_DropZoneMarker_FX()
+{
+	if( !IsValid( file.assignedSpawnWaypoint ) )
+		return
+
+	ForcedSpawn_LandingMarkers_SpinUp_FlareFX()
+	ForcedSpawn_LandingMarkers_SpinUp_DropRadius()
+}
+
+void function ForcedSpawn_LandingMarkers_SpinUp_FlareFX()
+{
+	entity player = GetLocalViewPlayer()
+	int playerTeam = player.GetTeam()
+	entity spawnWaypoint = file.assignedSpawnWaypoint
+
+	if ( !IsValid( spawnWaypoint ) )
+		return
+
+	if ( !tuning.drop_zone_flare_enabled )
+		return
+
+	
+	vector destination = spawnWaypoint.GetWaypointVector( FORCEDSPAWN_WP_INDEX_POS )
+
+	int markerFXIndex       = GetParticleSystemIndex( DROPZONE_MARKER_FX_BEACON )
+
+	
+	int flareFX = StartParticleEffectInWorldWithHandle( markerFXIndex, destination, < 0, 0 ,0 > )
+
+	
+	EffectSetControlPointVector( flareFX, 1, FRIENDLY_SPAWNPOINT_FLARE_VFX_COLOR )
+
+	file.DropZoneMarker_FX_Flares.append( flareFX )
+
+	if ( file.enemySpawnPoints.len() > 0 )
+	{
+		foreach ( vector enemyPos in file.enemySpawnPoints )
+		{
+			
+			int enemyflareFX = StartParticleEffectInWorldWithHandle( markerFXIndex, enemyPos, < 0, 0 ,0 > )
+
+			
+			EffectSetControlPointVector( enemyflareFX, 1, ENEMY_SPAWNPOINT_FLARE_VFX_COLOR )
+
+			file.DropZoneMarker_FX_Flares.append( enemyflareFX )
+		}
+	}
+}
+
+void function ForcedSpawn_LandingMarkers_SpinUp_DropRadius()
+{
+	if ( !tuning.drop_zone_radius_shown_in_skydive )
+		return
+
+	entity player = GetLocalViewPlayer()
+	int playerTeam = player.GetTeam()
+	entity spawnWaypoint = file.assignedSpawnWaypoint
+
+	if ( !IsValid( spawnWaypoint ) )
+		return
+
+	
+	vector destination = spawnWaypoint.GetWaypointVector( FORCEDSPAWN_WP_INDEX_POS )
+
+	
+	float skydiveRadius = tuning.drop_zone_radius
+
+	int markerFXIndex       = GetParticleSystemIndex( DROPZONE_MARKER_FX_RADIUS )
+	float zOffset = 1000 
+
+	destination += < 0, 0 , zOffset >
+
+	
+	int radiusFX = StartParticleEffectInWorldWithHandle( markerFXIndex, destination, < 0, 0 ,0 > )
+
+	EffectSetControlPointVector( radiusFX, 1, FRIENDLY_SPAWNPOINT_FLARE_VFX_COLOR )
+	EffectSetControlPointVector( radiusFX, 2, < skydiveRadius, 0, 0 > )
+
+	file.DropZoneMarker_FX_Radii.append( radiusFX )
+}
+
+void function ServerToClient_ForcedSpawn_LandingMarkers_CleanUp()
+{
+	foreach( flareFX in file.DropZoneMarker_FX_Flares )
+	{
+		if ( EffectDoesExist( flareFX ) )
+		{
+			EffectStop( flareFX, false, true )
+		}
+	}
+	file.DropZoneMarker_FX_Flares.clear()
+
+	if ( !tuning.drop_zone_skydive_radius_never_delete )
+	{
+		foreach( radiusFX in file.DropZoneMarker_FX_Radii )
+		{
+			if ( EffectDoesExist( radiusFX ) )
+			{
+				EffectStop( radiusFX, false, true )
+			}
+		}
+		file.DropZoneMarker_FX_Radii.clear()
+	}
+
+	file.enemySpawnPoints.clear()
+}
+
+void function ServerToClient_ForcedSpawn_WarningSystem_DisplayWarningAnnouncement( bool beingInvaded )
+{
+	if ( beingInvaded )
+	{
+		string message = Localize( "#DROP_ZONES_WARNING_ENEMY_INVASION" )
+
+		AnnouncementMessageSweep( GetLocalViewPlayer(),  message , "", GetKeyColor( COLORID_COLORSWATCH_RED ), $"", "menu_deny", tuning.zone_invasion_warning_duration )
+		
+	}
+	else
+	{
+		string poiName = "ENEMY POI" 
+		string message = Localize( "#DROP_ZONES_WARNING_FRIENDLY_INVASION", poiName )
+
+		AnnouncementMessageSweep( GetLocalViewPlayer(),  message , "", GetKeyColor( COLORID_DANGER_WARNING_ORANGE ), $"", "menu_deny", tuning.zone_invasion_warning_duration )
+		
+	}
+}
+
+
+
+void function ServerToClient_SimulatePreviewCamera( vector targetPos, bool hybridCameraConfig, float fov, float time )
+{
+#if DEV
+	entity player = GetLocalViewPlayer()
+	thread DEV_SimulatePreviewCamera_Thread( player, targetPos, hybridCameraConfig, fov, time  )
+#endif
+}
+
+
+#if DEV
+void function DEV_SimulatePreviewCamera_Thread( entity player, vector targetPos, bool hybridCameraConfig, float fov, float time )
+{
+	if ( !IsValid( player ) )
+		return
+
+	player.Signal( "EndSimulatePreviewCamera" )
+	player.EndSignal( "EndSimulatePreviewCamera" )
+
+	entity camera      = CreateClientSidePointCamera( targetPos, <0, 0, 0>, fov )
+
+	file.playerPOIPreviewCamera = camera
+
+	OnThreadEnd(
+		function() : ( player, camera )
+		{
+			if ( IsValid( player ) )
+			{
+				player.ClearMenuCameraEntity()
+			}
+			if ( IsValid( camera ) )
+			{
+				camera.Destroy()
+			}
+		}
+	)
+
+	OptimizeInitialCameraViewPosition( targetPos, hybridCameraConfig, fov )
+
+	player.SetMenuCameraEntity( camera )
+
+	vector targetToCamera = camera.GetOrigin() - targetPos
+	float dist = Length( targetToCamera )
+	float sin = targetToCamera.z / dist
+	float angle = asin( sin ) * RAD_TO_DEG
+	printt( "[DropZones] target pos:", targetPos, "cameraPos:", camera.GetOrigin(), "cameraAngles:", camera.GetAngles(), "cameraFOV:", fov )
+	printt( "[DropZones] target to camera dist:", dist, "angle", angle )
+
+	wait time
+}
+#endif
+
+                                

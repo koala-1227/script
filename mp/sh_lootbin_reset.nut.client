@@ -1,0 +1,3071 @@
+
+
+global function LootBinReset_Enabled
+global function LootBinReset_AllowPerkBinReuse_Enabled
+global function MythicBin_ExtendedUseSuccess
+global function MythicBin_OnUse
+global function LootBinReset_UseUniqueSpawnSources_Enabled
+global function LootBinReset_RegisterSystem
+global function LootBinReset_IsLootBinSpecial
+global function LootBinReset_IsLootBin_GoldBin
+global function LootBinReset_IsLootBin_Mythic
+global function LootBinReset_MythicBins_Enabled
+global function LootBinReset_MythicBins_MaxMythicBins
+global function LootBinReset_LootBinsHaveReset
+global function LootBinReset_RecentlyOpened_BinsEjectLoot_Enabled
+global function LootBinReset_RecentlyOpened_TimeThreshold
+global function LootBinReset_MythicBins_HaveUniqueInteractPrompt
+global function LootBinReset_Announce_OnResetTrigger_Enabled
+global function LootBinReset_Announce_Warning_NearTrigger_Enabled
+global function LootBinReset_Announce_Warning_HUD_OnTriggerRoundStart_Enabled
+global function Sh_Lootbin_Reset_Init
+global function LootBinReset_PVAR_LootBinResetType
+
+
+const string MYTHIC_BIN_DENY_SFX = "menu_deny"
+global const string MYTHIC_BIN_SKIN_NAME = "Reroll_Mythic"
+global const string GOLD_BIN_SKIN_NAME = "Reroll_Gold"
+global const string REGULAR_BIN_RESET_SKIN_NAME = "Default_Alt_Emissive"
+global const string SUPPORT_BIN_RESET_SKIN_NAME = "Secret_Alt_Emissive"
+global const string ASSAULT_BIN_RESET_SKIN_NAME = "Munitions_Alt_Emissive"
+
+const string LOOTBIN_RESET_TRIGGERED_NETBOOL = "lootbins_has_reset"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const BIN_RESET_FX = $"P_LBReset_CP"
+const vector COLOR_GOLD_BIN_VFX = <255, 190, 70>
+const vector COLOR_MYTHIC_BIN_VFX = <232, 53, 86>
+const float BIN_RESET_OPENED_BIN_UPDATE_TIME_OFFSET = 1.4
+
+global const float MYTHIC_BIN_ICON_UP_OFFSET = 35
+const float MYTHIC_BIN_PING_DISTANCE = 2500
+const int LOOTBIN_RESET_MINIMUM_LOOT_TIER = 2
+
+const string MYTHIC_BIN_OPENING_LOOP_SFX = "Lootbin_Mythic_Unlock_Loop"
+
+const string FUNCNAME_LootBinReset_Warning_Announcement = "ServertoClient_LootBinReset_Warning_Announcement"
+const string FUNCNAME_LootBinReset_Warning_HUD_Indicator_Set = "ServertoClient_LootBinReset_Warning_HUD_Indicator_Set" 
+const string FUNCNAME_LootBinReset_Warning_MythicBinLocations_Revealed = "ServerToClient_MessageToPlayer_MythicBin_LocationsRevealed"
+
+const string FUNCNAME_RegisterMythicBinEnt = "LootBinReset_ServerToClient_SetMythicBinEnt"
+const string FUNCNAME_RegisterGoldBinEnts = "ServerToClient_Set_GoldBinEnts"
+
+const string FUNCNAME_Ping_MythicBinFromMap = "LootBinReset_ClientToServer_Ping_MythicBinFromMap"
+
+global enum eBinResetingState
+{
+	INVALID,
+	OPEN,
+	CLOSED,
+	CLOSING,
+	EJECTING,
+	EJECTED
+}
+
+
+global function ServertoClient_LootBinAnnouncement
+global function ServerCallback_MythicBin_Client_MythicBinSpawned
+global function ServerCallback_UpdateBinPulse
+
+global function ServertoClient_LootBinReset_Warning_Announcement
+global function ServertoClient_LootBinReset_Warning_HUD_Indicator_Set
+global function ServerToClient_MessageToPlayer_MythicBin_LocationsRevealed
+
+global function LootBinReset_ServerToClient_SetMythicBinEnt
+global function ServerToClient_MythicBinOpened
+global function ServerToClient_Set_GoldBinEnts
+
+global function LootBinReset_MythicBins_BinPinged
+global function LootBinReset_MythicBins_GetHighlightedBin
+global function LootBinReset_MythicBins_UpdateHighlightedBinIcon
+
+global const asset MYTHIC_BIN_ICON = $"rui/hud/gametype_icons/survival/bin_inworld_mythic"  
+const asset MYTHIC_BIN_MINIMAP_ICON = $"rui/hud/gametype_icons/survival/bin_inworld_mythic_minimap"
+
+
+
+
+
+global enum eLootBinResetSystemType
+{
+	NONE,
+	SINGLE_ROUND,
+
+	MULTI_ROUND,
+
+}
+
+global struct LootbinResetSystem
+{
+	int systemType = eLootBinResetSystemType.NONE
+	int functionref(int) GetMinResetLootTier
+}
+
+struct
+{
+	LootbinResetSystem& sys
+	bool			lootbinSystemInitialized
+	bool 			lootbinResetTriggered
+	array< entity > potentialMythicBinEnts
+	array< entity >		  	mythicBinEnts
+	array< entity >			mythicBinMinimapEnts
+
+	array< entity > goldBinEnts
+	table< entity, bool > potentialGoldBins
+	array< string > blockedWeaponsForGoldUpgrades
+
+	array< entity > mythicBinPingedEnts
+	table< entity, bool > mythicBinWorldspaceIconVisibility
+	entity highlightedPingEnt
+	table< entity, var > binToWorldSpaceRui
+
+
+
+
+
+
+
+} file
+
+
+
+struct
+{
+	
+	bool lootBinResetEnabled = false
+	int deathfieldTriggerStage = 1
+
+	
+	bool useUniqueSpawnSources = true
+
+	
+	bool allowPerkBinReuse = true
+	bool allowHealthItemUpgrades = true
+	bool allowWeaponItemUpgrades = false
+	bool recentlyOpenedBinsEjectLoot = true
+	float recentlyOpenedTimeThreshold = 10.0
+	bool playerAdjacentBinsEjectLoot = true
+	float playerAdjacentDistanceThreshold = ( 20 * METERS_TO_INCHES )
+	int maxLootbinsClosedPerFrame = 10
+	bool allowMinimimLootTierUpgrade = false
+
+	
+	bool mythicBinEnabled = false
+	bool mythicBinRewardDynamicLoot = true
+	int mythicBinMinItemCount = 6
+	int mythicBinMythicItemCount = 1
+	bool mythicBinGuaranteeBigHeal = true
+	float mythicBinChannelDuration = 10.0
+	bool mythicBinAwardEvoOnOpen = true
+	bool mythicBinConfettiEnabled = true
+	int mythicBinConfettiCount = 6
+	int mythicBinConfettiSwitchThreshold = 3
+	bool mythicBinUniqueInteractPrompt = true
+	bool mythicBinPreselectionEnabled = true
+	bool mythicBinMessagedPreSpawn = true
+	bool mythicBinMapFeatureEnabled = true
+	int mythicBinCount = 1
+	float mythicBinExclusionDistance = ( 265 * METERS_TO_INCHES )
+	string mythicBinMythicLootGroup = "crate_weapons_midgame"  
+
+
+	
+	bool goldBinsEnabled = false
+	bool goldBinsUseSmartLoot = true
+	int goldBinsMaxCount = 5
+	float goldBinExclusionDistance = 5500 
+	bool limitGoldOutput = true
+	bool upgradeGoldLootToMinimum = false
+	int maxGoldItemsPerOpen = 1
+	int goldBinsItemCount = 6
+	string goldBinItemFallbackLootGroup = "top_tier_inventory"
+
+
+
+	
+	bool pingFromMapEnabled = true
+	bool announcerVOEnabled = true
+	bool announceOnResetEnabled = false
+	bool announceNearTriggerEnabled = false
+	float announceWarningTimeOffset = 50.0
+	bool warningHUDOnTriggerEnabled = true
+	bool announceHUDUseLongText = false
+	bool reskinUsedPerkBinsEnabled = true
+
+} tuning
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________INIT___________________________()
+{}
+#endif
+
+void function Sh_Lootbin_Reset_Init()
+{
+	
+	
+	RegisterSignal( "LootBinResetStarted" )
+
+	bool successfulInit = false
+	successfulInit = Sh_Lootbin_Reset_SingleRound_Init()
+
+	if ( !successfulInit )
+	{
+		successfulInit = Sh_Lootbin_Reset_MultiRound_Init()
+	}
+
+
+	file.lootbinSystemInitialized = true
+	if ( !successfulInit ) {
+		return
+	}
+
+	Sh_Lootbin_Reset_RegisterNetworking()
+
+	PrecacheParticleSystem( BIN_RESET_FX )
+
+	RegisterSignal( "OpenMythicBin" )
+	RegisterSignal( "HaltMythicBinOpening" )
+	RegisterSignal( "MythicBinPinged" )
+	RegisterSignal( "MythicBinPingDestroyed" )
+
+
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.MYTHIC_BIN_WARNING,
+			MINIMAP_OBJ_AREA_RUI, void function( entity ent, var rui ) {
+				SetupMapRui_MythincBins_SelectedBinLocation( ent, rui, false )
+			},
+			FULLMAP_OBJECTIVE_AREA_RUI, void function( entity ent, var rui ) {
+				SetupMapRui_MythincBins_SelectedBinLocation( ent, rui, true )
+			}
+		)
+
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.MYTHIC_BIN, MINIMAP_OBJECT_RUI, MinimapPackage_MythicBin, FULLMAP_OBJECT_RUI, FullmapPackage_MythicBin )
+
+		if ( LootBinReset_PingFromMap_Enabled() )
+			AddCallback_OnFindFullMapAimEntity( GetMythicBinUnderAim, PingMythicBinUnderAim )
+
+		if ( LootBinReset_SupportedMode_ForHUD() )
+			AddOnSpectatorTargetChangedCallback( OnSpectateTargetChanged )
+
+
+
+
+
+
+
+
+	Sh_Lootbin_Reset_NetvarsInit()
+}
+
+void function LootBinReset_RegisterSystem( LootbinResetSystem system )
+{
+	Assert( system.systemType != eLootBinResetSystemType.NONE, "Trying to register a blank Lootbin Reset system!" )
+
+	printt("Registered Lootbin Reset System", GetEnumString( "eLootBinResetSystemType", system.systemType ) )
+
+	file.sys = system
+}
+
+void function Sh_Lootbin_Reset_RegisterNetworking()
+{
+	Remote_RegisterClientFunction( "ServertoClient_LootBinAnnouncement" )
+	Remote_RegisterClientFunction( FUNCNAME_LootBinReset_Warning_Announcement, "float", 0.0, 32000.0, 32 )
+	Remote_RegisterClientFunction( FUNCNAME_LootBinReset_Warning_HUD_Indicator_Set, "bool" )
+	Remote_RegisterClientFunction( FUNCNAME_LootBinReset_Warning_MythicBinLocations_Revealed )
+	Remote_RegisterClientFunction( "ServerCallback_MythicBin_Client_MythicBinSpawned", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_MythicBinOpened", "entity" )
+
+	Remote_RegisterClientFunction( FUNCNAME_RegisterMythicBinEnt, "entity" )
+	Remote_RegisterClientFunction( FUNCNAME_RegisterGoldBinEnts, "entity" )
+
+	Remote_RegisterServerFunction( FUNCNAME_Ping_MythicBinFromMap, "typed_entity", "prop_dynamic" )
+}
+
+void function Sh_Lootbin_Reset_NetvarsInit()
+{
+	RegisterNetworkedVariable( LOOTBIN_RESET_TRIGGERED_NETBOOL, SNDC_GLOBAL, SNVT_BOOL, false )
+
+
+		RegisterNetVarBoolChangeCallback( LOOTBIN_RESET_TRIGGERED_NETBOOL, LootBinReset_ResetStateChanged )
+
+}
+
+void function Init_BlockedGoldWeaponRegistry()
+{
+	string blockedGoldWeaponStr = GetCurrentPlaylistVarString( "lootbin_reset_blocked_gold_weapon_list", "" )
+	array< string > blockedGoldKeyValueStrs = GetTrimmedSplitString( blockedGoldWeaponStr, " " )
+
+	if ( blockedGoldKeyValueStrs.len() > 0 )
+	{
+		file.blockedWeaponsForGoldUpgrades = blockedGoldKeyValueStrs
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SINGLE_ROUND___________________________()
+{}
+#endif
+
+void function Init_SingleRoundTuningVars()
+{
+	Init_BlockedGoldWeaponRegistry()
+
+	tuning.lootBinResetEnabled = LootBinReset_SingleRound_Enabled()
+
+	RegisterTuningStruct( "tuning", "lootbin_reset_" )
+}
+
+bool function Sh_Lootbin_Reset_SingleRound_Init()
+{
+	Init_SingleRoundTuningVars()
+
+	if ( !LootBinReset_SingleRound_Enabled() )
+		return false
+
+	LootBinReset_RegisterSingleRoundSystem()
+
+	return true
+}
+
+void function LootBinReset_RegisterSingleRoundSystem()
+{
+	LootbinResetSystem system
+	system.systemType = eLootBinResetSystemType.SINGLE_ROUND
+	system.GetMinResetLootTier = int function( int deathStage ) : () { return LOOTBIN_RESET_MINIMUM_LOOT_TIER }
+
+
+
+
+
+	LootBinReset_RegisterSystem( system )
+}
+
+bool function LootBinReset_SingleRound_Enabled()
+{
+	return LootBinReset_PVAR_LootBinResetType() == eLootBinResetSystemType.SINGLE_ROUND
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SERVER___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________MYTHIC_BINS___________________________()
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function MythicBin_OnUse( entity lootbin, entity player, int useInputFlags )
+{
+	if ( !IsValid( player ) )
+	{
+		return
+	}
+
+	if ( IsBitFlagSet( useInputFlags, USE_INPUT_LONG ) )
+	{
+		ExtendedUseSettings settings
+		
+		
+		settings.duration = LootBinReset_MythicBins_ChannelDuration()
+		settings.successFunc = MythicBin_ExtendedUseSuccess
+		settings.movementDisable = true
+
+
+
+
+
+
+
+
+			
+			
+			settings.hint = Localize ( "#MYTHIC_BIN_ACTIVATE_HINT" )
+
+
+		thread ExtendedUse( lootbin, player, settings )
+	}
+	else
+	{
+
+
+
+	}
+}
+
+void function MythicBin_UseThink_Thread( entity lootbin, entity player )
+{
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function MythicBin_ExtendedUseSuccess( entity lootbin, entity player, ExtendedUseSettings settings )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( !IsValid( lootbin ) )
+		return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	lootbin.Signal( "OpenMythicBin" )
+	lootbin.Signal( "HideWorldSpaceIconMinimapVisibility" )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________GOLD_BINS___________________________()
+
+{}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CLIENT___________________________()
+{}
+#endif
+
+
+void function LootBinReset_ResetStateChanged( entity player, bool newVal )
+{
+	if ( file.lootbinResetTriggered != newVal )
+		file.lootbinResetTriggered = newVal
+}
+
+
+void function PlayWarningSFX_Thread()
+{
+	string audioRef = "LootBin_UI_InGame_LootBinsReset"
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), audioRef )
+}
+
+void function ServertoClient_LootBinAnnouncement()
+{
+	string message         = Localize( "#LOOTBIN_REFRESH_ANNOUNCEMENT_TITLE" )
+
+	if( Arsenals_Enabled())
+		message         = Localize( "#HUD_LOOT_STATION_RESET" )
+
+	entity localViewPlayer = GetLocalViewPlayer()
+
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	mainBanner.mainText = message
+
+	vector backgroundColor = <0, 0, 0>
+	vector frameColor = COLOR_WHITE / 255.0
+
+
+	if ( LootBinReset_MultiRound_Enabled() )
+	{
+		backgroundColor = GetKeyColor( COLORID_DIM_LOOT_TIER0, LootBinReset_GetMinLootTierPerRound( SURVIVAL_GetCurrentDeathFieldStage() - 1 ) ) / 255.0
+		frameColor = GetKeyColor( COLORID_LOOT_TIER0, LootBinReset_GetMinLootTierPerRound( SURVIVAL_GetCurrentDeathFieldStage() - 1 ) ) / 255.0
+	}
+
+
+	mainBanner.backgroundColor = backgroundColor
+	mainBanner.frameColor = frameColor
+	mainBanner.backgroundAlpha = 0.8
+	mainBanner.textureColor = mainBanner.frameColor
+	mainBanner.soundAliases.append( "LootBin_UI_InGame_LootBinsReset" )
+
+	if ( LootBinReset_Announce_VO_Enabled() )
+	{
+		table< int, bool > disabledRounds
+		string disabledRoundsString = GetCurrentPlaylistVarString( "lootbin_reset_announce_vo_disabled_rounds", "" )
+
+		if ( disabledRoundsString.len() > 0 )
+		{
+			array<string> trimmedSplitString = GetTrimmedSplitString( disabledRoundsString , " " )
+			foreach ( string roundString in trimmedSplitString )
+			{
+				int round = int( roundString )
+				if ( !( round in disabledRounds ) )
+				{
+					disabledRounds[round] <- true
+				}
+			}
+		}
+
+		int currentRound = SURVIVAL_GetCurrentDeathFieldStage()
+		if ( !( currentRound in disabledRounds ) )
+		{
+			mainBanner.speakerDialogueLines.append( PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.LOOTBIN_RESET ) )
+		}
+	}
+
+	if ( MinimapAnnouncements_IsEnabled() )
+	{
+		
+		if ( Arsenals_Enabled() && GetCurrentPlaylistVarBool( "secondary_announcement_location_loot_short", false ) )
+		{
+			MapAnnouncementItem mapAnnouncementItem
+			mapAnnouncementItem.message = Localize( "#HUD_LOOT_RESET" )
+			mapAnnouncementItem.colorIn = < 255, 255, 255 > / 255.0
+			mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_loot_reset"
+			mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_loot_reset_shadow"
+			mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+			mapAnnouncementItem.speakerDialogueLines = mainBanner.speakerDialogueLines
+
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+		} else if ( Arsenals_Enabled() && GetCurrentPlaylistVarBool( "secondary_announcement_location_loot_split", true ) )
+		{
+			MapAnnouncementItem mapAnnouncementItem1
+			mapAnnouncementItem1.message = Localize( "#HUD_LOOT_BINS_RESET" )
+			mapAnnouncementItem1.colorIn = < 255, 255, 255 > / 255.0
+			mapAnnouncementItem1.icon = $"rui/hud/small_announcements/icon_loot_reset"
+			mapAnnouncementItem1.iconShadow = $"rui/hud/small_announcements/icon_loot_reset_shadow"
+			mapAnnouncementItem1.priority = eHudNotificationQueuePriority.LOW
+			mapAnnouncementItem1.speakerDialogueLines = mainBanner.speakerDialogueLines
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem1 )
+
+			MapAnnouncementItem mapAnnouncementItem2
+			mapAnnouncementItem2.message = Localize( "#HUD_LOOT_ARSENALS_RESET" )
+			mapAnnouncementItem2.colorIn = < 255, 255, 255 > / 255.0
+			mapAnnouncementItem2.icon = $"rui/hud/small_announcements/icon_loot_reset"
+			mapAnnouncementItem2.iconShadow = $"rui/hud/small_announcements/icon_loot_reset_shadow"
+			mapAnnouncementItem2.priority = eHudNotificationQueuePriority.LOW
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem2 )
+		}
+		else
+		{
+			MapAnnouncementItem mapAnnouncementItem
+			mapAnnouncementItem.message = message
+			mapAnnouncementItem.colorIn = mainBanner.frameColor
+			mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_loot_upgraded"
+			mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_loot_upgraded_shadow"
+			mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+			mapAnnouncementItem.speakerDialogueLines = mainBanner.speakerDialogueLines
+
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+		}
+		return
+	}
+
+	CenterAnnouncements_QueueItem( mainBanner, ePersistenceContext.GLOBAL )
+}
+
+void function ServertoClient_LootBinReset_Warning_Announcement( float duration )
+{
+	thread ServertoClient_LootBinReset_Warning_Announcement_Internal_Thread( duration )
+}
+
+void function ServertoClient_LootBinReset_Warning_HUD_Indicator_Set( bool reveal )
+{
+	LootBinReset_Warning_HUD_Indicator_Set( reveal )
+}
+
+void function ServertoClient_LootBinReset_Warning_Announcement_Internal_Thread( float duration )
+{
+	float timeToWait
+
+	if ( LootBinReset_Announce_Warning_NearTrigger_TimeOffset() > 0 )
+		timeToWait = duration - LootBinReset_Announce_Warning_NearTrigger_TimeOffset()
+	else
+		timeToWait = 20.0
+
+	wait timeToWait
+
+	string message         = Localize( "#LOOTBIN_REFRESH_WARNING_ANNOUNCEMENT" )
+
+	if( Arsenals_Enabled())
+		message         = Localize( "#HUD_LOOT_STATION_RESET" )
+
+	entity localViewPlayer = GetLocalViewPlayer()
+
+	AnnouncementData announcement  = Announcement_Create( message )
+	announcement.useColorOnSubtext = true
+	announcement.announcementStyle = ANNOUNCEMENT_STYLE_GENERIC_WARNING
+	announcement.duration          = 5.0
+
+	AnnouncementFromClass( localViewPlayer, announcement )
+
+	thread PlayWarningSFX_Thread()
+}
+
+void function ServerToClient_Set_GoldBinEnts( entity lootBin )
+{
+	if ( !IsValid( lootBin ) )
+		return
+
+	file.goldBinEnts.append( lootBin )
+}
+
+void function ServerToClient_MythicBinOpened( entity lootbin )
+{
+	if ( IsValid( lootbin ) )
+	{
+		lootbin.Signal( "OpenMythicBin" )
+		lootbin.Signal( "HideWorldSpaceIconMinimapVisibility" )
+	}
+}
+
+void function ServerCallback_MythicBin_Client_MythicBinSpawned( entity binFromServer )
+{
+	if ( !IsValid( binFromServer ) )
+		return
+
+	AddCallback_OnUseEntity_ClientServer( binFromServer, MythicBin_OnUse )
+
+	WorldspaceIconData iconSettings
+	iconSettings.ent = binFromServer
+	iconSettings.color = SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 )
+	iconSettings.imageAsset = MYTHIC_BIN_ICON
+	iconSettings.upOffset = MYTHIC_BIN_ICON_UP_OFFSET
+	iconSettings.descriptiveText = "#PROMPT_PING_RESET_BIN_MYTHIC_SHORT"
+	iconSettings.pingType = ePingType.RESET_BIN_MYTHIC
+
+	SetupWorldspaceIcon( iconSettings )
+}
+
+void function ServerCallback_UpdateBinPulse( entity binFromServer )
+{
+	binFromServer.kv.rendercolor = "255 255 255"
+}
+
+void function LootBinReset_Warning_HUD_Indicator_Set( bool reveal )
+{
+	if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) || GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_TRAINING ) )
+		return
+
+	string message
+	if ( reveal )
+	{
+		if ( LootBinReset_Announce_Warning_HudIndicator_UseLongText() )
+		{
+
+			if( Arsenals_Enabled())
+				message = Localize( "#HUD_LOOT_STATION_RESET" )
+			else
+
+				message = Localize( "#LOOTBIN_REFRESH_HUD_WARNING_MESSAGE_LONG" )
+		}
+		else
+		{
+
+			if( Arsenals_Enabled())
+				message = Localize( "#HUD_LOOT_STATION_RESET" )
+			else
+
+				message = Localize( "#LOOTBIN_REFRESH_HUD_WARNING_MESSAGE_SHORT" )
+		}
+
+	}
+
+	NextCircleClosingStatusChanged( message )
+}
+
+var function Bin_CreateClientSideHUDMarker_thread ( asset hudImage, entity lootbin, float upOffset, bool trackPosition )
+{
+	lootbin.EndSignal( "OnDestroy" )
+	lootbin.EndSignal( "OnDeath" )
+	lootbin.EndSignal( "OpenMythicBin" )
+
+	entity localViewPlayer = GetLocalViewPlayer()
+	vector pos             = lootbin.GetOrigin()
+	var rui                = CreateFullscreenRui( PERK_IN_WORLD_HUD_OBJECT, RuiCalculateDistanceSortKey( localViewPlayer.EyePosition(), pos ) )
+
+	RuiSetImage( rui, "beaconImage", hudImage )
+	printt( "Mythic Bin Color: " + SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 ) )
+	RuiSetFloat3( rui, "iconColor", SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 ) )
+	RuiSetGameTime( rui, "startTime", Time() )
+	if ( trackPosition )
+	{
+		RuiTrackFloat3( rui, "pos", lootbin, RUI_TRACK_ABSORIGIN_FOLLOW  )
+	}
+	else
+	{
+		RuiSetFloat3( rui, "pos", pos )
+	}
+	RuiSetFloat( rui, "upOffset", upOffset )
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+	RuiSetBool( rui, "isVisible", true )
+
+	file.binToWorldSpaceRui[ lootbin ] <- rui
+
+	thread LootBinReset_WorldspaceUseIconThink_Thread( rui, lootbin )
+
+	OnThreadEnd(
+		function() : ( rui )
+		{
+			if ( IsValid( rui ) )
+				RuiSetBool( rui, "isVisible", false )
+		}
+	)
+
+	WaitForever()
+}
+
+void function LootBinReset_WorldspaceUseIconThink_Thread( var rui, entity ent )
+{
+	Assert( IsNewThread() )
+	ent.EndSignal( "OnDestroy", "OpenMythicBin")
+	ent.EndSignal( "OnDeath" )
+
+	RuiSetString( rui, "descriptiveTextLocString", "#PROMPT_PING_RESET_BIN_MYTHIC_SHORT" )
+	file.mythicBinWorldspaceIconVisibility[ent] <- true
+	RuiSetBool( rui, "isVisible", true )
+	thread MythicBin_ListenForBinPinged( ent, rui )
+
+	OnThreadEnd( void function() : ( ent, rui ) {
+		RuiDestroyIfAlive( rui )
+		if( ent in file.binToWorldSpaceRui )
+			delete file.binToWorldSpaceRui[ent]
+		if( ent in file.mythicBinWorldspaceIconVisibility )
+			delete file.mythicBinWorldspaceIconVisibility[ent]
+		if( file.highlightedPingEnt == ent )
+		{
+			file.highlightedPingEnt = null
+		}
+	} )
+
+	WaitForever()
+}
+
+void function MythicBin_ListenForBinPinged( entity prop, var rui )
+{
+	prop.EndSignal( "OnDestroy", "OpenMythicBin")
+
+	while( true )
+	{
+		if( !file.mythicBinPingedEnts.contains( prop ) )
+			prop.WaitSignal( "MythicBinPinged" )
+
+		file.mythicBinWorldspaceIconVisibility[ prop ] <- false
+		RuiSetBool( rui, "isVisible", false )
+		prop.WaitSignal( "MythicBinPingDestroyed" )
+		file.mythicBinWorldspaceIconVisibility[prop] <- true
+		RuiSetBool( rui, "isVisible", true )
+	}
+}
+
+void function LootBinReset_MythicBins_BinPinged( entity prop, entity wp )
+{
+	if ( !LootBinReset_Enabled() )
+		return
+
+	prop.Signal( "MythicBinPinged" )
+	file.mythicBinPingedEnts.append( prop )
+	wp.WaitSignal( "OnDestroy" )
+	file.mythicBinPingedEnts.fastremovebyvalue( prop )
+	prop.Signal( "MythicBinPingDestroyed" )
+}
+
+void function LootBinReset_SetHighlightedBinIcon( entity ent )
+{
+	if( file.highlightedPingEnt == ent )
+		return
+
+	if( IsValid( file.highlightedPingEnt ) )
+	{
+		RuiSetBool( file.binToWorldSpaceRui[file.highlightedPingEnt], "isHighlighted", false )
+	}
+
+	file.highlightedPingEnt = ent
+
+	if( IsValid( file.highlightedPingEnt ) )
+	{
+		RuiSetBool( file.binToWorldSpaceRui[file.highlightedPingEnt], "isHighlighted", true )
+	}
+}
+
+entity function LootBinReset_MythicBins_GetHighlightedBin()
+{
+	return file.highlightedPingEnt
+}
+
+bool function LootBinReset_MythicBins_UpdateHighlightedBinIcon()
+{
+	
+	
+
+	entity player = GetLocalClientPlayer()
+	vector playerEyePos = player.EyePosition()
+	vector viewVector = player.GetViewVector()
+	float minDot = deg_cos( 3.0 )
+	float bestDot = 0
+	entity bestEnt = null
+
+	array<entity> bins
+	foreach( bin, rui in file.binToWorldSpaceRui )
+	{
+		bins.append( bin )
+	}
+
+	bins = GetEntitiesFromArrayNearPos( bins, playerEyePos, MYTHIC_BIN_PING_DISTANCE )
+
+	foreach( entity ent in bins )
+	{
+		if( !(ent in file.mythicBinWorldspaceIconVisibility) || !file.mythicBinWorldspaceIconVisibility[ent] || !( ent in file.binToWorldSpaceRui ) )
+			continue
+
+		vector iconPos
+		iconPos = ent.GetOrigin() + <0,0,EVO_HARVESTER_ICON_UP_OFFSET>
+		vector eyeToIcon = iconPos - playerEyePos
+		vector eyeToIconNormalized = Normalize( eyeToIcon )
+		float dot = DotProduct( eyeToIconNormalized, viewVector )
+		if( dot < minDot || dot < bestDot )
+			continue
+
+		bestDot = dot
+		bestEnt = ent
+	}
+
+
+	LootBinReset_SetHighlightedBinIcon( bestEnt )
+	return bestEnt != null
+}
+
+void function LootBinReset_ServerToClient_SetMythicBinEnt( entity lootBin )
+{
+	if ( !IsValid( lootBin ) )
+		return
+
+	file.mythicBinEnts.append( lootBin )
+}
+
+void function MinimapPackage_MythicBin( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", MYTHIC_BIN_ICON ) 
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetFloat3( rui, "iconColor", SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 ) )
+
+	RuiSetBool( rui, "useTeamColor", false )
+
+	RuiSetImage( rui, "smallIcon", MYTHIC_BIN_MINIMAP_ICON )
+	RuiSetBool( rui, "hasSmallIcon", true )
+
+}
+
+void function FullmapPackage_MythicBin( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", MYTHIC_BIN_ICON )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetFloat3( rui, "iconColor", SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 ) )
+
+	RuiSetBool( rui, "useTeamColor", false )
+
+	RuiSetImage( rui, "smallIcon", MYTHIC_BIN_MINIMAP_ICON ) 
+	RuiSetBool( rui, "hasSmallIcon", true )
+}
+
+void function OnSpectateTargetChanged( entity spectatingPlayer, entity oldSpectatorTarget, entity newSpectatorTarget )
+{
+	int deathStage   = SURVIVAL_GetCurrentDeathFieldStage()
+	int triggerStage = LootBinReset_DeathstageCloseTrigger()
+
+	if ( LootBinReset_Announce_Warning_HUD_OnTriggerRoundStart_Enabled() )
+	{
+		if ( deathStage == triggerStage )
+		{
+			if ( LootBinReset_Announce_Warning_HUD_OnTriggerRoundStart_Enabled() )
+			{
+				LootBinReset_Warning_HUD_Indicator_Set( true )
+			}
+		}
+		else
+		{
+			if ( LootBinReset_Announce_Warning_HUD_OnTriggerRoundStart_Enabled() )
+			{
+				LootBinReset_Warning_HUD_Indicator_Set( false )
+			}
+		}
+	}
+}
+
+entity function GetMythicBinUnderAim( vector worldPos, float worldRange )
+{
+	float closestDistSqr        = FLT_MAX
+	float worldRangeSqr = worldRange * worldRange
+	float extendedRange = worldRange * 2
+	entity closestEnt = null
+
+	entity binEnt
+
+	if ( MapPing_Modify_DistanceCheck_Enabled() )
+	{
+		float modifier = MapPing_DistanceCheck_GetModifier()
+
+		if ( worldRange >= MapPing_DistanceCheck_GetDistanceRange() )
+			modifier *= 0.5
+
+		worldRangeSqr = ( worldRange * modifier ) * ( worldRange * modifier )
+	}
+
+	foreach ( mythicBin in file.mythicBinEnts )
+	{
+		if ( !IsValid( mythicBin ) )
+			continue
+
+		vector objOrigin = mythicBin.GetOrigin()
+
+		float distSqr = Distance2DSqr( objOrigin, worldPos )
+		if ( distSqr < worldRangeSqr && distSqr < closestDistSqr  )
+		{
+			closestDistSqr = distSqr
+			closestEnt     = mythicBin
+		}
+	}
+
+	if ( !IsValid( closestEnt ) )
+	{
+		return null
+	}
+
+	return closestEnt
+}
+
+bool function PingMythicBinUnderAim( entity binEnt )
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return false
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return false
+
+	if ( LootBinReset_PingFromMap_Enabled() )
+		Remote_ServerCallFunction( FUNCNAME_Ping_MythicBinFromMap, binEnt )
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+
+	return true
+}
+
+void function SetupMapRui_MythincBins_SelectedBinLocation( entity ent, var rui, bool isFullMap )
+{
+	RuiSetAsset( rui, "areaImage", $"rui/hud/common/radial_gradiant" )
+	RuiSetImage( rui, "centerImage", $"" )
+	RuiSetImage( rui, "clampedImage", $"" )
+	RuiSetFloat( rui, "areaImageAlpha", 0.95 )
+
+	string areaColorArgName = "objColor"
+	if ( !isFullMap )
+	{
+		RuiSetBool( rui, "useOverrideColor", true )
+		areaColorArgName = "overrideColor"
+	}
+
+	RuiSetColorAlpha( rui, areaColorArgName, SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 ), 1 )
+
+	RuiSetFloat( rui, "objectRadius", 30 * METERS_TO_INCHES / 16384 )
+}
+
+void function ServerToClient_MessageToPlayer_MythicBin_LocationsRevealed()
+{
+	if ( LootBinReset_MythicBins_MapFeature_Enabled() )
+	{
+		SetMapFeatureItem( 1010, Localize( "#MYTHIC_BIN_MAP_FEATURE_TITLE" ), Localize( "#MYTHIC_BIN_MAP_FEATURE_DESCRIPTION" ), MYTHIC_BIN_ICON, SrgbToLinear( GetKeyColor( COLORID_MYTHIC_BIN_ICON ) / 255.0 ) )
+	}
+
+	Obituary_Print_Localized( Localize( "#MYTHIC_BIN_LOCATIONS_REVEALED_WARNING" ), GetKeyColor( COLORID_MYTHIC_BIN_ICON ) )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PLAYLISTVARS___________________________()
+{}
+#endif
+
+bool function LootBinReset_Enabled()
+{
+	if ( file.lootbinSystemInitialized )
+		return ( file.sys.systemType != eLootBinResetSystemType.NONE )
+
+	return ( LootBinReset_PVAR_LootBinResetType() != eLootBinResetSystemType.NONE )
+}
+
+int function LootBinReset_PVAR_LootBinResetType()
+{
+	if ( file.lootbinSystemInitialized )
+		return file.sys.systemType
+
+	return eLootBinResetSystemType[ GetCurrentPlaylistVarString( "lootbin_reset_type", "NONE" ) ]
+}
+
+int function LootBinReset_DeathstageCloseTrigger()
+{
+	return tuning.deathfieldTriggerStage 
+}
+
+bool function LootBinReset_UseUniqueSpawnSources_Enabled()
+{
+	return tuning.useUniqueSpawnSources 
+}
+
+bool function LootBinReset_AllowPerkBinReuse_Enabled()
+{
+	return tuning.allowPerkBinReuse
+}
+
+bool function LootBinReset_AllowHealthItemUpgrades_Enabled()
+{
+	return tuning.allowHealthItemUpgrades
+}
+
+bool function LootBinReset_AllowWeaponItemUpgrades_Enabled()
+{
+	return tuning.allowWeaponItemUpgrades
+}
+
+bool function LootBinReset_RecentlyOpened_BinsEjectLoot_Enabled()
+{
+	return tuning.recentlyOpenedBinsEjectLoot
+}
+
+float function LootBinReset_RecentlyOpened_TimeThreshold()
+{
+	return tuning.recentlyOpenedTimeThreshold
+}
+
+bool function LootBinReset_PlayerAdjacent_BinsEjectLoot_Enabled()
+{
+	return tuning.playerAdjacentBinsEjectLoot
+}
+
+bool function LootBinReset_AllowMinimimLootTierUpgrade_Enabled()
+{
+	return tuning.allowMinimimLootTierUpgrade
+}
+
+float function LootBinReset_PlayerAdjacent_DistanceThreshold()
+{
+	return tuning.playerAdjacentDistanceThreshold
+}
+
+bool function LootBinReset_PingFromMap_Enabled()
+{
+	return tuning.pingFromMapEnabled
+}
+
+bool function LootBinReset_Announce_VO_Enabled()
+{
+	return tuning.announcerVOEnabled
+}
+
+bool function LootBinReset_Announce_OnResetTrigger_Enabled()
+{
+	return tuning.announceOnResetEnabled
+}
+
+bool function LootBinReset_Announce_Warning_NearTrigger_Enabled()
+{
+	return tuning.announceNearTriggerEnabled
+}
+
+float function LootBinReset_Announce_Warning_NearTrigger_TimeOffset()
+{
+	return tuning.announceWarningTimeOffset
+}
+
+bool function LootBinReset_Announce_Warning_HUD_OnTriggerRoundStart_Enabled()
+{
+	return tuning.warningHUDOnTriggerEnabled
+}
+
+bool function LootBinReset_Announce_Warning_HudIndicator_UseLongText()
+{
+	return tuning.announceHUDUseLongText
+}
+
+bool function LootBinReset_ReSkin_UsedPerkBins_Enabled()
+{
+	return tuning.reskinUsedPerkBinsEnabled
+}
+
+bool function LootBinReset_MythicBins_Enabled()
+{
+	return tuning.mythicBinEnabled
+}
+
+bool function LootBinReset_MythicBins_ReawrdDynamicLoot()
+{
+	return tuning.mythicBinRewardDynamicLoot
+}
+
+int function LootBinReset_MythicBins_MinItemCount()
+{
+	return tuning.mythicBinMinItemCount
+}
+
+int function LootBinReset_MythicBins_MythicItemCount()
+{
+	return tuning.mythicBinMythicItemCount
+}
+
+bool function LootBinReset_MythicBins_GuaranteedBattery_Enabled()
+{
+	return tuning.mythicBinGuaranteeBigHeal
+}
+
+float function LootBinReset_MythicBins_ChannelDuration()
+{
+	return tuning.mythicBinChannelDuration
+}
+
+array< string > function LootBinReset_MythicBins_GetStaticRewards()
+{
+	array< string > rewards
+
+	string defaults = GetCurrentPlaylistVarString( "lootbin_reset_mythic_bins_static_loot_rewards", "mp_pickup_xp_cache_dynamic mp_weapon_sniper mp_pickup_xp_cache_dynamic mp_weapon_esaw_crate mp_pickup_xp_cache_dynamic" )
+
+	if ( GetCurrentPlaylistVarString( "pin_match_type", "survival" ) == "duo" )
+	{
+		defaults = GetCurrentPlaylistVarString( "lootbin_reset_mythic_bins_static_loot_rewards_duos", "mp_pickup_xp_cache_dynamic mp_weapon_sniper mp_pickup_xp_cache_dynamic mp_weapon_esaw_crate" )
+	}
+
+	rewards = GetTrimmedSplitString( defaults, " " )
+
+	return rewards
+}
+
+bool function LootBinReset_MythicBins_AwardTeamEvoOnOpen()
+{
+	return tuning.mythicBinAwardEvoOnOpen
+}
+
+bool function LootBinReset_MythicBins_OnOpen_ConfettiLootEnabled()
+{
+	return tuning.mythicBinConfettiEnabled
+}
+
+int function LootBinReset_MythicBins_OnOpen_ConfettiLootCount()
+{
+	return tuning.mythicBinConfettiCount
+}
+
+int function LootBinReset_MythicBins_OnOpen_ConfettiLoot_SwitchThreshold()
+{
+	return tuning.mythicBinConfettiSwitchThreshold
+}
+
+bool function LootBinReset_MythicBins_HaveUniqueInteractPrompt()
+{
+	return tuning.mythicBinUniqueInteractPrompt
+}
+
+bool function LootBinReset_MythicBins_PreSelection_Enabled()
+{
+	return tuning.mythicBinPreselectionEnabled
+}
+
+bool function LootBinReset_MythicBins_MessagedPreSpawn()
+{
+	return tuning.mythicBinMessagedPreSpawn
+}
+
+bool function LootBinReset_MythicBins_MapFeature_Enabled()
+{
+	return tuning.mythicBinMapFeatureEnabled
+}
+
+float function LootBinReset_MythicBins_MythicBinSpawnDistance()
+{
+	return tuning.mythicBinExclusionDistance
+}
+
+int function LootBinReset_MythicBins_MaxMythicBins()
+{
+	return tuning.mythicBinCount
+}
+
+bool function LootBinReset_GoldBins_Enabled() 
+{
+	return tuning.goldBinsEnabled
+}
+
+bool function LootBinReset_GoldBins_UseSmartLoot() 
+{
+	return tuning.goldBinsUseSmartLoot
+}
+
+int function LootBinReset_GoldBins_MaxGoldBins()
+{
+	return tuning.goldBinsMaxCount
+}
+
+float function LootBinReset_GoldBins_GoldBinSpawnDistance()
+{
+	return tuning.goldBinExclusionDistance
+}
+
+bool function LootBinReset_GoldBins_LimitGoldOutput() 
+{
+	return tuning.limitGoldOutput
+}
+
+int function LootBinReset_GoldBins_MaxGoldItemsPerOpen()
+{
+	return tuning.maxGoldItemsPerOpen
+}
+
+int function LootBinReset_GoldBins_NumOfItemsToSpawn()
+{
+	return tuning.goldBinsItemCount
+}
+
+bool function LootBinReset_GoldBins_UpgradeLootToMinLootTier()
+{
+	return tuning.upgradeGoldLootToMinimum
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________STATE_GETTERS___________________________()
+{}
+#endif
+
+int function LootBinReset_GetMinimumLootTierPerRound( int deathStage )
+{
+	return file.sys.GetMinResetLootTier( deathStage )
+}
+
+
+bool function LootBinReset_LootBinsHaveReset()
+{
+	return file.lootbinResetTriggered
+}
+
+bool function LootBinReset_IsLootBinSpecial( entity lootBin )
+{
+	if ( file.mythicBinEnts.contains( lootBin ) )
+		return true
+
+	foreach ( bin in file.goldBinEnts )
+	{
+		if ( bin == lootBin )
+			return true
+	}
+
+	return false
+}
+
+bool function LootBinReset_IsLootBin_PotentialMythic( entity lootBin )
+{
+	if ( file.potentialMythicBinEnts.contains( lootBin ) )
+		return true
+
+	return false
+}
+
+bool function LootBinReset_IsLootBin_PotentialGold( entity lootBin )
+{
+	if ( lootBin in file.potentialGoldBins )
+		return true
+
+	return false
+}
+
+bool function LootBinReset_IsLootBin_Mythic( entity lootBin )
+{
+	if ( file.mythicBinEnts.contains( lootBin ) )
+		return true
+
+	return false
+}
+
+bool function LootBinReset_IsLootBin_GoldBin( entity lootBin )
+{
+	
+	
+	
+	
+	
+
+	foreach ( bin in file.goldBinEnts )
+	{
+		if ( bin == lootBin )
+			return true
+	}
+
+	return false
+}
+
+bool function LootBinReset_SupportedMode_ForHUD()
+{
+	if ( GameMode_IsActive( eGameModes.SURVIVAL ) )
+	{
+		if ( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+			return false
+
+		return true
+	}
+
+	return false
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

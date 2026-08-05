@@ -1,0 +1,1587 @@
+global function Sh_SkydiveLaunchers_Init
+global function SkydiveLauncher_AddSFXOverride
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global enum eSkydiveLauncherType
+{
+	DEFAULT,
+	SHORT_HEIGHT,
+
+		GRAVITY_CANNON,
+
+		GRAVITY_MINI,
+
+		IMC_ARMORY,
+
+
+		ZIPRAIL,
+
+	
+}
+
+global enum eSkydiveLauncherAirControlType
+{
+	DEFAULT,
+	LIMITED,
+	FULL
+}
+
+enum eSkydiveLauncherThreshold
+{
+	FLOOR,
+	CEILING,
+	NONE
+}
+
+enum eSkydiveLauncherVelocityType
+{
+	VERTICAL,
+	ABSOLUTE
+}
+
+global enum eSkydiveLauncherSFX
+{
+	IDLE,
+	CHARGE,
+	LAUNCH_1P,
+	LAUNCH_3P,
+	AIRBORNE_1P,
+	AIRBORNE_3P
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct
+{
+
+		table < entity, entity > ambientGenericForSkydiveLauncherEntity
+
+
+	table< string, table< int, string > > sfxOverrides 
+	table< string, table< int, string > > juicedSFXOverrides 
+
+
+
+
+
+
+
+
+
+
+
+
+
+	bool holsterWeaponsOnAscent
+} file
+
+
+
+
+
+global asset FX_SKYDIVE_LAUNCHER_LOOP_DEFAULT = $""
+global asset FX_SKYDIVE_LAUNCHER_LOOP_NO_SNOW = $""
+global asset FX_SKYDIVE_LAUNCHER_GRAVITY_MINI_IDLE = $""
+
+
+
+
+
+
+
+
+asset HORIZONTAL_LAUNCHER_LAUNCH_SEQUENCE = $"animseq/props/district_horizontal_launcher/district_horizontal_launcher_fireA.rseq"
+global asset HORIZONTAL_LAUNCHER_MODEL = $"mdl/props/district_horizontal_launcher/district_horizontal_launcher_base_w.rmdl"
+
+void function Sh_SkydiveLaunchers_Init()
+{
+
+		AddCreateCallback( "trigger_cylinder_heavy", OnSkydiveLauncherCreated )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	file.holsterWeaponsOnAscent = GetCurrentPlaylistVarBool( "skydive_launchers_holster_weapons", true )
+}
+
+void function SkydiveLauncher_AddSFXOverride( string scriptName, bool juiced, int sfxType, string sfxName )
+{
+	table< string, table< int, string > > sfxOverrides = juiced ? file.juicedSFXOverrides : file.sfxOverrides
+
+	if ( !(scriptName in sfxOverrides) )
+	{
+		sfxOverrides[scriptName] <- {}
+	}
+
+	if ( !(sfxType in sfxOverrides[scriptName]) )
+	{
+		sfxOverrides[scriptName][sfxType] <- sfxName
+	}
+	else
+	{
+		sfxOverrides[scriptName][sfxType] = sfxName
+	}
+}
+
+string function SkyDiveLauncher_GetSFXOverrideOrDefault( entity ent, int sfxType, string defaultSFX = "" )
+{
+	bool juiced = ent.GetNoTargetSmartAmmo()
+
+	string scriptName = ent.GetScriptName()
+
+	table< string, table< int, string > > sfxOverrides = juiced ? file.juicedSFXOverrides : file.sfxOverrides
+
+	if ( !(scriptName in sfxOverrides) )
+		return defaultSFX
+
+	if ( !(sfxType in sfxOverrides[scriptName]) )
+		return defaultSFX
+
+	return sfxOverrides[scriptName][sfxType]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnSkydiveLauncherDestroyed( entity trigger )
+{
+	if ( trigger.GetTargetName() != "skydive_launcher_trigger" )
+		return
+
+
+	
+	
+	
+	entity clientAG = file.ambientGenericForSkydiveLauncherEntity[trigger]
+	if ( IsValid( clientAG ) )
+	{
+		clientAG.Destroy()
+		delete file.ambientGenericForSkydiveLauncherEntity[trigger]
+	}
+
+
+	if ( trigger.GetScriptName() == "" )
+		return
+
+	trigger.SetScriptName( "" )
+}
+
+
+
+void function OnSkydiveLauncherCreated( entity trigger )
+{
+	if ( trigger.GetTargetName() != "skydive_launcher_trigger" )
+		return
+
+	AddEntityDestroyedCallback( trigger, OnSkydiveLauncherDestroyed )
+
+	vector triggerOrigin = trigger.GetOrigin()
+
+	string ambientFxName = ""
+	string scriptName = trigger.GetScriptName()
+	Assert( IsValid( scriptName ), "Client can't get the script name of the skydive launch trigger" )
+	int skydiveLauncherType = scriptName.tointeger()
+	switch( skydiveLauncherType )
+	{
+		case eSkydiveLauncherType.GRAVITY_MINI:
+			ambientFxName = "GravityMini_LaunchPad_Idle_Loop"
+			break
+
+		case eSkydiveLauncherType.IMC_ARMORY:
+			ambientFxName = "GravityMini_LaunchPad_SpectreShack_Idle_Loop"
+			break
+
+
+		case eSkydiveLauncherType.ZIPRAIL:
+			ambientFxName = "ZipRail_Launcher_Idle_Loop"
+			break
+
+
+		case eSkydiveLauncherType.DEFAULT:
+			{
+				entity launcherModel = trigger.GetOwner()
+				if ( IsValid( launcherModel ) )
+				{
+					string launcherName = launcherModel.GetScriptName()
+					if ( launcherName == "district_launcher_horizontal" )
+					{
+						ambientFxName = SkyDiveLauncher_GetSFXOverrideOrDefault( launcherModel, eSkydiveLauncherSFX.IDLE, "District_GravityMini_LaunchPad_Idle_Loop_Horizontal_3p" )
+						break
+					}
+					if ( launcherName == "district_launcher_vertical" )
+					{
+						ambientFxName = SkyDiveLauncher_GetSFXOverrideOrDefault( launcherModel, eSkydiveLauncherSFX.IDLE, "District_GravityMini_LaunchPad_Idle_Loop_Vertical_3p" )
+						break
+					}
+				}
+			}
+
+		default:
+			ambientFxName = "WXpress_Emit_LaunchPad_Loop"
+			break
+	}
+	entity clientAG = CreateClientSideAmbientGeneric( triggerOrigin + <0,0,16>, ambientFxName, 0 )
+	clientAG.SetSegmentEndpoints( triggerOrigin + <0,0,16>, triggerOrigin + <0, 0, 72> )
+	clientAG.SetEnabled( true )
+	clientAG.RemoveFromAllRealms()
+	clientAG.AddToOtherEntitysRealms( trigger )
+	clientAG.SetParent( trigger, "", true, 0.0 )
+	file.ambientGenericForSkydiveLauncherEntity[trigger] <- clientAG
+
+	trigger.SetClientEnterCallback( void function( entity trigger, entity player )
+	{
+		entity localViewPlayer = GetLocalViewPlayer()
+		if ( player != localViewPlayer )
+			return
+
+		if ( !IsPilot( player ) )
+			return
+
+		string scriptName = trigger.GetScriptName()
+		Assert( IsValid( scriptName ), "Client can't get the script name of the skydive launch trigger" )
+		int skydiveLauncherType = scriptName.tointeger()
+		string sfxLaunchPlayer1p
+		string sfxAirborneMvmt1p
+		bool launcherSounds = true
+
+		switch( skydiveLauncherType )
+		{
+			case eSkydiveLauncherType.DEFAULT:
+			{
+				entity launcherModel = trigger.GetOwner()
+				if ( IsValid( launcherModel ) )
+				{
+					string launcherName = launcherModel.GetScriptName()
+					if ( launcherName == "district_launcher_horizontal" )
+					{
+						sfxLaunchPlayer1p = SkyDiveLauncher_GetSFXOverrideOrDefault( launcherModel, eSkydiveLauncherSFX.LAUNCH_1P, "District_GravityMini_LaunchPad_Horizontal_1p" )
+						sfxAirborneMvmt1p = SkyDiveLauncher_GetSFXOverrideOrDefault( launcherModel, eSkydiveLauncherSFX.AIRBORNE_1P, "JumpPad_Ascent_Windrush" )
+						break
+					}
+
+					if ( launcherName == "district_launcher_vertical" )
+					{
+						sfxLaunchPlayer1p = SkyDiveLauncher_GetSFXOverrideOrDefault( launcherModel, eSkydiveLauncherSFX.LAUNCH_1P, "District_GravityMini_LaunchPad_Vertical_1p" )
+						sfxAirborneMvmt1p = SkyDiveLauncher_GetSFXOverrideOrDefault( launcherModel, eSkydiveLauncherSFX.AIRBORNE_1P, "JumpPad_Ascent_Windrush" )
+						break
+					}
+				}
+			}
+			case eSkydiveLauncherType.SHORT_HEIGHT:
+				sfxLaunchPlayer1p = "WXpress_LaunchPad"
+				sfxAirborneMvmt1p = "JumpPad_Ascent_Windrush"
+				break
+			case eSkydiveLauncherType.GRAVITY_MINI:
+
+			case eSkydiveLauncherType.IMC_ARMORY:
+
+				sfxLaunchPlayer1p = "GravityMini_LaunchPad_1p"
+				sfxAirborneMvmt1p = "JumpPad_Ascent_Windrush"
+				break
+
+			case eSkydiveLauncherType.GRAVITY_CANNON:
+				
+				launcherSounds = false
+				break
+
+
+			case eSkydiveLauncherType.ZIPRAIL:
+				sfxLaunchPlayer1p = "ZipRail_Launcher_Activate_1p"
+				sfxAirborneMvmt1p = "ZipRail_Launcher_AirborneMvmt_1p"
+				break
+
+			default:
+				Assert( false, "Unhandled eSkydiveLauncherType on client: " + skydiveLauncherType )
+
+		}
+
+		if ( launcherSounds )
+		{
+			EmitSoundOnEntity( player, sfxLaunchPlayer1p )
+			EmitSoundOnEntity( player, sfxAirborneMvmt1p )
+
+			thread SkydiveLauncher_TrackPlayerToStopSoundsOnGroundTouch( player, [sfxLaunchPlayer1p, sfxAirborneMvmt1p] )
+		}
+
+		Chroma_UsedJumpPad()
+	} )
+}
+
+void function SkydiveLauncher_TrackPlayerToStopSoundsOnGroundTouch( entity player, array< string > sounds )
+{
+	wait 0.3
+
+	if ( !IsValid( player ) )
+		return
+
+	while ( !player.IsOnGround() )
+	{
+		WaitFrame()
+
+		if ( !IsValid( player ) )
+			return
+	}
+
+	foreach ( string sound in sounds )
+	{
+		StopSoundOnEntity( player, sound )
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

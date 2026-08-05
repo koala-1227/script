@@ -1,0 +1,2168 @@
+global function EvoHarvesters_Init
+
+global function UpgradeCore_EvoHarvesters_Enabled
+global function UpgradeCore_CanUseConsole
+global function UpgradeCore_UseUpdatedHarvesterModel
+global function UpgradeCore_EvoHarvester_PreventInteractionByAutoPlayers
+global function EvoHarvesters_SetHarvesterSettings
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function UpgradeCore_HarvesterPinged
+global function UpgradeCore_GetHighlightedHarvester
+global function UpgradeCore_UpdateHighlightedHarvesterIcon
+global function UpgradeCore_ActivateAndOpenAllXPStations
+global function ServerToClient_UpgradeCore_SetHarvesterState
+global function ServerToClient_UpgradeCore_UpdateHarvesterState
+global function ServerToClient_UpgradeCore_ConsoleUsed
+
+
+
+
+
+
+
+
+
+
+
+
+
+global struct EvoHarvesterSettings
+{
+	asset harvesterModel																						= $""
+	asset harvesterIdleVFX																						= $""
+	asset harvesterUseVFX																						= $""
+	string harvesterUseVFXAttachPoint																			= ""
+	string sfxHarvesterAmbientLoop																				= ""
+	bool isTeamUse																								= true
+
+	void functionref( entity ) callback_OnHarvesterCreatedOverride 												= null
+	bool functionref( entity, entity, bool ) callback_OnUpgradeCore_CanUseConsoleOverride 						= null
+
+
+
+
+
+
+	void functionref( WorldspaceIconData ) callback_OnInitializeWorldSpaceIcon									= null
+	void functionref( var ) callback_OnInitializeMinimapPackage													= null
+	void functionref() callback_OnRevealXPStations																= null
+
+	int functionref( entity, entity ) function_FindHarvesterStateOverride										= null
+	bool functionref( entity, entity ) function_CanDisplayConsoleWorldIcon										= null
+
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	table< entity, entity > upgradeStationClientProxies
+	table< entity, entity > ambGenericTable
+	array< entity > pingedHarvesters
+	table< entity, bool > worldspaceHarvesterIconVisibility
+	entity highlightedPingEnt
+	table< entity, var > harvesterToWorldspaceRui
+
+	table < entity, int > harvesterStateOverrides
+
+	EvoHarvesterSettings evoHarvesterSettings
+} file
+
+struct
+{
+	float evoHarvesterTimegateDuration = 100.0
+	int numEvoHarvestersToSpawn = 8
+	
+	bool harvesters_enabled = true
+
+	bool limited_harvester_spawns_enabled = true
+	bool limited_harvester_spawns_exclude_zones = true
+
+	float limted_harvester_core_exclusion_radius = 32000
+	float limited_harvester_zone_exclusion_radius = 6200
+
+	float harvesterSpawnInitialAngleDeviation = 30.0
+	float harvesterSpawnInitialMinScale= 0.4
+	float harvesterSpawnInitialMaxScale = 0.7
+	float harvesterSpawnInitialSeperationDistance = 15000.0
+	float harvesterSpawnVerticalOffset = -10.0
+	int harvesterSpawnNumRetries = 10
+	bool harvestersNotAccessibleBeforeAnnounce = true
+	bool harvestersGrantTeamXp = true
+	bool harvestersStartClosed = false
+
+	bool useOldHarvesterAnnouncementLogic = false
+
+	float harvester_idealTileArea = 2500.0
+	float harvester_minTileSize = 800.0
+	float harvester_minSurroundingArea = 10000.0
+	float harvester_maxSurroundingArea = 35000.0 
+	float harvester_maxPathCost = 10000.0
+	int harvester_minNumAdjacentTiles = 8
+
+	bool harvester_useBadAreaAvoidanceRadius = true
+	float harvester_badAreaAvoidanceRadius = 3000.0
+	bool harvester_usePropAvoidanceRadius = true
+	float harvester_propAvoidanceRadius = 400.0
+
+	float harvester_useSafeDistFromRing = -1.0
+
+	bool harvester_checkGroundNormalAngle = true
+	float maxGroundNormalAngleWithVertical = 20.0
+} tuning
+
+
+const string FUNCNAME_PingConsoleFromMap = "Crafting_ClientToServer_PingConsoleFromMap"
+global const string FUNCNAME_ServerToClient_UpgradeCore_ConsoleUsed = "ServerToClient_UpgradeCore_ConsoleUsed"
+const string FUNCNAME_ServerToClient_UpgradeCore_UpdateHarvesterState = "ServerToClient_UpgradeCore_UpdateHarvesterState"
+const string FUNCNAME_ServerToClient_UpgradeCore_SetHarvesterState = "ServerToClient_UpgradeCore_SetHarvesterState"
+
+
+const asset EVO_STATION_MINIMAP_ICON = $"rui/hud/gametype_icons/survival/upgrade_station_large"
+const asset EVO_STATION_MINIMAP_ICON_SMALL = $"rui/hud/gametype_icons/survival/upgrade_station_small"
+const asset EVO_HARVESTER_MODEL_OLD =  $"mdl/props/crafting_siphon/crafting_siphon.rmdl"
+const asset EVO_HARVESTER_MODEL =  $"mdl/props/evo_harvester/evo_harvester.rmdl"
+const string EVO_HARVESTER_LOOP = "Crafting_Harvester_Active_AmbientLoop_3p"
+const string EVO_HARVESTER_COLLECT_1P = "Crafting_Harvester_Active_Collect_1P"
+const string EVO_HARVESTER_COLLECT_3P = "Crafting_Harvester_Active_Collect_3P"
+global const string EVO_HARVESTER_CLOSE_IDLE_ANIM = "evo_harvester_close_idle"
+global const string EVO_HARVESTER_CLOSE_TO_OPEN_ANIM = "evo_harvester_close_to_open"
+global const string EVO_HARVESTER_FULL_IDLE_ANIM = "evo_harvester_open_idle"
+global const string EVO_HARVESTER_OPEN_TO_CLOSE_IDLE_ANIM = "evo_harvester_open_to_close"
+global const string EVO_HARVESTER_FULL_TO_EMPTY_ANIM = "evo_harvester_full_to_empty"
+global const string EVO_HARVESTER_EMPTY_IDLE_ANIM = "evo_harvester_empty_idle"
+const asset EVO_HARVESTER_IDLE_FX = $"P_siphon_idle"
+const string EVO_HARVESTER_COLLECT_TEAM = "UI_InGame_Crafting_Extractor_Collect_Squad"
+
+
+global const string UPGRADE_CORE_HARVESTER_ACTIVATION_TIME = "upgrade_core_harvester_activation_time"
+global const string UPGRADE_CORE_CONSOLE_SCRIPT_NAME = "upgrade_console"
+
+
+
+global const float EVO_HARVESTER_ICON_UP_OFFSET = 50 
+const float EVO_HARVESTER_PING_DISTANCE = 3250 
+const float EVO_HARVESTER_VO_ANNOUNCE_OFFSET = 4.0
+
+void function EvoHarvesters_Init()
+{
+	EvoHarvester_InitTuningValues()
+
+	if( !tuning.harvesters_enabled )
+		return
+
+	Remote_RegisterServerFunction( FUNCNAME_PingConsoleFromMap, "typed_entity", "prop_script" )
+	Remote_RegisterClientFunction( FUNCNAME_ServerToClient_UpgradeCore_ConsoleUsed, "entity" )
+	Remote_RegisterClientFunction( FUNCNAME_ServerToClient_UpgradeCore_UpdateHarvesterState, "entity" )
+	Remote_RegisterClientFunction( FUNCNAME_ServerToClient_UpgradeCore_SetHarvesterState, "entity", "int", 0, eHarvesterState.COUNT_ )
+
+	PrecacheParticleSystem( EVO_HARVESTER_IDLE_FX )
+
+	if ( file.evoHarvesterSettings.harvesterModel == $"" )
+	{
+		if ( !UpgradeCore_UseUpdatedHarvesterModel() )
+		{
+			file.evoHarvesterSettings.harvesterModel = EVO_HARVESTER_MODEL_OLD
+		}
+		else
+		{
+			file.evoHarvesterSettings.harvesterModel = EVO_HARVESTER_MODEL
+		}
+
+		PrecacheModel( file.evoHarvesterSettings.harvesterModel )
+	}
+
+	file.evoHarvesterSettings.sfxHarvesterAmbientLoop = EVO_HARVESTER_LOOP
+
+	RegisterNetworkedVariable( UPGRADE_CORE_HARVESTER_ACTIVATION_TIME, SNDC_GLOBAL, SNVT_TIME , 0.0 )
+
+
+
+
+
+
+
+		RegisterSignal( "HarvesterStopFX" )
+		RegisterSignal( "HarvesterUsed" )
+		RegisterSignal( "UpdateEvoHarvesterState" )
+
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.UPGRADE_CORE_BIN, MINIMAP_OBJECT_RUI, MinimapPackage_UpgradeCoreBin, FULLMAP_OBJECT_RUI, MinimapPackage_UpgradeCoreBin )
+
+		RegisterNetVarTimeChangeCallback( UPGRADE_CORE_HARVESTER_ACTIVATION_TIME, UpgradeCore_HarvesterActivationTimeChange )
+
+		AddCreateCallback( "prop_material_harvester", UpgradeCore_ClientUpgradeConsoleCreated )
+		AddDestroyCallback( "prop_material_harvester", UpgradeCore_ClientUpgradeConsoleDestroyed )
+
+		AddCallback_OnFindFullMapAimEntity( Get_UpgradeConsole_UnderAim, Ping_UpgradeConsole_UnderAim )
+		AddOnSpectatorTargetChangedCallback( UpgradeCore_OnSpectateTargetChanged )
+
+
+
+
+
+
+
+
+}
+
+void function EvoHarvester_InitTuningValues()
+{
+
+		if ( ForcedSpawn_POIPreview_Enabled() )
+			tuning.evoHarvesterTimegateDuration = ForcedSpawn_EvoHarvesterTimegateOverride()
+
+
+	tuning.evoHarvesterTimegateDuration = GetCurrentPlaylistVarFloat( "passive_upgrade_core_evo_harvester_activation_delay", tuning.evoHarvesterTimegateDuration )
+	tuning.numEvoHarvestersToSpawn = GetCurrentPlaylistVarInt( "passive_upgrade_core_num_consoles_to_spawn", tuning.numEvoHarvestersToSpawn )
+	tuning.harvesters_enabled = GetCurrentPlaylistVarBool( "evo_harvesters_enabled", true )
+	tuning.limited_harvester_spawns_enabled = GetCurrentPlaylistVarBool( "evo_harvester_limited_spawns_enabled", tuning.limited_harvester_spawns_enabled )
+	tuning.limited_harvester_spawns_exclude_zones = GetCurrentPlaylistVarBool( "evo_harvester_limited_spawns_exclude_zones", tuning.limited_harvester_spawns_exclude_zones )
+	tuning.limted_harvester_core_exclusion_radius = GetCurrentPlaylistVarFloat( "evo_harvester_limted_core_exclusion_radius", tuning.limted_harvester_core_exclusion_radius )
+	tuning.limited_harvester_zone_exclusion_radius = GetCurrentPlaylistVarFloat( "evo_harvester_limited_zone_exclusion_radius", tuning.limited_harvester_zone_exclusion_radius )
+	tuning.harvesterSpawnInitialAngleDeviation = GetCurrentPlaylistVarFloat( "evo_harvester_spawn_initial_angle_deviation", tuning.harvesterSpawnInitialAngleDeviation )
+	tuning.harvesterSpawnInitialMinScale= GetCurrentPlaylistVarFloat( "evo_harvester_spawn_initial_min_scale", tuning.harvesterSpawnInitialMinScale )
+	tuning.harvesterSpawnInitialMaxScale = GetCurrentPlaylistVarFloat( "evo_harvester_spawn_initial_max_scale", tuning.harvesterSpawnInitialMaxScale )
+	tuning.harvesterSpawnInitialSeperationDistance = GetCurrentPlaylistVarFloat( "evo_harvester_spawn_initial_seperation_distance", tuning.harvesterSpawnInitialSeperationDistance )
+	tuning.harvesterSpawnVerticalOffset = GetCurrentPlaylistVarFloat( "evo_harvester_spawn_vertical_offset", tuning.harvesterSpawnVerticalOffset )
+	tuning.harvester_idealTileArea = GetCurrentPlaylistVarFloat( "evo_harvester_idealTileArea", tuning.harvester_idealTileArea )
+	tuning.harvester_minTileSize = GetCurrentPlaylistVarFloat( "evo_harvester_minTileSize", tuning.harvester_minTileSize )
+	tuning.harvester_minSurroundingArea = GetCurrentPlaylistVarFloat( "evo_harvester_minSurroundingArea", tuning.harvester_minSurroundingArea )
+	tuning.harvester_maxSurroundingArea = GetCurrentPlaylistVarFloat( "evo_harvester_maxSurroundingArea", tuning.harvester_maxSurroundingArea )
+	tuning.harvester_maxPathCost = GetCurrentPlaylistVarFloat( "evo_harvester_maxPathCost", tuning.harvester_maxPathCost )
+	tuning.harvester_minNumAdjacentTiles = GetCurrentPlaylistVarInt( "evo_harvester_minNumAdjacentTiles", tuning.harvester_minNumAdjacentTiles )
+	tuning.harvesterSpawnNumRetries = GetCurrentPlaylistVarInt( "evo_harvester_spawn_num_retries", tuning.harvesterSpawnNumRetries )
+	tuning.harvester_useBadAreaAvoidanceRadius = GetCurrentPlaylistVarBool( "passive_upgrade_core_harvester_bad_area_avoidance_enabled", tuning.harvester_useBadAreaAvoidanceRadius )
+	tuning.harvester_badAreaAvoidanceRadius = GetCurrentPlaylistVarFloat( "passive_upgrade_core_harvester_bad_area_avoidance_radius", tuning.harvester_badAreaAvoidanceRadius )
+	tuning.harvester_usePropAvoidanceRadius = GetCurrentPlaylistVarBool( "passive_upgrade_core_harvester_prop_avoidance_enabled", tuning.harvester_usePropAvoidanceRadius )
+	tuning.harvester_propAvoidanceRadius = GetCurrentPlaylistVarFloat( "passive_upgrade_core_harvester_prop_avoidance_radius", tuning.harvester_propAvoidanceRadius )
+	tuning.harvester_useSafeDistFromRing = GetCurrentPlaylistVarFloat( "passive_upgrade_core_harvester_dist_from_ring", tuning.harvester_useSafeDistFromRing )
+	tuning.harvester_checkGroundNormalAngle = GetCurrentPlaylistVarBool( "passive_upgrade_core_harvester_check_ground_normal_angle", tuning.harvester_checkGroundNormalAngle )
+	tuning.harvestersNotAccessibleBeforeAnnounce = GetCurrentPlaylistVarBool( "evo_harvester_noninteractive_before_time_gate", true )
+	tuning.maxGroundNormalAngleWithVertical = GetCurrentPlaylistVarFloat( "passive_upgrade_core_harvester_maxGroundNormalAngleWithVertical", tuning.maxGroundNormalAngleWithVertical ) * DEG_TO_RAD
+	tuning.harvestersGrantTeamXp = GetCurrentPlaylistVarBool( "evo_harvesters_grant_team_xp", tuning.harvestersGrantTeamXp )
+	tuning.harvestersStartClosed = GetCurrentPlaylistVarBool( "evo_harvesters_start_closed", tuning.harvestersStartClosed )
+
+	tuning.useOldHarvesterAnnouncementLogic = GetCurrentPlaylistVarBool( "evo_harvester_use_old_announcement_logic", tuning.useOldHarvesterAnnouncementLogic )
+}
+
+bool function UpgradeCore_IsUpgradeCoreConsole( entity ent )
+{
+	return ent.GetScriptName() == UPGRADE_CORE_CONSOLE_SCRIPT_NAME
+}
+
+bool function UpgradeCore_UseUpdatedHarvesterModel()
+{
+	return GetCurrentPlaylistVarBool( "passive_upgrade_core_use_new_model_harvester", true )
+}
+
+bool function UpgradeCore_EvoHarvester_PreventInteractionForFullyUpgradeTeams()
+{
+	return GetCurrentPlaylistVarBool( "passive_upgrade_core_harvester_prevent_fullyupgraded_teaminteraction", true )
+}
+
+bool function UpgradeCore_EvoHarvester_PreventInteractionByAutoPlayers()
+{
+	return GetCurrentPlaylistVarBool( "evo_harvester_prevent_autoplayer_interaction", false )
+}
+
+void function EvoHarvesters_SetHarvesterSettings( EvoHarvesterSettings harvesterSettings )
+{
+	if ( harvesterSettings.harvesterModel != $"" )
+	{
+		file.evoHarvesterSettings.harvesterModel = harvesterSettings.harvesterModel
+		PrecacheModel( file.evoHarvesterSettings.harvesterModel )
+	}
+
+	if ( harvesterSettings.harvesterIdleVFX != $"" )
+	{
+		file.evoHarvesterSettings.harvesterIdleVFX = harvesterSettings.harvesterIdleVFX
+		PrecacheParticleSystem( file.evoHarvesterSettings.harvesterIdleVFX )
+	}
+
+	if ( harvesterSettings.harvesterUseVFX != $"" )
+	{
+		file.evoHarvesterSettings.harvesterUseVFX = harvesterSettings.harvesterUseVFX
+		PrecacheParticleSystem( file.evoHarvesterSettings.harvesterUseVFX )
+	}
+
+	if ( harvesterSettings.sfxHarvesterAmbientLoop != "" )
+	{
+		file.evoHarvesterSettings.sfxHarvesterAmbientLoop = harvesterSettings.sfxHarvesterAmbientLoop
+	}
+
+	file.evoHarvesterSettings.harvesterUseVFXAttachPoint = harvesterSettings.harvesterUseVFXAttachPoint
+	file.evoHarvesterSettings.isTeamUse = harvesterSettings.isTeamUse
+	file.evoHarvesterSettings.callback_OnHarvesterCreatedOverride = harvesterSettings.callback_OnHarvesterCreatedOverride
+	file.evoHarvesterSettings.callback_OnUpgradeCore_CanUseConsoleOverride = harvesterSettings.callback_OnUpgradeCore_CanUseConsoleOverride
+
+
+
+
+
+
+		file.evoHarvesterSettings.callback_OnInitializeWorldSpaceIcon = harvesterSettings.callback_OnInitializeWorldSpaceIcon
+		file.evoHarvesterSettings.callback_OnInitializeMinimapPackage = harvesterSettings.callback_OnInitializeMinimapPackage
+		file.evoHarvesterSettings.callback_OnRevealXPStations = harvesterSettings.callback_OnRevealXPStations
+		file.evoHarvesterSettings.function_FindHarvesterStateOverride = harvesterSettings.function_FindHarvesterStateOverride
+		file.evoHarvesterSettings.function_CanDisplayConsoleWorldIcon = harvesterSettings.function_CanDisplayConsoleWorldIcon
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function UpgradeCore_ConsoleCanUseFunction( entity player, entity beacon, int useFlags )
+{
+	if ( GetGameState() < eGameState.Playing )
+		return false
+
+	if ( !UpgradeCore_Upgrade_Station_CanUseFunction( player, beacon, useFlags ) )
+		return false
+
+	return true
+}
+
+bool function UpgradeCore_Upgrade_Station_CanUseFunction( entity playerUser, entity controlPanel, int useFlags )
+{
+	if ( Bleedout_IsBleedingOut( playerUser ) || playerUser.p.isInExtendedUse )
+		return false
+
+	bool canUseWhileParented = EntIsHoverVehicle( playerUser.GetParent() ) && StatusEffect_HasSeverity( playerUser, eStatusEffect.camera_view )	
+	if ( IsValid( playerUser.GetParent() ) && !canUseWhileParented )
+		return false
+
+	entity activeWeapon = playerUser.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	if ( IsValid( activeWeapon ) )
+	{
+		if( activeWeapon.IsWeaponOffhand() )
+		{
+			var offhandAllowsPickups = activeWeapon.GetWeaponInfoFileKeyField( "offhand_allow_player_interact" )
+			if ( !offhandAllowsPickups || offhandAllowsPickups <= 0 )
+				return false
+		}
+	}
+
+	if( !UpgradeCore_IsUpgradeCoreConsole( controlPanel ) )
+	{
+		return false
+	}
+
+	return true
+}
+
+bool function UpgradeCore_CanUseConsole( entity player, entity console, bool checkTime = true )
+{
+	if ( !IsValid( console ) )
+		return false
+
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return false
+
+	if( checkTime && Time() < GetGlobalNetTime( UPGRADE_CORE_HARVESTER_ACTIVATION_TIME ) )
+		return false
+
+	if ( file.evoHarvesterSettings.callback_OnUpgradeCore_CanUseConsoleOverride != null )
+	{
+		if ( !file.evoHarvesterSettings.callback_OnUpgradeCore_CanUseConsoleOverride( player, console, checkTime ) )
+			return false
+	}
+	else
+	{
+		if ( UpgradeCore_EvoHarvester_PreventInteractionForFullyUpgradeTeams() )
+		{
+			if ( UpgradeCore_CanUseConsole_IsTeamMaxLevel( player ) )
+				return false
+		}
+	}
+
+#if AUTO_PLAYER
+	if ( ( AutoPlayer_IsAutoPlayer( player ) || player.IsBot() ) && UpgradeCore_EvoHarvester_PreventInteractionByAutoPlayers() )
+		return false
+#endif
+
+	int useIndex = file.evoHarvesterSettings.isTeamUse ? player.GetTeam() : player.GetPlayerIndex()
+	return !console.GetUseStateByIndex( useIndex )
+}
+
+bool function UpgradeCore_CanUseConsole_IsTeamMaxLevel( entity player )
+{
+	if ( !tuning.harvestersGrantTeamXp )
+	{
+		return EvoXp_IsPlayerAtMaxXP( player )
+	}
+
+	array< entity > teammates = GetPlayerArrayOfTeam_Alive( player.GetTeam() )
+
+	int memberCount = 0
+	if ( teammates.len() > 0 )
+	{
+		memberCount = teammates.len()
+	}
+
+	int maxedOutMemberCount = 0
+
+	foreach ( teammate in teammates )
+	{
+		if ( EvoXp_IsPlayerAtMaxXP( teammate ) )
+		{
+			maxedOutMemberCount++
+			continue
+		}
+	}
+
+	if( maxedOutMemberCount == memberCount )
+		return true
+
+	return false
+}
+
+bool function UpgradeCore_EvoHarvesters_Enabled()
+{
+	return tuning.harvesters_enabled
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function EvoHarvesters_OnHarvesterCreated( entity harvester )
+{
+	if ( !IsValid( harvester ) )
+		return
+
+
+
+
+
+
+
+
+
+
+
+
+		SetCallback_CanUseEntityCallback( harvester, UpgradeCore_ConsoleCanUseFunction )
+		AddCallback_OnUseEntity_ClientServer( harvester, UpgradeCore_XpStationOnUsed_Client )
+		AddEntityCallback_GetUseEntOverrideText( harvester, GetUpgradeConsoleHoldUseTextOverride )
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_UpgradeCore_ConsoleUsed( entity harvester )
+{
+	if( !( harvester in file.upgradeStationClientProxies ) )
+		return
+
+	Signal( harvester, "HarvesterUsed" )
+	if ( CL_FindHarvesterState( harvester ) != eHarvesterState.EMPTY )
+		return
+
+	entity proxy = file.upgradeStationClientProxies[harvester]
+	thread HarvesterAnimThread( proxy )
+	thread FadeModelIntensityOverTime( proxy, 1, 1, 0.1 )
+
+	int particleSystemIndex = GetParticleSystemIndex( file.evoHarvesterSettings.harvesterUseVFX )
+	if ( particleSystemIndex > 0 )
+	{
+		StartParticleEffectOnEntity( proxy, particleSystemIndex, FX_PATTACH_ABSORIGIN_FOLLOW, 0 )
+	}
+
+	Signal( proxy, "HarvesterStopFX" )
+	Signal( harvester, "HarvesterStopFX" )
+	Signal( harvester, "HideWorldSpaceIconMinimapVisibility" )
+
+	if( !( harvester in file.ambGenericTable ) )
+		return
+	file.ambGenericTable[harvester].SetEnabled( false )
+}
+
+void function UpgradeCore_Announce_RevealXPStations()
+{
+	SetMapFeatureItem( 1011, Localize( "#PROMPT_PING_UPGRADE_STATION" ), Localize( "#LEGEND_UPGRADE_ANNOUNCEMENT_STATIONS_INIT_SUBTITLE" ), EVO_STATION_MINIMAP_ICON, <1.0, 1.0, 0.0> )
+
+	if( tuning.harvestersNotAccessibleBeforeAnnounce )
+	{
+		UpgradeCore_ActivateAndOpenAllXPStations()
+	}
+
+	if( !EvoLevels_IsDisplayingLevelUpMessage() )
+	{
+		string announcementText = Arsenals_TimeGateMatchesEvoHarvesters() ? "#EVO_STATIONS_AND_ARSENALS_ONLINE_ANNOUNCEMENT" : "#EVO_STATIONS_ONLINE_ANNOUNCEMENT"
+		if ( MinimapAnnouncements_IsEnabled() )
+		{
+			MapAnnouncementItem mapAnnouncementItem
+			mapAnnouncementItem.message = announcementText
+			mapAnnouncementItem.colorIn =  < 255, 255, 0 > / 255.0
+			mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_evo_online"
+			mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_evo_online_shadow"
+			mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+			mapAnnouncementItem.speakerDialogueLines = [ PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.EVO_HARVESTERS_ACTIVATE ) ]
+
+			MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+			return
+		}
+
+		AnnouncementData announcement = Announcement_Create( announcementText )
+		Announcement_SetStyle( announcement, ANNOUNCEMENT_STYLE_EVO_STATIONS_SPAWNED )
+		Announcement_SetPurge( announcement, true )
+		Announcement_SetSoundAlias( announcement, "UI_Crafting_Harvester_AvailableWarning" )
+		Announcement_SetDuration( announcement, 3.0 )
+		AnnouncementFromClass( GetLocalViewPlayer(), announcement )
+	}
+}
+
+void function UpgradeCore_ActivateAndOpenAllXPStations()
+{
+	foreach ( entity console, proxy in file.upgradeStationClientProxies )
+	{
+		thread UpgradeCore_ActivateAndOpen_XPStations_Thread( console, proxy )
+	}
+}
+
+void function UpgradeCore_ActivateAndOpen_XPStations_Thread( entity console, entity proxy )
+{
+	entity ambGen = file.ambGenericTable[ console ]
+	if( IsValid( ambGen ) )
+	{
+		ambGen.SetEnabled( true )
+	}
+
+	proxy.Anim_Stop()
+	proxy.Anim_Play( EVO_HARVESTER_CLOSE_TO_OPEN_ANIM )
+
+	float waitTime = 2
+	wait waitTime
+
+	CL_SetHarvesterState( console, eHarvesterState.FULL )
+}
+
+void function UpgradeCore_HarvesterActivationTimeChange( entity unused, float time )
+{
+	clGlobal.levelEnt.Signal( "UpdateEvoHarvesterState" )
+
+	thread UpgradeCore_HarvesterActivation_Wait_Thread( time )
+}
+
+void function UpgradeCore_HarvesterActivation_Wait_Thread( float activationTime )
+{
+	float currentTime = Time()
+
+	if( currentTime < activationTime )
+		wait activationTime - currentTime
+	else
+		return
+
+	if ( file.evoHarvesterSettings.callback_OnRevealXPStations != null )
+	{
+		file.evoHarvesterSettings.callback_OnRevealXPStations()
+	}
+	else
+	{
+		UpgradeCore_Announce_RevealXPStations()
+	}
+}
+
+void function MinimapPackage_UpgradeCoreBin( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", EVO_STATION_MINIMAP_ICON )
+	RuiSetImage( rui, "smallIcon", EVO_STATION_MINIMAP_ICON_SMALL )
+	RuiSetBool( rui, "hasSmallIcon", true )
+	RuiSetImage( rui, "clampedDefaultIcon", $"" )
+	RuiSetFloat3( rui, "iconColor", <1.0,1.0,0.0> )
+
+	if ( file.evoHarvesterSettings.callback_OnInitializeMinimapPackage != null )
+	{
+		file.evoHarvesterSettings.callback_OnInitializeMinimapPackage( rui )
+	}
+}
+
+var function UpgradeCore_CreateClientSideHudMarker( asset hudImage, entity minimapObj, float upOffset, bool trackPosition )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	vector pos             = minimapObj.GetOrigin()
+	var rui                = CreateFullscreenRui( PERK_IN_WORLD_HUD_OBJECT, RuiCalculateDistanceSortKey( localViewPlayer.EyePosition(), pos ) )
+	RuiSetImage( rui, "beaconImage", hudImage )
+	RuiSetGameTime( rui, "startTime", Time() )
+	if( trackPosition )
+	{
+		RuiTrackFloat3( rui, "pos", minimapObj, RUI_TRACK_ABSORIGIN_FOLLOW  )
+	}
+	else
+	{
+		RuiSetFloat3( rui, "pos", pos )
+	}
+	RuiSetFloat( rui, "upOffset", upOffset )
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+	RuiSetBool( rui, "isVisible", true )
+	RuiSetFloat3( rui, "iconColor", <1.0,1.0,0.0>  )
+
+	return rui
+}
+
+entity function Get_UpgradeConsole_UnderAim( vector worldPos, float worldRange )
+{
+	float closestDistSqr        = FLT_MAX
+	float worldRangeSqr = worldRange * worldRange
+	entity closestEnt = null
+
+	if( MapPing_Modify_DistanceCheck_Enabled() )
+	{
+		float modifier = MapPing_DistanceCheck_GetModifier()
+
+		if( worldRange >= MapPing_DistanceCheck_GetDistanceRange() )
+			modifier *= 0.5
+
+		worldRangeSqr = ( worldRange * modifier ) * ( worldRange * modifier )
+	}
+
+	foreach ( console, rui in file.harvesterToWorldspaceRui )
+	{
+		if ( !IsValid( console ) )
+			continue
+
+		vector objOrigin = console.GetOrigin()
+
+		float distSqr = Distance2DSqr( objOrigin, worldPos )
+		if ( distSqr < worldRangeSqr && distSqr < closestDistSqr  )
+		{
+			closestDistSqr = distSqr
+			closestEnt     = console
+		}
+	}
+
+	if ( !IsValid( closestEnt ) )
+	{
+		return null
+	}
+
+	return closestEnt
+}
+
+bool function Ping_UpgradeConsole_UnderAim( entity console )
+{
+	entity player = GetLocalClientPlayer()
+
+	if ( !IsValid( player ) || !IsPingAllowedForPlayer( player ) )
+		return false
+
+	if ( !IsPingEnabledForPlayer( player ) )
+		return false
+
+	entity minimapEnt = console.GetLinkEnt()
+	if( IsValid( minimapEnt ) )
+	{
+		Remote_ServerCallFunction( FUNCNAME_PingConsoleFromMap, minimapEnt )
+	}
+
+	EmitSoundOnEntity( GetLocalViewPlayer(), PING_SOUND_LOCAL_CONFIRM )
+
+	return true
+}
+
+void function UpgradeCore_ClientUpgradeConsoleCreated( entity console )
+{
+	if ( !IsValid( console ) )
+		return
+
+	if( !UpgradeCore_IsUpgradeCoreConsole( console ) )
+		return
+
+	thread UpgradeCore_SetUpConsole_Thread( console )
+}
+
+void function UpgradeCore_ClientUpgradeConsoleDestroyed( entity target )
+{
+	if ( !( target in file.upgradeStationClientProxies ) )
+		return
+
+	
+	
+	thread UpgradeCore_ClientUpgradeConsoleDestroyed_Delayed( target )
+}
+
+void function UpgradeCore_ClientUpgradeConsoleDestroyed_Delayed( entity target )
+{
+	WaitFrame()
+	if (( target in file.upgradeStationClientProxies ) && IsValid( file.upgradeStationClientProxies[target] ) )
+	{
+		file.upgradeStationClientProxies[target].Destroy()
+		delete file.upgradeStationClientProxies[target]
+	}
+
+	if (( target in file.ambGenericTable ) && IsValid( file.ambGenericTable[target] ))
+	{
+		file.ambGenericTable[target].Destroy()
+		delete file.ambGenericTable[target]
+	}
+}
+
+void function UpgradeCore_SetUpConsole_Thread( entity console  )
+{
+	Assert( IsNewThread() )
+
+	console.EndSignal( "OnDestroy" )
+
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( console ) )
+		return
+
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return
+
+	file.upgradeStationClientProxies[ console ] <- console
+
+	if ( file.evoHarvesterSettings.callback_OnHarvesterCreatedOverride != null )
+	{
+		file.evoHarvesterSettings.callback_OnHarvesterCreatedOverride( console )
+	}
+	else
+	{
+		EvoHarvesters_OnHarvesterCreated( console )
+	}
+
+	
+	vector origin = console.GetOrigin()
+	vector angles = console.GetAngles()
+
+	entity fakeHarvester
+
+	fakeHarvester = CreatePropDynamic( file.evoHarvesterSettings.harvesterModel, origin, angles )
+
+	fakeHarvester.SetFadeDistance( 15000 )
+	fakeHarvester.SetForceVisibleInPhaseShift( true )
+	file.upgradeStationClientProxies[console] <- fakeHarvester
+
+	entity ambGen = CreateClientSideAmbientGeneric( console.GetOrigin(), file.evoHarvesterSettings.sfxHarvesterAmbientLoop, 3000 )
+	ambGen.SetParent( console )
+	ambGen.SetLocalOrigin( <0, 0, 60> )
+	file.ambGenericTable[console] <- ambGen
+
+	CL_FindAndSetHarvesterState( console )
+
+	float harvesterActivationTime = GetGlobalNetTime( UPGRADE_CORE_HARVESTER_ACTIVATION_TIME )
+	if( harvesterActivationTime <= 0 )
+	{
+		clGlobal.levelEnt.WaitSignal( "UpdateEvoHarvesterState" )
+	}
+
+	if( Time() < harvesterActivationTime )
+	{
+		wait harvesterActivationTime - Time()
+	}
+
+	if ( file.evoHarvesterSettings.function_CanDisplayConsoleWorldIcon != null )
+	{
+		if ( !file.evoHarvesterSettings.function_CanDisplayConsoleWorldIcon( GetLocalViewPlayer(), console ) )
+			return
+	}
+	else
+	{
+		if ( !UpgradeCore_CanUseConsole( GetLocalViewPlayer(), console, false ) )
+			return
+	}
+
+	WorldspaceIconData iconSettings
+	iconSettings.ent = console
+	iconSettings.imageAsset = EVO_STATION_MINIMAP_ICON
+	iconSettings.upOffset = EVO_HARVESTER_ICON_UP_OFFSET
+	iconSettings.descriptiveText = "#PROMPT_PING_UPGRADE_STATION"
+	iconSettings.pingType = ePingType.UPGRADE_STATION
+	iconSettings.color = < 1.0, 1.0, 0.0 >
+	iconSettings.pingDistance = EVO_HARVESTER_PING_DISTANCE
+	iconSettings.minAlphaDistance = EVO_HARVESTER_PING_DISTANCE - 500
+	iconSettings.maxAlphaDistance = EVO_HARVESTER_PING_DISTANCE
+
+	if ( file.evoHarvesterSettings.callback_OnInitializeWorldSpaceIcon != null )
+	{
+		file.evoHarvesterSettings.callback_OnInitializeWorldSpaceIcon( iconSettings )
+	}
+
+	SetupWorldspaceIcon( iconSettings )
+}
+
+
+
+void function UpgradeCore_WorldspaceUseIconThink_Thread( entity ent, var rui )
+{
+	Assert( IsNewThread() )
+	ent.EndSignal( "OnDestroy", "HarvesterUsed" )
+
+	RuiSetString( rui, "descriptiveTextLocString", "#PROMPT_PING_UPGRADE_STATION" )
+	file.worldspaceHarvesterIconVisibility[ent] <- true
+	RuiSetBool( rui, "isVisible", true )
+	thread ListenForHarvesterPinged( ent, rui )
+
+	OnThreadEnd( void function() : ( ent, rui ) {
+		RuiDestroyIfAlive( rui )
+		delete file.harvesterToWorldspaceRui[ent]
+		delete file.worldspaceHarvesterIconVisibility[ent]
+		if( file.highlightedPingEnt == ent )
+		{
+			file.highlightedPingEnt = null
+		}
+	} )
+
+	WaitForever()
+}
+
+void function ListenForHarvesterPinged( entity prop, var rui )
+{
+	prop.EndSignal( "OnDestroy", "HarvesterUsed" )
+
+	while( true )
+	{
+		if( !file.pingedHarvesters.contains( prop ) )
+			prop.WaitSignal( "PerkPropPinged" )
+		file.worldspaceHarvesterIconVisibility[prop] <- false
+		RuiSetBool( rui, "isVisible", false )
+		prop.WaitSignal( "PerkPropPingDestroyed" )
+		file.worldspaceHarvesterIconVisibility[prop] <- true
+		RuiSetBool( rui, "isVisible", true )
+	}
+}
+
+void function UpgradeCore_HarvesterPinged( entity prop, entity wp )
+{
+	if ( !Perks_Enabled() )
+		return
+
+	prop.Signal( "PerkPropPinged" )
+	file.pingedHarvesters.append( prop )
+	wp.WaitSignal( "OnDestroy" )
+	file.pingedHarvesters.fastremovebyvalue( prop )
+	prop.Signal( "PerkPropPingDestroyed" )
+}
+
+void function UpgradeCore_SetHighlightedHarvesterIcon( entity ent )
+{
+	if( file.highlightedPingEnt == ent )
+		return
+
+	if( IsValid( file.highlightedPingEnt ) )
+	{
+		RuiSetBool( file.harvesterToWorldspaceRui[file.highlightedPingEnt], "isHighlighted", false )
+	}
+	file.highlightedPingEnt = ent
+	if( IsValid( file.highlightedPingEnt ) )
+	{
+		RuiSetBool( file.harvesterToWorldspaceRui[file.highlightedPingEnt], "isHighlighted", true )
+	}
+}
+
+entity function UpgradeCore_GetHighlightedHarvester()
+{
+	return file.highlightedPingEnt
+}
+
+bool function UpgradeCore_UpdateHighlightedHarvesterIcon()
+{
+	if( Perks_GetPerkPingInfo().ent != null || DeathBoxInsight_GetCurrentPingInfo().loot != null )
+		return false
+
+	entity player = GetLocalClientPlayer()
+	vector playerEyePos = player.EyePosition()
+	vector viewVector = player.GetViewVector()
+	float minDot = deg_cos( PERK_HIGHLIGHT_DEGREES  )
+	float bestDot = 0
+	entity bestEnt = null
+
+	array<entity> harvesters
+	foreach( harvester, rui in file.harvesterToWorldspaceRui )
+		harvesters.append( harvester )
+	harvesters = GetEntitiesFromArrayNearPos( harvesters, playerEyePos, EVO_HARVESTER_PING_DISTANCE )
+	foreach( entity ent in harvesters )
+	{
+		if( !(ent in file.worldspaceHarvesterIconVisibility) || !file.worldspaceHarvesterIconVisibility[ent] || !( ent in file.harvesterToWorldspaceRui ) )
+			continue
+		vector iconPos
+		iconPos = ent.GetOrigin() + <0,0,EVO_HARVESTER_ICON_UP_OFFSET>
+		vector eyeToIcon = iconPos - playerEyePos
+		vector eyeToIconNormalized = Normalize( eyeToIcon )
+		float dot = DotProduct( eyeToIconNormalized, viewVector )
+		if( dot < minDot || dot < bestDot )
+			continue
+
+		bestDot = dot
+		bestEnt = ent
+	}
+
+
+	UpgradeCore_SetHighlightedHarvesterIcon( bestEnt )
+	return bestEnt != null
+}
+
+void function UpgradeCore_XpStationOnUsed_Client( entity beacon, entity player, int pickupFlags )
+{
+	if ( UpgradeCore_EvoHarvester_PreventInteractionForFullyUpgradeTeams() )
+	{
+		if ( UpgradeCore_CanUseConsole_IsTeamMaxLevel( player ) )
+			return
+	}
+
+#if AUTO_PLAYER
+	if ( UpgradeCore_EvoHarvester_PreventInteractionByAutoPlayers() )
+	{
+		if ( (AutoPlayer_IsAutoPlayer( player ) || player.IsBot()) )
+			return
+	}
+#endif
+
+	beacon.Signal( "HarvesterUsed" )
+	beacon.Signal( "HideWorldSpaceIconMinimapVisibility" )
+}
+
+void function UpgradeCore_OnSpectateTargetChanged( entity spectatingPlayer, entity oldSpectatorTarget, entity newSpectatorTarget )
+{
+	entity player = GetLocalViewPlayer()
+	foreach( harvester, proxy in file.upgradeStationClientProxies )
+	{
+		CL_FindAndSetHarvesterState( harvester )
+	}
+}
+
+void function ServerToClient_UpgradeCore_UpdateHarvesterState( entity connectingPlayer )
+{
+	entity player = connectingPlayer
+
+	if( !IsValid( player ) )
+		return
+
+	foreach( harvester, proxy in file.upgradeStationClientProxies )
+	{
+		CL_FindAndSetHarvesterState( harvester )
+	}
+}
+
+void function CL_FindAndSetHarvesterState( entity harvester )
+{
+	if( !IsValid( harvester ) )
+		return
+
+	int newState = CL_FindHarvesterState( harvester )
+
+	if ( newState != eHarvesterState.COUNT_ )
+	{
+		CL_SetHarvesterState( harvester, newState )
+	}
+}
+
+int function CL_FindHarvesterState( entity harvester )
+{
+	int harvesterState = eHarvesterState.COUNT_
+
+	if( !IsValid( harvester ) )
+	{
+		return harvesterState
+	}
+
+	if ( harvester in file.harvesterStateOverrides )
+		return file.harvesterStateOverrides[harvester]
+
+	if ( file.evoHarvesterSettings.function_FindHarvesterStateOverride != null )
+	{
+		harvesterState = file.evoHarvesterSettings.function_FindHarvesterStateOverride( GetLocalViewPlayer(), harvester )
+	}
+	else
+	{
+		if ( UpgradeCore_CanUseConsole( GetLocalViewPlayer(), harvester )  )
+		{
+			harvesterState = eHarvesterState.FULL
+		}
+		else if ( tuning.harvesters_enabled && tuning.harvestersNotAccessibleBeforeAnnounce )
+		{
+			if( Time() < GetGlobalNetTime( UPGRADE_CORE_HARVESTER_ACTIVATION_TIME ) )
+			{
+				harvesterState = eHarvesterState.CLOSED
+			}
+			else
+			{
+				harvesterState = eHarvesterState.EMPTY
+			}
+		}
+		else
+		{
+			if ( tuning.harvestersStartClosed )
+			{
+				harvesterState = eHarvesterState.CLOSED
+			}
+			else
+			{
+				harvesterState = eHarvesterState.EMPTY
+			}
+		}
+	}
+
+	return harvesterState
+}
+
+void function ServerToClient_UpgradeCore_SetHarvesterState( entity harvester, int harvesterState )
+{
+	if ( !IsValid( harvester ) )
+		return
+
+	int oldState = CL_FindHarvesterState( harvester )
+	file.harvesterStateOverrides[harvester] <- harvesterState
+
+	
+	if ( oldState == harvesterState )
+		return
+
+	thread CL_SetHarvesterStateWithTransitionAnims( harvester, oldState, harvesterState )
+}
+
+void function CL_SetHarvesterStateWithTransitionAnims( entity harvester, int oldState, int newState )
+{
+	Assert( oldState != newState )
+
+	entity fakeHarvester = file.upgradeStationClientProxies[ harvester ]
+	if ( IsValid( fakeHarvester ) )
+	{
+		if ( oldState == eHarvesterState.CLOSED )
+		{
+			fakeHarvester.Anim_Stop()
+			fakeHarvester.Anim_Play( EVO_HARVESTER_CLOSE_TO_OPEN_ANIM )
+
+			WaittillAnimDone( fakeHarvester )
+		}
+		else if ( newState == eHarvesterState.CLOSED )
+		{
+			fakeHarvester.Anim_Stop()
+			fakeHarvester.Anim_Play( EVO_HARVESTER_OPEN_TO_CLOSE_IDLE_ANIM )
+
+			WaittillAnimDone( fakeHarvester )
+		}
+	}
+
+	CL_SetHarvesterState( harvester, newState )
+}
+
+void function CL_SetHarvesterState( entity harvester, int harvesterState )
+{
+	if( !IsValid( harvester ) )
+		return
+
+	entity fakeHarvester = file.upgradeStationClientProxies[ harvester ]
+	entity ambGen = file.ambGenericTable[ harvester ]
+
+	if( !IsValid( fakeHarvester ) )
+		return
+
+	switch( harvesterState )
+	{
+		case eHarvesterState.EMPTY:
+			fakeHarvester.Anim_Stop()
+			fakeHarvester.Anim_Play( EVO_HARVESTER_EMPTY_IDLE_ANIM )
+			fakeHarvester.kv.intensity = 0.1
+			if( IsValid( ambGen ) )
+			{
+				ambGen.SetEnabled( false )
+			}
+			Signal( harvester, "HarvesterStopFX" )
+			Signal( harvester, "HarvesterUsed" )
+			Signal( harvester, "HideWorldSpaceIconMinimapVisibility" )
+			break
+		case eHarvesterState.FULL:
+			thread PlayHarvesterIdleFX( fakeHarvester )
+			fakeHarvester.Anim_Stop()
+			fakeHarvester.Anim_Play( EVO_HARVESTER_FULL_IDLE_ANIM )
+			fakeHarvester.kv.intensity = 1.0
+			if( IsValid( ambGen ) )
+			{
+				ambGen.SetEnabled( true )
+			}
+			break
+		case eHarvesterState.CLOSED:
+			thread PlayHarvesterIdleFX( fakeHarvester )
+			fakeHarvester.Anim_Stop()
+			fakeHarvester.Anim_Play( EVO_HARVESTER_CLOSE_IDLE_ANIM )
+			fakeHarvester.kv.intensity = 1.0
+			if( IsValid( ambGen ) )
+			{
+				ambGen.SetEnabled( false )
+			}
+			break
+		default:
+			break
+	}
+}
+
+void function PlayHarvesterIdleFX( entity harvester )
+{
+	if( !IsValid( harvester ) )
+		return
+
+	
+	Signal( harvester, "HarvesterStopFX" )
+
+	EndSignal( harvester, "OnDestroy", "HarvesterStopFX" )
+
+	if( !UpgradeCore_UseUpdatedHarvesterModel() )
+	{
+		int attachId = harvester.LookupAttachment( "FX_INSIDE" )
+
+		int particleSystemIndex = 0
+		if ( file.evoHarvesterSettings.harvesterIdleVFX != $"" )
+		{
+			particleSystemIndex = GetParticleSystemIndex( file.evoHarvesterSettings.harvesterIdleVFX )
+		}
+		else
+		{
+			particleSystemIndex = GetParticleSystemIndex( EVO_HARVESTER_IDLE_FX )
+		}
+
+		int idleFx = StartParticleEffectOnEntity( harvester, particleSystemIndex, FX_PATTACH_POINT_FOLLOW, attachId )
+
+		OnThreadEnd(
+			function() : ( idleFx )
+			{
+				if ( IsValid( idleFx ) )
+				{
+					EffectStop( idleFx, false, true )
+				}
+			}
+		)
+	}
+
+	WaitForever()
+}
+
+string function GetUpgradeConsoleHoldUseTextOverride( entity ent )
+{
+	entity player = GetLocalViewPlayer()
+	bool canUse = UpgradeCore_CanUseConsole( player, ent )
+	if( !canUse )
+	{
+		if( Time() < GetGlobalNetTime( UPGRADE_CORE_HARVESTER_ACTIVATION_TIME )  )
+		{
+			return Localize( "#LEGEND_UPGRADE_STATIONS_USE_PROMPT_DENY_INACTIVE" ) 
+		}
+		else if ( UpgradeCore_CanUseConsole_IsTeamMaxLevel( player ) )
+		{
+			return Localize( "#LEGEND_UPGRADE_STATIONS_USE_PROMPT_DENY_MAXED" )
+		}
+		else
+		{
+			return Localize( "#LEGEND_UPGRADE_STATIONS_USE_PROMPT_DENY_USED" ) 
+		}
+	}
+
+	return ""
+}
+
+ 

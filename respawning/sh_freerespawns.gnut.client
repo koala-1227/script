@@ -1,0 +1,3418 @@
+
+
+global function FreeRespawns_Feature_Exists
+
+global function Freespawns_PLV_RebuildWeaponSlots
+
+
+
+
+
+
+
+
+
+
+const asset RESPAWN_DEATHLOC_BEACON_ASSET = $"P_ar_loot_drop_point_far_cp"
+const asset RESPAWN_DEATHLOC_ICON_ASSET		  = $"rui/rui_screens/icon_skull_postdeath"
+const float RESPAWN_DEATHLOC_SHOW_DURATION = 60.0
+
+
+
+const int TEAM_ALL = -1
+const int DEFAULT_LIMIT_ENDROUNDEND 	= 4
+const int DEFAULT_LIMIT_SQUADSREMAINING = -1 
+
+const asset		DESTINATIONMARKER_FX = $"P_ar_FS_landingmark" 
+const float 	FREESPAWNS_LANDINGMARKER_SPECTATE_TIME = 4.0
+
+const string 	FREESPAWN_SOUND_3P_LANDINGMARKER_ALLY 	= "Survival_Freespawn_Landing_Marker_3P"
+const string 	FREESPAWN_SOUND_3P_LANDINGMARKER_ENEMY 	= "PvE_RespawnChime_3P"
+const string	FREESPAWN_SOUND_1P_ELIMINATED_A_SQUAD		= "UI_3Strikes_EnemySquadEliminated" 
+
+
+const string	FREESPAWN_SOUND_1P_ALLYRESPAWNED			= "Survival_Freespawn_Friendly_1P"					
+const string 	FREESPAWN_SOUND_1P_ENEMYNEARBY				= "Survival_Freespawn_Nearby_Enemy_1P"				
+const string 	FREESPAWN_SOUND_1P_RESPAWNCOUNTDOWN			= "Survival_Freespawn_TokenCountdown_1P"			
+global const string	FREESPAWN_SOUND_1P_USETOKEN					= "Survival_Freespawn_TokenUse_1P"					
+const string	FREESPAWN_SOUND_1P_LAUNCHRESTORE			= "Survival_Freespawn_LaunchRestore_1P"				
+
+const string	FREESPAWN_SOUND_PLAYER_KILLED_WILL_RESPAWN  = "Survival_Freespawn_Pilot_Killed_Indicator_1P"	
+const string	FREESPAWN_SOUND_FREESPAWNS_DISABLED			= "Survival_Gameplay_Revival_Finish"				
+
+const string 	FREESPAWN_VO_RESPAWN_START					= "bc_returnFromRespawn" 
+const string 	FREESPAWN_VO_RESPAWN_LANDED					= "bc_respawnAuto"
+const float		SQUAD_SURVIVOR_WARNING_DEBOUNCE_TIME			= 10.0
+const string	SQUAD_SURVIVOR_SOUND_ANNOUNCE				= "Survival_Freespawn_TokenCountdownUpdate_1P" 
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct sObserverTarget
+{
+	entity targetObj
+	int mode = OBS_MODE_CHASE
+	float duration
+}
+
+struct sFreespawnedLoadout_DegradedWeapon
+{
+	string ref
+	array< string > mods
+}
+
+
+const string SKYDIVE_SPAWN_WARN_SOUND = "PvE_RespawnChime_3P"
+
+
+
+global const vector 	FREESPAWN_PROMPT_COLOR	= < 128.0, 128.0, 128.0 > / 255.0
+global const vector 	FREESPAWN_AGRROREWARD_COLOR	= < 0.0, 255.0, 0.0 > / 255.0
+global const vector		FREESPAWN_AGGROREWARD_PENALTY_COLOR = < 255.0, 0.0, 0.0 > / 255.0
+global const float 		FREESPAWN_DELAY = 30.0
+
+global const string 	RESPAWN_PLAYERWILLRESPAWN_SFX = "Dummie_WarpOut_3P"
+
+global function Freespawns_RespawnBeacons_Disabled
+
+global function Freespawns_PLV_RestoreAttachments_OnFreespawn
+global function Freespawns_RestorableAttachments_GetTypes
+
+const int FREESPAWNSV3_SELFREVIVES_MAX = 1
+const string HIGHLIGHT_ENEMYTEAMMATES = "bloodhound_sonar"
+
+
+const int FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT = 1000
+
+global function FreeRespawns_Init
+global function Freespawns_DisabledForPlayer_Get
+
+#if DEV
+global function DEV_Freespawns_DisabledForPlayer_Set
+#endif
+
+global function FreeRespawns_Feature_IsInEffect
+global function Freespawns_ManualBleedout_CanDo
+global function Freespawns_SelfRevive_CanDo
+global function Freespawns_PLV_DeathCam_Time
+global function PlayerRecentlyFreespawned_Check
+
+
+
+global function FreeRespawns_CanLocalPlayerRespawn
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function FreeRespawns_SV2CL_Announcement_SquadElimination
+global function FreeRespawns_SV2CL_Announcement_RespawnsDisabled
+global function FreeRespawns_SV2CL_UpdateRui
+
+global function Freespawns_SV2CL_RespawnStatus_Announce
+
+global function Freespawns_SV2CL_SelfRevives_Updated
+
+global struct sAnnouncementFields
+{
+	string  playerName = ""
+	string 	message = ""
+	string 	messageObit = ""
+	string 	messageLoc = ""
+	string 	messageObitLoc = ""
+	vector 	messageColor = COLOR_GRAY
+	float 	duration = 5.0
+	int 	announceStyle =  ANNOUNCEMENT_STYLE_GENERIC_WARNING 
+	int 	priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+	string 	announcementSFX = RESPAWN_PLAYERWILLRESPAWN_SFX
+}
+
+const string NETVAR_FREERESPAWNS_RESPAWNS_CLOSING_THREAD_SIGNAL		= "Freespawns_RespawnsClosingWarning_Thread"
+
+
+
+const string NETVAR_FREERESPAWNS_RESPAWNS_ENABLED		= "FreeRespawn_RespawnsEnabled"
+const string NETVAR_FREERESPAWNS_SQUAD_LIVES 			= "FreeRespawn_Squad_Lives"
+
+
+
+
+const string NETFUNC_ANNOUNCEMENT_SQUAD_ELIMINATION 	= "FreeRespawns_SV2CL_Announcement_SquadElimination"
+const string NETFUNC_ANNOUNCEMENT_RESPAWNS_DISABLED 	= "FreeRespawns_SV2CL_Announcement_RespawnsDisabled"
+
+const string NETFUNC_SV2CL_UPDATERUI 					= "FreeRespawns_SV2CL_UpdateRui"
+
+global const string NETVAR_FREERESPAWNS_RESPAWN_END_TIME		= "FreeRespawn_RespawnEndTime"
+const string NETVAR_FREERESPAWNS_RECENTLYFREESPAWNED	= "Freespawn_RecentlyFreespawned"
+global const string NETVAR_FREESPAWNS_PLAYER_ISFREESPAWNING = "Freespawn_Player_IsFreespawning"
+const float TIME_ANNOUNCEMENT_RESPAWN_ENABLED = 7.0
+const float TIME_ANNOUNCEMENT_RESPAWN_DISABLED = 7.0
+const float TIME_ANNOUNCEMENT_SQUAD_ELIMINATED = 4.0
+const float TIME_ANNOUNCEMENT_SQUAD_LIVES_REMAINING_RESPAWN = 7.0
+const float TIME_ANNOUNCEMENT_SQUAD_LIVES_REMAINING = 7.0
+
+enum eFreespawnObitType
+{
+	WILL_RESPAWN,
+	IS_RESPAWNING,
+	IS_RESPAWNING_MULTIPLE,
+	SQUAD_SURVIVOR,
+	TEAMMATE_KILLED,
+	ELIMINATED,
+	ELIMINATED_A_SQUAD,
+	COUNT_
+}
+
+
+global const int FREESPAWNS_SELFREVIVE_STATUSEFFECT_INDEX = eStatusEffect.temporary_self_revive
+
+
+
+
+
+
+const asset RUI_STRIKEOUT_INFO = 	$"ui/gamestate_info_survival.rpak"
+const asset RUI_STRIKEOUT_FULLMAP = $"ui/gamestate_info_fullmap.rpak"
+const asset RUI_DEATH_SCREEN = 		$"ui/header_data_solo.rpak" 
+
+const string RUIVAR_SQUAD_LIVES = "squadStrikes"
+const string RUIVAR_LIVES_HEADER_LABEL = "headerLabel"
+const string RUIVAR_RESPAWN_DISABLED = "respawnsDisabled"
+const string RUIVAR_DEATH_SCREEN_TITLE = "headerText"
+const string RUIVAR_DEATH_SCREEN_KILLS = "killsText"
+const string RUIVAR_DEATH_SCREEN_SCORE_LOSE = "losingScore"
+const string RUIVAR_DEATH_SCREEN_SCORE_WIN = "winningScore"
+
+const string TEXT_RESPAWN_ENABLED 			= "#FREERESPAWNS_ENABLED"
+const string TEXT_RESPAWN_ENABLED_SUB 		= "#FREERESPAWNS_ENABLED_SUB"
+
+const string TEXT_RESPAWN_DISABLED = "#FREERESPAWNS_DISABLED"
+const string TEXT_RESPAWN_DISABLED_SUB = "#FREERESPAWNS_DISABLED_SUB"
+
+const string TEXT_SQUAD_PLACEMENT_WIN = "#SQUAD_PLACEMENT_GCARDS_TITLE"
+const string TEXT_SQUAD_PLACEMENT_LOSE = "#SQUAD_HEADER_DEFEAT"
+const string TEXT_SQUAD_PLACEMENT_KILLS = "#DEATH_SCREEN_SUMMARY_KILLS_SQUAD"
+const string TEXT_DEATH_SCREEN_SUMMARY_KILLS = "#DEATH_SCREEN_SUMMARY_KILLS"
+const string TEXT_DEATH_SCREEN_SUMMARY_ASSISTS = "#DEATH_SCREEN_SUMMARY_ASSISTS"
+const string TEXT_DEATH_SCREEN_SUMMARY_KNOCKDOWNS = "#DEATH_SCREEN_SUMMARY_KNOCKDOWNS"
+const string TEXT_DEATH_SCREEN_SUMMARY_DAMAGE = "#DEATH_SCREEN_SUMMARY_DAMAGE_DEALT"
+const string TEXT_DEATH_SCREEN_SUMMARY_TIME = "#DEATH_SCREEN_SUMMARY_SURVIVAL_TIME"
+const string TEXT_DEATH_SCREEN_SUMMARY_REVIVES = "#DEATH_SCREEN_SUMMARY_REVIVES"
+
+
+const string SFX_SQUAD_LIVES_REMAINING_ONE = "UI_3Strikes_Widget_Stinger_Strike1"
+const string SFX_SQUAD_LIVES_REMAINING_ZERO = "UI_3Strikes_Widget_Stinger_Strike1"
+const string SFX_SQUAD_ELIMINATED = "UI_3Strikes_EnemySquadEliminated"
+const string SFX_RESPAWN_DISABLED_WITH_REWARD = "UI_3Strikes_RespawningDisabled"
+const string SFX_RESPAWN_DISABLED_WITHOUT_REWARD = "UI_3Strikes_RespawningDisabled"
+
+
+
+const vector INVALID_LOC = < 0,0,0 >
+
+struct
+{
+	bool devPrintsOn = false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		table< int, asset > freeSpawnV2_CountdownNumbers
+
+		array< entity > freespawns_DisabledForPlayer 
+
+
+
+
+		int squadLives = 0
+		int squadLivesViewPlayer = 0
+		int lastSquadLifeAnnouncement = -1
+		bool soloSplashAnnounceDisplayed = false
+
+
+
+		bool gameIsPlaying = false 
+
+		var nestedRespawnTokenRui
+		var nestedSquadLivesRui
+		var nestedSquadLivesMapRui
+		bool squadEliminated = false
+		float enemyRespawningLastAnnounceTime = 0.0
+		table< int, array< int > > destinationFXs 
+
+
+} file
+
+
+
+
+
+
+
+void function FreeRespawns_Init()
+{
+	if( !FreeRespawns_Feature_Exists() )
+		return
+
+	PrecacheParticleSystem( DESTINATIONMARKER_FX )
+
+	RegisterNetworking()
+
+	AddCallback_EntitiesDidLoad( OnEntitiesDidLoad )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	RegisterSignal( "freespawns_gameover" )
+
+	AddCallback_GameStateEnter( eGameState.Playing, OnGameState_Playing )
+	AddCallback_GameStateEnter( eGameState.WinnerDetermined, OnGameState_WinnerDetermined ) 
+
+
+		RegisterNetVarIntChangeCallback( NETVAR_FREERESPAWNS_SQUAD_LIVES, Lives_Changed )
+
+		Announcements_SetOnSetupAnnouncement_RemainingRespawns( FreeRespawns_OnSetupAnnouncement_RemainingRespawns )
+
+		DeathScreen_SetIsPlayerWaitingForRespawnFunc( FreeRespawns_IsPlayerWaitingForRespawn )
+		AddScoreboardShowCallback( FreeRespawns_OnShowScoreboard )
+
+		FreeRespawns_OverrideGameStateUI()
+
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.FREESPAWN_RESPAWN_MAP,
+			MINIMAP_OBJ_AREA_RUI, void function( entity ent, var rui ) {
+				SetupMapRuiRespawnLocation( ent, rui, false )
+			},
+			FULLMAP_OBJECTIVE_AREA_RUI, void function( entity ent, var rui ) {
+				SetupMapRuiRespawnLocation( ent, rui, true )
+			}
+		)
+
+
+
+	LockoutTimers_Init()
+}
+
+void function RegisterNetworking()
+{
+	RegisterNetworkedVariable( NETVAR_FREERESPAWNS_RESPAWN_END_TIME, SNDC_GLOBAL, SNVT_TIME, -1 )
+	RegisterNetworkedVariable( NETVAR_FREERESPAWNS_RESPAWNS_ENABLED, SNDC_GLOBAL, SNVT_BOOL, true )
+
+	RegisterNetworkedVariable( NETVAR_FREERESPAWNS_SQUAD_LIVES, SNDC_PLAYER_EXCLUSIVE, SNVT_INT, 0 )
+
+	RegisterNetworkedVariable( NETVAR_FREERESPAWNS_RECENTLYFREESPAWNED, SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL, false )
+	RegisterNetworkedVariable( NETVAR_FREESPAWNS_PLAYER_ISFREESPAWNING, SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL, false )
+
+	Remote_RegisterClientFunction( NETFUNC_ANNOUNCEMENT_SQUAD_ELIMINATION )
+	Remote_RegisterClientFunction( NETFUNC_ANNOUNCEMENT_RESPAWNS_DISABLED, "bool" )
+	Remote_RegisterClientFunction( NETFUNC_SV2CL_UPDATERUI )
+
+
+		RegisterNetVarBoolChangeCallback( NETVAR_FREERESPAWNS_RESPAWNS_ENABLED, Freespawns_SV2CL_FreespawnsEnabled_Update )
+		RegisterNetVarTimeChangeCallback( NETVAR_FREERESPAWNS_RESPAWN_END_TIME, Freespawns_OnRespawnsEndTimeChanged )
+		RegisterSignal( NETVAR_FREERESPAWNS_RESPAWNS_CLOSING_THREAD_SIGNAL )
+
+
+	Remote_RegisterClientFunction( "Freespawns_SV2CL_RespawnStatus_Announce", 			"entity", "int", 0, eFreespawnObitType.COUNT_ )
+	Remote_RegisterClientFunction( "Freespawns_SV2CL_SelfRevives_Updated", "entity", 	"int", 0, SelfRevives_PLV_MaxCount() )
+}
+
+void function OnEntitiesDidLoad()
+{
+
+
+
+
+
+
+
+}
+
+void function OnGameState_Playing()
+{
+
+
+
+
+
+		file.gameIsPlaying = true
+		thread Freespawns_RespawnsClosingWarning_Thread( GetLocalClientPlayer(), GetGlobalNetTime( NETVAR_FREERESPAWNS_RESPAWN_END_TIME ) )
+
+}
+
+void function OnGameState_WinnerDetermined()
+{
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		entity localPlayer = GetLocalClientPlayer() 
+
+		if( IsValid( localPlayer ) )
+		{
+			localPlayer.Signal( "freespawns_gameover" )
+		}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function Lives_Get( entity player )
+{
+	if( !IsValid( player ) )
+		return -1
+
+	if( !player.IsPlayer() )
+		return -1
+
+	int lives = player.GetPlayerNetInt( NETVAR_FREERESPAWNS_SQUAD_LIVES )
+	return( lives )
+}
+
+array< entity > function Lives_PlayersWithLives_Get( int team )
+{
+	array< entity > playersWithFreespawns = []
+	array< entity > squadPlayers = GetPlayerArrayOfTeam( team )
+
+	if( squadPlayers.len() == 0 )
+		return playersWithFreespawns
+
+	foreach( pl in squadPlayers )
+	{
+		if( !IsValid( pl ) )
+			continue
+
+		int playerLives = Lives_Get( pl )
+		if( playerLives >= 0 ) 
+		{
+			playersWithFreespawns.append( pl )
+		}
+	}
+
+	return playersWithFreespawns
+}
+
+int function Lives_PlayersWithLives_Count( int team )
+{
+	array< entity > playersWithLivesLeft = Lives_PlayersWithLives_Get( team )
+	int countPlayers = playersWithLivesLeft.len()
+
+#if DEV
+		printt( FUNC_NAME() + "(): Team " + " has " + countPlayers + " players with Freespawns left." )
+#endif
+	return countPlayers
+}
+
+array< entity > function Lives_PlayersWithoutLives_Get( int team )
+{
+	array< entity > playersWithNoFreespawns
+	array< entity > squadPlayers = GetPlayerArrayOfTeam( team )
+
+	if( squadPlayers.len() == 0 )
+		return playersWithNoFreespawns
+
+	foreach( pl in squadPlayers )
+	{
+		if( !IsValid( pl ) )
+			continue
+
+		int playerLives = Lives_Get( pl )
+		if( playerLives < 0 ) 
+		{
+			playersWithNoFreespawns.append( pl )
+		}
+	}
+
+	return playersWithNoFreespawns
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Freespawns_DisabledForPlayer_Get( entity player )
+{
+	if ( !IsValid( player ) )
+		return true
+
+	if ( !player.IsPlayer() )
+		return true
+
+	return( file.freespawns_DisabledForPlayer.contains( player ) )
+}
+
+void function Freespawns_DisabledForPlayer_Set( entity player, bool isDisabled )
+{
+	if ( !IsValid( player ) )
+		return
+
+	if ( !player.IsPlayer() )
+		return
+
+	if ( isDisabled )
+	{
+		if ( !file.freespawns_DisabledForPlayer.contains( player )  )
+		{
+			file.freespawns_DisabledForPlayer.append( player )
+		}
+	}
+	else
+	{
+		if ( file.freespawns_DisabledForPlayer.contains( player ) )
+		{
+			file.freespawns_DisabledForPlayer.removebyvalue( player )
+		}
+	}
+}
+
+#if DEV
+void function DEV_Freespawns_DisabledForPlayer_Set( entity player, bool isDisabled )
+{
+	Freespawns_DisabledForPlayer_Set( player, isDisabled )
+}
+#endif
+
+bool function FreeRespawns_Feature_IsInEffect()
+{
+	if( !FreeRespawns_Feature_Exists() )
+		return false
+
+	return GetGlobalNetBool( NETVAR_FREERESPAWNS_RESPAWNS_ENABLED )
+}
+
+bool function ManualBleedout_PLV_Enabled()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_manual_bleedout_enabled", true ) )
+}
+
+bool function Freespawns_ManualBleedout_CanDo()
+{
+	bool featureOn 		= FreeRespawns_Feature_IsInEffect()
+	bool canForceBleedout 	= ManualBleedout_PLV_Enabled()
+	return( featureOn && canForceBleedout )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function SquadLives_Get( int team )
+{
+	
+	if( FreeRespawns_PLV_SquadLivesMax() <= 0  )
+		return 1
+
+
+
+
+
+
+		return ( file.squadLives )
+
+}
+
+int function SquadLives_Get_ByPlayer( entity player )
+{
+	if ( !IsValid( player ) )
+		return 0
+
+	if( !player.IsPlayer() )
+		return 0
+
+	return( player.GetPlayerNetInt( NETVAR_FREERESPAWNS_SQUAD_LIVES ) )
+}
+
+
+
+
+
+
+
+
+bool function FreeRespawns_Feature_Exists()
+{
+	if( !GameMode_IsActive( eGameModes.SURVIVAL ) )
+		return false
+
+	if( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_FIRING_RANGE ) )
+		return false
+
+	if( GameModeVariant_IsActive( eGameModeVariants.SURVIVAL_TRAINING ) )
+		return false
+
+	return( GetCurrentPlaylistVarBool( "freerespawns_feature_exists", false ) )
+}
+
+
+
+bool function FreeRespawns_PLV_DropshipSkyDive_HasJumpMaster()
+{
+	return( GetCurrentPlaylistVarBool( "freerespawns_dropshipskydive_hasjumpmaster", true ) )
+}
+
+bool function FreeRespawns_PLV_GiveReward_OnDisable()
+{
+	return( GetCurrentPlaylistVarBool( "freerespawns_givereward_ondisable", false ) )
+}
+
+bool function FreeRespawns_PLV_DropshipSkyDive_HasDropship()
+{
+	return( GetCurrentPlaylistVarBool( "freerespawns_dropshipskydive_hasdropship", true ) )
+}
+
+
+
+
+int function FreeRespawns_PLV_Limit_SquadsRemaining()
+{
+	return( GetCurrentPlaylistVarInt( "freerespawns_limit_squadsremaining", DEFAULT_LIMIT_SQUADSREMAINING ) )
+}
+
+int function FreeRespawns_PLV_SquadLivesMax()
+{
+	return( GetCurrentPlaylistVarInt( "freerespawns_squadlivesmax", 1 ) )
+}
+
+int function FreeRespawns_PLV_MinSquadMembersToRespawn()
+{
+	return GetCurrentPlaylistVarInt( "freerespawns_minsquadmemberstorespawn", 1 )
+}
+
+int function LivesToStrikes( int lives )
+{
+	
+	const int MAX_STRIKES = 3
+
+	int strikes = minint( MAX_STRIKES - lives - 1, 3 )
+	return maxint( strikes, 0 )
+}
+
+float function FreeRespawns_PLV_ConsecutiveDeathsTimeoutSeconds()
+{
+	return( GetCurrentPlaylistVarFloat( "freerespawns_consecutive_deaths_timeout_seconds", 60.0 ) )
+}
+
+
+
+
+int function Freespawns_PLV_EndRound_OnClose()
+{
+	return GetCurrentPlaylistVarInt( "freespawns_endround_onclose", 4 ) - 1 
+}
+
+float function Freespawns_PLV_RespawnsClosingWarningSeconds()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_respawns_closing_warning_seconds", 120.0 )
+}
+
+
+bool function Freespawns_PLV_RestoreAttachments_OnFreespawn()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_restoreattachments", true ) ) 
+}
+
+
+
+
+string function Freespawns_PLV_RestorableAttachments()
+{
+	return( GetCurrentPlaylistVarString( "freespawns_restorableattachments", "barrel bolt hopup laser mag optic stock" ) ) 
+}
+
+array< string > function Freespawns_RestorableAttachments_GetTypes()
+{
+	string plv = Freespawns_PLV_RestorableAttachments()
+	array< string > results = GetTrimmedSplitString( plv, " " )
+	return results
+}
+
+
+bool function Freespawns_PLV_RebuildWeaponSlots()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_rebuildweaponslots", true ) ) 
+}
+
+
+bool function FreespawnLoadout_PLV_DegradeAttachments()
+{
+	return( GetCurrentPlaylistVarBool( "freespawnloadout_degradegoldattachments", true ) )
+}
+
+bool function FreespawnLoadout_PLV_DegradeAttachments_SuicidesOnly()
+{
+	return( GetCurrentPlaylistVarBool( "freespawnsloadout_degradegoldattachments_suicidesonly", true ) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function Freespawns_PLV_RespawningEnemy_WarnDistance()
+{
+	return( GetCurrentPlaylistVarFloat( "freespawns_respawningenemy_warndistance", 150 ) ) * METERS_TO_INCHES
+}
+float function Freespawns_PLV_RespawningEnemy_WarnDebounceTime()
+{
+	return( GetCurrentPlaylistVarFloat( "freespawns_respawningenemy_warndebouncetime_seconds", 10 ) )
+}
+
+float function Freespawns_PLV_RespawningEnemy_WarnDistanceToGround()
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_respawningenemy_warndistancetoground", 500.0 ) 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function PlayerRecentlyFreespawned_Check( entity player )
+{
+	if( !IsValid( player ) )
+		return false
+
+	if( !player.IsPlayer() )
+		return false
+
+
+
+
+
+
+		if( !file.gameIsPlaying )
+			return false
+
+
+	return( player.GetPlayerNetBool( NETVAR_FREERESPAWNS_RECENTLYFREESPAWNED ) )
+}
+
+
+
+#if DEV
+
+void function DevOut( string printMe, bool forcePrint = false )
+{
+	if( forcePrint || file.devPrintsOn )
+	{
+		printt( "** FREERESPAWNS ** " + printMe )
+	}
+}
+
+
+void function DevSphere( vector loc, float radius, vector color, bool showThrough, float duration, bool forceOut = false )
+{
+	if( !file.devPrintsOn && !forceOut )
+		return
+
+	DebugDrawSphere( loc, radius, color, showThrough, duration )
+}
+
+#endif
+
+
+
+
+
+void function Lives_Changed( entity argPlayer, int newValue )
+{
+	Lives_ForPlayer_Changed( argPlayer, newValue )
+}
+
+void function Lives_ForPlayer_Changed( entity argPlayer, int newValue )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	entity localClientPlayer = GetLocalClientPlayer()
+
+	entity localPlayer = IsValid( localViewPlayer ) ? localViewPlayer : localClientPlayer
+	if( !IsValid( localPlayer ) )
+		return
+
+	int localPlayerTeam = localPlayer.GetTeam()
+	int argPlayerTeam = argPlayer.GetTeam()
+
+#if DEV
+		DevOut( format( "%s():  -------------------", FUNC_NAME() ) )
+		DevOut( format( "%s():  Local Player Team == %s", FUNC_NAME(), string(  localPlayerTeam ) ) )
+		DevOut( format( "%s():  Arg Player Team == %s", FUNC_NAME(), string(  argPlayerTeam ) ) )
+		DevOut( format( "%s():  newValue == %s", FUNC_NAME(), string(  newValue ) ) )
+#endif
+
+	if( argPlayer == localPlayer )
+	{
+		file.squadLives = newValue
+		UpdateRui_Lives()
+	}
+}
+
+void function FreeRespawns_OverrideGameStateUI()
+{
+	ClGameState_RegisterGameStateAsset( RUI_STRIKEOUT_INFO )
+	ClGameState_RegisterGameStateFullmapAsset( RUI_STRIKEOUT_FULLMAP )
+}
+
+var function FreeRespawns_OnSetupAnnouncement_RemainingRespawns( AnnouncementData announcement )
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return null
+
+	var rui = RuiCreate( $"ui/announcement_solos_respawns_remaining.rpak", clGlobal.topoFullScreen, RUI_DRAW_POSTEFFECTS, RUI_SORT_SCREENFADE + 1 )
+	RuiSetInt( rui, "squadLives", file.squadLives )
+	RuiSetInt( rui, "strikeTotal", LivesToStrikes( file.squadLives ) )
+
+	EmitSoundOnEntity( player, announcement.soundAlias )
+	return rui
+}
+
+bool function FreeRespawns_IsPlayerWaitingForRespawn( entity player )
+{
+	if ( !IsValid( player ) || ( player != GetLocalClientPlayer() ) )
+		return false
+
+	if ( Freespawns_DisabledForPlayer_Get( player ) )
+		return false
+
+	int team = player.GetTeam()
+	bool awaitingRespawn = file.squadLives > -1
+
+#if DEV
+		bool playerIsLocalClientPlayer = player == GetLocalClientPlayer()
+		bool playerIsLocalViewPlayer = player == GetLocalViewPlayer()
+		DevOut( format( "%s(): player is Local Client Player? %s", FUNC_NAME(), string ( playerIsLocalClientPlayer ) ) )
+		DevOut( format( "%s(): player is Local View Player? %s", FUNC_NAME(), string ( playerIsLocalClientPlayer ) ) )
+		DevOut( format( "%s(): Squad Lives for Team %s == %s", FUNC_NAME(), string( team ), string ( file.squadLives ) ) )
+		DevOut( format( "%s(): NETVAR_FREERESPAWNS_RESPAWNS_ENABLED == %s", FUNC_NAME(), string ( FreeRespawns_Feature_IsInEffect() ) ) )
+#endif
+
+	return( awaitingRespawn )
+}
+
+void function FreeRespawns_ShowRespawnsDisabledSplash( bool hasLives )
+{
+	if ( GetGameState() != eGameState.Playing )
+		return
+
+	string message = Localize( TEXT_RESPAWN_DISABLED )
+	AnnouncementData announcement = Announcement_Create( message )
+
+	int style = hasLives ? ANNOUNCEMENT_STYLE_FINAL_RING_NO_RESPAWNS : ANNOUNCEMENT_STYLE_GENERIC_WARNING
+	string subText = Localize( TEXT_RESPAWN_DISABLED_SUB )
+	vector messageColor = SrgbToLinear( GetKeyColor( COLORID_DANGER_WARNING_RED ) / 255 )
+
+	if( hasLives )
+	{
+		Announcement_SetSubText( announcement, subText )
+	}
+
+	Announcement_SetUseColorOnSubtext( announcement, false )
+	Announcement_SetFrameColor( announcement, messageColor )
+	Announcement_SetTitleColor( announcement, <1.0, 1.0, 1.0> )
+	Announcement_SetDuration( announcement, TIME_ANNOUNCEMENT_RESPAWN_DISABLED )
+	Announcement_SetStyle( announcement, style )
+
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateDeprecatedStyle( announcement )
+	mainBanner.priority = eHudNotificationQueuePriority.HIGH
+	mainBanner.soundAliases = [ SFX_RESPAWN_DISABLED_WITHOUT_REWARD ]
+	mainBanner.speakerDialogueLines = [ PickCommentaryLineFromBucket( eSurvivalCommentaryBucket.RESPAWNS_DISABLED ) ]
+	CenterAnnouncements_QueueItem( mainBanner, ePersistenceContext.GLOBAL )
+}
+
+void function FreeRespawns_SV2CL_Announcement_RespawnsDisabled( bool hasLives )
+{
+	FreeRespawns_ShowRespawnsDisabledSplash( hasLives )
+
+	UpdateRui_RespawnState( false )
+	UpdateRui_Lives()
+}
+
+void function UpdateRui_RespawnState( bool newState )
+{
+	UpdateNestedSquadLivesRui( file.nestedSquadLivesRui, file.squadLives, file.squadLivesViewPlayer )
+	UpdateNestedSquadLivesRui( file.nestedSquadLivesMapRui, file.squadLives, file.squadLivesViewPlayer )
+}
+
+void function UpdateRui_Lives()
+{
+	UpdateRui_Lives_Player()
+}
+
+void function UpdateRui_Lives_Player()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player) )
+		return
+
+	TryCreateNestedSquadLivesRui()
+
+	int lives = player.GetPlayerNetInt( NETVAR_FREERESPAWNS_SQUAD_LIVES )
+	UpdateNestedSquadLivesRui( file.nestedSquadLivesRui, lives, file.squadLivesViewPlayer )
+	UpdateNestedSquadLivesRui( file.nestedSquadLivesMapRui, lives, file.squadLivesViewPlayer )
+}
+
+
+void function TryCreateNestedSquadLivesRui()
+{
+	var gamestateRui = ClGameState_GetRui()
+	if ( gamestateRui != null && RuiIsAlive( gamestateRui ) && file.nestedSquadLivesRui == null || !RuiIsAlive( file.nestedSquadLivesRui ) )
+	{
+		RuiDestroyNestedIfAlive( gamestateRui, "respawnTokenHudHandle" )
+		file.nestedSquadLivesRui = RuiCreateNested( gamestateRui, "respawnTokenHudHandle", $"ui/gamestate_survival_respawn_token.rpak" )
+		RuiTrackGameTime( file.nestedSquadLivesRui, "respawningEndTime", null, RUI_TRACK_SCRIPT_NETWORK_VAR_GLOBAL_GAMETIME, GetNetworkedVariableIndex( NETVAR_FREERESPAWNS_RESPAWN_END_TIME ) )
+		RuiSetGameTime( file.nestedSquadLivesRui, "respawningTimeWarning", Freespawns_PLV_RespawnsClosingWarningSeconds() )
+		RuiTrackBool( file.nestedSquadLivesRui, "respawnsEnabled", null, RUI_TRACK_SCRIPT_NETWORK_VAR_GLOBAL_BOOL, GetNetworkedVariableIndex( NETVAR_FREERESPAWNS_RESPAWNS_ENABLED ) )
+
+		if ( FreeRespawns_PLV_MinSquadMembersToRespawn() == 0 )
+		{
+			RuiSetBool( file.nestedSquadLivesRui, "isVisible", false )
+		}
+	}
+
+	var gamestateMapRui = GetFullmapGamestateRui()
+	if ( gamestateMapRui != null && RuiIsAlive( gamestateMapRui ) && file.nestedSquadLivesMapRui == null || !RuiIsAlive( file.nestedSquadLivesMapRui ) )
+	{
+		RuiDestroyNestedIfAlive( gamestateMapRui, "respawnTokenHudHandle" )
+		file.nestedSquadLivesMapRui = RuiCreateNested( gamestateMapRui, "respawnTokenHudHandle", $"ui/gamestate_survival_respawn_token.rpak" )
+		RuiTrackGameTime( file.nestedSquadLivesMapRui, "respawningEndTime", null, RUI_TRACK_SCRIPT_NETWORK_VAR_GLOBAL_GAMETIME, GetNetworkedVariableIndex( NETVAR_FREERESPAWNS_RESPAWN_END_TIME ) )
+		RuiSetGameTime( file.nestedSquadLivesMapRui, "respawningTimeWarning", Freespawns_PLV_RespawnsClosingWarningSeconds() )
+		RuiTrackBool( file.nestedSquadLivesMapRui, "respawnsEnabled", null, RUI_TRACK_SCRIPT_NETWORK_VAR_GLOBAL_BOOL, GetNetworkedVariableIndex( NETVAR_FREERESPAWNS_RESPAWNS_ENABLED ) )
+
+		if ( FreeRespawns_PLV_MinSquadMembersToRespawn() == 0 )
+		{
+			RuiSetBool( file.nestedSquadLivesMapRui, "isVisible", false )
+		}
+	}
+}
+
+void function UpdateNestedSquadLivesRui( var nestedSquadLivesRui, int lives, int viewPlayerLives )
+{
+	if ( nestedSquadLivesRui != null && RuiIsAlive( nestedSquadLivesRui ) )
+	{
+		RuiSetInt( nestedSquadLivesRui, "squadLives", maxint( lives, 0 ) )
+		RuiSetInt( nestedSquadLivesRui, "viewPlayerLives", maxint( viewPlayerLives, 0 ) )
+		RuiSetBool( nestedSquadLivesRui, "isLivesInfinite", true )
+	}
+}
+
+
+void function FreeRespawns_OnShowScoreboard()
+{
+	UpdateNestedSquadLivesRui( file.nestedSquadLivesMapRui, file.squadLives, file.squadLivesViewPlayer )
+}
+
+
+
+
+void function FreeRespawns_SV2CL_Announcement_SquadElimination()
+{
+	EmitSoundOnEntity( GetLocalViewPlayer(), SFX_SQUAD_ELIMINATED )
+}
+
+
+
+void function FreeRespawns_SV2CL_UpdateRui()
+{
+	UpdateRui_Lives()
+}
+
+
+
+bool function FreeRespawns_CanLocalPlayerRespawn()
+{
+	entity player = GetLocalClientPlayer()
+	if ( !IsValid( player ) )
+		return false
+
+	bool squadEliminated = player.GetPlayerNetInt( "respawnStatus" ) == eRespawnStatus.SQUAD_ELIMINATED
+	int squadLives = player.GetPlayerNetInt( NETVAR_FREERESPAWNS_SQUAD_LIVES )
+	bool canRespawn = !squadEliminated && squadLives > -1
+
+	return canRespawn
+}
+
+
+
+array< int > function Get_Squads_NotEliminated()
+{
+	array< int > results
+	array< entity > allPlayers  = GetPlayerArray()
+
+	foreach( player in allPlayers )
+	{
+		if( !IsValid( player ) )
+			continue
+
+		if( !player.IsPlayer() )
+			continue
+
+		if( GetRespawnStatus( player ) == eRespawnStatus.SQUAD_ELIMINATED )
+			continue
+
+		int playerTeam = player.GetTeam()
+		if( !results.contains( playerTeam ) )
+		{
+			results.append( playerTeam )
+		}
+	}
+
+	return results
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function Freespawns_PLV_Show_RespawnStatus_OnRespawn()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_showrespawnstatus_onrespawn", true ) ) 
+}
+
+bool function Freespawns_PLV_Show_RespawnStatus_OnDeath_WillSpawn()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_showrespawnstatus_ondeath_willrespawn", false ) ) 
+}
+
+bool function Freespawns_PLV_Show_Survivor_AggroHint()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_show_survivor_aggrohint", true ) )
+}
+
+bool function Freespawns_PLV_Show_RespawnStatus_OnDeath_Eliminated()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_showrespawnstatus_ondeath_eliminated", true ) ) 
+}
+
+bool function Freespawns_PLV_Show_RespawnStatus_OnTeammateKilled()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_showrespawnstatus_onteammatekilled", false ) )
+}
+
+bool function Freespawns_PLV_Show_RespawnStatus_CountDownedTeammatesAsLiving()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_showrespawnstatus_countdownedteammatesasliving", true ) )
+}
+
+
+
+
+float function DropshipGroupSpawn_PLV_DiveRadius()
+{
+	return( GetCurrentPlaylistVarFloat( "freespawns_dropshipgroupspawn_diveradius", 250 ))  * METERS_TO_INCHES 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function SetupMapRuiRespawnLocation( entity ent, var rui, bool isFullMap )
+{
+	RuiSetAsset( rui, "areaImage", $"rui/hud/common/radial_gradiant" )
+	RuiSetImage( rui, "centerImage", $"" )
+	RuiSetImage( rui, "clampedImage", $"" )
+	RuiSetFloat( rui, "areaImageAlpha", 0.95 )
+
+	string areaColorArgName = "objColor"
+	if ( !isFullMap )
+	{
+		RuiSetBool( rui, "useOverrideColor", true )
+		areaColorArgName = "overrideColor"
+	}
+
+	RuiSetColorAlpha( rui, areaColorArgName, SrgbToLinear( <57, 181, 74> / 255 ), 1 )
+
+	RuiSetFloat( rui, "objectRadius", DropshipGroupSpawn_PLV_DiveRadius() / 16384)
+}
+
+
+
+void function Freespawns_SV2CL_RespawnStatus_Announce( entity subjectPlayer, int respawnObitType )
+{
+	const asset LIVES_ICON = $"rui/hud/gamestate/extra_life_icon"
+
+	entity player = GetLocalViewPlayer()
+
+	if( !IsValid( player ) )
+		return
+
+	if( !IsValid( subjectPlayer ) )
+		return
+
+	if( !subjectPlayer.IsPlayer() )
+		return
+
+	if ( GetGameState() != eGameState.Playing )
+		return
+
+	bool isSelf = player == subjectPlayer
+	bool isAlly = player.GetTeam() == subjectPlayer.GetTeam()
+
+	sAnnouncementFields aFields
+
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+	mainBanner.priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+	mainBanner.duration = 5.0 
+	mainBanner.backgroundAlpha = 0.8
+	mainBanner.scalar = 0.8
+
+
+	CenterAnnouncementItem playerBanner = CenterAnnouncements_CreateGradientStyle()
+	playerBanner.mainText = GetDisplayablePlayerName( subjectPlayer )
+	playerBanner.paddingTop = 5.0
+	playerBanner.scalar = 0.6
+	playerBanner.mainTextIsUpper = false
+
+
+
+		playerBanner.mainTextFontFace = DEFAULT_FONT
+
+
+	switch( respawnObitType )
+	{
+		case eFreespawnObitType.IS_RESPAWNING:	
+			if( isSelf )
+			{
+				
+				Obituary_Print_Localized( Localize( "#FREESPAWNSV2_OBIT_YOURE_FREESPAWNING" ), COLOR_GREEN )
+
+				
+				if ( !FreeRespawns_Feature_IsInEffect() )
+				{
+					FreeRespawns_ShowRespawnsDisabledSplash( true )
+				}
+				else
+				{
+					if ( Freespawns_PLV_Show_RespawnStatus_OnTeammateKilled() )
+					{
+						array< entity > aliveTeammates = GetPlayerArrayOfTeam_Alive( player.GetTeam() )
+						aliveTeammates.fastremovebyvalue( player )
+
+						
+						if ( aliveTeammates.len() >= GetTeamSize( player.GetTeam() ) - 1 )
+							break
+
+						mainBanner.mainText = Localize( aliveTeammates.len() > 0 ? "#FREESPAWNS_RESPAWN_TEAMMATES_STATUS" : "#FREESPAWNV2_LONE_SURVIVOR" )
+						mainBanner.frameColor = GetKeyColor( COLORID_DANGER_WARNING_RED ) / 255.0
+						mainBanner.leftIntensityTextureCount = 1
+						mainBanner.rightIntensityTextureCount = 1
+
+						playerBanner.mainText = Localize( aliveTeammates.len() > 0 ? "#FREESPAWNS_RESPAWN_TEAMMATES_STATUS_SUB" : "#FREESPAWNV2_LONE_SURVIVOR_SUB" )
+
+						AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, playerBanner ] )
+						builder.priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+
+						CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+					}
+				}
+			}
+			else
+			{
+				if ( !isAlly && Time() - file.enemyRespawningLastAnnounceTime < Freespawns_PLV_RespawningEnemy_WarnDebounceTime() )
+					break;
+
+				file.enemyRespawningLastAnnounceTime = isAlly ? file.enemyRespawningLastAnnounceTime : Time()
+				if ( isAlly && ShowRespawnObitForAlly() )
+				{
+					string playerName = GetDisplayablePlayerName( subjectPlayer )
+					vector playerColor = GetKeyColor( COLORID_MEMBER_COLOR0, subjectPlayer.GetTeamMemberIndex() )
+
+					ObitRankBadgeInfo badgeInfo
+					Obituary_Print_PlayerDeath( "", LIVES_ICON, "", $"", playerName, badgeInfo, <255, 255, 255>, playerColor, <255, 255, 255>, false, 0 )
+					EmitSoundOnEntity( player, FREESPAWN_SOUND_1P_ALLYRESPAWNED )
+				}
+
+				if ( isAlly && ShowRespawnBannerForAlly() )
+				{
+					mainBanner.mainText = Localize( "#FREESPAWNSV2_OBIT_VICTIM_ISRESPAWNING_TOALLIES" )
+					mainBanner.frameColor = GetKeyColor( COLORID_MEMBER_COLOR0, subjectPlayer.GetTeamMemberIndex() ) / 255.0
+					mainBanner.soundAliases.append( FREESPAWN_SOUND_1P_ALLYRESPAWNED )
+					mainBanner.mainIcon1 = LIVES_ICON
+					mainBanner.imageContainerFrameColor = mainBanner.frameColor
+
+					array< CenterAnnouncementItem > banners = [ mainBanner, playerBanner ]
+					AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( banners )
+					builder.priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+					CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+				}
+
+				if ( !isAlly && ShowRespawnObitForEnemy() )
+				{
+					string playerName = GetDisplayablePlayerName( subjectPlayer )
+					vector playerColor = GetKeyColor( COLORID_DANGER_WARNING_YELLOW )
+
+					ObitRankBadgeInfo badgeInfo
+					Obituary_Print_PlayerDeath( "", LIVES_ICON, "", $"", playerName, badgeInfo, <255, 255, 255>, playerColor, <255, 255, 255>, false, 0 )
+					EmitSoundOnEntity( player, FREESPAWN_SOUND_1P_ENEMYNEARBY )
+				}
+
+				if ( !isAlly && ( ShowRespawnBannerForEnemy() ) )
+				{
+					mainBanner.mainText = Localize( "#FREESPAWNSV2_OBIT_VICTIM_ISRESPAWNING_TOENEMIES" )
+					mainBanner.frameColor = GetKeyColor( COLORID_DANGER_WARNING_YELLOW ) / 255.0
+					mainBanner.soundAliases.append( FREESPAWN_SOUND_1P_ENEMYNEARBY )
+					mainBanner.leftIntensityTextureCount = 1
+					mainBanner.rightIntensityTextureCount = 1
+
+					if ( MinimapAnnouncements_IsEnabled() )
+					{
+						MapAnnouncementItem mapAnnouncementItem
+						mapAnnouncementItem.message = mainBanner.mainText
+						mapAnnouncementItem.colorIn = < 245, 165, 35 > / 255.0
+						mapAnnouncementItem.icon = $"rui/hud/small_announcements/icon_enemy_nearby"
+						mapAnnouncementItem.iconShadow = $"rui/hud/small_announcements/icon_enemy_nearby_shadow"
+						mapAnnouncementItem.priority = eHudNotificationQueuePriority.LOW
+						mapAnnouncementItem.speakerDialogueLines = mainBanner.speakerDialogueLines
+
+						MinimapAnnouncement_QueueItem( mapAnnouncementItem )
+						return
+					}
+
+					AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner ] )
+					builder.priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+
+					CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+				}
+			}
+			break
+		case eFreespawnObitType.TEAMMATE_KILLED:
+			if ( Freespawns_PLV_Show_RespawnStatus_OnTeammateKilled() )
+			{
+				mainBanner.mainText = Localize( "#FREESPAWNV4_SQUAD_SURVIVOR" )
+				mainBanner.frameColor = GetKeyColor( COLORID_DANGER_WARNING_RED ) / 255.0
+				mainBanner.mainIcon1 = $"rui/rui_screens/obj_skull_splash"
+				mainBanner.imageContainerFrameColor = mainBanner.frameColor
+				mainBanner.leftIntensityTextureCount = 1
+				mainBanner.rightIntensityTextureCount = 1
+
+				AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, playerBanner ] )
+				builder.priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+
+				CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+			}
+			break
+		case eFreespawnObitType.SQUAD_SURVIVOR:
+			mainBanner.mainText = Localize( "#FREESPAWNV2_LONE_SURVIVOR" )
+			mainBanner.frameColor = GetKeyColor( COLORID_DANGER_WARNING_RED ) / 255.0
+			mainBanner.mainIcon1 = $"rui/rui_screens/obj_tri_skull"
+			mainBanner.soundAliases.append( SQUAD_SURVIVOR_SOUND_ANNOUNCE )
+			mainBanner.imageContainerFrameColor = mainBanner.frameColor
+			mainBanner.leftIntensityTextureCount = 3
+			mainBanner.rightIntensityTextureCount = 3
+
+			playerBanner.mainText = FreeRespawns_Feature_IsInEffect() ? Localize( "#FREESPAWNV2_LONE_SURVIVOR_SUB_RESPAWNSON" ) : Localize( "#FREESPAWNV2_LONE_SURVIVOR_SUB_RESPAWNSOFF" )
+
+			AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, playerBanner ] )
+			builder.priority = FREESPAWN_ANNOUNCEMENT_PRIORITY_DEFAULT
+
+			builder.onPreIntro = bool function( HudNotificationQueueItem queueItem )
+			{
+				entity player = GetLocalViewPlayer()
+
+				if ( !IsValid( player ) )
+					return false
+
+				array< entity > aliveAllies = GetPlayerArrayOfTeam_Alive( player.GetTeam() )
+				int alliesStillStandingCount
+				foreach( ally in aliveAllies )
+				{
+					if( !Bleedout_IsBleedingOut( ally ) )
+					{
+						alliesStillStandingCount++
+					}
+				}
+
+				int livingAllyCountForMessaging = Freespawns_PLV_Show_RespawnStatus_CountDownedTeammatesAsLiving() ? aliveAllies.len() : alliesStillStandingCount
+
+				
+				return livingAllyCountForMessaging == 1
+			}
+
+			CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+			break
+		case eFreespawnObitType.ELIMINATED_A_SQUAD:
+			
+			Obituary_Print_Localized( Localize( isSelf ? "#FREESPAWNS_RESPAWN_OBIT_ELIMINATEDASQUAD_BYYOU" : "#FREESPAWNS_RESPAWN_OBIT_ELIMINATEDASQUAD", GetDisplayablePlayerName( subjectPlayer ) ), COLOR_GREEN, COLOR_WHITE, COLOR_WHITE, COLOR_WHITE, 0.0, false, OBIT_FLAG_SQUAD_WIPE )
+			EmitSoundOnEntity( player, FREESPAWN_SOUND_1P_ELIMINATED_A_SQUAD )
+			break
+		default:
+			break
+	}
+}
+
+
+bool function ShowRespawnObitForAlly()
+{
+	return GetCurrentPlaylistVarBool( "show_respawn_obit_ally", true )
+}
+
+bool function ShowRespawnObitForEnemy()
+{
+	return GetCurrentPlaylistVarBool( "show_respawn_obit_enemy", false )
+}
+
+bool function ShowRespawnBannerForAlly()
+{
+	return GetCurrentPlaylistVarBool( "show_respawn_banner_ally", false )
+}
+
+bool function ShowRespawnBannerForEnemy()
+{
+	return GetCurrentPlaylistVarBool( "show_respawn_banner_enemy", true )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Freespawns_SV2CL_FreespawnsEnabled_Update( entity player, bool isOn )
+{
+	Freespawns_DisabledForPlayer_Set( GetLocalViewPlayer(), !isOn )
+}
+
+void function Freespawns_OnRespawnsEndTimeChanged( entity player, float endTime )
+{
+	thread Freespawns_RespawnsClosingWarning_Thread( player, endTime )
+}
+
+void function Freespawns_RespawnsClosingWarning_Thread( entity player, float endTime )
+{
+	if ( !IsValid( player ) )
+		return
+
+	player.Signal( NETVAR_FREERESPAWNS_RESPAWNS_CLOSING_THREAD_SIGNAL )
+	player.EndSignal( NETVAR_FREERESPAWNS_RESPAWNS_CLOSING_THREAD_SIGNAL )
+	player.EndSignal( "OnDestroy" )
+
+	float timeTilRespawnsWarning = endTime - Time() - Freespawns_PLV_RespawnsClosingWarningSeconds()
+	if ( timeTilRespawnsWarning < 0 )
+		return
+
+	wait timeTilRespawnsWarning
+
+	array< string > voLines = [ "diag_ap_aiNotify_respawnDisableWarning_01_01", "diag_ap_aiNotify_respawnDisableWarning_01_02" ]
+	EmitSoundOnEntity( player, voLines.getrandom() )
+}
+
+
+
+
+
+bool function SelfRevives_PLV_Enabled()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_selfrevives_enabled", false ) ) 
+}
+
+bool function SelfRevives_PLV_Allowed_AfterFreespawnDisable()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_selfrevives_allowed_afterfreespawndisable", true ) ) 
+}
+
+int function SelfRevives_PLV_MaxCount()
+{
+	return( GetCurrentPlaylistVarInt( "freespawns_selfrevives_maxcount", FREESPAWNSV3_SELFREVIVES_MAX ) ) 
+}
+
+
+
+bool function SelfRevives_Allowed()
+{
+	bool freespawnsV3_SelfRevives_Enabled = SelfRevives_PLV_Enabled()
+	bool freespawnsEnabled = SelfRevives_PLV_Allowed_AfterFreespawnDisable() ? true : FreeRespawns_Feature_IsInEffect()
+
+	return ( freespawnsEnabled && freespawnsV3_SelfRevives_Enabled )
+}
+
+bool function Freespawns_SelfRevive_CanDo( entity player )
+{
+	if( !IsValid( player ) )
+		return false
+
+	if( !player.IsPlayer() )
+		return false
+
+	if( !SelfRevives_Allowed() )
+		return false
+
+	return( player.p.numSelfRevivesLeft > 0 )
+}
+
+float function Freespawns_PLV_DeathCam_Time( entity player )
+{
+	return GetCurrentPlaylistVarFloat( "freespawns_deathcam_time", DEATHCAM_TIME_SHORT )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Freespawns_SV2CL_SelfRevives_Updated( entity player, int revives )
+{
+	if( !IsValid( player ) )
+		return
+
+#if DEV
+		printt( FUNC_NAME() + "(): for player " + player )
+		printt( FUNC_NAME() + "(): revives == " + revives )
+#endif
+
+	player.p.numSelfRevivesLeft = revives
+}
+
+
+
+int function SelfRevives_Remaining_Get( entity player )
+{
+	if( !IsValid( player ) )
+		return 0
+
+	int revivesLeft = player.p.numSelfRevivesLeft
+	return( revivesLeft )
+}
+
+
+
+
+bool function Freespawns_PLV_RespawnBeacons_Disabled()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_respawnbeacons_disabled", true ) ) 
+}
+
+bool function Freespawns_RespawnBeacons_Disabled()
+{
+	bool featureExists 	= FreeRespawns_Feature_Exists()
+	bool respawnBeacons_Disabled = Freespawns_PLV_RespawnBeacons_Disabled()
+	return( featureExists && respawnBeacons_Disabled )
+}
+
+
+bool function Freespawns_PLV_RespawnMapIcons_Enabled()
+{
+	return( GetCurrentPlaylistVarBool( "freespawns_respawnmapicons_enabled", true ) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           

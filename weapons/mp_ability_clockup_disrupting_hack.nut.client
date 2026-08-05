@@ -1,0 +1,394 @@
+global function Ability_ClockUp_DisruptingHack_Init
+global function Ability_ClockUp_DisruptingHack_IsValidRef
+global function Ability_ClockUp_DisruptingHack_CanSpawnInDeathbox
+global function Ability_ClockUp_DisruptingHack_GetCyberloadTriggerCost
+global function Ability_ClockUp_DisruptingHack_TryActivate
+
+
+
+
+
+
+
+const string PVAR_ABILITY_CLOCKUP_DISRUPTING_HACK_IS_ENABLED							= "ability_clockup_disrupting_hack_is_enabled"
+
+
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_START							= "ability_clockup_disrupting_hack_lifetime_start"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_STOP							= "ability_clockup_disrupting_hack_lifetime_stop"
+const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_START					= "ability_clockup_disrupting_hack_offhand_lifetime_start"
+global const string SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_STOP			= "ability_clockup_disrupting_hack_offhand_lifetime_stop"
+
+
+global const string ABILITY_CLOCKUP_DISRUPTING_HACK_REF									= "mp_ability_clockup_disrupting_hack"
+const float ABILITY_CLOCKUP_DISRUPTING_HACK_CYBERLOAD_ACCELERATION						= 4.0
+const float ABILITY_CLOCKUP_DISRUPTING_HACK_GADGET_ENGAGE_TIME							= 1.0
+const float ABILITY_CLOCKUP_DISRUPTING_HACK_GADGET_ACTIVE_TIME							= 40.0
+const string ABILITY_CLOCKUP_DISRUPTING_HACK_PVAR_PREFIX								= "ability_clockup_disrupting_hack_"
+
+
+const asset VFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED									= $"P_clockup_cyber_lines_breach"
+
+
+const string SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED_1P								= "Clockup_Cyberware_Activate_1P"
+const string SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_DISENGAGED_1P							= "Clockup_Cyberware_Deactivate_1P"
+const string SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED_3P								= "Clockup_Cyberware_Activate_3P"
+const string SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_DISENGAGED_3P							= "Clockup_Cyberware_Deactivate_3P"
+
+
+struct
+{
+	int cyberloadTriggerCost															= 0
+	bool canSpawnInDeathbox																= false
+	bool canDropEquipmentOnDeath														= false
+} tuning
+
+
+struct
+{
+
+
+
+} file
+
+
+void function Ability_ClockUp_DisruptingHack_Init()
+{
+	if ( !Ability_ClockUp_DisruptingHack_IsEnabled() )
+	{
+		SURVIVAL_Loot_AddDisabledRef( ABILITY_CLOCKUP_DISRUPTING_HACK_REF )
+		return
+	}
+
+	RegisterTuningStruct( "tuning", ABILITY_CLOCKUP_DISRUPTING_HACK_PVAR_PREFIX )
+
+	Ability_ClockUp_DisruptingHack_Offhand_Init()
+
+	
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_STOP )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_START )
+	RegisterSignal( SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_STOP )
+
+	BoostKit_RegisterOnMeleePressedFunctionOverride( ABILITY_CLOCKUP_DISRUPTING_HACK_REF, Ability_ClockUp_DisruptingHack_OnMeleePressed_Override )
+
+
+
+
+
+
+
+
+
+	PrecacheParticleSystem( VFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED )
+
+	AddCallback_OnPassiveChanged( ePassives.PAS_CLOCKUP_DISRUPTING_HACK, Ability_ClockUp_DisruptingHack_OnPassiveChanged )
+
+}
+
+bool function Ability_ClockUp_DisruptingHack_IsEnabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_ABILITY_CLOCKUP_DISRUPTING_HACK_IS_ENABLED, false )
+}
+
+bool function Ability_ClockUp_DisruptingHack_IsValidRef( string ref )
+{
+	return (ref.find( ABILITY_CLOCKUP_DISRUPTING_HACK_REF ) != -1)
+}
+
+bool function Ability_ClockUp_DisruptingHack_CanSpawnInDeathbox()
+{
+	return tuning.canSpawnInDeathbox
+}
+
+int function Ability_ClockUp_DisruptingHack_GetCyberloadTriggerCost()
+{
+	return tuning.cyberloadTriggerCost
+}
+
+bool function Ability_ClockUp_DisruptingHack_CanDropEquipmentOnDeath()
+{
+	return tuning.canDropEquipmentOnDeath
+}
+
+bool function Ability_ClockUp_DisruptingHack_TryActivate( entity player, entity gadget )
+{
+	if ( !Ability_ClockUp_DisruptingHack_IsEnabled() )
+		return false
+
+	string gadgetRef = EquipmentSlot_GetLootRefForSlot( player, GADGET_SLOT )
+	if ( !Ability_ClockUp_DisruptingHack_IsValidRef( gadgetRef ) )
+		return false
+
+	if ( !player.HasPassive( ePassives.PAS_CLOCKUP_DISRUPTING_HACK ) && gadget.GetWeaponPrimaryClipCountMax() != gadget.GetWeaponPrimaryClipCount() )
+		return false
+
+	player.ClearOffhand( eActiveInventorySlot.altHand )
+	BoostKit_ActivateOffhand( player )
+
+	
+	{
+		entity weapon = player.GetOffhandWeapon( GENERIC_OFFHAND_INDEX )
+		if ( IsValid( weapon ) )
+		{
+			weapon.AddMod( "clockup_gadget" )
+		}
+
+		thread (void function() : ( player )
+		{
+			EndSignal( player, "OnDeath", "OnDestroy" )
+
+			OnThreadEnd(
+				function() : ( player )
+				{
+					if ( !IsValid( player ) )
+						return
+
+					entity weapon = player.GetOffhandWeapon( GENERIC_OFFHAND_INDEX )
+					if ( !IsValid( weapon ) )
+						return
+
+					weapon.RemoveMod( "clockup_gadget" )
+				}
+			)
+
+			WaitFrame()
+		})()
+	}
+
+	if ( player.HasPassive( ePassives.PAS_CLOCKUP_DISRUPTING_HACK ) )
+	{
+
+
+
+
+		Signal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_STOP )
+	}
+	else
+	{
+
+
+
+		thread Ability_ClockUp_DisruptingHack_Lifetime_Thread( player )
+	}
+
+	return true
+}
+
+bool function Ability_ClockUp_DisruptingHack_OnMeleePressed_Override( entity player )
+{
+	if ( !player.HasPassive( ePassives.PAS_CLOCKUP_DISRUPTING_HACK ) )
+		return false
+
+	if ( player.ContextAction_IsMeleeExecution() ) 
+		return false
+
+	if ( player.ContextAction_IsBusy() )
+		return false
+
+	if ( IsInBleedoutOrRevive( player ) )
+		return false
+
+	if ( player.Player_IsSkydiving() || player.Player_IsSkywardFollowing() || player.Player_IsSkywardLaunching() )
+		return false
+
+	entity weapon = player.GetOffhandWeapon( eOffhandInv.EQUIPMENT )
+	if ( !IsValid( weapon ) || (weapon.GetWeaponClassName() != ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_REF) )
+	{
+		if ( Ability_ClockUp_DisruptingHack_Offhand_CanActivate( player ) )
+		{
+			Signal( player, TRANSPORT_PORTAL_INTERRUPT_CHANNEL_SIGNAL )
+			thread Ability_ClockUp_DisruptingHack_Offhand_Lifetime_Thread( player )
+		}
+	}
+
+	return true
+}
+
+void function Ability_ClockUp_DisruptingHack_BeginOffhandUse( entity player )
+{
+
+
+
+
+
+
+
+
+}
+
+void function Ability_ClockUp_DisruptingHack_EndOffhandUse( entity player )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function Ability_ClockUp_DisruptingHack_Lifetime_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_STOP )
+	EndSignal( player, SIG_CLOCKUP_CYBERFORM_TRANSFORM )
+	EndSignal( player, SIG_CLOCKUP_ENDORSEMENTS_DISENGAGE_GADGET )
+	EndSignal( player, "OnDestroy", "OnDeath" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		ClockUp_ShowEndorsementFirstUseHint( player )
+		entity cockpit = player.GetCockpit()
+		if ( !IsValid( cockpit ) )
+			return
+
+		int gadgetEngagedEffectID = GetParticleSystemIndex( VFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED )
+		if ( gadgetEngagedEffectID != 0 )
+		{
+			int vfxHandleGadgetEngaged = StartParticleEffectOnEntity( cockpit, gadgetEngagedEffectID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+			EffectSetIsWithCockpit( vfxHandleGadgetEngaged, true )
+			EffectSetControlPointVector( vfxHandleGadgetEngaged, 1, COLOR_MAGENTA )
+
+			OnThreadEnd(
+				function() : ( player, vfxHandleGadgetEngaged )
+				{
+					if ( EffectDoesExist( vfxHandleGadgetEngaged ) )
+					{
+						EffectStop( vfxHandleGadgetEngaged, false, true )
+					}
+
+					if ( SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_DISENGAGED_1P != "" )
+					{
+						EmitSoundOnEntity( player, SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_DISENGAGED_1P )
+					}
+				}
+			)
+		}
+
+		if ( SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED_1P != "" )
+		{
+			EmitSoundOnEntity( player, SFX_ABILITY_CLOCKUP_DISRUPTING_HACK_ENGAGED_1P )
+		}
+
+		WaitForever()
+
+}
+
+void function Ability_ClockUp_DisruptingHack_Offhand_Lifetime_Thread( entity player )
+{
+	AssertIsNewThread()
+
+	Signal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_START )
+	EndSignal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_OFFHAND_LIFETIME_STOP )
+	EndSignal( player, "OnDestroy", "OnDeath" )
+
+	OnThreadEnd(
+		function() : ( player )
+		{
+			if ( !IsValid( player ) )
+				return
+
+			Ability_ClockUp_DisruptingHack_EndOffhandUse( player )
+		}
+	)
+
+	Ability_ClockUp_DisruptingHack_BeginOffhandUse( player )
+
+	WaitForever()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Ability_ClockUp_DisruptingHack_OnPassiveChanged( entity player, int passive, bool didHave, bool nowHas )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	if ( nowHas )
+	{
+		thread Ability_ClockUp_DisruptingHack_Lifetime_Thread( player )
+	}
+	else
+	{
+		Signal( player, SIG_ABILITY_CLOCKUP_DISRUPTING_HACK_LIFETIME_STOP )
+	}
+}
+
+ 

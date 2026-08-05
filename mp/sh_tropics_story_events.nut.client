@@ -1,0 +1,729 @@
+
+global function TropicsStoryEvents_Init
+
+
+
+
+global function TimeTrial_Init
+
+
+global const string PLAYLIST_TIME_TRIAL_ENABLED = "overdrive_time_trial_tease"
+
+
+const string TIME_TRIAL_WAYPOINT_TRACK_NAME		= "time_trial_waypoint_track"
+const string TIME_TRIAL_NEXT_WAYPOINT			= "next_time_trial_waypoint"
+const string TIME_TRIAL_PANEL_SCRIPTNAME		= "time_trial_panel"
+
+
+const string TIME_TRIAL_FINISHED				= "time_trial_finished"
+
+
+const asset TIME_TRIAL_PANEL					= $"mdl/props/overdrive_motorcycle_01/overdrive_motorcycle_01.rmdl"
+const vector TIME_TRIAL_PANEL_SPAWN_POS			= <-39223, -21046, 533> 
+const vector TIME_TRIAL_PANEL_SPAWN_ANG			= <0, 90, -15>
+
+
+const asset VFX_TIME_TRIAL_RING					= $"P_ar_cyl_short_temp"
+const vector VFX_TIME_TRIAL_RING_COLOR			= < 1, 0, 2 >
+const asset VFX_TIME_TRIAL_BEAM					= FX_AIRDROP_BEAM_CP
+const asset VFX_TIME_TRIAL_FLARE				= $"P_road_flare_CPColor"
+const vector VFX_TIME_TRIAL_FLARE_COLOR			= <160, 30, 200>
+const asset VFX_TIME_TRIAL_SUCCESS				= $"P_loba_staff_ar_init"
+
+
+const string SFX_TIME_TRIAL_FLARE				= "S28_1_Tease_TimeTrial_Flare_Start_Loop"
+const string SFX_TIME_TRIAL_START_HOLO			= "S28_1_Tease_TimeTrial_Hologram_Loop"
+const string SFX_TIME_TRIAL_SUCCESS 			= "datenight_aoe_success_stinger_1p"
+const string SFX_TIME_TRIAL_MID_RESULT 			= "UI_Menu_BattlePass_PopUp"
+const string SFX_TIME_TRIAL_GREAT_RESULT 		= "UI_InGame_KillLeader"
+
+
+const asset TIME_TRIAL_WAYPOINT_ICON 			= $"rui/tropic_tease_event/topic_tease_waypoint_icon"
+const asset TIME_TRIAL_START_NOTI_ICON 			= $"rui/tropic_tease_event/topic_tease_waypoint_icon"
+const asset TIME_TRIAL_SUPER_SWEAT_NOTI_ICON	= $"rui/tropic_tease_event/tropic_tease_badge_sickos"
+const asset TIME_TRIAL_GOLD_NOTI_ICON 			= $"rui/tropic_tease_event/tropic_tease_badge_gold"
+const asset TIME_TRIAL_SILVER_NOTI_ICON 		= $"rui/tropic_tease_event/tropic_tease_badge_silver"
+const asset TIME_TRIAL_BRONZE_NOTI_ICON 		= $"rui/tropic_tease_event/tropic_tease_badge_bronze"
+
+
+const vector TIME_TRIAL_TEASE_COLOR				= <0.624, 0.310, 0.569>
+const vector TIME_TRIAL_ICON_COLOR_GRAY			= <0.5, 0.5, 0.5>
+const vector TIME_TRIAL_ICON_COLOR				= <1, 1, 1>
+const float TIME_TRIAL_ICON_SIZE_LARGE			= 80
+const float TIME_TRIAL_ICON_SIZE_SMALL			= 50
+
+
+const int TIME_TRIAL_WAYPOINT_TRACK_INDEX	= 0
+const float TIME_TRIAL_DEFAULT_RADIUS 		= 100.0
+const float TIME_TRIAL_DEFAULT_HEIGHT 		= 125.0
+const float TIME_TRIAL_DEFAULT_BELOW_HEIGHT = 50.0
+const float TIME_TRIAL_EXIT_ZONE_RADIUS		= 7000.0
+const float TIME_TRIAL_EXIT_ZONE_RADIUS_SMALL = 900.0
+
+const float TIME_TRIAL_GROUND_HEIGHT_CHECK = 50.0
+const vector TIME_TRIAL_GROUND_HEIGHT_OFFSET = < 0, 0, 5 >
+
+const int COLORID_TIME_TRIAL_TRACK = COLORID_FX_LOOT_TIER1
+const int COLORID_TIME_TRIAL_NEXT = COLORID_FX_LOOT_TIER3
+
+struct
+{
+
+
+
+
+
+
+
+		float raceTime
+
+		array< array<int> > checkpointFX
+		table< int, var > waypointRuis
+
+		var timerRui
+
+	table<int, entity> indexToTrackWaypoint
+	entity panel
+}file
+
+struct
+{
+	
+	float superSweatTime 	= 40.0
+	float goldTime			= 45.0
+	float silverTime 		= 60.0
+	float bronzeTime 		= 90.0
+	float forceEndTime		= 120.0
+} tuning
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function TropicsStoryEvents_Init()
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		Waypoints_RegisterCustomType( TIME_TRIAL_WAYPOINT_TRACK_NAME, TimeTrial_OnTrackWaypointCreated )
+		AddCreateCallback( "prop_material_harvester", OnTimeTrialPanelSpawn )
+
+
+}
+
+
+void function TimeTrial_Init()
+{
+	RegisterTuningStruct( "tuning", "time_trial_" )
+
+	RegisterSignal( TIME_TRIAL_FINISHED )
+
+	RegisterNetworkedVariable( TIME_TRIAL_NEXT_WAYPOINT, SNDC_PLAYER_EXCLUSIVE, SNVT_INT, -1 )
+
+		RegisterNetVarIntChangeCallback ( TIME_TRIAL_NEXT_WAYPOINT, TimeTrial_OnCheckpointChanged )
+
+}
+
+
+
+
+void function EntitiesDidLoad()
+{
+
+
+
+
+
+
+
+
+}
+
+
+
+
+void function OnTimeTrialPanelSpawn( entity panel )
+{
+	if ( !IsValid( panel ) )
+		return
+	if ( panel.GetScriptName() != TIME_TRIAL_PANEL_SCRIPTNAME )
+		return
+
+	SetCallback_CanUseEntityCallback( panel, TimeTrialPanel_CanUse )
+	AddCallback_OnUseEntity_ClientServer( panel, TimeTrialPanel_OnUse )
+
+
+
+
+
+
+
+
+
+
+
+
+		AddEntityCallback_GetUseEntOverrideText( panel, GetTimeTrialPanelUseTextOverride )
+
+
+	file.panel = panel
+}
+
+bool function TimeTrialPanel_CanUse( entity player, entity panel, int useFlags )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	if ( player.IsPhaseShifted() )
+		return false
+
+	if ( Bleedout_IsBleedingOut( player ) )
+		return false
+
+	if ( player.IsPlayerInAnyVehicle() )
+		return false
+
+	if ( player.ContextAction_IsReviving() || player.ContextAction_IsBeingRevived() )
+		return false
+
+	if ( player.ContextAction_IsMeleeExecution() || player.ContextAction_IsMeleeExecutionTarget() )
+		return false
+
+	if ( GetGameState() < eGameState.Playing )
+		return false
+
+	bool canUse = player.GetPlayerNetInt( TIME_TRIAL_NEXT_WAYPOINT ) != 0
+
+	return canUse
+}
+
+void function TimeTrialPanel_OnUse( entity panel, entity player, int useFlags )
+{
+
+
+
+
+
+
+
+
+
+		if ( !TimeTrialPanel_CanUse( player, panel, useFlags ) )
+			return
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function TimeTrial_OnCheckpointChanged( entity player, int nextIndex )
+{
+	if ( nextIndex > 0 )
+	{
+		
+		RemoveCheckpointFx()
+		
+		entity currentWaypoint = file.indexToTrackWaypoint[nextIndex - 1]
+		if ( IsValid( currentWaypoint ) )
+			StopSoundOnEntity( currentWaypoint, SFX_TIME_TRIAL_FLARE )
+		
+		RuiSetBool( file.waypointRuis[nextIndex - 1], "isHidden", true )
+	}
+
+	if ( nextIndex == 0 ) 
+	{
+		player.Signal( TIME_TRIAL_FINISHED )
+		AnnounceTimeTrialEvent( player )
+
+		
+
+		foreach ( int index, var rui in file.waypointRuis )
+		{
+			RuiSetBool( rui, "isHidden", true )
+			RuiSetFloat( rui, "iconSize", TIME_TRIAL_ICON_SIZE_SMALL )
+			RuiSetFloat3( rui, "iconColor", TIME_TRIAL_ICON_COLOR_GRAY )
+		}
+
+		RuiSetBool( file.waypointRuis[nextIndex], "isHidden", false )
+		file.raceTime = 0.0
+		file.checkpointFX.append( CreateCheckpointFx( nextIndex ) )
+	}
+
+	if ( nextIndex == 1 ) 
+	{
+		AnnounceTimeTrialEvent( player )
+		thread HandleTimer_Thread( player, Time() )
+	}
+
+	if ( nextIndex >= file.indexToTrackWaypoint.len() || nextIndex < 0 ) 
+	{
+		if ( nextIndex >= -1 )
+			AnnounceTimeTrialEvent( player )
+
+		ClearCheckpointFx()
+
+		foreach ( wp in file.indexToTrackWaypoint )
+		{
+			if ( IsValid( wp ) )
+				StopSoundOnEntity( wp, SFX_TIME_TRIAL_FLARE )
+		}
+
+		foreach ( int index, var rui in file.waypointRuis )
+			RuiSetBool( rui, "isHidden", true )
+
+		file.raceTime = 0.0
+		player.Signal( TIME_TRIAL_FINISHED )
+	}
+	else if ( nextIndex == file.indexToTrackWaypoint.len() - 1 )
+	{
+		RuiSetFloat( file.waypointRuis[nextIndex], "iconSize", TIME_TRIAL_ICON_SIZE_LARGE )
+		RuiSetFloat3( file.waypointRuis[nextIndex], "iconColor", TIME_TRIAL_TEASE_COLOR )
+	}
+	else
+	{
+		
+		RuiSetBool( file.waypointRuis[nextIndex + 1], "isHidden", false )
+		RuiSetFloat( file.waypointRuis[nextIndex], "iconSize", TIME_TRIAL_ICON_SIZE_LARGE )
+		RuiSetFloat3( file.waypointRuis[nextIndex], "iconColor", TIME_TRIAL_ICON_COLOR )
+		file.checkpointFX.append( CreateCheckpointFx( nextIndex + 1 ) )
+	}
+}
+
+array< int > function CreateCheckpointFx( int nextIndex )
+{
+	entity trackWaypoint = file.indexToTrackWaypoint[nextIndex]
+
+	array<int> handle
+
+	if ( !IsValid( trackWaypoint ) )
+		return handle
+
+	vector origin = trackWaypoint.GetOrigin()
+
+	entity proxy = CreateClientSidePropDynamic( origin, <0, 0, 0>, EMPTY_MODEL )
+	EmitSoundOnEntity( trackWaypoint, SFX_TIME_TRIAL_FLARE )
+
+	
+	int beamFx = StartParticleEffectOnEntityWithPos( proxy, GetParticleSystemIndex( VFX_TIME_TRIAL_BEAM ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, <0, 0, 0>, <0, 180, 0> )
+	EffectSetControlPointColorById( beamFx, 1, nextIndex == 0 ? COLORID_TIME_TRIAL_NEXT : COLORID_TIME_TRIAL_TRACK )
+	handle.append( beamFx )
+
+	int flareFx = StartParticleEffectOnEntityWithPos( proxy, GetParticleSystemIndex( VFX_TIME_TRIAL_FLARE ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, OriginToGround( origin + <0, 0, TIME_TRIAL_GROUND_HEIGHT_CHECK> ) + <0, 0, 4> - origin, <0, 0, 0> )
+	EffectSetControlPointVector( flareFx, 1, VFX_TIME_TRIAL_FLARE_COLOR )
+	handle.append( flareFx )
+
+	int ringFx = StartParticleEffectOnEntityWithPos( proxy, GetParticleSystemIndex( VFX_TIME_TRIAL_RING ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, OriginToGround( origin + <0, 0, TIME_TRIAL_GROUND_HEIGHT_CHECK> ) + <0, 0, 4> - origin, <0, 0, 0> )
+	float ringFXradius = TIME_TRIAL_DEFAULT_RADIUS * INCHES_TO_METERS / 10
+	EffectSetControlPointVector( ringFx, 1, VFX_TIME_TRIAL_RING_COLOR )
+	EffectSetControlPointVector( ringFx, 2, < ringFXradius, 0, 0 > )
+	handle.append( ringFx )
+
+	return handle
+}
+
+void function ClearCheckpointFx()
+{
+	if ( file.checkpointFX.len() > 0 )
+	{
+		for ( int i = 0; i < file.checkpointFX.len(); i++ )
+		{
+			foreach ( fx in file.checkpointFX[i] )
+			{
+				EffectStop( fx, true, false )
+			}
+		}
+		file.checkpointFX.clear()
+	}
+}
+
+void function RemoveCheckpointFx()
+{
+	if ( file.checkpointFX.len() > 0 )
+	{
+		foreach ( fx in file.checkpointFX[0] )
+		{
+			EffectStop( fx, true, false )
+		}
+
+		file.checkpointFX.remove(0)
+	}
+}
+
+void function TimeTrial_OnTrackWaypointCreated( entity trackWaypoint )
+{
+	if ( !IsValid( trackWaypoint ) )
+		return
+
+	vector origin = trackWaypoint.GetOrigin()
+
+	int trackIndex = trackWaypoint.GetWaypointInt( TIME_TRIAL_WAYPOINT_TRACK_INDEX )
+	if ( trackIndex in file.indexToTrackWaypoint && !IsValid( file.indexToTrackWaypoint[trackIndex] ))
+		file.indexToTrackWaypoint[trackIndex] = trackWaypoint
+	else
+		file.indexToTrackWaypoint[trackIndex] <- trackWaypoint
+
+	file.indexToTrackWaypoint[trackIndex] <- trackWaypoint
+
+	var trackRui = CreateWaypointRui( $"ui/waypoint_basic_entpos.rpak", 301 )
+
+	RuiKeepSortKeyUpdated( trackRui, true, "targetPos" )
+
+	RuiTrackFloat3( trackRui, "targetPos", trackWaypoint, RUI_TRACK_ABSORIGIN_FOLLOW )
+	RuiSetFloat3( trackRui, "targetOffset", <0, 0, 50> )
+	RuiKeepSortKeyUpdated( trackRui, true, "targetPos" )
+	RuiSetBool( trackRui, "useInactiveScalar", false )
+	RuiSetBool( trackRui, "isHidden", true )
+	RuiSetImage( trackRui, "iconImage", TIME_TRIAL_WAYPOINT_ICON )
+
+	file.waypointRuis[trackIndex] <- trackRui
+}
+
+void function AnnounceTimeTrialEvent( entity racer )
+{
+	int nextWaypointNetVar = racer.GetPlayerNetInt( TIME_TRIAL_NEXT_WAYPOINT )
+
+	if ( nextWaypointNetVar == 0 ) 
+	{
+		CenterAnnouncementItem announcementBanner = CenterAnnouncements_CreateNotchedStyle()
+		CenterAnnouncements_ImageContainer_SetNotchedStyle( announcementBanner )
+		announcementBanner.mainText                   = Localize( "#TIME_TRIAL_ACTIVATE_TEXT_HEADER" )
+		announcementBanner.subText                    = Localize( "#TIME_TRIAL_ACTIVATE_TEXT_DESC" )
+		announcementBanner.priority                   = eHudNotificationQueuePriority.MEDIUM
+		announcementBanner.mainIcon1                  = TIME_TRIAL_START_NOTI_ICON
+		announcementBanner.soundAliases               = [ SFX_TIME_TRIAL_SUCCESS ]
+		announcementBanner.imageContainerFrameColor   = TIME_TRIAL_TEASE_COLOR
+		announcementBanner.frameColor                 = TIME_TRIAL_TEASE_COLOR
+		announcementBanner.textureColor               = TIME_TRIAL_TEASE_COLOR
+		announcementBanner.leftIntensityTextureCount  = 2
+		announcementBanner.rightIntensityTextureCount = 2
+		announcementBanner.backgroundAlpha            = 0.6
+
+		CenterAnnouncements_QueueItem( announcementBanner, ePersistenceContext.PLAYER )
+	}
+	else if ( nextWaypointNetVar == -1 ) 
+	{
+		string displayTimeString = Localize( "Finished in " + format("%.2f", file.raceTime) + " seconds" )
+		int badgeTier
+
+		CenterAnnouncementItem resultBanner   = CenterAnnouncements_CreateNotchedStyle()
+		CenterAnnouncements_ImageContainer_SetEmptyStyle( resultBanner )
+		resultBanner.imageContainerHeight	  = 120
+		resultBanner.imageContainerVerticalPadding = 0
+		resultBanner.mainText                 = displayTimeString
+		resultBanner.priority                 = eHudNotificationQueuePriority.HIGH
+		resultBanner.duration                 = 6.0
+		resultBanner.soundAliases             = [ SFX_TIME_TRIAL_GREAT_RESULT ]
+		resultBanner.imageContainerFrameColor = TIME_TRIAL_TEASE_COLOR
+		resultBanner.frameColor               = TIME_TRIAL_TEASE_COLOR
+		resultBanner.textureColor             = TIME_TRIAL_TEASE_COLOR
+
+		if ( file.raceTime <= tuning.superSweatTime )
+		{
+			resultBanner.mainIcon1 = TIME_TRIAL_SUPER_SWEAT_NOTI_ICON
+			resultBanner.subText   = Localize( "#TIME_TRIAL_SUPER_SWEAT_RESULT_MESSAGE" )
+			resultBanner.leftIntensityTextureCount  = 2
+			resultBanner.rightIntensityTextureCount = 2
+
+
+			if ( !PlayerHasPassive( racer, ePassives.PAS_OVERDRIVE ) ) 
+				Quickchat( eCommsAction.QUICKCHAT_CELEBRATE, null )
+
+		}
+		else if ( file.raceTime <= tuning.goldTime )
+		{
+			resultBanner.mainIcon1 = TIME_TRIAL_GOLD_NOTI_ICON
+			resultBanner.subText   = Localize( "#TIME_TRIAL_GOLD_RESULT_MESSAGE" )
+			resultBanner.leftIntensityTextureCount  = 2
+			resultBanner.rightIntensityTextureCount = 2
+
+				Quickchat( eCommsAction.QUICKCHAT_CELEBRATE, null )
+
+		}
+		else if ( file.raceTime <= tuning.silverTime )
+		{
+			resultBanner.mainIcon1 = TIME_TRIAL_SILVER_NOTI_ICON
+			resultBanner.subText   = Localize( "#TIME_TRIAL_SILVER_RESULT_MESSAGE" )
+			resultBanner.leftIntensityTextureCount  = 1
+			resultBanner.rightIntensityTextureCount = 1
+		}
+		else if ( file.raceTime <= tuning.bronzeTime )
+		{
+			resultBanner.mainIcon1 = TIME_TRIAL_BRONZE_NOTI_ICON
+			resultBanner.subText   = Localize( "#TIME_TRIAL_BRONZE_RESULT_MESSAGE" )
+		}
+		else if ( file.raceTime <= tuning.forceEndTime )
+		{
+			resultBanner.subText   = Localize( "#TIME_TRIAL_SLOW_RESULT_MESSAGE" )
+		}
+		else
+		{
+			return
+		}
+
+		CenterAnnouncements_QueueItem( resultBanner, ePersistenceContext.PLAYER )
+	}
+}
+
+void function HandleTimer_Thread( entity racer, float startTime )
+{
+	EndSignal( racer, TIME_TRIAL_FINISHED, "OnDeath", "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( racer )
+		{
+			RuiDestroyIfAlive( file.timerRui )
+
+			ClearCheckpointFx()
+
+			foreach ( int index, var rui in file.waypointRuis )
+				RuiSetBool( rui, "isHidden", true )
+		}
+	)
+
+	file.timerRui = CreateFullscreenRui( $"ui/tropics_tease_timer.rpak", 0 )
+
+	while ( file.raceTime < tuning.forceEndTime )
+	{
+		file.raceTime = Time() - startTime
+		RuiSetString( file.timerRui, "time", file.raceTime > 3.0 ? Localize( format("%.2f", file.raceTime) ) : Localize( "#TIME_TRIAL_START_TEXT_HEADER" ) )
+		RuiSetFloat( file.timerRui, "timerAlpha", racer.GetZoomFrac() > 0.1 ? 0.3 : 1.0 )
+		WaitFrame()
+	}
+}
+
+string function GetTimeTrialPanelUseTextOverride( entity panel )
+{
+	entity player = GetLocalViewPlayer()
+
+	if ( !IsValid( player ) )
+		return ""
+
+	bool canUse = TimeTrialPanel_CanUse( player, panel, 0 )
+	int nextCheckpoint = player.GetPlayerNetInt( TIME_TRIAL_NEXT_WAYPOINT )
+
+	if ( !canUse || nextCheckpoint == 0 )
+		return ""
+
+	return nextCheckpoint < 0 ? Localize( "#TIME_TRIAL_HINT" ) : Localize( "#TIME_TRIAL_RESTART" )
+}
+
+
+ 

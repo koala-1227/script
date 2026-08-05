@@ -1,0 +1,407 @@
+global function SpawnExclusions_AddSpawnExclusion
+global function SpawnExclusions_UpdateSpawnExclusionOwner
+global function SpawnExclusions_RemoveSpawnExclusionsForId
+global function SpawnExclusions_RemoveSpawnExclusionsForType
+global function SpawnExclusions_DoesPointOverlap
+global function SpawnExclusions_DoesPointOverlap_WithType
+global function SpawnExclusions_DoesPointOverlap2D
+global function SpawnExclusions_DoesPointOverlap2D_WithType
+global function SpawnExclusions_GetSpawnExclusionById
+global function SpawnExclusions_GetAllSpawnExclusions
+global function SpawnExclusions_GetAllSpawnExclusions_OfTypes
+
+
+#if DEV
+bool SHOW_SPAWN_EXCLUSION_OVERLAPS = false
+#endif
+
+global struct SpawnExclusionData
+{
+	int id
+
+	int airdropBadPlaceId = -1
+
+	vector origin
+	float radius
+	entity ownerEnt
+	array< int > realms = [ eRealms.DEFAULT ]
+
+	int type = 0
+}
+
+global enum eSpawnExclusionType
+{
+	DEFAULT,
+	AIRDROP,
+	CRAFTER,
+	EVO_HARVESTER,
+
+	ARSENAL,
+
+
+
+
+	MOBILE_RESPAWN_BEACON,
+	LAUNCHER,
+
+
+
+
+
+
+
+
+
+	CONTROL_POINT,
+	VEHICLE,
+
+
+
+
+
+
+
+
+
+
+
+
+	_count
+}
+
+struct
+{
+	table< int, SpawnExclusionData > idToSpawnExclusionMap
+	int idCount = 0
+} file
+
+
+
+
+int function SpawnExclusions_AddSpawnExclusion( vector origin, float radius, int type = eSpawnExclusionType.DEFAULT, entity ornull ownerEnt = null, array< int > realms = [ eRealms.DEFAULT ], bool createAirdropBadPlace = true )
+{
+#if DEV
+		
+		
+		
+		float effectiveRadius = type == eSpawnExclusionType.MOBILE_RESPAWN_BEACON ? 0.0 : radius
+		SpawnExclusionData overlapData = SpawnExclusions_GetOverlapData( origin, false, type, effectiveRadius, ownerEnt, realms )
+		if ( overlapData.origin != INVALID_POSITION )
+		{
+			if ( SHOW_SPAWN_EXCLUSION_OVERLAPS )
+			{
+				DebugDrawSphere( origin, radius, COLOR_RED, true, 100 )
+				DebugDrawSphere( overlapData.origin, overlapData.radius, COLOR_BLUE, true, 100 )
+			}
+
+			SpawnExclusions_Assert( false, "Tried to add a spawn exclusion that already exists. Overlaps with exclusion at " + overlapData.origin + " with radius " + overlapData.radius + " and of type " + GetEnumString( "eSpawnExclusionType", overlapData.type ) )
+		}
+#endif
+
+	int id = file.idCount++
+
+	SpawnExclusionData spawnExclusion
+	spawnExclusion.id = id
+	spawnExclusion.origin = origin
+	spawnExclusion.radius = radius
+	spawnExclusion.type = type
+	spawnExclusion.realms = realms
+
+	if ( ownerEnt != null )
+	{
+		expect entity( ownerEnt )
+		spawnExclusion.ownerEnt = ownerEnt
+
+		if ( IsValid( ownerEnt ) )
+		{
+			AddEntityDestroyedCallback( ownerEnt,
+				void function( entity ent ) : ( ownerEnt, id )
+				{
+					SpawnExclusions_RemoveSpawnExclusionsForEntWithId( ownerEnt, id )
+				}
+			)
+		}
+
+
+
+
+
+
+
+	}
+	else
+	{
+
+
+
+
+
+
+	}
+
+	file.idToSpawnExclusionMap[id] <- spawnExclusion
+	return id
+}
+
+
+
+
+
+
+void function SpawnExclusions_UpdateSpawnExclusionOwner( int id, entity newOwnerEnt, bool createAirdropBadPlace = true )
+{
+	if ( !(id in file.idToSpawnExclusionMap) )
+		return
+
+	if ( !IsValid( newOwnerEnt ) )
+		return
+
+	SpawnExclusionData spawnExclusion = file.idToSpawnExclusionMap[id]
+	entity oldOwnerEnt = spawnExclusion.ownerEnt
+	spawnExclusion.ownerEnt = newOwnerEnt
+
+	AddEntityDestroyedCallback( newOwnerEnt,
+		void function( entity ent ) : ( newOwnerEnt, id )
+		{
+			SpawnExclusions_RemoveSpawnExclusionsForEntWithId( newOwnerEnt, id )
+		}
+	)
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function SpawnExclusions_RemoveSpawnExclusionsForId( int id )
+{
+	if ( !( id in file.idToSpawnExclusionMap ) )
+	{
+#if DEV
+			SpawnExclusions_Assert( false, "Tried to remove a spawn exclusion for a point that doesn't exist" )
+#endif
+		return
+	}
+
+	RemoveSpawnExclusion_Internal( id )
+}
+
+void function SpawnExclusions_RemoveSpawnExclusionsForEntWithId( entity ent, int id )
+{
+	if ( !( id in file.idToSpawnExclusionMap ) )
+	{
+#if DEV
+			SpawnExclusions_Assert( false, "Tried to remove a spawn exclusion for a point that doesn't exist" )
+#endif
+		return
+	}
+
+	if ( file.idToSpawnExclusionMap[id].ownerEnt != ent )
+		return
+
+	RemoveSpawnExclusion_Internal( id )
+}
+
+void function SpawnExclusions_RemoveSpawnExclusionsForType( int type )
+{
+	foreach ( id, spawnExclusion in clone file.idToSpawnExclusionMap )
+	{
+		if ( spawnExclusion.type == type )
+		{
+			RemoveSpawnExclusion_Internal( id )
+		}
+	}
+}
+
+void function RemoveSpawnExclusion_Internal( int id )
+{
+
+
+
+
+
+
+
+	delete file.idToSpawnExclusionMap[id]
+}
+
+bool function SpawnExclusions_DoesPointOverlap( vector pointToCheck, float radiusToCheck = 0, entity ornull ownerToCheckOrNull = null, array< int > realms = [ eRealms.DEFAULT ] )
+{
+	return DoesPointOverlap_Internal( pointToCheck, false, -1, radiusToCheck, ownerToCheckOrNull, realms )
+}
+
+bool function SpawnExclusions_DoesPointOverlap_WithType( vector pointToCheck, int type, float radiusToCheck = 0, entity ornull ownerToCheckOrNull = null, array< int > realms = [ eRealms.DEFAULT ] )
+{
+	return DoesPointOverlap_Internal( pointToCheck, false, type, radiusToCheck, ownerToCheckOrNull, realms )
+}
+
+
+
+
+bool function SpawnExclusions_DoesPointOverlap2D( vector pointToCheck, float radiusToCheck = 0, entity ornull ownerToCheckOrNull = null, array< int > realms = [ eRealms.DEFAULT ] )
+{
+	return DoesPointOverlap_Internal( pointToCheck, true, -1, radiusToCheck, ownerToCheckOrNull, realms )
+}
+
+
+
+
+bool function SpawnExclusions_DoesPointOverlap2D_WithType( vector pointToCheck, int type, float radiusToCheck = 0, entity ornull ownerToCheckOrNull = null, array< int > realms = [ eRealms.DEFAULT ] )
+{
+	return DoesPointOverlap_Internal( pointToCheck, true, type, radiusToCheck, ownerToCheckOrNull, realms )
+}
+
+bool function DoesPointOverlap_Internal( vector pointToCheck, bool check2D, int type = -1, float radiusToCheck = 0, entity ornull ownerToCheckOrNull = null, array< int > realms = [ eRealms.DEFAULT ] )
+{
+	radiusToCheck = radiusToCheck < 0.0 ? 0.0 : radiusToCheck
+
+	entity ownerToCheck
+	if ( ownerToCheck != null )
+	{
+		ownerToCheck = expect entity( ownerToCheckOrNull )
+	}
+
+	foreach ( spawnExclusion in file.idToSpawnExclusionMap.clonevalues() )
+	{
+		if ( type != -1 && spawnExclusion.type != type )
+			continue
+
+		bool sharesRealm = false
+		foreach ( realm in realms )
+		{
+			if ( spawnExclusion.realms.contains( realm ) )
+			{
+				sharesRealm = true
+				break
+			}
+		}
+
+		if ( !sharesRealm )
+			continue
+
+		if ( IsValid( ownerToCheck ) && IsValid( spawnExclusion.ownerEnt ) && !spawnExclusion.ownerEnt.DoesShareRealms( ownerToCheck ) )
+			continue
+
+		if ( check2D && Distance2DSqr( spawnExclusion.origin, pointToCheck ) < pow( spawnExclusion.radius + radiusToCheck, 2 ) )
+			return true
+		else if ( !check2D && DistanceSqr( spawnExclusion.origin, pointToCheck ) < pow( spawnExclusion.radius + radiusToCheck, 2 ) )
+			return true
+	}
+
+	return false
+}
+
+SpawnExclusionData function SpawnExclusions_GetOverlapData( vector pointToCheck, bool check2D, int type = -1, float radiusToCheck = 0, entity ornull ownerToCheckOrNull = null, array< int > realms = [ eRealms.DEFAULT ] )
+{
+	radiusToCheck = radiusToCheck < 0.0 ? 0.0 : radiusToCheck
+
+	entity ownerToCheck
+	if ( ownerToCheck != null )
+	{
+		ownerToCheck = expect entity( ownerToCheckOrNull )
+	}
+
+	foreach ( spawnExclusion in file.idToSpawnExclusionMap.clonevalues() )
+	{
+		if ( type != -1 && spawnExclusion.type != type )
+			continue
+
+		bool sharesRealm = false
+		foreach ( realm in realms )
+		{
+			if ( spawnExclusion.realms.contains( realm ) )
+			{
+				sharesRealm = true
+				break
+			}
+		}
+
+		if ( !sharesRealm )
+			continue
+
+		if ( IsValid( ownerToCheck ) && IsValid( spawnExclusion.ownerEnt ) && !spawnExclusion.ownerEnt.DoesShareRealms( ownerToCheck ) )
+			continue
+
+		if ( check2D && Distance2DSqr( spawnExclusion.origin, pointToCheck ) < pow( spawnExclusion.radius + radiusToCheck, 2 ) )
+			return spawnExclusion
+		else if ( !check2D && DistanceSqr( spawnExclusion.origin, pointToCheck ) < pow( spawnExclusion.radius + radiusToCheck, 2 ) )
+			return spawnExclusion
+	}
+
+	SpawnExclusionData invalidData
+	invalidData.origin = INVALID_POSITION
+	return invalidData
+}
+
+SpawnExclusionData function SpawnExclusions_GetSpawnExclusionById( int id )
+{
+	SpawnExclusionData emptyData
+	if ( !( id in file.idToSpawnExclusionMap ) )
+	{
+#if DEV
+			SpawnExclusions_Assert( false, "Tried to get a spawn exclusion for an ID that doesn't exist" )
+#endif
+		return emptyData
+	}
+
+	return file.idToSpawnExclusionMap[id]
+}
+
+array< SpawnExclusionData > function SpawnExclusions_GetAllSpawnExclusions()
+{
+	return file.idToSpawnExclusionMap.clonevalues()
+}
+
+array< SpawnExclusionData > function SpawnExclusions_GetAllSpawnExclusions_OfTypes( array< int > types )
+{
+	array< SpawnExclusionData > spawnExclusionOfType
+	if ( types.len() == 0 )
+		return spawnExclusionOfType
+
+	table< int, bool > typeLookupTable
+	foreach ( type in types )
+	{
+		typeLookupTable[type] <- true
+	}
+
+	foreach ( spawnExclusion in file.idToSpawnExclusionMap.clonevalues() )
+	{
+		if ( !(spawnExclusion.type in typeLookupTable) )
+			continue
+
+		spawnExclusionOfType.append( spawnExclusion )
+	}
+
+	return spawnExclusionOfType
+}
+
+#if DEV
+bool function SpawnExclusions_RunAsserts()
+{
+	return GetCurrentPlaylistVarBool( "spawn_exclusions_run_asserts", true )
+}
+
+const string PREVENTION_MESSAGE = ". TO AVOID CRASHING AGAIN - IF YOU HIT THIS AND ARE NOT USING THE SPAWN EXCLUSION SYSTEM IN SCRIPT, PLEASE BUG THIS AND SET THE PLAYLIST VAR 'spawn_exclusions_run_asserts 0'"
+void function SpawnExclusions_Assert( bool valueToCheck, string failMessage )
+{
+	if ( valueToCheck )
+		return
+
+	if ( !SpawnExclusions_RunAsserts() )
+	{
+		printt( "Warning: " + failMessage )
+	}
+	else
+	{
+		Assert( false, failMessage + PREVENTION_MESSAGE )
+	}
+}
+#endif
+ 

@@ -1,0 +1,2737 @@
+global function DeathboxInit
+
+global function IsDeathbox
+global function GetAllDeathboxes
+global function GetAllDeathBoxesOfTeam
+global function DeathBoxBannerAvailable
+global function ShouldPickupDNAFromDeathBox
+
+global function IsPlayerCloseEnoughToDeathBoxToLoot
+global function IsPlayerWithinStandardDeathBoxUseDistance
+global function IsPlayerOutsideStandardDeathBoxUseDistanceButRemoteInteractAllowed
+global function IsValidAndUsableDeathBoxEnt
+global function IsLootEntAccessibleViaDeathBox
+
+global function Deathbox_GetLootEnts
+global function Deathbox_IsLootEntInsideDeathbox
+global function DoesDeathBoxSupportAddingLoot
+
+global function Deathbox_GetLootByType
+global function Deathbox_GetLootByType_Single
+global function Deathbox_GetUsefulShields
+
+global function IsPlayingBannerPickupAnim
+global function CanInterruptBannerPickupEarly
+global function CanUseFastBannerPickup
+
+global function Deathbox_FindBestEdgeForVFX_WorldSpace
+global function Deathbox_FindBestEdgeForVFX_LocalSpace
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function Deathbox_Latest_Get
+
+
+global function Deathbox_GetOwnerEHI
+global function Deathbox_GetDeathboxPlayerIsLookingAt
+global function Deathbox_GetExtendedUseSettings
+global function Deathbox_CreateRui
+global function Deathbox_ShouldFocus
+global function Deathbox_ManageLoot_Thread
+global function Deathbox_GetHighlightFillAlpha
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct OverrideDeathBoxRUI_NetworkOptimizedStruct
+{
+	string name
+	string hardware
+	string playerID
+	int    characterIndex
+	int    skinIndex
+	int    frameIndex
+	int    stanceIndex
+	int    firstBadgeIndex
+	int    firstBadgeDataInt
+	int    secondBadgeIndex
+	int    secondBadgeDataInt
+	int    thirdBadgeIndex
+	int    thirdBadgeDataInt
+
+	bool isValid = false
+}
+
+struct {
+	array<entity> allDeathBoxes
+
+
+		entity focusedDeathbox = null
+		bool   focusedDeathBoxHandled = false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+} file
+
+void function DeathboxInit()
+{
+
+		AddCreateCallback( "prop_death_box", OnDeathboxCreated )
+		AddDestroyCallback( "prop_death_box", OnDeathboxDestroyed )
+
+
+
+
+
+
+
+
+
+	RegisterNetworkedVariable( "characterIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "overrideRUIType", SNDC_DEATH_BOX, SNVT_BIG_INT, 0 )
+	RegisterNetworkedVariable( "skinIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "frameIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "stanceIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "firstBadgeIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "firstBadgeDataInt", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "secondBadgeIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "secondBadgeDataInt", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "thirdBadgeIndex", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+	RegisterNetworkedVariable( "thirdBadgeDataInt", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+
+	RegisterNetworkedVariable( "highlightFar", SNDC_DEATH_BOX, SNVT_BOOL, false )
+	RegisterNetworkedVariable( "maxLootTier", SNDC_DEATH_BOX, SNVT_INT, 0 )
+
+	Remote_RegisterClientFunction( "ServerToClient_PlayLootRarityFXOnDeathboxDrop", "entity" )
+
+	RegisterNetworkedVariable( "lootRarity", SNDC_DEATH_BOX, SNVT_INT, -1 )
+	RegisterNetworkedVariable( "ownerEHI", SNDC_DEATH_BOX, SNVT_BIG_INT, -1 )
+
+	RegisterNetworkedVariable( "latestDeathbox", SNDC_PLAYER_GLOBAL, SNVT_ENTITY )
+
+
+		Remote_RegisterClientFunction( "ServerCallback_PromptMarkMyLastDeathbox" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Getters___________________________(){}
+#endif
+
+bool function IsDeathbox( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return false
+
+	return ent.GetNetworkedClassName() == "prop_death_box"
+}
+
+array<entity> function GetAllDeathboxes()
+{
+	return file.allDeathBoxes
+}
+
+array<entity> function GetAllDeathBoxesOfTeam( int team )
+{
+	array<entity> teamDeathBoxes
+	foreach ( entity deathbox in file.allDeathBoxes )
+	{
+		Assert( IsValid( deathbox ), "Invalid deathox in allDeathboxes list!" )
+
+		entity boxOwner = deathbox.GetOwner()
+
+		if( !IsValid( boxOwner ) )
+			continue
+
+		int boxTeam = boxOwner.GetTeam()
+		if( boxTeam != team )
+			continue
+
+		teamDeathBoxes.append( deathbox )
+	}
+
+	return teamDeathBoxes
+}
+
+
+
+
+EHI ornull function Deathbox_GetOwnerEHI( entity box )
+{
+	EHI eHandle = box.GetNetInt( "ownerEHI" )
+
+	if ( eHandle == -1 )
+		return null
+
+	return eHandle
+}
+
+
+
+
+
+
+
+
+
+entity function Deathbox_Latest_Get( entity player )
+{
+	entity result = player.GetPlayerNetEnt( "latestDeathbox" )
+	return result
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array< entity > function Deathbox_GetLootByType( entity box, int desiredLootType )
+{
+	array< entity > items = Deathbox_GetLootEnts( box )
+	array< entity > matchingItems
+
+	foreach ( entity item in items )
+	{
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( item.GetSurvivalInt() )
+		if ( data.lootType == desiredLootType )
+		{
+			matchingItems.append( item )
+		}
+	}
+
+	return matchingItems
+}
+
+
+entity function Deathbox_GetLootByType_Single( entity box, int desiredLootType )
+{
+	entity result
+
+	array< entity > items = Deathbox_GetLootEnts( box )
+	foreach( entity item in items )
+	{
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( item.GetSurvivalInt() )
+		if ( data.lootType == desiredLootType )
+		{
+			result = item
+			break
+		}
+	}
+
+	return result
+}
+
+
+entity function Deathbox_GetUsefulShields( entity player, entity box )
+{
+	entity result
+
+	if( !IsValid( box ) )
+		return result
+
+	entity item = Deathbox_GetLootByType_Single( box, eLootType.ARMOR )
+
+	if( !IsValid( item ) )
+		return result
+
+	int currentShields  = SURVIVAL_GetPlayerShieldHealthFromArmor( player )
+	int lootShields     = GetPropSurvivalMainPropertyFromEnt( item )
+
+	if( lootShields > currentShields )
+	{
+		result = item
+	}
+
+	return result
+}
+
+
+entity function Deathbox_GetDeathboxPlayerIsLookingAt( entity player, float degrees = 8.0, float maxDistSqr = 1000000.0 )
+{
+	array<entity> deathboxArray = GetAllDeathboxes()
+
+	entity theEnt
+	float largestDot = -1.0
+
+	float minDot = deg_cos( degrees )
+	float dot
+
+	array<PlayerLookAtItem> finalLootEnts
+
+	vector playerEyePos = player.EyePosition()
+
+	foreach ( ent in deathboxArray )
+	{
+		if ( ent.GetScriptName() != DEATH_BOX_SCRIPTNAME )
+			continue
+
+		dot = DotProduct( Normalize( ent.GetWorldSpaceCenter() - playerEyePos ), player.GetViewVector() )
+		if ( dot < minDot )
+			continue
+
+		float distanceSqr = DistanceSqr( ent.GetOrigin(), player.GetOrigin() )
+		if ( distanceSqr > maxDistSqr )
+			continue
+
+		PlayerLookAtItem lootItem
+		lootItem.ent = ent
+		lootItem.playerViewDot = dot
+		finalLootEnts.append( lootItem )
+
+#if DEV
+			
+			
+#endif
+	}
+
+	finalLootEnts.sort( PlayerLookSort )
+
+	foreach ( item in finalLootEnts )
+	{
+		TraceResults result = TraceLineHighDetail( playerEyePos, item.ent.GetWorldSpaceCenter(), [player, item.ent], TRACE_MASK_SOLID_BRUSHONLY, TRACE_COLLISION_GROUP_PLAYER )
+		if ( result.fraction == 1.0 )
+		{
+			theEnt = item.ent
+			break
+		}
+	}
+
+	return theEnt
+}
+
+
+bool function IsValidAndUsableDeathBoxEnt( entity deathBox )
+{
+	if ( !IsValid( deathBox ) )
+		return false
+
+	string ornull netClassName = deathBox.GetNetworkedClassName()
+	if ( netClassName == "prop_death_box" || netClassName == "prop_loot_grabber" )
+		return true
+
+	return false
+}
+
+bool function IsPlayerCloseEnoughToDeathBoxToLoot( entity player, entity deathBox )
+{
+	if ( !IsValidAndUsableDeathBoxEnt( deathBox ) )
+		return false
+
+	float distanceToDeathbox = DistanceSqr( player.GetOrigin(), deathBox.GetOrigin() )
+	float maxSquareDist = ( DEATH_BOX_MAX_DIST * DEATH_BOX_MAX_DIST )
+
+	if ( deathBox.GetNetworkedClassName() == "prop_death_box" && PlayerHasPassive( player, ePassives.PAS_ALTER ) && CanPlayerRemoteInteractWithDeathbox( player, deathBox ) )
+	{
+		if ( IsBitFlagSet(deathBox.GetUsableValue(), USABLE_FROM_EXTENDED_RANGE) )
+		{
+			maxSquareDist = GetRemoteDeathboxInteractSqrRangeForAlter( player )
+		}
+	}
+
+	return distanceToDeathbox <= maxSquareDist
+}
+
+bool function IsPlayerWithinStandardDeathBoxUseDistance( entity player, entity deathBox )
+{
+	float distanceToDeathbox = DistanceSqr( player.GetOrigin(), deathBox.GetOrigin() )
+	const float maxSquareDist = ( DEATH_BOX_MAX_DIST * DEATH_BOX_MAX_DIST )
+
+	return distanceToDeathbox <= maxSquareDist
+}
+
+bool function IsPlayerOutsideStandardDeathBoxUseDistanceButRemoteInteractAllowed( entity player, entity deathBox )
+{
+	if ( !IsValidAndUsableDeathBoxEnt( deathBox ) )
+		return false
+
+	float distanceToDeathbox = DistanceSqr( player.GetOrigin(), deathBox.GetOrigin() )
+	float maxSquareDist = ( DEATH_BOX_MAX_DIST * DEATH_BOX_MAX_DIST )
+
+	if ( distanceToDeathbox <= maxSquareDist )
+		return false
+
+	if ( deathBox.GetNetworkedClassName() == "prop_death_box" && PlayerHasPassive( player, ePassives.PAS_ALTER ) && CanPlayerRemoteInteractWithDeathbox( player, deathBox ) )
+	{
+		if ( IsBitFlagSet(deathBox.GetUsableValue(), USABLE_FROM_EXTENDED_RANGE) )
+		{
+			maxSquareDist = GetRemoteDeathboxInteractSqrRangeForAlter( player )
+			return distanceToDeathbox <= maxSquareDist
+		}
+	}
+
+	return false
+}
+
+
+array<entity> function Deathbox_GetLootEnts( entity deathBox, entity realmEntity = null )
+{
+	if ( deathBox.GetNetworkedClassName() == "prop_death_box" )
+	{
+		return deathBox.GetLinkEntArray()
+	}
+	else if ( deathBox.GetNetworkedClassName() == "prop_loot_grabber" )
+	{
+
+
+
+
+
+
+
+		vector deathBoxOrigin = deathBox.GetOrigin()
+		float radius          = deathBox.GetLootGrabDist()
+		entity realmEnt		  = realmEntity == null ? deathBox : realmEntity
+
+		array<entity> lootEnts = GetSurvivalLootNearbyPos( deathBoxOrigin, radius, false, false, false, realmEnt )
+
+		array<entity> nearbyDeathBoxes = GetEntitiesFromArrayNearPos( GetAllDeathboxes(), deathBoxOrigin, radius )
+
+		foreach ( entity nearbyDeathBox in nearbyDeathBoxes )
+			lootEnts.extend( Deathbox_GetLootEnts( nearbyDeathBox ) )
+		return lootEnts
+	}
+
+	Assert( false, "Unhandled death box class: " + string(deathBox.GetNetworkedClassName()) )
+	return []
+}
+
+
+struct PlaneVisibility
+{
+	float value
+	vector connectPoint
+}
+
+vector function Deathbox_FindBestEdgeForVFX_WorldSpace( entity deathbox, entity player )
+{
+	vector endPoint = Deathbox_FindBestEdgeForVFX_LocalSpace( deathbox, player )
+	endPoint = RotateVector( endPoint, deathbox.GetAngles() )
+	endPoint += deathbox.GetOrigin()
+
+	return endPoint
+}
+
+vector function Deathbox_FindBestEdgeForVFX_LocalSpace( entity deathbox, entity player )
+{
+	vector mins = deathbox.GetBoundingMins()
+	vector maxs = deathbox.GetBoundingMaxs()
+	vector boxToPlayer = player.EyePosition() - deathbox.GetOrigin()
+	vector fwd = deathbox.GetForwardVector()
+	vector rgt = deathbox.GetRightVector()
+	vector up  = deathbox.GetUpVector()
+
+	
+	array<PlaneVisibility> planeArray
+
+	{
+		PlaneVisibility testPlane
+		testPlane.value = DotProduct( fwd, boxToPlayer - maxs.x * fwd )
+		testPlane.connectPoint = <maxs.x, 0, maxs.z * 0.5>
+		planeArray.append( testPlane )
+	}
+
+	{
+		PlaneVisibility testPlane
+		testPlane.value = DotProduct( -fwd, boxToPlayer - mins.x * fwd )
+		testPlane.connectPoint = <mins.x, 0, maxs.z * 0.5>
+		planeArray.append( testPlane )
+	}
+	
+	{
+		PlaneVisibility testPlane
+		testPlane.value = DotProduct( rgt, boxToPlayer - maxs.y * rgt )
+		testPlane.connectPoint = <0, mins.y, maxs.z * 0.5>
+		planeArray.append( testPlane )
+	}
+
+	{
+		PlaneVisibility testPlane
+		testPlane.value = DotProduct( -rgt, boxToPlayer - mins.y * rgt )
+		testPlane.connectPoint = <0, maxs.y, maxs.z * 0.5>
+		planeArray.append( testPlane )
+	}
+
+	{
+		PlaneVisibility testPlane
+		testPlane.value = DotProduct( up, boxToPlayer - maxs.z * up )
+		testPlane.connectPoint = <0, 0, maxs.z>
+		planeArray.append( testPlane )
+	}
+
+	{
+		PlaneVisibility testPlane
+		testPlane.value = DotProduct( -up, boxToPlayer )
+		testPlane.connectPoint = <0, 0, mins.z>
+		planeArray.append( testPlane )
+	}
+
+	planeArray.sort( int function( PlaneVisibility a, PlaneVisibility b ) : ()
+	{
+		if ( a.value > b.value )
+			return -1
+		else if( a.value < b.value )
+			return 1
+
+		return 0
+	} )
+
+	return planeArray[0].connectPoint
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CreateAdd___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsLootEntAccessibleViaDeathBox( entity lootEnt, entity deathbox, entity player )
+{
+	Assert( lootEnt.GetNetworkedClassName() == "prop_survival" )
+
+	if ( deathbox.GetNetworkedClassName() == "prop_death_box" )
+	{
+
+
+
+			return deathbox.GetLinkEntArray().contains( lootEnt )
+
+	}
+	else if ( deathbox.GetNetworkedClassName() == "prop_loot_grabber" )
+	{
+		vector deathBoxOrigin = deathbox.GetOrigin()
+		float radius          = deathbox.GetLootGrabDist()
+
+		if ( IsVendingMachineUnsafe( deathbox ) )
+		{
+			if ( !IsValid( player ) )
+				return false
+
+			if ( lootEnt.DoesShareRealms( player ) )
+				return true
+
+			array<entity> nearbyDeathBoxes = GetEntitiesFromArrayNearPos( GetAllDeathboxes(), deathBoxOrigin, radius )
+
+			foreach ( entity nearbyDeathBox in nearbyDeathBoxes )
+			{
+				if ( IsLootEntAccessibleViaDeathBox( lootEnt, nearbyDeathBox, player ) )
+					return true
+			}
+
+			return false
+		}
+		else
+		{
+			if ( DistanceSqr( lootEnt.GetOrigin(), deathBoxOrigin ) <= radius * radius && lootEnt.DoesShareRealms( deathbox ) )
+				return true
+
+			array<entity> nearbyDeathBoxes = GetEntitiesFromArrayNearPos( GetAllDeathboxes(), deathBoxOrigin, radius )
+
+			foreach ( entity nearbyDeathBox in nearbyDeathBoxes )
+			{
+				if ( IsLootEntAccessibleViaDeathBox( lootEnt, nearbyDeathBox, player ) )
+					return true
+			}
+
+			return false
+		}
+	}
+
+	Assert( false, "Unhandled death box class: " + string(deathbox.GetNetworkedClassName()) )
+	return false
+}
+
+
+bool function Deathbox_IsLootEntInsideDeathbox( entity lootEnt )
+{
+	Assert( lootEnt.GetNetworkedClassName() == "prop_survival" )
+
+	if ( !IsValid( lootEnt ) )
+		return false
+
+	entity lootEntParent = lootEnt.GetParent()
+
+	if ( !IsValid( lootEntParent ) )
+		return false
+
+	if ( lootEntParent.GetNetworkedClassName() != "prop_death_box" )
+	{
+		return false
+	}
+
+	array<entity> boxLinkedEnts = lootEntParent.GetLinkEntArray()	
+	if ( boxLinkedEnts.contains( lootEnt ) )
+		return true
+	else
+		return false
+
+	unreachable
+}
+
+
+bool function DoesDeathBoxSupportAddingLoot( entity deathbox )
+{
+	return (deathbox.GetNetworkedClassName() == "prop_death_box") 
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Callbacks___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________BannersAndDNA___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function DeathBoxBannerAvailable( entity player, entity deathbox )
+{
+	if ( !IsValid( deathbox ) )
+		return false
+
+
+		if( deathbox.GetNetBool( DEATH_BOX_BANNER_EXPIRED_NETVAR ) && !Perk_CanPickUpExpiredBanners( player, deathbox ) )
+			return false
+
+
+	if ( deathbox.GetTeam() != TEAM_UNASSIGNED )
+	{
+		if ( deathbox.GetTeam() == player.GetTeam() && IsValid( deathbox.GetOwner() ) )
+			return true
+	}
+
+	return false
+}
+
+
+bool function ShouldPickupDNAFromDeathBox( entity ent, entity player )
+{
+
+		if( ent.GetNetBool( DEATH_BOX_BANNER_EXPIRED_NETVAR ) && !Perk_CanPickUpExpiredBanners( player, ent ) )
+			return false
+
+
+	
+
+	if( (!RemoteDeathboxInteractAllowGrabbingBanners() && !IsPlayerWithinStandardDeathBoxUseDistance( player, ent )) &&
+			!PlayerHasPassive( player, ePassives.PAS_CRYPTO ))
+		return false
+
+	if ( ent.GetTeam() != TEAM_UNASSIGNED )
+	{
+		entity owner = ent.GetOwner()
+
+		if( !IsValid( owner ) )
+			return false
+
+		int respawnStatus = owner.GetPlayerNetInt( "respawnStatus" )
+		if ( ent.GetTeam() == player.GetTeam() && IsValid( owner ) && ( respawnStatus == eRespawnStatus.WAITING_FOR_PICKUP )  )
+			return true
+	}
+
+	return false
+}
+
+bool function CanUseFastBannerPickup( entity player, entity ent )
+{
+	if ( !IsPlayingBannerPickupAnim( player ) )
+		return false
+
+	string classname = expect string( ent.GetNetworkedClassName() )
+	if ( classname == "prop_death_box" )
+		return HasInterruptableBannerPickup() || ShouldPickupDNAFromDeathBox( ent, player )
+	else if ( classname == "prop_survival" )
+	{
+		LootData data = SURVIVAL_Loot_GetLootDataByIndex( ent.GetSurvivalInt() )
+
+		return data.ref == CRAFTED_BANNER_REF || data.ref == BLACK_MARKET_BANNER_REF
+	}
+
+	return false
+}
+
+bool function CanInterruptBannerPickupEarly( entity player )
+{
+	return HasInterruptableBannerPickup() && IsPlayingBannerPickupAnim( player )
+}
+
+bool function IsPlayingBannerPickupAnim( entity player )
+{
+	entity firstPersonProxy = player.GetPredictedFirstPersonProxy()
+	if ( !IsValid( firstPersonProxy ) || firstPersonProxy.GetModelName() == $"" || firstPersonProxy.GetModelName() == $"?" )
+		return false
+
+	if ( !IsPlayingFirstPersonAnimation( player ) )
+		return false
+
+	string firstPersonAnim = firstPersonProxy.GetCurrentSequenceName()
+	bool isPlayingPickupAnimation = ( firstPersonAnim.find( PICKING_UP_RESPAWN_BANNER_ANIM ) > -1 ) || ( firstPersonAnim.find( PICKING_UP_RESPAWN_BANNER_AND_MRB_ANIM ) > -1 )
+	return isPlayingPickupAnimation
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Use___________________________(){}
+#endif
+
+bool function DeathBox_CanUseFunction( entity player, entity ent, int useFlags )
+{
+
+		if ( IsValid( ent ) && Deathbox_ShouldFocus( ent ) )
+			thread Deathbox_CreateRui( ent )
+
+
+	if ( IsPVEMode() && (GetRespawnStyle() == eRespawnStyle.NONE) )
+	{
+		if ( IsValid( ent.GetOwner() ) && (player != ent.GetOwner()) )
+			return false
+	}
+
+	if ( GetGameState() > eGameState.Playing )
+		return false
+
+	if ( !PlayerHandsAvailable( player ) )
+		return false
+
+	if ( !PlayerInValidState( player, false, false ) )
+		return false
+
+	if ( IsPlayerBusyOrAnimating( player ) && !( CanInterruptBannerPickupEarly( player ) || CanUseFastBannerPickup( player, ent ) ) )
+		return false
+
+
+
+
+
+
+
+		if ( player.IsPilotModeActive() )
+			return false
+
+
+
+		
+		
+		if( IsBitFlagSet( useFlags, RESPAWN_FROMDEATHBOX_INPUT ) && ( !Respawn_FromDeathbox_PlayerInUseRange( player, ent ) || HasTeammatesRespawningFromBeacon( player.GetTeam() ) ) )
+			return false
+
+
+	if ( ent.GetTeam() != TEAM_UNASSIGNED )
+	{
+		if ( ent.GetTeam() == player.GetTeam() )
+			return true
+	}
+
+	return ent.GetLinkEntArray().len() > 0
+}
+
+bool function DeathBox_ShouldUseBlockReload( entity player, entity ent )
+{
+	
+	if ( IsPlayingFirstPersonAnimation( player ) )
+	{
+		return true
+	}
+	return false
+}
+
+void function ExtendedTryOpenGroundList( entity ent, entity player, ExtendedUseSettings settings )
+{
+	OpenSurvivalGroundList( player, ent )
+}
+
+
+
+ExtendedUseSettings function Deathbox_GetExtendedUseSettings( entity ent, entity playerUser )
+{
+	ExtendedUseSettings settings
+	settings.loopSound = "UI_Survival_PickupTicker"
+	settings.successSound = "UI_Survival_DeathBoxOpen"
+	settings.hint = "#PROMPT_OPEN"
+	settings.successFunc = ExtendedTryOpenGroundList
+
+
+
+
+
+
+
+
+	return settings
+}
+
+
+bool function UsableFromExtendedRange( entity ent, entity player, ExtendedUseSettings settings )
+{
+	return !IsPlayerWithinStandardDeathBoxUseDistance( player, ent )
+}
+
+void function OnDeathBoxUse( entity box, entity player, int useInputFlags )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		if( Respawn_FromDeathbox_Enabled()  )
+		{
+			if( IsBitFlagSet( useInputFlags, RESPAWN_FROMDEATHBOX_INPUT )  )
+			{
+				Respawn_FromDeathbox_OnUse ( player, box )
+				return
+			}
+		}
+
+
+	if ( IsBitFlagSet( useInputFlags, USE_INPUT_LONG ) )
+	{
+		
+		if ( ShouldPickupDNAFromDeathBox( box, player ) && !HasInterruptableBannerPickup() )
+			return
+
+		if ( box.GetLinkEntArray().len() == 0 )
+			return
+
+
+
+
+
+
+		ExtendedUseSettings settings
+
+
+
+
+			settings = Deathbox_GetExtendedUseSettings( box, player )
+
+
+		settings.usableFromExtendedRangeFunc = UsableFromExtendedRange
+		settings.duration = 0.3
+		settings.requireMatchingUseEnt = true
+
+		thread ExtendedUse( box, player, settings )
+	}
+}
+
+
+bool function Deathbox_ShouldFocus( entity deathbox )
+{
+	if ( deathbox == file.focusedDeathbox )
+	{
+		file.focusedDeathBoxHandled = true
+	}
+
+	return !file.focusedDeathBoxHandled
+}
+
+
+
+string function DeathBoxTextOverride( entity ent )
+{
+	if ( ent.e.isBusy )
+		return " "
+
+
+
+
+
+
+
+
+	entity localViewPlayer = GetLocalViewPlayer()
+	if ( ShouldPickupDNAFromDeathBox( ent, localViewPlayer ) )
+	{
+		string localizedHint = ""
+		if ( ent.GetCustomOwnerName() != "" )
+			localizedHint = Localize( "#HINT_PICKUP_DNA_USE", ent.GetCustomOwnerName() )
+		else
+			localizedHint = Localize( "#HINT_PICKUP_DNA_USE", ent.GetOwner().GetPlayerName() )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			if( Respawn_FromDeathbox_Enabled() )
+			{
+				localizedHint = localizedHint + "\n" + Respawn_FromDeathbox_Get_UsePrompts( localViewPlayer, ent )
+			}
+
+
+		return localizedHint
+	}
+
+	if ( ent.GetLinkEntArray().len() == 0 )
+	{
+
+
+
+
+
+
+
+
+
+
+		return " "
+	}
+
+	EHI ornull ehi = Deathbox_GetOwnerEHI( ent )
+	if ( ehi == null )
+		return ""
+	expect EHI( ehi )
+	if ( !EHIHasValidScriptStruct( ehi ) )
+		return ""
+
+	int team          = EHI_GetTeam( ehi )
+	string playerName = GetDisplayablePlayerNameFromEHI( ehi )
+
+	if ( ent.GetCustomOwnerName() != "" ) 
+		playerName = ent.GetCustomOwnerName()
+
+	string hint = "#DEATHBOX_HINT_NAME"
+
+	bool isEnemyTeam = IsEnemyTeam( team, localViewPlayer.GetTeam() )
+	if ( isEnemyTeam )
+		hint = "#DEATHBOX_HINT_ENEMY"
+
+	bool remoteInteracting = IsPlayerOutsideStandardDeathBoxUseDistanceButRemoteInteractAllowed( localViewPlayer, ent )
+	if ( remoteInteracting )
+	{
+		hint = "#VOID_REACH_HINT_NAME"
+		if ( isEnemyTeam )
+			hint = "#VOID_REACH_HINT_ENEMY"
+	}
+
+
+	string localizedHint = Localize( hint, playerName )
+
+
+
+
+
+
+
+
+
+
+
+	if ( remoteInteracting && localViewPlayer.GetUseEntity() == ent )
+	{
+		CustomUsePrompt_Show( ent )
+		CustomUsePrompt_SetSourcePos( ent.GetOrigin() + < 0, 0, 25 > )
+		CustomUsePrompt_SetText( localizedHint )
+		CustomUsePrompt_SetHintImage( $"" )
+		int lootRarity = ent.GetNetInt( "maxLootTier" )
+		CustomUsePrompt_SetLineColor( GetSurvialPropColorFromRarity( lootRarity ) )
+		if ( PlayerIsInADS( localViewPlayer ) )
+			CustomUsePrompt_ShowSourcePos( false )
+		else
+			CustomUsePrompt_ShowSourcePos( true )
+
+		localizedHint = " "
+	}
+	else
+	{
+		CustomUsePrompt_Hide()
+	}
+
+
+
+
+
+
+
+
+
+		if( Respawn_FromDeathbox_Enabled() )
+		{
+			string deathboxRespawnPrompt = Respawn_FromDeathbox_Get_UsePrompts( localViewPlayer, ent )
+			if( deathboxRespawnPrompt != "" )
+			{
+				localizedHint = localizedHint + "\n" + deathboxRespawnPrompt
+			}
+		}
+
+
+	return localizedHint
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Highlight___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float s_deathboxHighlightFillCache = 0
+float function Deathbox_GetHighlightFillAlpha( entity deathbox )
+{
+	if (s_deathboxHighlightFillCache == 0)
+	{
+		vector mins = deathbox.GetBoundingMins()
+		vector maxs = deathbox.GetBoundingMaxs()
+
+		float volume = (maxs.x - mins.x) * (maxs.y - mins.y) * (maxs.z - mins.z)
+
+		s_deathboxHighlightFillCache = GraphCapped( volume, LOOT_FILL_VOLUME_MIN, LOOT_FILL_VOLUME_MAX, LOOT_FILL_ALPHA_MAX, LOOT_FILL_ALPHA_MIN )
+	}
+
+	return s_deathboxHighlightFillCache
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________InternalFuncs___________________________(){}
+#endif
+
+void function OnDeathboxCreated( entity ent )
+{
+	if ( ent.GetScriptName() != DEATH_BOX_SCRIPTNAME )
+		return
+
+	file.allDeathBoxes.append( ent )
+
+
+
+
+
+		AddEntityCallback_GetUseEntOverrideText( ent, DeathBoxTextOverride )
+		ent.SetDoDestroyCallback( true )
+
+		if ( ent.GetOwner() == GetLocalClientPlayer() )
+		{
+			thread Deathbox_CreateRui( ent )
+		}
+		DeathBoxTextOverride( ent )  
+
+
+	SetCallback_CanUseEntityCallback( ent, DeathBox_CanUseFunction )
+	SetCallback_ShouldUseBlockReloadCallback( ent, DeathBox_ShouldUseBlockReload )
+
+
+	AddCallback_OnUseEntity_ClientServer( ent, OnDeathBoxUse )
+}
+
+
+void function OnDeathboxDestroyed( entity ent )
+{
+
+		file.allDeathBoxes.fastremovebyvalue( ent )
+
+		Respawn_FromDeathBox_Waypt_ForDeathBox_Remove( ent )
+
+
+
+
+
+
+
+
+
+
+}
+
+void function OnBoxPropDestroyed( entity pickup )
+{
+
+
+
+
+
+
+}
+
+
+
+void function Deathbox_CreateRui( entity deathbox )
+{
+	EHI ornull ehi = Deathbox_GetOwnerEHI( deathbox )
+	if ( ehi == null )
+		return
+
+	expect EHI( ehi )
+
+	clGlobal.levelEnt.Signal( "CreateDeathBoxRui" )
+	clGlobal.levelEnt.EndSignal( "CreateDeathBoxRui" )
+
+	deathbox.EndSignal( "OnDestroy" )
+
+	file.focusedDeathbox = deathbox
+	file.focusedDeathBoxHandled = true
+
+	float scale      = 0.0820
+	float width      = 264 * scale
+	float height     = 720 * scale
+	vector ang       = deathbox.GetAngles()
+	vector rgt       = AnglesToRight( ang )
+	vector up        = AnglesToUp( ang )
+	entity player    = GetLocalViewPlayer()
+	vector playerDir = player.GetOrigin() - deathbox.GetOrigin()
+	bool onBoxRight  = DotProduct2D( rgt, playerDir ) < 0.0
+	float direction  = onBoxRight ? 1.0 : -1.0
+	vector right     = <0, 1, 0> * height * 0.5 * direction
+	vector fwd       = <1, 0, 0> * width * 0.5 * direction * -1.0
+
+	int attachmentIndex = deathbox.LookupAttachment( "BANNER_FRAME" )
+
+	Assert( attachmentIndex > 0, "Couldn't find BANNER_FRAME attachment on the deathbox to place the banner" )
+	if ( attachmentIndex <= 0 )
+		return
+
+	vector localOrigin = WorldPosToLocalPos( deathbox.GetAttachmentOrigin( attachmentIndex ), deathbox )
+
+	var topo = RuiTopology_CreatePlane( localOrigin - right * 0.5 - fwd * 0.5, fwd, right, true )
+	RuiTopology_SetParent( topo, deathbox )
+
+	NestedGladiatorCardHandle ornull nestedGCHandleOrNull = null
+
+	var rui
+	int ruiOverrideType = deathbox.GetNetInt( "overrideRUIType" )
+	if ( ruiOverrideType == 2 )
+	{
+		const string playlistVar = "deathbox_rui_override_2"
+		asset overrideAsset = GetCurrentPlaylistVarAsset( playlistVar )
+		if ( overrideAsset == $"" )
+		{
+			Warning( "%s() - override type #%d specified, but playlist var '%s' is blank.", FUNC_NAME(), ruiOverrideType, playlistVar )
+			return
+		}
+		rui = RuiCreate( overrideAsset, topo, RUI_DRAW_WORLD, MINIMAP_Z_BASE + 10 )
+	}
+	else
+	{
+		rui = RuiCreate( $"ui/gladiator_card_deathbox.rpak", topo, RUI_DRAW_WORLD, MINIMAP_Z_BASE + 10 )
+		NestedGladiatorCardHandle nestedGCHandle = CreateNestedGladiatorCard( rui, "card", eGladCardDisplaySituation.DEATH_BOX_STILL, eGladCardPresentation.FRONT_DETAILS )
+		nestedGCHandleOrNull = nestedGCHandle
+
+		if ( ruiOverrideType == 1 )
+			Deathbox_CreateRuiWithOverridenData( deathbox, nestedGCHandle )
+
+		ChangeNestedGladiatorCardOwner( nestedGCHandle, ehi, null, eGladCardLifestateOverride.ALIVE )
+	}
+
+	OnThreadEnd (
+		void function() : ( topo, rui, nestedGCHandleOrNull )
+		{
+			if ( nestedGCHandleOrNull != null )
+				CleanupNestedGladiatorCard( expect NestedGladiatorCardHandle( nestedGCHandleOrNull ) )
+			RuiDestroy( rui )
+			RuiTopology_Destroy( topo )
+
+			file.focusedDeathbox        = null
+			file.focusedDeathBoxHandled = false
+		}
+	)
+
+	entity plane = CreateClientSidePropDynamic( deathbox.GetAttachmentOrigin( attachmentIndex ), deathbox.GetAttachmentAngles( attachmentIndex ), DEATH_BOX_FLAT_PLANE )
+	plane.SetParent( deathbox )
+
+	OnThreadEnd(
+		function() : ( plane )
+		{
+			if ( IsValid( plane ) )
+				plane.Destroy()
+		}
+	)
+
+
+	while ( true )
+	{
+		WaitEndFrame()
+		file.focusedDeathBoxHandled = false
+		WaitFrame()
+	}
+}
+
+
+
+void function Deathbox_ManageLoot_Thread()
+{
+	while ( true )
+	{
+		WaitFrame()
+
+		ManageDeathBoxLoot()
+	}
+}
+
+
+
+void function ManageDeathBoxLoot()
+{
+	entity player = GetLocalViewPlayer()
+
+	if ( !IsValid( player ) )
+		return
+
+	if ( player != GetLocalClientPlayer() )
+		return
+
+	if ( player.IsPhaseShifted() )
+		return
+
+	if ( !Survival_IsGroundlistOpen() )
+		return
+
+	bool isBlackMarket      = false
+	array<entity> loot
+	entity currentDeathBox = Survival_GetDeathBox()
+	if ( IsValid( currentDeathBox ) )
+	{
+		loot = Deathbox_GetLootEnts( currentDeathBox )
+
+		
+		if ( currentDeathBox.GetScriptName() == BLACK_MARKET_SCRIPTNAME )
+		{
+			isBlackMarket = true
+		}
+	}
+
+	if ( IsGroundListMenuOpen() )
+	{
+		SurvivalGroundListUpdateParams params
+		params.player = player
+		params.currentLootEnts = loot
+		params.isBlackMarket = isBlackMarket
+		UpdateSurvivalGroundList( params )
+	}
+	else
+	{
+		GroundItemUpdate( player, loot )
+	}
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________DevDeathboxes___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Deathbox_CreateRuiWithOverridenData( entity deathbox, NestedGladiatorCardHandle nestedGCHandle )
+{
+	printt( "Creating with overriden profile data" )
+	SetNestedGladiatorCardOverrideName( nestedGCHandle, deathbox.GetCustomOwnerName() )
+
+	int characterIndex                 = deathbox.GetNetInt( "characterIndex" )
+	LoadoutEntry characterLoadoutEntry = Loadout_Character()
+	ItemFlavor character               = ConvertLoadoutSlotContentsIndexToItemFlavor( characterLoadoutEntry, characterIndex )
+	SetNestedGladiatorCardOverrideCharacter( nestedGCHandle, character )
+
+	int skinIndex                 = deathbox.GetNetInt( "skinIndex" )
+	LoadoutEntry skinLoadoutEntry = Loadout_CharacterSkin( character )
+	SetNestedGladiatorCardOverrideSkin( nestedGCHandle, ConvertLoadoutSlotContentsIndexToItemFlavor( skinLoadoutEntry, skinIndex ) )
+
+	int frameIndex                 = deathbox.GetNetInt( "frameIndex" )
+	LoadoutEntry frameLoadoutEntry = Loadout_GladiatorCardFrame( character )
+	SetNestedGladiatorCardOverrideFrame( nestedGCHandle, ConvertLoadoutSlotContentsIndexToItemFlavor( frameLoadoutEntry, frameIndex ) )
+
+	int stanceIndex                 = deathbox.GetNetInt( "stanceIndex" )
+	LoadoutEntry stanceLoadoutEntry = Loadout_GladiatorCardStance( character )
+	SetNestedGladiatorCardOverrideStance( nestedGCHandle, ConvertLoadoutSlotContentsIndexToItemFlavor( stanceLoadoutEntry, stanceIndex ) )
+
+	int firstBadgeIndex                 = deathbox.GetNetInt( "firstBadgeIndex" )
+	LoadoutEntry firstBadgeLoadoutEntry = Loadout_GladiatorCardBadge( character, 0 )
+	int firstBadgeDataInt               = deathbox.GetNetInt( "firstBadgeDataInt" )
+	SetNestedGladiatorCardOverrideBadge( nestedGCHandle, 0, ConvertLoadoutSlotContentsIndexToItemFlavor( firstBadgeLoadoutEntry, firstBadgeIndex ), firstBadgeDataInt )
+
+	int secondBadgeIndex                 = deathbox.GetNetInt( "secondBadgeIndex" )
+	LoadoutEntry secondBadgeLoadoutEntry = Loadout_GladiatorCardBadge( character, 1 )
+	int secondBadgeDataInt               = deathbox.GetNetInt( "secondBadgeDataInt" )
+	SetNestedGladiatorCardOverrideBadge( nestedGCHandle, 1, ConvertLoadoutSlotContentsIndexToItemFlavor( secondBadgeLoadoutEntry, secondBadgeIndex ), secondBadgeDataInt )
+
+	int thirdBadgeIndex                 = deathbox.GetNetInt( "thirdBadgeIndex" )
+	LoadoutEntry thirdBadgeLoadoutEntry = Loadout_GladiatorCardBadge( character, 2 )
+	int thirdBadgeDataInt               = deathbox.GetNetInt( "thirdBadgeDataInt" )
+	SetNestedGladiatorCardOverrideBadge( nestedGCHandle, 2, ConvertLoadoutSlotContentsIndexToItemFlavor( thirdBadgeLoadoutEntry, thirdBadgeIndex ), thirdBadgeDataInt )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

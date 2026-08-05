@@ -1,0 +1,258 @@
+global function MenuModel_Start3PDeathboxEffects
+global function MenuModel_ClearDeathboxEffects
+global function MenuModel_UpdateDeathboxLights
+
+#if DEV
+const bool s_debugLights = false
+const bool s_turnOffRoomLights = false
+const float s_debugTime = 10.0
+#endif
+entity s_lightRigModel = null
+entity s_weaponModel = null
+
+const int DEFAULT_DEATHBOX_GUID = 989815244
+
+const asset LIGHT_RIG_MDL = $"mdl/empty/lights/empty_lights.rmdl"
+const array< string > LIGHT_NAMES = [
+	"LIGHT_1",
+	"LIGHT_2",
+	"LIGHT_3",
+	"LIGHT_4",
+]
+
+const array<string> ROOM_LIGHT_NAMES = [
+	"char_sel_light_key",
+	"char_sel_light_fill",
+	"char_sel_light_rim_l",
+	"char_sel_light_rim_r",
+]
+
+
+
+struct
+{
+	table<entity, array<int> > activeMenuDeathboxEffects
+} file
+
+void function MenuModel_Start3PDeathboxEffects( entity model, ItemFlavor skin )
+{
+	asset fx = Artifacts_FX_GetDeathboxFX( skin )
+
+	if ( fx == $"" )
+		return
+
+	int fxHandle = StartParticleEffectOnEntity( model, GetParticleSystemIndex( fx ), FX_PATTACH_POINT_FOLLOW, model.LookupAttachment( "FX_CENTER" ) )
+	EffectSetControlPointColorById( fxHandle, 1, COLORID_FX_LOOT_TIER5 )
+
+	if ( model in file.activeMenuDeathboxEffects )
+	{
+		file.activeMenuDeathboxEffects[ model ].append( fxHandle )
+	}
+	else
+	{
+		file.activeMenuDeathboxEffects[ model ] <- [ fxHandle ]
+	}
+
+	model.kv.rendercolor = "255 255 255" 
+	model.kv.intensity = 1.0
+}
+
+void function MenuModel_ClearDeathboxEffects( entity model )
+{
+	if ( model in file.activeMenuDeathboxEffects )
+	{
+		foreach ( fxHandle in file.activeMenuDeathboxEffects[ model ] )
+		{
+			if ( EffectDoesExist( fxHandle ) )
+				EffectStop( fxHandle, true, false )
+		}
+
+		delete file.activeMenuDeathboxEffects[ model ]
+	}
+
+	if ( IsValid( model ) ) 
+	{
+		model.kv.rendercolor = "0" 
+		model.kv.intensity   = 1.0
+	}
+}
+
+void function CleanupLights( array<entity> lights )
+{
+	if ( IsValid( s_lightRigModel ) )
+	{
+		s_lightRigModel.Destroy()
+#if DEV
+			if ( s_debugLights )
+				printt( "WeaponLightsDbg - OnThreadEnd - s_lightRigModel destroyed" )
+#endif
+	}
+
+	foreach ( int idx, entity light in lights )
+	{
+		if ( !IsValid( light ) )
+			continue
+
+		light.SetTweakLightRealtimeShadows( false )
+		light.SetTweakLightUpdateShadowsEveryFrame( false )
+		light.SetTweakLightDistance( 2.0 ) 
+		light.SetTweakLightBrightness( 0.01 )
+#if DEV
+			if ( s_debugLights )
+				printf( "WeaponLightsDbg - OnThreadEnd - light %d dimmed", idx )
+#endif
+	}
+}
+
+void function MenuModel_UpdateDeathboxLights( entity model, vector rotation, ItemFlavor item )
+{
+#if DEV
+		if ( s_turnOffRoomLights )
+		{
+			foreach ( string roomLightName in ROOM_LIGHT_NAMES )
+			{
+				foreach ( entity roomLight in GetEntArrayByScriptName( roomLightName ) )
+				{
+					if ( IsValid( roomLight ) )
+					{
+						roomLight.SetTweakLightDistance( 1.0 )
+						roomLight.SetTweakLightBrightness( 0.0 )
+					}
+				}
+			}
+
+			foreach ( bpLight in GetEntArrayByScriptName( "battlepass_stationary_light" ) )
+			{
+				if ( IsValid( bpLight ) )
+				{
+					bpLight.SetTweakLightDistance( 1.0 )
+					bpLight.SetTweakLightBrightness( 0.0 )
+				}
+			}
+		}
+#endif
+
+	thread function() : ( model, rotation, item ) {
+		if ( IsValid( s_lightRigModel ) && ( s_weaponModel == model ) && ( s_weaponModel.GetModelName() == model.GetModelName() ) )
+			return
+
+		Signal( level, WEAPON_LIGHT_SIGNAL_NAME )
+		EndSignal( level, WEAPON_LIGHT_SIGNAL_NAME )
+		EndSignal( model, "OnDestroy" )
+
+		array<entity> lights = GetEntArrayByScriptName( "close_character_light" ) 
+
+		OnThreadEnd( void function() : ( lights ) {
+			CleanupLights( lights )
+		} )
+
+		CleanupLights( lights )
+
+		
+		vector origin = model.GetAttachmentOrigin( model.LookupAttachment( "ORIGIN" ) )
+
+		s_lightRigModel = CreateClientSidePropDynamic( origin, rotation, LIGHT_RIG_MDL )
+		s_lightRigModel.MakeSafeForUIScriptHack()
+		s_lightRigModel.Hide()
+
+		s_weaponModel = model
+
+		LightData lightData =  WeaponItemFlavor_GetMenuCustomLightData( item )
+
+		if ( !lightData.initialized )
+		{
+			ItemFlavor defaultBox = GetItemFlavorByGUID( DEFAULT_DEATHBOX_GUID )
+			lightData = WeaponItemFlavor_GetMenuCustomLightData( defaultBox )
+			Assert( lightData.initialized )
+		}
+
+		Assert( lights.len() == LIGHT_NAMES.len() )
+		if ( lights.len() != LIGHT_NAMES.len() )
+			return
+
+		foreach ( entity light in lights )
+		{
+			light.SetTweakLightRealtimeShadows( true )
+			light.SetTweakLightUpdateShadowsEveryFrame( true )
+		}
+
+		entity keyLight  = lights[0]
+		entity fillLight = lights[1]
+		entity rimLightL = lights[2]
+		entity rimLightR = lights[3]
+
+		keyLight.SetTweakLightColor( lightData.key_color )
+		keyLight.SetTweakLightBrightness( lightData.key_brightness )
+		keyLight.SetTweakLightCone( lightData.key_cone )
+		keyLight.SetTweakLightInnerCone ( lightData.key_innercone )
+		keyLight.SetTweakLightDistance( lightData.key_distance )
+		keyLight.SetTweakLightHalfBrightFrac( lightData.key_halfbrightfrac )
+		keyLight.SetTweakLightSpecIntensity( lightData.key_specint )
+		keyLight.SetTweakLightPBRFalloff( lightData.key_pbrfalloff )
+		keyLight.SetTweakLightRealtimeShadows( lightData.key_castshadows )
+		fillLight.SetTweakLightColor( lightData.fill_color )
+		fillLight.SetTweakLightBrightness( lightData.fill_brightness )
+		fillLight.SetTweakLightCone( lightData.fill_cone )
+		fillLight.SetTweakLightInnerCone ( lightData.fill_innercone )
+		fillLight.SetTweakLightDistance( lightData.fill_distance )
+		fillLight.SetTweakLightHalfBrightFrac( lightData.fill_halfbrightfrac )
+		fillLight.SetTweakLightSpecIntensity( lightData.fill_specint )
+		fillLight.SetTweakLightPBRFalloff( lightData.fill_pbrfalloff )
+		fillLight.SetTweakLightRealtimeShadows( lightData.fill_castshadows )
+		rimLightL.SetTweakLightColor( lightData.rimL_color )
+		rimLightL.SetTweakLightBrightness( lightData.rimL_brightness )
+		rimLightL.SetTweakLightCone( lightData.rimL_cone )
+		rimLightL.SetTweakLightInnerCone ( lightData.rimL_innercone )
+		rimLightL.SetTweakLightDistance( lightData.rimL_distance )
+		rimLightL.SetTweakLightHalfBrightFrac( lightData.rimL_halfbrightfrac )
+		rimLightL.SetTweakLightSpecIntensity( lightData.rimL_specint )
+		rimLightL.SetTweakLightPBRFalloff( lightData.rimL_pbrfalloff )
+		rimLightL.SetTweakLightRealtimeShadows( lightData.rimL_castshadows )
+		rimLightR.SetTweakLightColor( lightData.rimR_color )
+		rimLightR.SetTweakLightBrightness( lightData.rimR_brightness )
+		rimLightR.SetTweakLightCone( lightData.rimR_cone )
+		rimLightR.SetTweakLightInnerCone ( lightData.rimR_innercone )
+		rimLightR.SetTweakLightDistance( lightData.rimR_distance )
+		rimLightR.SetTweakLightHalfBrightFrac( lightData.rimR_halfbrightfrac )
+		rimLightR.SetTweakLightSpecIntensity( lightData.rimR_specint )
+		rimLightR.SetTweakLightPBRFalloff( lightData.rimR_pbrfalloff )
+		rimLightR.SetTweakLightRealtimeShadows( lightData.rimR_castshadows )
+
+		s_lightRigModel.Anim_Play( lightData.animSeq )
+
+		int attachIdx_fill = s_lightRigModel.LookupAttachment( LIGHT_NAMES[0] )
+		int attachIdx_rimL = s_lightRigModel.LookupAttachment( LIGHT_NAMES[1] )
+		int attachIdx_rimR = s_lightRigModel.LookupAttachment( LIGHT_NAMES[2] )
+		int attachIdx_key  = s_lightRigModel.LookupAttachment( LIGHT_NAMES[3] )
+
+		fillLight.SetTweakLightOrigin( s_lightRigModel.GetAttachmentOrigin( attachIdx_fill ) )
+		fillLight.SetTweakLightAngles( s_lightRigModel.GetAttachmentAngles( attachIdx_fill ) )
+
+		rimLightL.SetTweakLightOrigin( s_lightRigModel.GetAttachmentOrigin( attachIdx_rimL ) )
+		rimLightL.SetTweakLightAngles( s_lightRigModel.GetAttachmentAngles( attachIdx_rimL ) )
+
+		rimLightR.SetTweakLightOrigin( s_lightRigModel.GetAttachmentOrigin( attachIdx_rimR ) )
+		rimLightR.SetTweakLightAngles( s_lightRigModel.GetAttachmentAngles( attachIdx_rimR ) )
+
+		keyLight.SetTweakLightOrigin( s_lightRigModel.GetAttachmentOrigin( attachIdx_key ) )
+		keyLight.SetTweakLightAngles( s_lightRigModel.GetAttachmentAngles( attachIdx_key ) )
+
+#if DEV
+			if ( s_debugLights )
+			{
+				foreach ( light in lights )
+					printf( "WeaponLightDbg: distance to light %s is %1.2f", string( light ), Distance( origin, light.GetOrigin() ) )
+
+				
+				DebugDrawArrow( origin, keyLight.GetOrigin(), 2, COLOR_YELLOW, false, s_debugTime )
+				DebugDrawArrow( origin, rimLightL.GetOrigin(),  2, COLOR_RED, false, s_debugTime )
+				DebugDrawArrow( origin, rimLightR.GetOrigin(),  2, COLOR_BLUE, false, s_debugTime )
+				DebugDrawArrow( origin, fillLight.GetOrigin(),  2, COLOR_GREEN, false, s_debugTime )
+			}
+#endif
+
+		WaitForever() 
+	}()
+}
+
+ 

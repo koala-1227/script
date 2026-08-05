@@ -1,0 +1,3260 @@
+global function MpWeaponCoverWall_Init
+
+global function OnWeaponPrimaryAttack_weapon_cover_wall
+global function OnWeaponActivate_weapon_cover_wall
+global function OnWeaponDeactivate_weapon_cover_wall
+global function OnWeaponAttemptOffhandSwitch_weapon_cover_wall
+global function OnWeaponStartZoomIn_weapon_cover_wall
+global function OnWeaponStartZoomOut_weapon_cover_wall
+
+global function OnCreateClientOnlyModel_weapon_cover_wall
+
+
+global function CanReclaimWall
+global function IsEnemyBlockingRemoteReclaim
+
+global function IsAmpedWallEnt
+global function IsCoverWallEnt
+
+
+
+
+
+
+
+
+
+#if DEV
+
+global function GetChargeFracForPlayerFromWall
+#endif
+
+
+global const string COVER_WALL_WEAPON_NAME = "mp_weapon_cover_wall"
+global const string BASE_WALL_SCRIPT_NAME = "cover_wall"
+global const string AMPED_WALL_SCRIPT_NAME = "amped_wall"
+global const string AMPED_WALL_MOVER_SCRIPTNAME = "amped_wall_mover"
+const string HEALTH_TICKS_SCRIPT_NAME = "health_ticks"
+global const string AMPED_ROOF_SCRIPT_NAME = "amped_roof"
+const string WALL_BOOST_TRIGGER_SCRIPT_NAME = "amped_speed_trigger"
+const string WALL_AREA_TRIGGER_SCRIPT_NAME = "cover_wall_trigger"
+const string WALL_CHARGE_TRACKER_SCRIPT_NAME = "cover_wall_charge_tracker"
+
+
+const string COVER_WALL_CHANGED_TEAMS_SIGNAL = "CoverWall_ChangedTeam"
+
+const string REPAIR_START_SIGNAL = "CoverWallRepairStart"
+const string COVER_WALL_STOP_AMPED_SPEED_EFFECT = "CoverWall_StopSpeedEffect"
+
+
+
+
+
+
+
+const string COVER_FIRE_ACTIVE_NETVAR = "RampCoverFire"
+
+
+
+const asset BASE_WALL_DESTROYED_FX = $"P_rampart_wall_destroy"
+const asset BASE_WALL_DAMAGE_STATE_TRANSITION_FX = $"P_rampart_wall_damaged"
+const asset BASE_WALL_DAMAGE_STATE_PERSISTENT_FX = $"P_rampart_wall_damaged_idle"
+const asset BASE_WALL_TAKE_DAMAGE_WHILE_HEALTH_LOW_FX = $"P_rampart_wall_damaged_hit"
+
+const float FX_IMPACT_DURATION = 0.05
+const asset DEPLOYABLE_SHIELD_FX_AMPED = $"P_rampart_shield_top"
+const asset AMPED_WALL_DESTROYED_FX = $"P_rampart_amp_destroy"
+const asset AMPED_WALL_PACKED_UP_FX = $"P_rampart_amp_end"
+const asset AMPED_SPEED_1P_SCREEN_FX = $"P_screen_buff_speed"
+const asset DEPLOYABLE_SHIELD_ROOF_FX = $"P_rampart_shield_roof" 
+const asset COVER_FIRE_3P_FX = $"P_Ramp_wall_amo_buff_body"
+const asset WALL_CHARGE_AMOUNT_LV1_FX = $"P_ramp_wall_speed_Level_1_mdl"
+const asset WALL_CHARGE_AMOUNT_LV2_FX = $"P_ramp_wall_speed_Level_2_mdl"
+const asset WALL_CHARGE_AMOUNT_LV3_FX = $"P_ramp_wall_speed_Level_3_mdl"
+const asset WALL_CHARGE_AMOUNT_LV4_FX = $"P_ramp_wall_speed_Level_4_mdl"
+const asset WALL_REGEN_FX = $"P_ramp_wall_regenerate"
+
+const asset COVER_FIRE_1P_FX = $"P_Ramp_wall_amo_screen"
+
+
+
+
+const string WALL_PLACED_SFX_1P = "Wall_Place_1p"
+const string WALL_PLACED_SFX_3P = "Wall_Place_3p"
+const string WALL_LANDS_ON_GROUND = "Wall_Land_Default"
+
+const string BASE_WALL_DAMAGE_STATE_TRANSITION_SFX = "Wall_Damage_ArmorBreak"
+const string BASE_WALL_DAMAGE_STATE_LOOP_SFX = "Wall_Rise_LowPulse_Damaged"
+const string BASE_WALL_DESTROYED_SFX = "Wall_Explode_Large"
+
+const string ARM_EXTEND_SERVO_SFX = "Wall_Rise_Start"
+const string AMPED_WALL_CHARGING_SEQUENCE_SFX = "Wall_Rise_LowPulse"
+const string AMPED_WALL_CHARGING_FINISHED_SFX = "Wall_ShieldAppear"
+const string AMPED_WALL_SHIELD_LOOP_SFX = "Wall_Shield_Sustain"
+const string AMPED_WALL_POWER_DOWN_SFX = "Wall_ShieldPowerDown"
+const string AMPED_WALL_BREAK_SFX_1P = "Wall_Shield_Break_1p"
+const string AMPED_WALL_BREAK_SFX_3P = "Wall_Shield_Break_3p"
+
+const string AMPED_SPEED_SFX_1P = "Alter_Tac_UI_VoidBreacher_1p"
+const string AMPED_WALL_RECHARGE_SFX = "Wall_Regen_Heal"
+
+
+const asset DEPLOYABLE_SHIELD_MODEL = $"mdl/fx/rampart_RW_shield_cell_fronT.rmdl"
+const asset HEALTH_TICKS_MODEL = $"mdl/fx/rampart_health_ticks.rmdl"
+const asset COVER_WALL_MODEL = $"mdl/props/rampart_cover_wall/rampart_cover_wall.rmdl"
+const asset COLLISION_CYLINDER_MODEL = $"mdl/props/rampart_cover_wall_replacement/rampart_cover_wall_invisible_collision_120x10_phys.rmdl"
+const asset AMPED_ROOF_MODEL = $"mdl/fx/rampart_RW_shield_cell.rmdl" 
+
+
+const float COVER_WALL_NO_SPAWN_RADIUS = 256.0
+const float COVER_WALL_ICON_HEIGHT = 48.0
+const float AMPED_WALL_HEIGHT_OFFSET = 39.0
+const float WALL_DESTROYED_CALLOUT_MIN_DIST = 1024.0
+
+
+
+struct
+{
+
+
+
+
+
+
+	int coverFireFxHandle
+
+
+	int persistentDamageFxIndex
+
+	array<entity> playersWithFastSwitch
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+} file
+
+struct
+{
+	float delayBeforeSwitchingFromUlt = 0.6
+
+	int startingHealth = 100
+
+	bool showWallHealthRui = false
+
+	bool speedBoostBasedOnAmpDamage = true
+	bool speedBoostShowFx = true
+	float speedBoostDurationAtMaxDamage = 15.0
+	float speedBoostDebounce = 0.2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+} tuning
+
+void function MpWeaponCoverWall_Init()
+{
+	SetupTuning()
+
+	Remote_RegisterServerFunction( "ClientCallback_TryPickupCoverWall", "typed_entity", "prop_script" )
+
+	if ( tuning.speedBoostBasedOnAmpDamage )
+	{
+		RegisterNetworkedVariable( COVER_FIRE_ACTIVE_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL )
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		RegisterConCommandTriggeredCallback( "+scriptCommand5", OnCharacterButtonPressed )
+
+		AddCallback_UseEntGainFocus( CoverWall_OnGainFocus )
+		AddCallback_UseEntLoseFocus( CoverWall_OnLoseFocus )
+
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.RAMPART_WALL, MINIMAP_OBJECT_RUI, MinimapPackage_RampartWall, FULLMAP_OBJECT_RUI, MinimapPackage_RampartWall )
+
+		RegisterNetVarBoolChangeCallback( COVER_FIRE_ACTIVE_NETVAR, CoverFireNetvarChangedCallback )
+		AddOnSpectatorTargetChangedCallback( OnSpectatorTargetChanged )
+
+		if ( tuning.speedBoostBasedOnAmpDamage )
+		{
+			StatusEffect_RegisterEnabledCallback( eStatusEffect.rampart_amped_speed, StartAmpedSpeedVisualEffect )
+			StatusEffect_RegisterDisabledCallback( eStatusEffect.rampart_amped_speed, StopAmpedSpeedVisualEffect )
+		}
+
+
+
+	RegisterSignal( "CoverWall_PickedUp" )
+
+
+
+
+	if ( tuning.speedBoostBasedOnAmpDamage )
+	{
+		AddCallback_OnPlayerChangedTeam( CoverWall_UpdateTrackingOnTeamChanged )
+
+		RegisterSignal( COVER_WALL_STOP_AMPED_SPEED_EFFECT )
+		RegisterSignal( COVER_WALL_CHANGED_TEAMS_SIGNAL )
+
+
+
+
+
+	}
+
+	PrecacheScriptString( BASE_WALL_SCRIPT_NAME )
+	PrecacheScriptString( AMPED_WALL_SCRIPT_NAME )
+	PrecacheScriptString( AMPED_WALL_MOVER_SCRIPTNAME )
+	PrecacheScriptString( HEALTH_TICKS_SCRIPT_NAME )
+	PrecacheScriptString( AMPED_ROOF_SCRIPT_NAME )
+	PrecacheScriptString( WALL_BOOST_TRIGGER_SCRIPT_NAME )
+	PrecacheScriptString( WALL_AREA_TRIGGER_SCRIPT_NAME )
+	PrecacheScriptString( WALL_CHARGE_TRACKER_SCRIPT_NAME )
+
+	PrecacheModel( COVER_WALL_MODEL )
+	PrecacheModel( COLLISION_CYLINDER_MODEL )
+	PrecacheModel( DEPLOYABLE_SHIELD_MODEL )
+	PrecacheModel( HEALTH_TICKS_MODEL )
+	PrecacheModel( AMPED_ROOF_MODEL )
+
+	PrecacheParticleSystem( DEPLOYABLE_SHIELD_FX_AMPED )
+	PrecacheParticleSystem( AMPED_WALL_DESTROYED_FX )
+	PrecacheParticleSystem( AMPED_WALL_PACKED_UP_FX )
+	PrecacheParticleSystem( AMPED_SPEED_1P_SCREEN_FX )
+	PrecacheParticleSystem( DEPLOYABLE_SHIELD_ROOF_FX )
+	PrecacheParticleSystem( WALL_CHARGE_AMOUNT_LV1_FX )
+	PrecacheParticleSystem( WALL_CHARGE_AMOUNT_LV2_FX )
+	PrecacheParticleSystem( WALL_CHARGE_AMOUNT_LV3_FX )
+	PrecacheParticleSystem( WALL_CHARGE_AMOUNT_LV4_FX )
+	PrecacheParticleSystem( WALL_REGEN_FX )
+	PrecacheParticleSystem( COVER_FIRE_3P_FX )
+
+	PrecacheParticleSystem( BASE_WALL_DESTROYED_FX )
+	PrecacheParticleSystem( BASE_WALL_DAMAGE_STATE_TRANSITION_FX )
+	file.persistentDamageFxIndex = PrecacheParticleSystem( BASE_WALL_DAMAGE_STATE_PERSISTENT_FX )
+	PrecacheParticleSystem( BASE_WALL_TAKE_DAMAGE_WHILE_HEALTH_LOW_FX )
+
+
+		PrecacheParticleSystem( COVER_FIRE_1P_FX )
+
+		AddCreateCallback( "prop_script", CoverWall_OnPropScriptCreated )
+		AddDestroyCallback( "prop_script", CoverWall_OnPropScriptDestroyed )
+
+		
+
+}
+
+void function SetupTuning()
+{
+	RegisterTuningStruct( "tuning", "rampart_wall_" )
+
+
+
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Getters___________________________(){}
+#endif
+bool function IsAmpedWallEnt( entity ent )
+{
+	bool isAmpedWall = ent.GetScriptName() == AMPED_WALL_SCRIPT_NAME
+
+	if ( !isAmpedWall )
+	{
+		isAmpedWall = ent.GetScriptName() == AMPED_ROOF_SCRIPT_NAME
+	}
+
+	return isAmpedWall
+}
+
+bool function IsCoverWallEnt( entity ent )
+{
+	return ent.GetScriptName() == BASE_WALL_SCRIPT_NAME
+}
+
+entity function GetAmpedWallForBase( entity baseWall )
+{
+	foreach( entity ent in baseWall.GetLinkEntArray() )
+	{
+		if ( IsAmpedWallEnt( ent ) )
+			return ent
+	}
+
+	return null
+}
+
+entity function GetBaseWallFromAmped( entity amped )
+{
+	if ( amped.GetScriptName() == AMPED_WALL_SCRIPT_NAME )
+	{
+		return amped.GetParent()
+	}
+	else if ( amped.GetScriptName() == AMPED_ROOF_SCRIPT_NAME )
+	{
+		entity otherShield = amped.GetParent()
+		if ( IsValid( otherShield ) )
+		{
+			return otherShield.GetParent()
+		}
+	}
+
+	return null
+}
+
+entity function GetOtherAmpedShieldFromAmpedShield( entity ampedShield )
+{
+	if ( ampedShield.GetScriptName() == AMPED_WALL_SCRIPT_NAME )
+	{
+		foreach ( entity child in ampedShield.GetChildren() )
+		{
+			if ( IsValid( child ) && child.GetScriptName() == AMPED_ROOF_SCRIPT_NAME )
+				return child
+		}
+	}
+	else if ( ampedShield.GetScriptName() == AMPED_ROOF_SCRIPT_NAME )
+	{
+		return ampedShield.GetParent()
+	}
+
+	return null
+}
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Common___________________________(){}
+#endif
+
+
+void function OnSpectatorTargetChanged( entity player, entity previousTarget, entity currentTarget )
+{
+	if ( tuning.speedBoostBasedOnAmpDamage )
+	{
+		Signal( player, COVER_WALL_CHANGED_TEAMS_SIGNAL )
+	}
+
+	if ( currentTarget )
+	{
+		thread CoverFireSpectatorTargetChangedDelay_Thread( currentTarget )
+	}
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________WeaponFuncs___________________________(){}
+#endif
+void function OnWeaponActivate_weapon_cover_wall( entity weapon )
+{
+	entity ownerPlayer = weapon.GetWeaponOwner()
+	weapon.w.startChargeTime = Time()
+
+	Assert( ownerPlayer.IsPlayer() )
+
+	if ( !IsLocalClientPlayer( ownerPlayer ) || IsWatchingKillReplay() )
+		return
+
+	string hintText = "#WPN_COVER_WALL_PLAYER_DEPLOY_HINT"
+	AddPlayerHint( 120, 0, $"", hintText )
+
+}
+
+
+void function OnWeaponDeactivate_weapon_cover_wall( entity weapon )
+{
+	entity ownerPlayer = weapon.GetWeaponOwner()
+	Assert( ownerPlayer.IsPlayer() )
+
+	if ( !IsLocalClientPlayer( ownerPlayer ) )
+		return
+
+	HidePlayerHint( "#WPN_COVER_WALL_PLAYER_DEPLOY_HINT" )
+
+
+	file.playersWithFastSwitch.fastremovebyvalue( ownerPlayer )
+
+
+
+
+
+
+}
+
+bool function OnWeaponAttemptOffhandSwitch_weapon_cover_wall( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	entity ultWeapon = player.GetOffhandWeapon( eOffhandInv.ULTIMATE )
+	entity placementWeapon = player.GetOffhandWeapon( eOffhandInv.BOMBARDMENT )
+
+	if( IsValid( ultWeapon ) && ultWeapon.GetWeaponClassName() == MOBILE_HMG_WEAPON_NAME && IsValid( placementWeapon ) && placementWeapon.GetWeaponClassName() == MOUNTED_TURRET_PLACEABLE_WEAPON_NAME
+			&& ( activeWeapon == ultWeapon || activeWeapon == placementWeapon ) )
+	{
+		float timeSinceStart = Time() - ultWeapon.w.startChargeTime
+		if( timeSinceStart < tuning.delayBeforeSwitchingFromUlt )
+			return false
+	}
+
+	return true
+}
+
+
+void function OnCreateClientOnlyModel_weapon_cover_wall( entity weapon, entity model, bool validHighlight )
+{
+	if ( validHighlight )
+	{
+		DeployableModelHighlight( model )
+	}
+	else
+	{
+		DeployableModelInvalidHighlight( model )
+	}
+}
+
+
+var function OnWeaponPrimaryAttack_weapon_cover_wall( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	
+	if ( !weapon.ObjectPlacementHasValidSpot() )
+	{
+		weapon.DoDryfire()
+		return 0
+	}
+
+	entity ownerPlayer = weapon.GetWeaponOwner()
+	Assert( ownerPlayer.IsPlayer() )
+
+
+
+
+
+
+
+
+
+	if ( file.playersWithFastSwitch.contains( ownerPlayer ) )
+	{
+		weapon.AddMod( "fast_place" )
+	}
+
+	PlayerUsedOffhand( ownerPlayer, weapon )
+	return weapon.GetAmmoPerShot()
+}
+
+void function OnWeaponStartZoomIn_weapon_cover_wall( entity weapon )
+{
+	entity ownerPlayer = weapon.GetWeaponOwner()
+
+	if ( !IsValid( ownerPlayer ) )
+		return
+
+
+		if ( ownerPlayer != GetLocalViewPlayer() )
+			return
+
+
+	bool serverOrPredicted = IsServer() || ( InPrediction() && IsFirstTimePredicted() )
+	if ( serverOrPredicted )
+	{
+		file.playersWithFastSwitch.append( ownerPlayer )
+	}
+}
+
+void function OnWeaponStartZoomOut_weapon_cover_wall( entity weapon )
+{
+	entity ownerPlayer = weapon.GetWeaponOwner()
+	if ( !IsValid( ownerPlayer ) )
+		return
+
+	if ( file.playersWithFastSwitch.contains( ownerPlayer ) )
+		return
+
+
+		if ( ownerPlayer != GetLocalViewPlayer() )
+			return
+
+	bool serverOrPredicted = IsServer() || ( InPrediction() && IsFirstTimePredicted() )
+	if ( serverOrPredicted )
+	{
+		if ( !weapon.HasMod( "fast_place" ) )
+		{
+			file.playersWithFastSwitch.fastremovebyvalue( ownerPlayer )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________PickupAndReclaimWall___________________________(){}
+#endif
+bool function IsEnemyBlockingRemoteReclaim( entity baseWall )
+{
+	entity owner = baseWall.GetOwner()
+	if( !IsValid( owner ) )
+		return false
+	int team = owner.GetTeam()
+	array<entity> enemies = GetPlayerArrayOfEnemies_Alive( team )
+	array<entity> nearbyEnemies = GetEntitiesFromArrayNearPos( enemies, baseWall.GetOrigin(), Perk_QuickPackup_GetRemotePickupBlockRange() )
+	return nearbyEnemies.len() > 0
+}
+
+bool function CanReclaimWall( entity baseWall )
+{
+	entity ampedWall = GetAmpedWallForBase( baseWall )
+
+	if ( !IsValid( baseWall ) )
+		return false
+
+	if ( !IsValid( ampedWall) )
+	{
+		if ( baseWall.GetMaxHealth() != tuning.startingHealth )
+			return false
+	}
+
+	if ( baseWall.GetHealth() <= 0 )
+		return false
+
+	if ( IsValid( ampedWall ) && ampedWall.GetHealth() <= 0 )
+		return false
+
+	if ( baseWall.GetHealth() < baseWall.GetMaxHealth() )
+		return false
+
+	if ( IsValid( ampedWall ) && ampedWall.GetHealth() < ampedWall.GetMaxHealth() )
+		return false
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ChargeTracking___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+entity function GetChargedWallTrackerEntFromWall( entity wall )
+{
+	Assert( IsCoverWallEnt( wall ) )
+
+	return FindScriptNameInChildren( wall, WALL_CHARGE_TRACKER_SCRIPT_NAME, false )
+}
+
+void function CoverWall_UpdateTrackingOnTeamChanged( entity player, int oldTeam, int newTeam )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	Signal( player, COVER_WALL_CHANGED_TEAMS_SIGNAL )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function GetChargeFracForPlayerFromWall( entity player, entity wall )
+{
+	Assert( tuning.speedBoostBasedOnAmpDamage )
+
+	entity tracker = GetChargedWallTrackerEntFromWall( wall )
+
+	return GetChargeFracForPlayerFromChargeTracker( player, tracker )
+}
+
+float function GetChargeFracForPlayerFromChargeTracker( entity player, entity tracker )
+{
+
+	if ( !IsValid( tracker ) )
+		return 0.0
+
+	int index = player.GetTeamMemberIndex()
+
+	if ( index < 0 )
+	{
+		Warning("Player " + player + "doesn't have a valid team member index. this is likely due to changing teams while connecting to a match." )
+
+		return 0.0
+	}
+
+	
+	const int PROP_MAX_SQUAD_SIZE = 6
+	if ( index >= PROP_MAX_SQUAD_SIZE )
+	{
+		Warning("More than max allowed players on a squad, charged walls won't work for them")
+
+		return 0.0
+	}
+
+	return tracker.GetChargeFracByIndex( index )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SpeedBoost___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function StartAmpedSpeedVisualEffect( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() )
+		return
+
+	player.Signal( COVER_WALL_STOP_AMPED_SPEED_EFFECT )
+	thread (void function() : ( player, statusEffect ) {
+		player.EndSignal( "OnDeath", "OnDestroy", "BleedOut_OnStartDying", COVER_WALL_STOP_AMPED_SPEED_EFFECT )
+
+		int fxHandle = StartParticleEffectOnEntityWithPos( player,
+			GetParticleSystemIndex( AMPED_SPEED_1P_SCREEN_FX ),
+			FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+
+		EffectSetIsWithCockpit( fxHandle, true )
+
+		
+		EffectSetControlPointVector( fxHandle, 1, <1.0, 999, 0> )
+		EffectSetControlPointVector( fxHandle, 3, <0.8,0.8,0.8> )
+
+		OnThreadEnd( function() : ( player, fxHandle ) {
+			CleanupFXHandle( fxHandle, false, true )
+			StopSoundOnEntityByName( player, AMPED_SPEED_SFX_1P )
+		} )
+
+		float remainingTime = StatusEffect_GetTimeRemaining( player, statusEffect )
+
+		EmitSoundOnEntityWithSeek( player, AMPED_SPEED_SFX_1P, (tuning.speedBoostDurationAtMaxDamage - remainingTime) )
+
+		while( true )
+		{
+			float newRemainingTime = StatusEffect_GetTimeRemaining( player, statusEffect )
+
+			if ( newRemainingTime > remainingTime )
+			{
+				thread StartAmpedSpeedVisualEffect( player, statusEffect, true )
+				return
+			}
+			remainingTime = newRemainingTime
+
+			WaitFrame()
+		}
+	})()
+}
+
+void function StopAmpedSpeedVisualEffect( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || (GetLocalViewPlayer() == GetLocalClientPlayer() && !actuallyChanged) )
+		return
+
+	player.Signal( COVER_WALL_STOP_AMPED_SPEED_EFFECT )
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________BattleModder_Passive___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________CoverFire_Upgrade___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CoverFireNetvarChangedCallback( entity player, bool newValue )
+{
+	CoverFireFX( player )
+}
+void function CoverFireSpectatorTargetChangedDelay_Thread( entity player )
+{
+	WaitFrame()
+	CoverFireFX( player )
+}
+
+void function CoverFireFX( entity player )
+{
+	if ( !IsValid( player ) || !player.IsPlayer() )
+		return
+
+	if ( player.GetPlayerNetBool( COVER_FIRE_ACTIVE_NETVAR ) )
+	{
+		LootData wallCoverUpgrade = SURVIVAL_Loot_GetLootDataByIndex( 0 )
+		wallCoverUpgrade.hudIcon = $"rui/hud/legend_upgrades/rampart_cover_fire_icon"
+		LootFeedItem wallUpgradeMessage = LootFeed_CreateItem( player, wallCoverUpgrade )
+		wallUpgradeMessage.itemNameText = "#UPGRADED_WALL_COVER_MESSAGE"
+		LootFeed_QueueItem( wallUpgradeMessage )
+
+		if ( EffectDoesExist( file.coverFireFxHandle ) )
+		{
+			EffectStop( file.coverFireFxHandle, false, true )
+		}
+
+		int fxIndex = GetParticleSystemIndex( COVER_FIRE_1P_FX )
+		file.coverFireFxHandle = StartParticleEffectOnEntityWithPos( player, fxIndex, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+		EffectSetIsWithCockpit( file.coverFireFxHandle, true )
+	}
+	else
+	{
+		if ( EffectDoesExist( file.coverFireFxHandle ) )
+		{
+			EffectStop( file.coverFireFxHandle, false, true )
+			file.coverFireFxHandle = 0
+		}
+	}
+}
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________Use___________________________(){}
+#endif
+bool function CoverWall_CanUse( entity player, entity ent, int useFlags )
+{
+	if ( ! IsValid( player ) )
+		return false
+
+	entity weapon = player.GetOffhandWeapon( eOffhandInv.TACTICAL )
+	if ( !IsValid( weapon ) || weapon.GetWeaponClassName() != COVER_WALL_WEAPON_NAME )
+		return false
+
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+	entity ultWeapon = player.GetOffhandWeapon( eOffhandInv.ULTIMATE )
+
+	if( IsValid( ultWeapon ) && activeWeapon == ultWeapon && ultWeapon.GetWeaponClassName() == MOBILE_HMG_WEAPON_NAME )
+		return false
+
+	bool currentlyInPlacementMode = IsValid( player.GetActiveWeapon( eActiveInventorySlot.mainHand ) )
+			&& player.GetActiveWeapon( eActiveInventorySlot.mainHand ).GetWeaponClassName() == COVER_WALL_WEAPON_NAME
+
+	return ent.GetOwner() == player &&
+			( currentlyInPlacementMode || SURVIVAL_PlayerAllowedToPickup( player ) ) &&
+			! GradeFlagsHas( ent, eGradeFlags.IS_BUSY )
+}
+
+
+void function CoverWall_OnPropScriptCreated( entity ent )
+{
+	if ( ent.GetScriptName() == BASE_WALL_SCRIPT_NAME )
+	{
+		SetCallback_CanUseEntityCallback( ent, CoverWall_CanUse )
+		AddEntityCallback_GetUseEntOverrideText( ent, CoverWall_UseTextOverride )
+		AddCallback_OnUseEntity_ClientServer( ent, CoverWall_OnUseWall )
+		if ( tuning.showWallHealthRui )
+		{
+			thread CoverWall_CreateHUDMarker( ent )
+		}
+		if ( tuning.speedBoostShowFx )
+		{
+			thread CoverWall_ChargeTrackingFX( ent )
+		}
+	}
+}
+
+void function CoverWall_OnPropScriptDestroyed( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return
+
+	if ( ent.GetScriptName() == BASE_WALL_SCRIPT_NAME )
+	{
+		CustomUsePrompt_ClearForEntity( ent )
+	}
+}
+
+void function OnCharacterButtonPressed( entity player )
+{
+	if( Perk_QuickPackup_RemoteInteractEnabled() )
+		return
+
+	entity useEnt = player.GetUsePromptEntity()
+	if ( !IsValid( useEnt ) || useEnt.GetScriptName() != BASE_WALL_SCRIPT_NAME )
+		return
+
+	if ( useEnt.GetOwner() != player )
+		return
+
+	CustomUsePrompt_SetLastUsedTime( Time() )
+
+	Remote_ServerCallFunction( "ClientCallback_TryPickupCoverWall", useEnt )
+}
+
+string function CoverWall_UseTextOverride( entity ent )
+{
+	entity player = GetLocalViewPlayer()
+
+	entity weapon = player.GetOffhandWeapon( eOffhandInv.TACTICAL )
+	if ( !CoverWall_CanUse( player, ent, USE_FLAG_NONE ) || !IsValid( weapon ) || weapon.GetWeaponClassName() != COVER_WALL_WEAPON_NAME )
+	{
+		CustomUsePrompt_Hide()
+	}
+	else if ( player == ent.GetOwner() )
+	{
+		CustomUsePrompt_Show( ent )
+		CustomUsePrompt_SetSourcePos( ent.GetOrigin() + < 0, 0, 30 > )
+
+		bool isRemotePickup = Perk_QuickPackup_IsRemotePickup( ent, player )
+		bool blockedByNearbyEnemies = isRemotePickup && IsEnemyBlockingRemoteReclaim( ent )
+
+		if ( CanReclaimWall( ent ) && !blockedByNearbyEnemies )
+		{
+			if( Perk_QuickPackup_RemoteInteractEnabled() )
+			{
+				entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+				if ( IsValid( activeWeapon ) && activeWeapon.GetWeaponBaseClassName() == COVER_WALL_WEAPON_NAME )
+				{
+					return Localize("#WPN_COVER_WALL_PLAYER_DEPLOY_HINT_RECLAIM")
+				}
+				return Localize("#WPN_COVER_WALL_DYNAMIC_RECLAIM")
+			}
+
+			CustomUsePrompt_SetText( Localize("#WPN_COVER_WALL_DYNAMIC_RECLAIM") )
+			CustomUsePrompt_SetHintImage( $"rui/hud/character_abilities/rampart_cover_pickup" )
+			CustomUsePrompt_SetLineColor( <0.0, 1.0, 1.0> )
+		}
+		else
+		{
+			if( Perk_QuickPackup_RemoteInteractEnabled() )
+			{
+				if( isRemotePickup )
+				{
+					if( blockedByNearbyEnemies )
+					{
+						return Localize( "#WPN_COVER_WALL_DYNAMIC_CANT_RECLAIM_ENEMIES" )
+					}
+					else
+					{
+						return Localize( "#WPN_COVER_WALL_DYNAMIC_CANT_RECLAIM_DAMAGED" )
+					}
+				}
+				else
+				{
+					entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+					if ( IsValid( activeWeapon ) && activeWeapon.GetWeaponBaseClassName() == COVER_WALL_WEAPON_NAME )
+					{
+						return Localize("#WPN_COVER_WALL_PLAYER_DEPLOY_HINT_DESTROY")
+					}
+					return Localize( "#WPN_COVER_WALL_DYNAMIC_DESTROY" )
+				}
+			}
+
+			CustomUsePrompt_SetText( Localize("#WPN_COVER_WALL_DYNAMIC_DESTROY") )
+			
+			CustomUsePrompt_SetHintImage( $"" )
+			CustomUsePrompt_SetLineColor( <1.0, 0.5, 0.0> )
+		}
+
+		if ( PlayerIsInADS( player ) )
+			CustomUsePrompt_ShowSourcePos( false )
+		else
+			CustomUsePrompt_ShowSourcePos( true )
+	}
+
+	return ""
+}
+
+void function CoverWall_OnUseWall( entity wallProxy, entity player, int useFlags )
+{
+	if ( IsControllerModeActive() )
+	{
+		if ( !IsBitFlagSet( useFlags, USE_INPUT_LONG ) )
+		{
+			thread IssueReloadCommand( player )
+		}
+	}
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ClientWork___________________________(){}
+#endif
+void function CoverWall_CreateHUDMarker( entity wall )
+{
+	wall.EndSignal( "OnDestroy" )
+
+	while ( wall.GetTeam() != GetLocalViewPlayer().GetTeam() )
+	{
+		WaitSignal( GetLocalClientPlayer(), COVER_WALL_CHANGED_TEAMS_SIGNAL )
+	}
+
+	vector pos = wall.GetOrigin() + <0,0,COVER_WALL_ICON_HEIGHT>
+	var rui = CreateCockpitRui( $"ui/cover_wall_marker_icons.rpak", RuiCalculateDistanceSortKey( GetLocalViewPlayer().EyePosition(), pos ) )
+	if ( tuning.speedBoostBasedOnAmpDamage )
+	{
+		RuiTrackFloat3( rui, "pos", wall, RUI_TRACK_POINT_FOLLOW, wall.LookupAttachment( "rui_attach" ) )
+	}
+	else
+	{
+		RuiTrackFloat( rui, "healthFrac", wall, RUI_TRACK_HEALTH )
+		RuiTrackFloat3( rui, "pos", wall, RUI_TRACK_OVERHEAD_FOLLOW )
+	}
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	OnThreadEnd(
+	function() : ( rui )
+	{
+		RuiDestroy( rui )
+	}
+	)
+
+	if ( tuning.speedBoostBasedOnAmpDamage )
+	{
+		RuiSetBool( rui, "isVisible", false )
+		while( !IsValid( GetChargedWallTrackerEntFromWall( wall ) ) )
+		{
+			WaitFrame()
+		}
+
+		while( true )
+		{
+			entity player = GetLocalViewPlayer()
+			int playerTeam = player.GetTeam()
+			int wallTeam = wall.GetTeam()
+
+			if ( playerTeam != wallTeam )
+			{
+				thread CoverWall_CreateHUDMarker( wall )
+				return
+			}
+
+			if  ( wall.GetOwner() != player && !IsFriendlyTeam( playerTeam, wallTeam ) )
+			{
+				RuiSetBool( rui, "isVisible", false )
+			}
+			else
+			{
+				float chargeFrac = GetChargeFracForPlayerFromWall( player, wall )
+
+				RuiSetBool( rui, "isVisible", true )
+				RuiSetFloat( rui, "healthFrac", chargeFrac )
+			}
+			WaitFrame()
+		}
+	}
+}
+
+void function CoverWall_ChargeTrackingFX( entity wall )
+{
+	wall.EndSignal( "OnDestroy" )
+
+	while ( wall.GetTeam() != GetLocalViewPlayer().GetTeam() )
+	{
+		WaitSignal( GetLocalClientPlayer(), COVER_WALL_CHANGED_TEAMS_SIGNAL )
+	}
+
+	PassByReferenceInt fxHandle
+
+	OnThreadEnd(
+	function() : ( fxHandle )
+	{
+		if ( EffectDoesExist( fxHandle.value ) )
+		{
+			EffectStop( fxHandle.value, true, false )
+		}
+	}
+	)
+
+	if ( tuning.speedBoostBasedOnAmpDamage )
+	{
+		while( !IsValid( GetChargedWallTrackerEntFromWall( wall ) ) )
+		{
+			WaitFrame()
+		}
+
+		entity tracker = GetChargedWallTrackerEntFromWall( wall )
+
+		int currentChargeLevel = 0
+		while( true )
+		{
+			entity player = GetLocalViewPlayer()
+			int playerTeam = player.GetTeam()
+			int wallTeam = wall.GetTeam()
+
+			if ( playerTeam != wallTeam )
+			{
+				thread CoverWall_ChargeTrackingFX( wall )
+				return
+			}
+
+			if  ( wall.GetOwner() != player && !IsFriendlyTeam( playerTeam, wallTeam ) )
+			{
+				if ( EffectDoesExist( fxHandle.value ) )
+				{
+					EffectStop( fxHandle.value, true, false )
+					fxHandle.value = 0
+				}
+			}
+			else
+			{
+				float chargeFrac = GetChargeFracForPlayerFromChargeTracker( player, tracker )
+
+				if ( GradeFlagsHas( wall, eGradeFlags.IS_BUSY ) )
+				{
+					chargeFrac = 0
+				}
+
+				int newChargeLevel = GetWallChargeLevelForFX( chargeFrac )
+				if ( newChargeLevel != currentChargeLevel )
+				{
+					if ( EffectDoesExist( fxHandle.value ) )
+					{
+						EffectStop( fxHandle.value, true, false )
+						fxHandle.value = 0
+					}
+
+					currentChargeLevel = newChargeLevel
+					if ( newChargeLevel > 0 )
+					{
+						int fxIndex = GetParticleSystemIndex( GetWallChargeFXForLevel( newChargeLevel ) )
+						fxHandle.value = StartParticleEffectOnEntity( wall, fxIndex, FX_PATTACH_POINT_FOLLOW, wall.LookupAttachment( "charge_tracker" ) )
+					}
+				}
+
+			}
+			WaitFrame()
+		}
+	}
+}
+int function GetWallChargeLevelForFX( float chargeFrac )
+{
+	if ( chargeFrac <= 0.0 )
+		return 0
+
+	if ( chargeFrac < 0.33 )
+		return 1
+
+	if ( chargeFrac < 0.67 )
+		return 2
+
+	if ( chargeFrac < 0.99 )
+		return 3
+
+	return 4
+
+}
+
+asset function GetWallChargeFXForLevel( int level )
+{
+	switch( level )
+	{
+		case 1:
+			return WALL_CHARGE_AMOUNT_LV1_FX
+		case 2:
+			return WALL_CHARGE_AMOUNT_LV2_FX
+		case 3:
+			return WALL_CHARGE_AMOUNT_LV3_FX
+		case 4:
+			return WALL_CHARGE_AMOUNT_LV4_FX
+	}
+
+	return $""
+}
+
+vector function CoverWall_OffsetDamageNumbersLower( entity wall, vector damageFlyoutPosition )
+{
+	return ( damageFlyoutPosition - < 0, 0, wall.GetBoundingMaxs().z/2.0 > )
+}
+
+void function CoverWall_OnGainFocus( entity ent )
+{
+	if ( !IsValid( ent ) )
+		return
+
+	if ( ent.GetScriptName() == BASE_WALL_SCRIPT_NAME )
+	{
+		entity viewPlayer = GetLocalViewPlayer()
+		if ( IsValid( viewPlayer ) )
+		{
+			entity activeWeapon = viewPlayer.GetActiveWeapon( eActiveInventorySlot.mainHand )
+			if ( IsValid( activeWeapon ) && activeWeapon.GetWeaponBaseClassName() != COVER_WALL_WEAPON_NAME )
+			{
+				CustomUsePrompt_Show( ent )
+			}
+		}
+	}
+}
+
+void function CoverWall_OnLoseFocus( entity ent )
+{
+	CustomUsePrompt_ClearForAny()
+}
+
+
+
+void function MinimapPackage_RampartWall( entity ent, var rui )
+{
+#if MINIMAP_DEBUG
+		printt( "Adding 'rui/hud/tactical_icons/tactical_rampart' icon to minimap" )
+#endif
+	RuiSetImage( rui, "defaultIcon", $"rui/hud/tactical_icons/tactical_rampart" )
+	RuiSetImage( rui, "clampedDefaultIcon", $"rui/hud/tactical_icons/tactical_rampart" )
+	RuiSetBool( rui, "useTeamColor", false )
+	RuiSetFloat( rui, "iconBlend", 0.0 )
+}
+
+ 

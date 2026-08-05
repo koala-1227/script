@@ -1,0 +1,616 @@
+
+
+
+
+
+global function Silence_StartVisualEffects
+global function AbilitySilence_StopVisualEffect
+
+global function MpAbilitySharedSilence_Init
+
+
+
+
+
+global const string GLOBAL_SILENCE_1P = "Silence_Global_Victim_1p"
+
+
+global enum eSilenceOwner
+{
+	REVENANT,
+	SEER,
+	ENDORSEMENT,
+	_count
+}
+
+const bool SILENCE_DEBUG_STATUSEFFECT = false
+
+global struct SilenceSettings
+{
+	asset vfx1p																	= $""
+	asset vfx3p																	= $""
+	string vfx3pAttachPoint														= "CHESTFOCUS"
+	string sfx1p																= ""
+	string sfx3p																= "Silence_Global_Victim_3p"
+	int visualsStatusEffect														= eStatusEffect.silenced_seer_visuals
+	int visualsColorCorrection													= -1
+	float effectDuration														= 0.0
+	float battleChatterDebounceTime													= 0.0
+	bool playBattleChatter														= false
+	bool isEndless																= false
+	bool applyInterrupt															= false
+}
+
+struct
+{
+	table<int,float> teamDebounceTimes
+
+	array<int> silenceStatusEffects
+
+	float effectDurationRev
+	float effectDurationSeer
+	float interruptedDuration
+
+
+
+
+
+
+		int silenceColorCorrection
+
+} file
+
+void function MpAbilitySharedSilence_Init()
+{
+	file.interruptedDuration = GetCurrentPlaylistVarFloat( "silence_interrupt_duration", 0.25 )
+
+	RegisterSignal( "Interrupted" )
+
+
+	file.silenceColorCorrection = ColorCorrection_Register( "materials/correction/ability_silence.raw_hdr" )
+	AddCallback_OnWeaponStatusUpdate( Silenced_WeaponStatusCheck )
+
+	RegisterSignal( "AbilitySilence_StopColorCorrection" )
+
+	StatusEffect_RegisterEnabledCallback( eStatusEffect.interrupted, Interrupted_ClientCallbacks )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Silenced_WeaponStatusCheck( entity player, var rui, int slot )
+{
+	switch ( slot )
+	{
+		case eOffhandInv.TACTICAL:
+		case eOffhandInv.ULTIMATE:
+			bool overwrite = false
+			if( slot == eOffhandInv.TACTICAL)
+			{
+				
+				
+
+				if ( PlayerHasPassive( player, ePassives.PAS_CRYPTO ) )
+				{
+
+
+
+					{
+						overwrite = true
+						rui       = GetCryptoAnimatedTacticalRui()
+					}
+				}
+				else if ( PlayerHasPassive( player, ePassives.PAS_VANTAGE ) )
+				{
+					overwrite = true
+					rui = GetVantageTacticalRui()
+				}
+				else if ( PlayerHasPassive( player, ePassives.PAS_OCTANE ) )
+				{
+					overwrite = true
+					rui = GetOctaneStimSurgeTacticalRui()
+				}
+
+			}
+
+
+			if ( rui != null )
+			{
+				if ( StatusEffect_HasSeverity( player, eStatusEffect.silenced ) )
+				{
+					if ( !overwrite )
+						RuiSetString( rui, "hintText", "" )
+					RuiSetBool( rui, "isSilenced", true )
+					if ( StatusEffect_HasSeverity( player, eStatusEffect.silenced_seer_visuals ) )
+					{
+						RuiSetInt( rui, "silenceOwner", eSilenceOwner.SEER )
+					}
+					else if ( StatusEffect_HasSeverity( player, eStatusEffect.silenced_rev_visuals ) )
+					{
+						RuiSetInt( rui, "silenceOwner", eSilenceOwner.REVENANT )
+					}
+					else if ( StatusEffect_HasSeverity( player, eStatusEffect.endorsement_silence_on_shield_break ) )
+					{
+						RuiSetInt( rui, "silenceOwner", eSilenceOwner.ENDORSEMENT )
+					}
+				}
+				else
+				{
+					RuiSetBool( rui, "isSilenced", false )
+				}
+			}
+			break
+	}
+}
+
+void function Silence_StartVisualEffects( entity targetPlayer, SilenceSettings silenceSettings )
+{
+	silenceSettings.effectDuration = StatusEffect_GetTimeRemaining( targetPlayer, silenceSettings.visualsStatusEffect )
+	silenceSettings.visualsColorCorrection = file.silenceColorCorrection
+
+	thread AbilitySilence_UpdatePlayerScreenColorCorrection( targetPlayer, silenceSettings )
+	thread AbilitySilence_ScreenEffectThread( targetPlayer, silenceSettings )
+}
+
+void function AbilitySilence_StopVisualEffect( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( ent != GetLocalViewPlayer() )
+		return
+
+	if ( IsAlive( ent ) )
+	{
+		EmitSoundOnEntity( ent, "Survival_UI_Ability_Ready_SilenceEnded" )
+	}
+
+	ent.Signal( "AbilitySilence_StopColorCorrection" )
+}
+
+
+void function AbilitySilence_UpdatePlayerScreenColorCorrection( entity player, SilenceSettings silenceSettings )
+{
+	Assert ( IsNewThread(), "Must be threaded off." )
+	Assert ( player == GetLocalViewPlayer() )
+
+	player.EndSignal( "OnDeath" )
+	player.EndSignal( "OnDestroy" )
+	player.EndSignal( "AbilitySilence_StopColorCorrection" )
+
+	OnThreadEnd(
+		function() : ( player, silenceSettings )
+		{
+			ColorCorrection_SetWeight( silenceSettings.visualsColorCorrection, 0.0 )
+			ColorCorrection_SetExclusive( silenceSettings.visualsColorCorrection, false )
+		}
+	)
+
+	ColorCorrection_SetExclusive( silenceSettings.visualsColorCorrection, true )
+	ColorCorrection_SetWeight( silenceSettings.visualsColorCorrection, 1.0 )
+
+	while ( IsValid( player ) )
+	{
+		float colorCorrectionWeight = 1.0
+		if ( !silenceSettings.isEndless && (silenceSettings.effectDuration > 0.0) )
+		{
+			float timeRemaining  = StatusEffect_GetTimeRemaining( player, silenceSettings.visualsStatusEffect )
+			colorCorrectionWeight = timeRemaining / silenceSettings.effectDuration
+		}
+
+		ColorCorrection_SetWeight( silenceSettings.visualsColorCorrection, colorCorrectionWeight )
+
+		if ( SILENCE_DEBUG_STATUSEFFECT )
+		{
+			DebugDrawScreenText( 0.427, 0.69, "ColorCorrection Weight: " + colorCorrectionWeight )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+void function AbilitySilence_ScreenEffectThread( entity viewPlayer, SilenceSettings silenceSettings )
+{
+	AssertIsNewThread()
+	EndSignal( viewPlayer, "OnDeath" )
+	EndSignal( viewPlayer, "AbilitySilence_StopColorCorrection" )
+
+	
+	int screenFxId = GetParticleSystemIndex( silenceSettings.vfx1p )
+	int fxHandle = StartParticleEffectOnEntityWithPos( viewPlayer, screenFxId, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, viewPlayer.EyePosition(), <0,0,0> )
+	EffectSetIsWithCockpit( fxHandle, true )
+
+	
+	if ( silenceSettings.sfx1p != "" )
+	{
+		EmitSoundOnEntity( viewPlayer, silenceSettings.sfx1p )
+	}
+
+	OnThreadEnd(
+		function() : ( viewPlayer, fxHandle, silenceSettings )
+		{
+			if ( EffectDoesExist( fxHandle ) )
+			{
+				EffectStop( fxHandle, false, true )
+			}
+
+			if ( IsValid( viewPlayer ) )
+			{
+				if ( silenceSettings.sfx1p != "" )
+				{
+					StopSoundOnEntity( viewPlayer, silenceSettings.sfx1p )
+				}
+			}
+		}
+	)
+
+	bool stopSoundOnce = false
+	while( IsValid( viewPlayer ) )
+	{
+		float effectWeight = 1.0
+		float timeRemaining = StatusEffect_GetTimeRemaining( viewPlayer, silenceSettings.visualsStatusEffect )
+		if ( !silenceSettings.isEndless && (silenceSettings.effectDuration > 0.0) )
+		{
+			effectWeight = timeRemaining / silenceSettings.effectDuration
+		}
+
+		if ( SILENCE_DEBUG_STATUSEFFECT )
+		{
+			DebugDrawScreenText( 0.47, 0.68, "CP1 Value: " + effectWeight )
+		}
+
+		if ( EffectDoesExist( fxHandle ) )
+		{
+			EffectSetControlPointVector( fxHandle, 1, <effectWeight,255,255> )
+		}
+
+		
+		if ( ( stopSoundOnce == false ) && ( timeRemaining < 3 ) && ( silenceSettings.visualsStatusEffect == eStatusEffect.silenced_rev_visuals ) )
+		{
+			stopSoundOnce = true
+			StopSoundOnEntity( viewPlayer, silenceSettings.sfx1p )
+		}
+
+		WaitFrame()
+	}
+}
+
+
+void function Interrupted_ClientCallbacks( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( ent != GetLocalViewPlayer() || ( GetLocalViewPlayer() == GetLocalClientPlayer() && !actuallyChanged) )
+		return
+
+	Signal( ent, "Interrupted" )
+
+	if ( GetCurrentPlaylistVarBool( "interrupted_closes_crafting_menu", true ) )
+		TryCloseCraftingMenu()
+
+	if ( PlayerHasPassive( ent, ePassives.PAS_AXIOM ) )
+	{
+		ArmoredLeap_HandleInterruptedMidLeap( ent )
+	}
+}
+
+
+
+
+
+
+
+
+
+bool function InterruptedStopsHeals()
+{
+	return GetCurrentPlaylistVarBool( "interrupted_disables_heal", false )
+}
+
+bool function InterruptedStopsFinishers()
+{
+	return GetCurrentPlaylistVarBool( "interrupted_stops_finishers", true )
+}
+
+float function Interrupt_GetEffectDuration()
+{
+	return file.interruptedDuration
+} 

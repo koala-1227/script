@@ -1,0 +1,607 @@
+global function RewardSummarySequence_Init
+
+
+
+
+
+
+global function UIToClient_RewardSummarySequence_Play
+global function UIToClient_RewardSummarySequence_Stop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const bool REWARD_SUMMARY_SEQUENCE_DEBUG = false
+
+global const string REWARD_SUMMARY_SEQUENCE_MUSIC = "Music_LootCeremony_MassPack_Pt1" 
+
+const string TARGET_REF_NAME = "target_loot_ceremony_ref" 
+
+const float BLACK_FADE_TIME = 0.25
+const float BLACK_FADE_TIME_HOLD = 0.25
+
+const float CAMERA_FOV = 35.5
+
+const string REWARD_SUMMARY_SEQUENCE_THREAD_STARTING_SIGNAL_NAME = "reward_summary_sequence_starting"
+const string REWARD_SUMMARY_SEQUENCE_THREAD_STOP_SIGNAL_NAME = "reward_summary_sequence_stop"
+const string STOP_HIDE_LOBBY_WHILE_WAITING_FOR_EARNED_REWARDS_SIGNAL_NAME = "stop_hide_lobby_while_waiting_for_earned_rewards"
+const string STOP_MUSIC_SIGNAL_NAME = "reward_summary_sequence_stop_music"
+
+const string ANIM_EVENT_NAME_SET_CAMERA_FOV = "reward_summary_sequence_set_camera_fov"
+const string ANIM_EVENT_NAME_CREATE_RARITY_FX = "reward_summary_sequence_create_rarity_fx"
+const string ANIM_EVENT_NAME_EMIT_UI_SOUND = "reward_summary_sequence_emit_ui_sound"
+
+
+
+const array<asset> ANIM_EVENT_FX_ASSETS = [
+	$"P_pod_door_glow_cine_CP"
+]
+
+struct FileLevelStruct
+{
+	table signalDummy
+
+
+	entity rootModelMover
+	entity rootModel
+	entity camera
+
+	bool isPlayingSequence = false
+	float startTime = 0.0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	int highestRarity
+
+}
+FileLevelStruct fileLevel
+
+
+
+
+
+
+
+
+void function RewardSummarySequence_Init()
+{
+
+		Remote_RegisterServerFunction( "ClientToServer_SendRewardSummarySequenceFinishedToPIN", "bool", "float", 0.0, 9999.9, 32 )
+		Remote_RegisterServerFunction( "ClientCallback_ResetRewardSummarySequenceWasConnectedToMatch" )
+
+		foreach ( asset fxAsset in ANIM_EVENT_FX_ASSETS )
+		{
+			PrecacheParticleSystem( fxAsset )
+		}
+
+
+
+		RegisterSignal( REWARD_SUMMARY_SEQUENCE_THREAD_STARTING_SIGNAL_NAME )
+		RegisterSignal( REWARD_SUMMARY_SEQUENCE_THREAD_STOP_SIGNAL_NAME )
+
+		AddCallback_FullUpdate( OnFullUpdate )
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function OnFullUpdate()
+{
+	if ( !fileLevel.isPlayingSequence )
+		return
+
+#if REWARD_SUMMARY_SEQUENCE_DEBUG
+		printf( "[RewardSummarySequence] OnFullUpdate" )
+#endif
+
+	entity localClientPlayer = GetLocalClientPlayer()
+	if ( IsValid( localClientPlayer ) && IsValid( fileLevel.camera ) )
+	{
+		localClientPlayer.SetMenuCameraEntityWithAudio( fileLevel.camera )
+	}
+}
+
+
+
+void function OnAnimEvent( entity ent, array<string> tokens )
+{
+	switch ( tokens[0] )
+	{
+		case ANIM_EVENT_NAME_SET_CAMERA_FOV:
+		{
+			Assert( tokens.len() >= 2 )
+			float fov = float( tokens[1] )
+			float changeDuration = 0.5
+			if ( tokens.len() > 2 )
+			{
+				changeDuration = float( tokens[2] )
+			}
+			fileLevel.camera.SetTargetFOV( fov, true, EASING_CUBIC_INOUT, changeDuration )
+			if ( REWARD_SUMMARY_SEQUENCE_DEBUG )
+			{
+				printf( "[%s] %f (%f)", ANIM_EVENT_NAME_SET_CAMERA_FOV, fov, changeDuration )
+			}
+			break
+		}
+
+		case ANIM_EVENT_NAME_CREATE_RARITY_FX:
+		{
+			Assert( tokens.len() == 3 )
+			string fxName = tokens[1]
+			string attachmentName = tokens[2]
+			int attachmentID = ent.LookupAttachment( attachmentName )
+			int fxIndex = StartParticleEffectOnEntity( ent, GetParticleSystemIndex( CastStringToAsset( fxName ) ), FX_PATTACH_POINT_FOLLOW, attachmentID )
+
+			vector rarityColor = GetFXRarityColorForUnlockable( fileLevel.highestRarity )
+			EffectSetControlPointVector( fxIndex, 1, rarityColor )
+
+			if ( REWARD_SUMMARY_SEQUENCE_DEBUG )
+			{
+				printf( "[%s] %s @ %s", ANIM_EVENT_NAME_CREATE_RARITY_FX, fxName, attachmentName )
+			}
+			break
+		}
+
+		case ANIM_EVENT_NAME_EMIT_UI_SOUND:
+		{
+			Assert( tokens.len() == 2 )
+			string soundName = tokens[1]
+			EmitUISound( soundName )
+
+			if ( REWARD_SUMMARY_SEQUENCE_DEBUG )
+			{
+				printf( "[%s] %s", ANIM_EVENT_NAME_EMIT_UI_SOUND, soundName )
+			}
+			break
+		}
+
+		default: Assert( false )
+	}
+}
+
+
+
+void function UIToClient_RewardSummarySequence_Play( int highestRarity )
+{
+#if REWARD_SUMMARY_SEQUENCE_DEBUG
+		printf( "[RewardSummarySequence] UIToClient_RewardSummarySequence_Play. highestRarity=%d", highestRarity )
+#endif
+
+	fileLevel.highestRarity = highestRarity
+
+	thread PlayRewardSummarySequence_Thread()
+}
+
+
+
+void function UIToClient_RewardSummarySequence_Stop()
+{
+#if REWARD_SUMMARY_SEQUENCE_DEBUG
+		printf( "[RewardSummarySequence] UIToClient_RewardSummarySequence_Stop" )
+#endif
+
+	Signal( fileLevel.signalDummy, REWARD_SUMMARY_SEQUENCE_THREAD_STOP_SIGNAL_NAME )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function AddGlobalAnimEvents()
+{
+	AddGlobalAnimEventTokenize( ANIM_EVENT_NAME_SET_CAMERA_FOV, OnAnimEvent )
+	AddGlobalAnimEventTokenize( ANIM_EVENT_NAME_CREATE_RARITY_FX, OnAnimEvent )
+	AddGlobalAnimEventTokenize( ANIM_EVENT_NAME_EMIT_UI_SOUND, OnAnimEvent )
+}
+
+
+
+void function DeleteGlobalAnimEvents()
+{
+	DeleteGlobalAnimEventTokenize( ANIM_EVENT_NAME_SET_CAMERA_FOV )
+	DeleteGlobalAnimEventTokenize( ANIM_EVENT_NAME_CREATE_RARITY_FX )
+	DeleteGlobalAnimEventTokenize( ANIM_EVENT_NAME_EMIT_UI_SOUND )
+}
+
+
+
+const int CHARACTER_LOBA_GUID = 1579967516
+const string LOBA_REWARD_SEQ = "medium_lootceremony_cinematic_character_loba"
+void function PlayRewardSummarySequence_Thread()
+{
+	
+	Signal( fileLevel.signalDummy, REWARD_SUMMARY_SEQUENCE_THREAD_STARTING_SIGNAL_NAME )
+
+	EndSignal( fileLevel.signalDummy, REWARD_SUMMARY_SEQUENCE_THREAD_STARTING_SIGNAL_NAME )
+	EndSignal( fileLevel.signalDummy, REWARD_SUMMARY_SEQUENCE_THREAD_STOP_SIGNAL_NAME )
+
+	OnThreadEnd(
+		function() : ()
+		{
+#if REWARD_SUMMARY_SEQUENCE_DEBUG
+				printf( "[RewardSummarySequence] PlayRewardSummarySequence_Thread Cleanup..." )
+#endif
+
+			bool wasSkipped = fileLevel.isPlayingSequence
+			float timeElapsedBeforeSkipped = 0.0
+			if ( wasSkipped )
+			{
+				timeElapsedBeforeSkipped = Time() - fileLevel.startTime
+			}
+			Remote_ServerCallFunction( "ClientToServer_SendRewardSummarySequenceFinishedToPIN", wasSkipped, timeElapsedBeforeSkipped )
+			fileLevel.isPlayingSequence = false
+
+			DeleteGlobalAnimEvents()
+
+			entity player = GetLocalClientPlayer()
+			if ( IsValid( player ) )
+			{
+				player.ClearMenuCameraEntity()
+			}
+
+			if ( IsValid( fileLevel.camera ) )
+			{
+				fileLevel.camera.Destroy()
+			}
+
+			if ( IsValid( fileLevel.rootModel ) )
+			{
+				fileLevel.rootModel.Destroy()
+			}
+
+			if ( IsValid( fileLevel.rootModelMover ) )
+			{
+				fileLevel.rootModelMover.Destroy()
+			}
+
+			RunUIScript( "ClientToUI_NotifyRewardSummarySequenceFinished" )
+		}
+	)
+
+#if REWARD_SUMMARY_SEQUENCE_DEBUG
+		printf( "[RewardSummarySequence] PlayRewardSummarySequence_Thread Running..." )
+#endif
+
+	fileLevel.isPlayingSequence = true
+	fileLevel.startTime = Time()
+
+	AddGlobalAnimEvents()
+
+	entity targetRef = GetEntByScriptName( TARGET_REF_NAME )
+	fileLevel.rootModelMover = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", targetRef.GetOrigin(), targetRef.GetAngles() )
+	fileLevel.rootModelMover.MakeSafeForUIScriptHack()
+	fileLevel.rootModel = CreateClientSidePropDynamic( targetRef.GetOrigin(), targetRef.GetAngles(), $"mdl/dev/empty_model.rmdl" )
+	fileLevel.rootModel.MakeSafeForUIScriptHack()
+	fileLevel.rootModel.SetParent( fileLevel.rootModelMover )
+
+	EHI playerEHI = LocalClientEHI()
+	ItemFlavor character = LoadoutSlot_WaitForItemFlavor( playerEHI, Loadout_Character() )
+	ItemFlavor characterSkin = LoadoutSlot_WaitForItemFlavor( playerEHI, Loadout_CharacterSkin( character ) )
+	CharacterSkin_Apply( fileLevel.rootModel, characterSkin )
+
+	fileLevel.camera = CreateClientSidePointCamera( targetRef.GetOrigin(), targetRef.GetAngles(), CAMERA_FOV )
+	fileLevel.camera.SetParent( fileLevel.rootModel, "VDU" )
+
+	ShowEntityAndChildren( fileLevel.rootModel )
+
+	GetLocalClientPlayer().SetMenuCameraEntityWithAudio( fileLevel.camera )
+
+	RunUIScript( "ClientToUI_PlayRewardSummarySequenceMusic" )
+
+	if ( ItemFlavor_GetGUID( character ) == CHARACTER_LOBA_GUID )
+		thread PlayAnim( fileLevel.rootModel, LOBA_REWARD_SEQ, fileLevel.rootModelMover )
+	else
+		thread PlayAnim( fileLevel.rootModel, "ACT_MP_MENU_REWARD_SUMMARY_SEQUENCE", fileLevel.rootModelMover )
+
+	const float DURATION = 4
+	wait DURATION
+
+	fileLevel.isPlayingSequence = false
+}
+
+
+
+
+
+
+
+
+
+
+
+ 

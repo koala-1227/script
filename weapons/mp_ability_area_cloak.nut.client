@@ -1,0 +1,1035 @@
+global function MpAbilityGroupCloak_Init
+
+global function OnWeaponTossReleaseAnimEvent_ability_group_cloak
+global function OnWeaponTossPrep_ability_group_cloak
+global function AreaCloak_ShouldApplyCloakVisuals
+global function AreaCloak_IsCloaked
+global function AreaCloak_UsesEntityCloak
+
+
+
+
+
+
+
+
+
+global function AreaCloak_CloakFieldDeployed
+
+global function AreaCloak_Timer_Player_In
+global function AreaCloak_Timer_Player_Out
+global function AreaCloak_Timer_Player_DestroyRui
+
+
+
+
+
+
+
+
+const asset AREA_CLOAK_DEPLOYED_MODEL =  $"mdl/legend_kits/bloodhound/ghost_grenade/bloodhound_ghost_grenade_v26_base_w.rmdl"
+const asset AREA_CLOAK_FIELD_FX = $"P_BH_re_ult_cloak_dome"
+const asset AREA_CLOAK_FIELD_REFRACT_FX = $"P_BH_re_ult_cloak_dome_refract"
+const asset AREA_CLOAK_GRENADE_FX = $"P_BH_re_cloak_grenade"
+
+const asset AREA_CLOAK_ONBODY_FX = $"P_BH_re_cloak_3p" 
+const asset AREA_CLOAK_ONBODY_BRIGHT_FX = $"P_BH_re_cloak_bright_3p"
+const asset AREA_CLOAK_ACTIVATION_SCREEN_FX = $"P_BH_re_cloak_screen"	
+
+const string AREA_CLOAK_DEVICE_SOUND_ACTIVATE = "Bloodhound_Ult_V2_Device_Activate_3p"
+const string AREA_CLOAK_DEVICE_SOUND_LOOP     = "Bloodhound_Ult_V2_Device_Loop_3p"
+const string AREA_CLOAK_DEVICE_SOUND_ENDING   = "Bloodhound_Ult_V2_Device_WarningToEnd_3P"
+const string AREA_CLOAK_DEVICE_SOUND_FINISH   = "Bloodhound_Ult_V2_Device_End_3p"
+
+const float AREA_CLOAK_LEAVE_KILL_TIMER = 10.0
+const float AREA_CLOAK_THROW_POWER = 800.0
+const int   AREA_CLOAK_TRIGGER_RADIUS = 240 
+
+
+struct CloakInfo
+{
+	entity fxEnt
+	array<entity> touchingCloakTriggers
+	float lastWeaponInterruptTime
+	float lastNonWeaponInterruptTime
+	PassByReferenceString cloakId
+	bool fullBreakTriggered
+
+	int moveSpeedHandle = SE_INVALID_HANDLE
+	int cloakHandle = SE_INVALID_HANDLE
+	int threatVisionHandle = SE_INVALID_HANDLE
+}
+
+struct
+{
+	table<entity, CloakInfo> playerCloakInfo
+
+
+
+		var cloakTimerRui
+
+} file
+
+struct
+{
+	float cloakFieldDuration = 8.0
+	float cloakFieldDurationWarning = 4.0
+
+	float cloakDuration = 12.0
+	float speedBoost = 0.10 				
+
+	float recloakWaitAfterInterrupt = 1.0
+
+	bool applyCloakFX = false
+
+	bool useRefractionCloak = true
+} tuning
+
+
+void function MpAbilityGroupCloak_Init()
+{
+	PrecacheWeapon( $"mp_ability_area_cloak" )
+	PrecacheParticleSystem( AREA_CLOAK_ONBODY_FX )
+	PrecacheParticleSystem( AREA_CLOAK_ONBODY_BRIGHT_FX )
+	PrecacheParticleSystem( AREA_CLOAK_FIELD_FX )
+	PrecacheParticleSystem( AREA_CLOAK_FIELD_REFRACT_FX )
+	PrecacheParticleSystem( AREA_CLOAK_GRENADE_FX )
+	PrecacheParticleSystem( AREA_CLOAK_ACTIVATION_SCREEN_FX )
+	PrecacheSkinName( "RefractionCloak" )
+
+	Remote_RegisterClientFunction( "AreaCloak_CloakFieldDeployed" )
+
+	Remote_RegisterClientFunction( "AreaCloak_Timer_Player_In" )
+	Remote_RegisterClientFunction( "AreaCloak_Timer_Player_Out" )
+	Remote_RegisterClientFunction( "AreaCloak_Timer_Player_DestroyRui" )
+
+
+	RegisterSignal( "AreaCloak_StopActivationScreenFX" )
+	RegisterSignal( "AreaCloak_OnEnteredCloakField" )
+
+
+
+
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.area_cloak,  AreaCloak_OnVisualsEnabled )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.area_cloak, AreaCloak_OnVisualsDisabled )
+
+
+	RegisterTuningStruct( "tuning", "bh_cloak_" )
+}
+
+bool function AreaCloak_UsesEntityCloak()
+{
+	return (tuning.useRefractionCloak && GetConVarBool( "use_refraction_cloak" ))
+}
+
+var function OnWeaponTossReleaseAnimEvent_ability_group_cloak( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	int ammoReq = weapon.GetAmmoPerShot()
+	weapon.EmitWeaponSound_1p3p( GetGrenadeThrowSound_1p( weapon ), GetGrenadeThrowSound_3p( weapon ) )
+
+	entity deployable = ThrowDeployable( weapon, attackParams, AREA_CLOAK_THROW_POWER, OnCloakerPlanted, null, <0, 0, -1000>, 10.0 )
+	if ( deployable )
+	{
+		entity player = weapon.GetWeaponOwner()
+		PlayerUsedOffhand( player, weapon, true, deployable )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+
+	return ammoReq
+}
+
+void function OnWeaponTossPrep_ability_group_cloak( entity weapon, WeaponTossPrepParams prepParams )
+{
+	weapon.EmitWeaponSound_1p3p( GetGrenadeDeploySound_1p( weapon ), GetGrenadeDeploySound_3p( weapon ) )
+}
+
+void function OnCloakerPlanted( entity projectile, DeployableCollisionParams collisionParams )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+void function CloakerIdleAnims( entity projectile )
+{
+	EndSignal( projectile, "OnDestroy" )
+
+	projectile.Anim_PlayOnly( "ghost_grenade_deploy" )
+	WaittillAnimDone( projectile )
+	projectile.Anim_PlayOnly( "ghost_grenade_idle" )
+}
+
+
+bool function AreaCloak_IsCloaked( entity player )
+{
+	return StatusEffect_HasSeverity( player, eStatusEffect.area_cloak )
+	
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function GetCloakDuration()
+{
+	return tuning.cloakDuration
+}
+
+bool function AreaCloak_ShouldApplyCloakVisuals( entity player )
+{
+	if ( StatusEffect_HasSeverity( player, eStatusEffect.area_cloak ) )
+	{
+		return true
+	}
+
+	return false
+}
+
+
+void function AreaCloak_CloakFieldDeployed()
+{
+	thread ShowHintWhenCloaked()
+}
+
+void function ShowHintWhenCloaked()
+{
+	entity localClient = GetLocalClientPlayer()
+	float endTime = Time() + tuning.cloakFieldDuration
+
+	while ( Time() < endTime )
+	{
+		if ( IsValid( localClient ) && StatusEffect_GetSeverity( localClient, eStatusEffect.area_cloak ) > 0 )
+		{
+			AddPlayerHint( 3.0, 0.5, $"rui/hud/tactical_icons/tactical_bloodhound", "#BLOODHOUND_HIDDEN_TAC_HINT" )
+			return
+		}
+		else
+		{
+			wait 0.1
+		}
+	}
+
+}
+
+void function AreaCloak_OnVisualsEnabled( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( ent != GetLocalViewPlayer() )
+		return
+
+	thread AreaCloak_PlayScreenFX( ent )
+}
+
+void function AreaCloak_OnVisualsDisabled( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( ent != GetLocalViewPlayer() )
+		return
+
+	Signal( ent, "AreaCloak_StopActivationScreenFX" )
+}
+
+void function AreaCloak_PlayScreenFX( entity clientPlayer )
+{
+	clientPlayer.EndSignal( "OnDeath" )
+	clientPlayer.EndSignal( "OnDestroy" )
+	
+
+	entity viewPlayer = GetLocalViewPlayer()
+	int fxid          = GetParticleSystemIndex( AREA_CLOAK_ACTIVATION_SCREEN_FX )
+
+	int fxHandle = StartParticleEffectOnEntity( viewPlayer, fxid, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetIsWithCockpit( fxHandle, true )
+	Effects_SetParticleFlag( fxHandle, PARTICLE_SCRIPT_FLAG_NO_DESATURATE, true )
+
+
+	OnThreadEnd(
+		function() : ( clientPlayer, fxHandle )
+		{
+			if ( IsValid( clientPlayer ) )
+			{
+				if ( EffectDoesExist( fxHandle ) )
+					EffectStop( fxHandle, false, true )
+			}
+		}
+	)
+
+	clientPlayer.WaitSignal( "AreaCloak_StopActivationScreenFX" )
+}
+
+
+void function AreaCloak_Timer_Player_In()
+{
+	if ( file.cloakTimerRui != null && RuiIsAlive( file.cloakTimerRui ) )
+		RuiSetBool( file.cloakTimerRui, "inArea", true )
+	else
+	{
+		file.cloakTimerRui = CreateCockpitRui( $"ui/area_buffs_hud.rpak", 500 )
+		RuiSetAsset( file.cloakTimerRui, "buff0Icon", $"rui/hud/ultimate_icons/ultimate_bloodhound_cloak")	
+		RuiSetFloat2( file.cloakTimerRui, "buff0IconScale", < 1.0, 1.0, 1.0 > )
+		RuiSetBool( file.cloakTimerRui, "inArea", true )
+		HudBuffQueue_QueueBuff( "BH_CLOAK", file.cloakTimerRui, eHudBuffQueuePriority.MAX )
+	}
+}
+
+void function AreaCloak_Timer_Player_Out()
+{
+	if ( file.cloakTimerRui != null && RuiIsAlive( file.cloakTimerRui ) )
+	{		
+		RuiSetBool( file.cloakTimerRui, "inArea", false )
+		RuiSetFloat( file.cloakTimerRui, "buff0StartTime", Time() )
+		RuiSetFloat( file.cloakTimerRui, "buff0EffectDuration", tuning.cloakDuration )
+	}
+}
+
+void function AreaCloak_Timer_Player_DestroyRui()
+{		
+	if ( file.cloakTimerRui != null )
+	{
+		HudBuffQueue_RemoveBuff( "BH_CLOAK" )
+		RuiDestroyIfAlive( file.cloakTimerRui )
+		file.cloakTimerRui = null
+	}
+}
+
+
+ 

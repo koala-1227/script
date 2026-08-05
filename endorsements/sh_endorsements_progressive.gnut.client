@@ -1,0 +1,1285 @@
+global function EndorsementProgressive_Init
+global function EndorsementProgressive_IsEnabled
+
+global function EndorsementProgressive_IsProgressFromXP
+global function EndorsementProgressive_RegisterEndorsementSetting
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+
+
+
+
+
+
+#endif
+
+
+global function EndorsementProgressive_GetEndorsementProgressForClientPlayer
+global function EndorsementProgressive_GetLevelForProgress
+global function EndorsementProgressive_GetNextLevelMilestone
+global function EndorsementProgressive_GetLevelGoalByIndex
+global function Endorsements_GetTooltipDesc
+global function Endorsements_GetProgressionType
+global function Endorsements_GetStandardPower
+global function Endorsements_GetEnhancedPower
+global function Endorsements_GetTaskDescription
+global function Endorsements_GetSubDescription
+global function EndorsementProgressive_DidPlayerAchieveMilestone
+global function Endorsements_SetLevelUpHUDNotifTrue
+global function Endorsements_SetLevelUpHUDNotifFalse
+
+
+
+
+
+
+const string PVAR_ENDORSEMENTS_PROGRESSIVE_BASE = "endorsements_progressive_"
+const string PVAR_ENDORSEMENTS_PROGRESSIVE_ENABLE = PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "enable"
+
+global const int ENDORSEMENT_PROGRESSIVE_LEVEL_MAX = 1
+global const int ENDORSEMENT_PROGRESSIVE_LEVEL_MIN = 1
+const int ENDORSEMENT_PROGRESSIVE_LEVEL_INVALID = -1
+global const int ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID = -1
+const int ENDORSEMENT_PROGRESSIVE_PROGRESS_STARTING = 0
+const int ENDORSEMENT_PROGRESSIVE_PROGRESS_MAX = 1023
+
+const string ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE = "EndorsementProgressive_EndorsementProgress_"
+const string ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_0 = ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE + "0"
+const string ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_1 = ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE + "1"
+const string ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_2 = ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE + "2"
+
+
+
+
+
+
+
+
+const asset ENDORSEMENT_PROGRESSIVE_LEVEL_UP_VFX_1P = $"P_wc_prog_upgrade_FP"
+
+
+
+const string ENDORSEMENT_PROGRESSIVE_LEVEL_UP_SFX_1P = "Wildcard_NorseHunter_UI_LevelUp_1p"
+const string ENDORSEMENT_PROGRESSIVE_PROGRESS_SFX_1P = "Wildcard_NorseHunter_UI_LevelProgress_1p"
+
+enum eEndorsementProgressive_ResetSetting
+{
+	NoReset,
+	StartLevel,
+	LastLevel,
+
+
+
+}
+
+global struct EndorsementProgressiveSetting
+{
+	array< int > progressRequiredForLevel
+	string controlledValue						
+	array< string > playerModOverrides			
+	array< float > statusEffectSeverityPerLevel	
+	string progressiveLevelsDesc
+	string progressiveType
+	string standardPower
+	string enhancedPower
+	string taskDescription
+	string subDescription
+}
+
+struct
+{
+	int resetSetting = eEndorsementProgressive_ResetSetting.NoReset
+
+	bool useEvoForProgression = true
+
+
+
+
+
+	bool playLevelUPVFX = true
+	bool playLevelUpSFX = true
+	bool playProgressSFX = true
+
+
+
+
+
+
+} tuning
+
+struct
+{
+	table< int, EndorsementProgressiveSetting > endorsementIDToEndorsementProgressiveSetting 
+
+
+
+
+
+
+
+		array< int > previousProgressOfSlot = [ ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID, ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID, ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID ]
+		bool levelUpActive = false
+		array< entity > progressSoundEntities
+
+} file
+
+void function EndorsementProgressive_Init()
+{
+	if ( !EndorsementProgressive_IsEnabled() )
+		return
+
+	RegisterTuningStruct( "tuning", PVAR_ENDORSEMENTS_PROGRESSIVE_BASE )
+
+	Remote_RegisterClientFunction( "Endorsements_SetLevelUpHUDNotifTrue" )
+
+
+
+
+ 	
+	RegisterNetworkedVariable( ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_0, SNDC_PLAYER_EXCLUSIVE, SNVT_UNSIGNED_INT ) 
+	RegisterNetworkedVariable( ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_1, SNDC_PLAYER_EXCLUSIVE, SNVT_UNSIGNED_INT ) 
+	RegisterNetworkedVariable( ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_2, SNDC_PLAYER_EXCLUSIVE, SNVT_UNSIGNED_INT ) 
+
+
+
+
+
+
+
+
+
+
+		RegisterNetVarIntChangeCallback( ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_0, EndorsementProgressive_NetVarChanged_Endorsement1ProgressUpdated )
+		RegisterNetVarIntChangeCallback( ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_1, EndorsementProgressive_NetVarChanged_Endorsement2ProgressUpdated )
+		RegisterNetVarIntChangeCallback( ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_2, EndorsementProgressive_NetVarChanged_Endorsement3ProgressUpdated )
+
+		PrecacheParticleSystem( ENDORSEMENT_PROGRESSIVE_LEVEL_UP_VFX_1P )
+
+		AddCallback_EntitiesDidLoad( EndorsementProgressive_EntitiesDidLoad )
+
+
+
+
+
+
+}
+
+bool function EndorsementProgressive_IsEnabled()
+{	
+	return Endorsements_IsActive() && GetCurrentPlaylistVarBool( PVAR_ENDORSEMENTS_PROGRESSIVE_ENABLE, true )
+}
+
+void function EndorsementProgressive_RegisterEndorsementSetting( int endorsementID, EndorsementProgressiveSetting endorsementSetting )
+{
+	if ( endorsementID in file.endorsementIDToEndorsementProgressiveSetting )
+	{
+		Assert( GetCurrentPlaylistVarBool(PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "register_setting", false ), "EndorsementProgressive_RegisterEndorsementSetting already has tuning registered for this endorsement!\n" + PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "register_setting 1 to disable assert." )
+		return
+	}
+
+	if ( endorsementSetting.progressRequiredForLevel.len() == ENDORSEMENT_PROGRESSIVE_LEVEL_MAX ) 
+	{
+		Assert( GetCurrentPlaylistVarBool(PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "progress_required_less_than_max", false ), "EndorsementProgressive_RegisterEndorsementSetting endorsement doesn't have enough progress required for max levels!\n" + PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "progress_required_less_than_max 1 to disable assert." )
+		return
+	}
+
+	EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromID( endorsementID )
+	if ( endorsementDefinition.endorsementType == eEndorsementType.PROGRESSIVE_WEAPON_MOD && endorsementSetting.controlledValue == "" )
+	{
+		Assert( GetCurrentPlaylistVarBool(PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "controlled_value_empty", false ), "EndorsementProgressive_RegisterEndorsementSetting has empty controlled value for weapon mod endorsement!\n" + PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "controlled_value_empty 1 to disable assert." )
+		return
+	}
+
+
+
+
+
+
+
+
+
+
+
+	file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ] <- endorsementSetting
+}
+
+
+void function EndorsementProgressive_EntitiesDidLoad()
+{
+	EndorsementProgressive_CreateProgressSoundEntities()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function EndorsementProgressive_GetResetSetting()
+{
+	return tuning.resetSetting
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function EndorsementProgressive_GetEndorsementProgressForClientPlayer( int endorsementID )
+{
+	entity localPlayer = GetLocalViewPlayer()
+	if ( !IsValidPlayer( localPlayer ) )
+		return ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID
+
+	int endorsementIndex = Endorsements_GetPlayerEndorsementSlot( localPlayer, endorsementID )
+	if ( endorsementIndex < 0 )
+		return ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID
+
+	string netVarStr = ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE + endorsementIndex
+	return localPlayer.GetPlayerNetInt( netVarStr )
+}
+
+
+
+
+
+
+
+
+
+
+int function EndorsementProgressive_GetLevelForProgress( int endorsementID, int progress )
+{
+	if ( endorsementID == 0 )
+		return 0
+
+	int level = ENDORSEMENT_PROGRESSIVE_LEVEL_INVALID
+	foreach ( int progressRequired in file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ].progressRequiredForLevel )
+	{
+		if ( progress >= progressRequired )
+		{
+			level++
+		}
+		else
+		{
+			break 
+		}
+	}
+
+	if ( level > ENDORSEMENT_PROGRESSIVE_LEVEL_MAX )
+	{
+		Assert( GetCurrentPlaylistVarBool(PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "leveled_beyond_max", false ), "EndorsementProgressive_GetLevelForProgress has endorsement trying to level beyond max!\n" + PVAR_ENDORSEMENTS_PROGRESSIVE_BASE + "leveled_beyond_max 1 to disable assert." )
+	}
+
+	return level
+}
+
+bool function EndorsementProgressive_IsProgressFromXP()
+{
+	return tuning.useEvoForProgression
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function EndorsementProgressive_NetVarChanged_Endorsement1ProgressUpdated( entity player, int newProgress )
+{
+	EndorsementProgressive_EndorsementProgressUpdated_Internal( player, newProgress, 0 )
+}
+
+
+
+void function EndorsementProgressive_NetVarChanged_Endorsement2ProgressUpdated( entity player, int newProgress )
+{
+	EndorsementProgressive_EndorsementProgressUpdated_Internal( player, newProgress, 1 )
+}
+
+
+
+void function EndorsementProgressive_NetVarChanged_Endorsement3ProgressUpdated( entity player, int newProgress )
+{
+	EndorsementProgressive_EndorsementProgressUpdated_Internal( player, newProgress, 2 )
+}
+
+
+
+void function EndorsementProgressive_EndorsementProgressUpdated_Internal( entity player, int newProgress, int idx = 0 )
+{
+	if ( player != GetLocalClientPlayer() || !IsAlive( player ) ) 
+		return
+
+	array< int > activeEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+	if ( !activeEndorsements.isvalidindex( idx ) )
+	{
+		file.previousProgressOfSlot[ idx ] = ENDORSEMENT_PROGRESSIVE_PROGRESS_INVALID
+		return
+	}
+
+	int endorsementID = activeEndorsements[ idx ]
+	string netVarStr = ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE + idx
+	int nextLevel = EndorsementProgressive_GetLevelForProgress( endorsementID, newProgress ) + 1
+	int indexLevel = nextLevel > ENDORSEMENT_PROGRESSIVE_LEVEL_MAX ? ENDORSEMENT_PROGRESSIVE_LEVEL_MAX : nextLevel
+	int totalProgress = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ].progressRequiredForLevel[ indexLevel ]
+
+	if ( tuning.playProgressSFX )
+	{
+		float progressFrac = ( newProgress.tofloat() / totalProgress.tofloat() )
+		entity soundEnt = EndorsementProgressive_GetProgressSoundEntForIndex( idx )
+		if ( IsValid( soundEnt ) )
+		{
+			soundEnt.SetSoundCodeControllerValue( progressFrac * 100.0 ) 
+			EmitSoundOnEntity( soundEnt, ENDORSEMENT_PROGRESSIVE_PROGRESS_SFX_1P )
+		}
+	}
+
+	int prevLevel = EndorsementProgressive_GetLevelForProgress( endorsementID, file.previousProgressOfSlot[ idx ] )
+	int newLevel = EndorsementProgressive_GetLevelForProgress( endorsementID, newProgress )
+
+	file.previousProgressOfSlot[ idx ] = newProgress
+
+	if ( prevLevel != ENDORSEMENT_PROGRESSIVE_LEVEL_INVALID && newLevel > prevLevel  )
+	{
+		if ( tuning.playLevelUpSFX )
+		{
+			EmitSoundOnEntity( player, ENDORSEMENT_PROGRESSIVE_LEVEL_UP_SFX_1P )
+		}
+		EndorsementProgressive_PlayVFXLevelUp()
+	}
+
+	Endorsements_UpdateUnitframeRuiForPlayer( player )
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function EndorsementProgressive_CreateProgressSoundEntities()
+{
+	foreach( entity soundEnt in file.progressSoundEntities )
+	{
+		soundEnt.Destroy()
+	}
+
+	file.progressSoundEntities.clear()
+
+	entity clientPlayer = GetLocalClientPlayer()
+	for( int i = 0; i < Endorsements_GetMaxEndorsementCount(); i++ )
+	{
+		entity soundEnt = CreateClientsideScriptMover( $"mdl/dev/empty_model.rmdl", clientPlayer.GetOrigin(), clientPlayer.GetAngles() )
+		soundEnt.SetParent( clientPlayer )
+		file.progressSoundEntities.append( soundEnt )
+	}
+}
+
+
+
+entity function EndorsementProgressive_GetProgressSoundEntForIndex( int index )
+{
+	if ( !file.progressSoundEntities.isvalidindex( index ) )
+		return null
+
+	entity soundEnt = file.progressSoundEntities[ index ]
+	if ( !IsValid( soundEnt ) )
+		return null
+
+	return soundEnt
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function EndorsementProgressive_GetNextLevelMilestone( int endorsementId )
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValidPlayer( player ) )
+		return 0.0
+
+	EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromID( endorsementId )
+	if ( !Endorsements_IsEndorsementProgressiveByType( endorsementDefinition.endorsementType ) )
+		return 0.0
+
+	int endorsementIndex = Endorsements_GetPlayerEndorsementSlot( player, endorsementId )
+	if ( endorsementIndex < 0 )
+		return 0.0
+
+	string netVarStr = ENDORSEMENT_PROGRESSIVE_NETVAR_ENDORSEMENT_PROGRESS_BASE + endorsementIndex
+	int progress = player.GetPlayerNetInt( netVarStr )
+	int level = EndorsementProgressive_GetLevelForProgress( endorsementDefinition.endorsementID, progress )
+	int nextLevel = level + 1
+	int indexLevel = nextLevel > ENDORSEMENT_PROGRESSIVE_LEVEL_MAX ? ENDORSEMENT_PROGRESSIVE_LEVEL_MAX : nextLevel
+	int totalProgress = file.endorsementIDToEndorsementProgressiveSetting[ endorsementDefinition.endorsementID ].progressRequiredForLevel[ indexLevel ]
+
+	return float( totalProgress )
+}
+
+float function EndorsementProgressive_GetLevelGoalByIndex( int endorsementId, int index )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementId ) )
+		return 0.0
+
+	if ( index < 0 || index > ENDORSEMENT_PROGRESSIVE_LEVEL_MAX )
+	{
+		Warning("EndorsementProgressive_GetLevelGoalByIndex's index call is out of range. Verify the level goal is [1-3].")
+		return 0.0
+	}
+
+	EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromID( endorsementId )
+	return float( file.endorsementIDToEndorsementProgressiveSetting[ endorsementDefinition.endorsementID ].progressRequiredForLevel[ index ] )
+}
+
+bool function EndorsementProgressive_DidPlayerAchieveMilestone( int endorsementId )
+{
+	return file.levelUpActive
+}
+
+void function Endorsements_SetLevelUpHUDNotifTrue()
+{
+	file.levelUpActive = true
+	EndorsementAnnouncement_OnLevelUp()
+}
+
+void function Endorsements_SetLevelUpHUDNotifFalse()
+{
+	file.levelUpActive = false
+}
+
+string function Endorsements_GetTooltipDesc( int endorsementID )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementID ) )
+		return ""
+
+	EndorsementProgressiveSetting endorsementSetting = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ]
+	return endorsementSetting.progressiveLevelsDesc
+}
+
+string function Endorsements_GetProgressionType( int endorsementID )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementID ) )
+		return ""
+
+	EndorsementProgressiveSetting endorsementSetting = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ]
+	return endorsementSetting.progressiveType
+}
+
+string function Endorsements_GetStandardPower( int endorsementID )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementID ) )
+		return ""
+
+	EndorsementProgressiveSetting endorsementSetting = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ]
+	return endorsementSetting.standardPower
+}
+
+string function Endorsements_GetEnhancedPower( int endorsementID )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementID ) )
+		return ""
+
+	EndorsementProgressiveSetting endorsementSetting = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ]
+	return endorsementSetting.enhancedPower
+}
+
+string function Endorsements_GetTaskDescription( int endorsementID )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementID ) )
+		return ""
+
+	EndorsementProgressiveSetting endorsementSetting = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ]
+	return endorsementSetting.taskDescription
+}
+
+string function Endorsements_GetSubDescription( int endorsementID )
+{
+	if ( !Endorsements_IsEndorsementProgressiveByID( endorsementID ) )
+		return ""
+
+	EndorsementProgressiveSetting endorsementSetting = file.endorsementIDToEndorsementProgressiveSetting[ endorsementID ]
+	return endorsementSetting.subDescription
+}
+
+
+
+void function EndorsementProgressive_PlayVFXLevelUp()
+{
+	if ( !tuning.playLevelUPVFX )
+		return
+
+	entity player = GetLocalClientPlayer()
+	int fxHandle = StartParticleEffectOnEntityWithPos( player, GetParticleSystemIndex( ENDORSEMENT_PROGRESSIVE_LEVEL_UP_VFX_1P ), FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+	EffectSetIsWithCockpit( fxHandle, true )
+	EffectSetControlPointVector( fxHandle, 6, UNHINGED_COLOR )
+}
+
+
+#if DEV
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#endif
+ 

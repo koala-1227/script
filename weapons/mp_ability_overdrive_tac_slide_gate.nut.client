@@ -1,0 +1,954 @@
+global function MpAbilitySlideGate_Init
+global function OnWeaponTossPrep_ability_slide_gate
+global function OnWeaponTossReleaseAnimEvent_ability_slide_gate
+
+
+global function OnClientAnimEvent_DeploySlideGate
+global function StopSlideGateBoostFX
+
+
+
+
+
+
+
+global const string OVERDRIVE_SLIDE_JUMP_PASSIVE	= "boosted_slide_jump"
+global const string SLIDEGATE_SCRIPTNAME			= "slide_gate"
+global const string SLIDEGATE_ABILITY_NAME			= "mp_ability_overdrive_tac_slide_gate"
+const string SLIDEGATE_BOOSTED_SLIDE_PASSIVE		= "slide_boost"
+const string SLIDEGATE_DESTRUCTION_IMPACT_TABLE     = "ability_axle_tac_nitro_gate_destruction"
+
+
+const string SLIDEGATE_TRIGGER_ENTER	= "SlideGate_EnterTrigger"
+const string SLIDEGATE_FX_END			= "SlideGate_BoostFXEnd"
+
+
+const asset SLIDEGATE_ACTIVE_1P_FX			= $"P_ability_axle_tac_rush_1p"
+const asset SLIDEGATE_BRACKET_ARROWS_FX		= $"P_ability_axle_tac_gate_arrows"
+const asset SLIDEGATE_PATH_ARROWS_FX		= $"p_ability_axle_tac_gate_arrows_UX"
+const asset SLIDEGATE_CORE_FX				= $"P_ability_axle_tac_gate_core"
+const asset SLIDEGATE_CORE_UPGRADE_FX		= $"P_ability_axle_tac_gate_core_upgrade"
+const asset SLIDEGATE_TRAIL_FX				= $"P_ability_axle_tac_rush_3p_trail" 
+const asset SLIDEGATE_GATE_FX_INIT			= $"P_ability_axle_tac_rush_3p_init_dir" 
+const asset SLIDEGATE_JUMPJETS_FX			= $"P_ability_axle_tac_init_nitrogate"
+const asset SLIDEGATE_JUMPJETS_FX_OVERDRIVE	= $"P_ability_axle_tac_init_nitrogate_axle"
+const string SLIDEGATE_DEPLOY_IMPACT_TABLE 	= "ability_axle_tac_nitro_gate"
+const vector SLIDEGATE_FLASH_COLOR 			= <177.0 / 255.0 * 3.0, 85.0 / 255.0 * 3.0, 214.0 / 255.0 * 3.0>	
+
+
+const string SLIDEGATE_DEPLOY_UNPACK		= "Overdrive_Tac_NitroGate_Deploy_Unpack"
+const string SLIDEGATE_IDLE					= "Overdrive_Tac_NitroGate_Armed_Idle_Loop"
+const string SLIDEGATE_LAUNCH_1P_GENERIC	= "Overdrive_Tac_Player_NitroGate_Launch_1P"
+const string SLIDEGATE_LAUNCH_1P_AXLE		= "Overdrive_Tac_Overdrive_NitroGate_Launch_1P"
+const string SLIDEGATE_LAUNCH_3P			= "Overdrive_Tac_Player_NitroGate_Launch_3P"
+const string SLIDEGATE_EFFECT_ACTIVE_3P		= "Overdrive_Tac_Player_SlidingPresence"
+const string SLIDEGATE_EFFECT_END_1P		= "Overdrive_Tac_Player_NitroGate_Slide_End_1P"
+const string SLIDEGATE_EFFECT_END_3P		= "Overdrive_Tac_Player_NitroGate_Slide_End_3P"
+const string SLIDEGATE_REMOVED				= "wattson_tactical_l"
+
+
+const asset SLIDEGATE_MODEL = $"mdl/props/overdrive_tactical_pad/overdrive_tactical_pad.rmdl"
+
+
+const string SLIDEGATE_DEPLOY_SCREEN_SHAKE = "slide_gate_screen_shake"
+const float SHAKE_AMPLITUDE  = 2.0
+const float SHAKE_FREQUENCY  = 10.0
+const float SHAKE_DURATION   = 0.2
+const vector SHAKE_DIRECTION = < 0.0, 0.0, 1.0 >
+
+const string SLIDEGATE_DEPLOY_ANIM	= "overdrive_tac_pad_deploy"
+const string SLIDEGATE_IDLE_ANIM	= "overdrive_tac_pad_idle"
+const string SLIDEGATE_LAUNCH_ANIM	= "overdrive_tac_pad_trigger"
+
+#if DEV
+const bool DEBUG_GATE_BOOST_VFX = false
+#endif
+
+
+
+
+
+
+
+
+
+struct
+{
+
+		string movementKeyBoundHint
+
+} file
+
+struct
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		float gateHighlightFadeDist = 1500.0
+
+
+	float slideMaxTime = 5.0 	
+	
+	float slideMaxTimeNerfed = 3.0
+} tuning
+
+void function MpAbilitySlideGate_Init()
+{
+	RegisterTuningStruct( "tuning", "axle_tac_" )
+
+	PrecacheModel( SLIDEGATE_MODEL )
+
+	PrecacheParticleSystem( SLIDEGATE_ACTIVE_1P_FX )
+	PrecacheParticleSystem( SLIDEGATE_BRACKET_ARROWS_FX )
+	PrecacheParticleSystem( SLIDEGATE_PATH_ARROWS_FX )
+	PrecacheParticleSystem( SLIDEGATE_CORE_FX )
+	PrecacheParticleSystem( SLIDEGATE_CORE_UPGRADE_FX )
+	PrecacheParticleSystem( SLIDEGATE_TRAIL_FX )
+	PrecacheParticleSystem( SLIDEGATE_GATE_FX_INIT )
+	PrecacheParticleSystem( SLIDEGATE_JUMPJETS_FX )
+	PrecacheParticleSystem( SLIDEGATE_JUMPJETS_FX_OVERDRIVE )
+	PrecacheImpactEffectTable( SLIDEGATE_DEPLOY_IMPACT_TABLE )
+	PrecacheScriptString( SLIDEGATE_SCRIPTNAME )
+
+
+
+
+
+
+
+
+
+
+
+		RegisterMinimapPackage( "prop_script", eMinimapObject_prop_script.NITRO_GATE, MINIMAP_OBJECT_RUI, MinimapPackage_SlideGate, FULLMAP_OBJECT_RUI, MinimapPackage_SlideGate )
+		AddCreateCallback( "trigger_cylinder_heavy", OnSlideGateTriggerCreated )
+		AddScriptNameCreateCallback( SLIDEGATE_SCRIPTNAME, OnSlideGateCreated )
+
+		RegisterSignal( SLIDEGATE_FX_END )
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.slide_gate_boosting, StartSlideGateBoostFX )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.slide_gate_boosting, StopSlideGateBoostFX )
+
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function __________________SharedFuncs_________________________(){}
+#endif
+
+void function OnWeaponTossPrep_ability_slide_gate( entity weapon, WeaponTossPrepParams prepParams )
+{
+	weapon.EmitWeaponSound_1p3p( GetGrenadeDeploySound_1p( weapon ), GetGrenadeDeploySound_3p( weapon ) )
+}
+
+var function OnWeaponTossReleaseAnimEvent_ability_slide_gate( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	int ammoReq = weapon.GetAmmoPerShot()
+	weapon.EmitWeaponSound_1p3p( GetGrenadeThrowSound_1p( weapon ), GetGrenadeThrowSound_3p( weapon ) )
+
+	entity deployable = ThrowDeployable( weapon, attackParams, 1.0, DeploySlideGate, null, <0, 0, 1900> )
+	if ( deployable )
+	{
+		entity player = weapon.GetWeaponOwner()
+		PlayerUsedOffhand( player, weapon, true, deployable )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+
+	return ammoReq
+}
+
+void function DeploySlideGate( entity projectile, DeployableCollisionParams deployCollisionParams)
+{
+
+
+
+}
+
+bool function SlideGate_FilterCallback( entity trigger, entity ent )
+{
+	if( !IsValid( ent ) || !ent.DoesShareRealms( trigger ) )
+		return false
+
+	if ( !ent.IsPlayer() && !ent.IsPlayerDecoy() && !IsTrainingDummie( ent ) )
+		return false
+
+	if( ent.IsPlayer() && ent.IsArmoredLeapActive() )
+		return false
+
+	if( !IsValid( trigger ) || trigger.IsMarkedForDeletion() )
+		return false
+
+	entity triggerParent = trigger.GetParent()
+	if( !IsValid( triggerParent ) || triggerParent.IsMarkedForDeletion() )
+		return false
+
+	return true
+}
+
+bool function DoesPlayerHaveJumpGate( entity player )
+{
+	return DoesPlayerHaveOverdrivePassive( player ) && PlayerHasPassive( player, ePassives.PAS_TAC_UPGRADE_ONE )
+}
+
+float function SlideGate_GetMaxSlideTime( entity player )
+{
+	return DoesPlayerHaveOverdrivePassive( player ) && PlayerHasPassive( player, ePassives.PAS_TAC_UPGRADE_THREE ) ? tuning.slideMaxTime : tuning.slideMaxTimeNerfed
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function __________________ServerFuncs_________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function __________________ClientFuncs_________________________(){}
+#endif
+
+
+void function OnSlideGateTriggerCreated( entity trigger )
+{
+	if ( trigger.GetTriggerType() != TT_SLIDE_GATE )
+		return
+
+	entity owner = trigger.GetOwner()
+	if( IsValid( owner ) )
+	{
+		trigger.e.isJumpGate = DoesPlayerHaveJumpGate( owner )
+		trigger.e.slideMaxTime = SlideGate_GetMaxSlideTime( owner )	
+	}
+
+	trigger.SetClientEnterCallback( SlideGate_EnterTrigger_Client )
+	trigger.SetClientScriptFilterCallback( SlideGate_FilterCallback )
+}
+
+void function SlideGate_EnterTrigger_Client( entity trigger, entity player )
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	if ( player != localViewPlayer )
+		return
+
+	if( !InPrediction() || !IsFirstTimePredicted() )
+		return
+
+	bool isPlayerAxle = DoesPlayerHaveOverdrivePassive( player )
+	string launchSound = isPlayerAxle ? SLIDEGATE_LAUNCH_1P_AXLE : SLIDEGATE_LAUNCH_1P_GENERIC
+	EmitSoundOnEntity( player, launchSound )
+
+	bool playerIsBleedingOut = Bleedout_IsBleedingOut( player )
+	if( trigger.e.isJumpGate && !playerIsBleedingOut )
+	{
+		SlideGate_DisplaySlideJumpHint( trigger.e.slideMaxTime, player )
+	}
+}
+
+void function SlideGate_DisplaySlideJumpHint( float slideMaxTime, entity player )
+{
+	bool movementKeyBound = IsMovementAbilityKeySet()
+	string hint = movementKeyBound ? "#ABL_PAS_SLIDE_MOVEMENT_KEY_SET_JUMP_HINT" : "#ABL_PAS_SLIDE_DEFAULT_JUMP_HINT"
+	AddPlayerHint( slideMaxTime, 0.10, $"", hint )
+
+	file.movementKeyBoundHint = hint
+
+	if ( !HasPlayerMovementEventCallback( player, ePlayerMovementEvents.SLIDE_SUPER_JUMP, SlideGate_OnSlideSuperJump ) )
+	{
+		AddPlayerMovementEventCallback( player, ePlayerMovementEvents.SLIDE_SUPER_JUMP, SlideGate_OnSlideSuperJump )
+	}
+}
+
+void function OnSlideGateCreated( entity slideGate )
+{
+	if ( !IsValid( slideGate ) )
+		return
+
+	slideGate.Highlight_SetFarFadeDist( tuning.gateHighlightFadeDist )
+}
+
+void function MinimapPackage_SlideGate( entity ent, var rui )
+{
+	RuiSetImage( rui, "defaultIcon", $"rui/hud/tactical_icons/tactical_overdrive" )
+	RuiSetImage( rui, "clampedDefaultIcon", $"rui/hud/tactical_icons/tactical_overdrive" )
+	RuiSetBool( rui, "useTeamColor", false )
+	RuiSetFloat( rui, "iconBlend", 0.0 )
+}
+
+void function OnClientAnimEvent_DeploySlideGate( entity weapon, string name )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( name == SLIDEGATE_DEPLOY_SCREEN_SHAKE )
+		ClientScreenShake( SHAKE_AMPLITUDE, SHAKE_FREQUENCY, SHAKE_DURATION, SHAKE_DIRECTION )
+}
+
+void function StartSlideGateBoostFX( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || (GetLocalViewPlayer() == GetLocalClientPlayer() && !actuallyChanged) )
+		return
+
+	if ( StatusEffect_GetSeverity( player, statusEffect ) < 1 )
+		return
+
+	entity cockpit = player.GetCockpit()
+	if ( !IsValid( cockpit ) )
+		return
+
+	Signal( player, "WreckingBall_CleanupFX" )
+
+	ScreenFlash( SLIDEGATE_FLASH_COLOR.x, SLIDEGATE_FLASH_COLOR.y, SLIDEGATE_FLASH_COLOR.z, 0.15, 0.3 )
+	Chroma_StartStimEffect()
+
+	thread (void function() : ( player ) {
+		EndSignal( player, "OnDeath", SLIDEGATE_FX_END )
+
+		int fxHandle = StartParticleEffectOnEntityWithPos( player,
+			GetParticleSystemIndex( SLIDEGATE_ACTIVE_1P_FX ),
+			FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+
+		EffectSetIsWithCockpit( fxHandle, true )
+
+		OnThreadEnd( function() : ( player, fxHandle ) {
+			CleanupFXHandle( fxHandle, false, true )
+			HidePlayerHint( file.movementKeyBoundHint )
+
+			bool isPlayerAxle = DoesPlayerHaveOverdrivePassive( player )
+			string launchSound = isPlayerAxle ? SLIDEGATE_LAUNCH_1P_AXLE : SLIDEGATE_LAUNCH_1P_GENERIC
+			StopSoundOnEntity( player, launchSound )
+		} )
+
+		while( true )
+		{
+			if ( !EffectDoesExist( fxHandle ) )
+				break
+
+			WaitFrame()
+		}
+	})()
+}
+
+bool function IsMovementAbilityKeySet()
+{
+	return !IsControllerModeActive() && GetKeyCodeForBinding( "+dodge", 0 ) != GetKeyCodeForBinding( "+jump", 0 )
+}
+
+void function SlideGate_OnSlideSuperJump( entity player )
+{
+	HidePlayerHint( file.movementKeyBoundHint )
+
+	if ( HasPlayerMovementEventCallback( player, ePlayerMovementEvents.SLIDE_SUPER_JUMP, SlideGate_OnSlideSuperJump ) )
+	{
+		RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.SLIDE_SUPER_JUMP, SlideGate_OnSlideSuperJump )
+	}
+}
+
+void function StopSlideGateBoostFX( entity player, int statusEffect, bool actuallyChanged )
+{
+	if ( player != GetLocalViewPlayer() || (GetLocalViewPlayer() == GetLocalClientPlayer() && !actuallyChanged) )
+		return
+
+	player.Signal( SLIDEGATE_FX_END )
+}
+
+
+ 

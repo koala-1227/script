@@ -1,0 +1,2245 @@
+global function MpWeaponDebuffZone_Init
+global function OnWeaponTossReleaseAnimEvent_DebuffZone
+global function OnWeaponTossPrep_DebuffZone
+global function OnProjectileCollision_DebuffZone
+global function OnWeaponToss_DebuffZone
+global function OnWeaponDeactivate_DebuffZone
+global function OnWeaponTossCancel_DebuffZone
+global function DoesPlayerHaveOverheatDebuff
+global function IsPlayerBeingTargetedByBallistic
+global function DebuffZone_GetAllowableStickyEnts
+global function DebuffZone_GetOverheatDuration
+
+
+global function IsPlayerBeingTargetedBySilenceBallistic
+
+
+
+
+
+
+global function OnClientAnimEvent_DebuffZone
+global function CreateTargetingRui
+global function DestroyTargetingRui
+global function ServerCallback_CreateOverHeatIconRui
+
+
+
+const asset DEBUFF_ZONE_HEART_MODEL = $"mdl/weapons/ballistic_pistol/w_ballistic_bullet.rmdl"
+
+
+int COCKPIT_DEBUFF_ZONE_SCREEN_FX
+int COCKPIT_TACT_IDLE
+
+const asset COCKPIT_DEBUFF_1P_SCREEN_FX = $"P_clbr_tac_screen_debuff"
+const asset COCKPIT_TACT_IDLE_SCREEN_FX = $"P_clbr_tac_screen_idle"
+
+const asset DEBUFF_WEAPON_EFFECT_1P = $"P_clbr_tac_wpn_overheat_idle"
+const asset AOE_RADIUS_FX = $"P_clbr_tac_imp_aoe"
+const asset AOE_UPGRADE_TIMER_FX = $"P_LU_Ballistic_tac_timer"
+const asset AOE_IMPACT_FX = $"P_clbr_tac_imp_aoe_end"
+const asset AOE_WARNING_FX = $"P_clbr_tac_imp"
+const asset DEBUFF_EXPLOSION = $"P_clbr_tac_wpn_overheat_exp"
+const asset DEBUFF_EXPLOSION_3P = $"P_clbr_tac_wpn_overheat_exp_3p"
+const asset DEBUFF_OVERHEAT_LHAND = $"P_clbr_tac_hand_overheat"
+const asset AOE_ENDING_FX_UPGRADE = $"P_LU_Ballistic_tac_timer"
+
+const asset OVERHEAT_DEBUFF_BODY_FX = $"P_clbr_tac_body_debuff_3p"
+
+const asset LOCK_ON_INIT = $"P_clbr_tac_wpn_Lockon_init"
+const asset LOCK_ON_MARKER = $"P_clbr_tac_wpn_Lockon"
+const asset FX_TACTICAL_RANGE_INDICATOR = $"P_clbr_tac_distance_sensor"
+const asset DEBUFF_ZONE_MUZZLE_FLASH_3P = $"P_clbr_tac_muzzleflash_3p"
+
+const asset FX_SILENCE_BALLISTIC_VICTIM_3P = $"P_player_silenced_body"
+const asset FX_SILENCE_BALLISTIC_VICTIM_1P = $"P_player_silenced_screen"
+
+
+const string HOMING_MISSILE_SFX_LOOP = "Ballistic_Tac_Projectile_3P"
+const string PROJECTILE_UPGRADED_TRIGGERED_AOE_SOUND = "Ballistic_Tac_Upgraded_AOE_Start_3P"
+const string PROJECTILE_UPGRADED_TRIGGERED_AOE_SOUND_ENEMY = "Ballistic_Tac_Upgraded_AOE_Start_3P_Enemy"
+const string PROJECTILE_WAITING_TO_TRIGGER_SOUND = "Ballistic_Tac_AOE_Electricity_3P"
+const string PROJECTILE_TRIGGERED_AOE_SOUND = "Ballistic_Tac_AOE_Start_3P"
+const string PROJECTILE_AOR_END_SOUND = "Ballistic_Tac_AOE_End_3P"
+const string PROJECTILE_TRIGGERED_AOE_SOUND_ENEMY = "Ballistic_Tac_AOE_Start_3P_Enemy"
+const string PROJECTILE_AOR_END_SOUND_ENEMY = "Ballistic_Tac_AOE_End_3P_Enemy"
+const string PROJECTILE_DIRECT_IMPACT_ENEMY_3P = "Ballistic_Tac_Impact_Direct_Enemy_3P"
+const string PROJECTILE_DIRECT_IMPACT_ENEMY_1P =  "Ballistic_Tac_Impact_Direct_Player_1P"
+const string PROJECTILE_DIRECT_IMPACT_FRIENDLY_3P = "Ballistic_Tac_Impact_Direct_Friendly_3P"
+const string OVERHEAT_HIGH_WARNING_1P = "Ballistic_Tac_Overheat_Warning_1P"
+const string PLAYER_OVERHEATS_3P_ENEMY = "Ballistic_Tac_Overheat_3P_enemy"
+const string PLAYER_OVERHEATS_3P_TEAM = "Ballistic_Tac_Overheat_3P"
+const string BALLISTIC_LOCKED_ON_1P = "Ballistic_Tac_TargetLock_1p_to_3p"
+const string TARGET_OF_BALLISTIC_LOCK_ON_1P = "Ballistic_Tac_TargetLock_3p_to_1p"
+const string BALLISTIC_LOCKED_ON_LOST_1P = "Ballistic_Tac_TargetLock_1p_to_3p_Lost"
+const string TARGET_OF_BALLISTIC_LOCK_ON_LOST_1P = "Ballistic_Tac_TargetLock_3p_to_1p_Lost"
+
+
+const string PROJECTILE_DIRECT_IMPACT_ENEMY_LOOP_1P =  "Ballistic_Tac_Impact_Direct_Player_Loop_1P"
+
+
+
+const string MISSILE_FIRE_SCREEN_SHAKE = "ballistic_tact_screen_shake"
+const float SHAKE_AMPLITUDE = 2.0
+const float SHAKE_FREQUENCY = 10.0
+const float SHAKE_DURATION = 0.2
+const vector SHAKE_DIRECTION = < 0.0, 0.0, 1.0 >
+
+
+const vector ZERO_THRESHOLD_COLOR = < 255, 100, 100 >
+const vector FIRST_THRESHOLD_COLOR = < 255, 80, 100 >
+const vector SECOND_THRESHOLD_COLOR = < 255, 60, 100 >
+const vector THIRD_THRESHOLD_COLOR = < 255, 40, 100 >
+const vector LAST_THRESHOLD_COLOR = < 255, 20, 100 >
+const array<vector> THRESHOLD_COLORS = [ZERO_THRESHOLD_COLOR, FIRST_THRESHOLD_COLOR, SECOND_THRESHOLD_COLOR, THIRD_THRESHOLD_COLOR, LAST_THRESHOLD_COLOR]
+
+const vector ZERO_THRESHOLD_ALPHA = < 0.3, 0, 0 >
+const vector FIRST_THRESHOLD_ALPHA = < 0.6, 0, 0 >
+const vector SECOND_THRESHOLD_ALPHA = < 0.8, 0, 0 >
+const vector THIRD_THRESHOLD_ALPHA = < 0.9, 0, 0 >
+const vector LAST_THRESHOLD_ALPHA = < 1, 0, 0 >
+const array<vector> THRESHOLD_ALPHA = [ZERO_THRESHOLD_ALPHA, FIRST_THRESHOLD_ALPHA, SECOND_THRESHOLD_ALPHA, THIRD_THRESHOLD_ALPHA, LAST_THRESHOLD_ALPHA]
+
+const float OVERHEAT_ICON_VISIBILITY_FOV = 110.0
+
+const string BALLISTIC_HAS_LOCKON_TARGET_NETVAR = "hasBallisticLockonTarget"
+const string BALLISTIC_IS_BEING_TARGETED_NETVAR = "ballisticIsBeingTargeted"
+
+
+const string BALLISTIC_IS_BEING_SILENCE_TARGETED_NETVAR = "ballisticIsBeingSilenceTargeted"
+
+
+const float FOLLOW_UP_SPEED_BOOST_DURATION = 2.0
+
+struct FollowUpStatusEffectIndexes
+{
+	int speedBoostID
+	int followUpVisualsID
+}
+
+struct
+{
+
+
+
+
+
+
+
+
+		var targetingRui
+		table<entity, var> overheatIconRui
+
+} file
+
+struct
+{
+	
+	float missileHomingSpeed = 1500.0
+	float missileNoTargetSpeed = 3000.0
+	float missileLifetime = 5.0
+	float missileFarDist = 800
+	float missileFarDistSqr 
+	float missileCloseDist = 200
+	float missileCloseDistSqr 
+	float missileHomingShortDelay = 0.15
+	float missileHomingLongDelay = 0.2
+
+	
+	int targetingMaxFOV = 5
+	float targetingMaxRange = 3000.0
+	float targetingMinRange = 120.0
+	float targetingLockOnDelay = 0.1
+	float targetingLockOnTimeout = 4.0
+
+	
+	int aoeRadius = 150
+	float aoeTimeout = 5.0
+	float aoeHitEffectTimer = 0.5
+	float aoeSpawnDelay = 1.0
+	float aoeDamage = 15.0
+
+	
+
+	float debuffDuration = 15.0
+	float upgradeAOEDamage = 35
+
+
+
+	float maxHeatAmount = 100.0
+	float heatAmountBetweenThresholds = 20.0
+
+	
+
+	int overheatDamage = 50
+
+
+
+
+
+	float hintDuration = 4.0
+	float empDuration = 0.5
+
+
+	
+	float silenceDuration = 6.0
+	float upgradedAoeTimeout = 15.0
+} tuning
+
+void function MpWeaponDebuffZone_Init()
+{
+	RegisterTuningStruct( "tuning", "ballistic_tact_" )
+
+	COCKPIT_TACT_IDLE = PrecacheParticleSystem( COCKPIT_TACT_IDLE_SCREEN_FX )
+	COCKPIT_DEBUFF_ZONE_SCREEN_FX = PrecacheParticleSystem( COCKPIT_DEBUFF_1P_SCREEN_FX )
+	PrecacheModel( DEBUFF_ZONE_HEART_MODEL )
+	PrecacheParticleSystem( LOCK_ON_INIT )
+	PrecacheParticleSystem( LOCK_ON_MARKER )
+	PrecacheParticleSystem( DEBUFF_WEAPON_EFFECT_1P )
+	PrecacheParticleSystem( AOE_RADIUS_FX )
+	PrecacheParticleSystem( AOE_UPGRADE_TIMER_FX)
+	PrecacheParticleSystem( AOE_IMPACT_FX )
+	PrecacheParticleSystem( AOE_WARNING_FX )
+	PrecacheParticleSystem( DEBUFF_EXPLOSION )
+	PrecacheParticleSystem( DEBUFF_EXPLOSION_3P )
+	PrecacheParticleSystem( DEBUFF_OVERHEAT_LHAND )
+	PrecacheParticleSystem( FX_TACTICAL_RANGE_INDICATOR )
+	PrecacheParticleSystem( OVERHEAT_DEBUFF_BODY_FX )
+	PrecacheParticleSystem( DEBUFF_ZONE_MUZZLE_FLASH_3P )
+	PrecacheParticleSystem( AOE_ENDING_FX_UPGRADE )
+	PrecacheParticleSystem( FX_SILENCE_BALLISTIC_VICTIM_3P )
+	PrecacheParticleSystem( FX_SILENCE_BALLISTIC_VICTIM_1P )
+
+	RegisterSignal( "EndLockon" )
+	RegisterSignal( "EndMissileHoming" )
+	RegisterSignal( "EndTargeting" )
+	RegisterSignal( "EndAOEThreads" )
+	RegisterSignal( "EndDebuff" )
+	RegisterSignal( "RemoveLockOnThreatIndicator" )
+
+
+
+
+
+
+
+
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.has_overheat_debuff, DebuffZone_OverheatDebuffEnabled )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.has_overheat_debuff, DebuffZone_OverheatDebuffDisabled )
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.ballistic_silence_visuals, BallisticSilence_StartVisualEffect )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.ballistic_silence_visuals, AbilitySilence_StopVisualEffect )
+
+		AddCallback_CreatePlayerPassiveRui( CreateTargetingRui )
+		AddCallback_DestroyPlayerPassiveRui( DestroyTargetingRui )
+
+
+		AddCallback_OnSelectedWeaponChanged( UpdateDebuffIcon )
+
+
+
+	Remote_RegisterClientFunction( "ServerCallback_CreateOverHeatIconRui", "entity" )
+	AddCallback_OnPlayerOverheat( DebuffZone_OnPlayerOverheat )
+
+	RegisterNetworkedVariable( BALLISTIC_HAS_LOCKON_TARGET_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL )
+	RegisterNetworkedVariable( BALLISTIC_IS_BEING_TARGETED_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL )
+
+
+	RegisterNetworkedVariable( BALLISTIC_IS_BEING_SILENCE_TARGETED_NETVAR, SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL )
+
+
+
+		RegisterNetVarBoolChangeCallback( BALLISTIC_HAS_LOCKON_TARGET_NETVAR, SetHasTargetForTargetingRui )
+
+
+
+		SetConVarFloat( "player_overheat_cooldown_delay", FLT_MAX )
+		SetConVarBool( "overheat_uses_multiple_weapon_slots", true )
+
+}
+
+float function GetAOETimeout( entity player )
+{
+	float result = tuning.aoeTimeout
+
+	if( PlayerHasPassive( player, ePassives.PAS_TAC_UPGRADE_ONE ) ) 
+	{
+		result = tuning.upgradedAoeTimeout
+	}
+
+	return result
+}
+
+bool function DoesPlayerHaveOverheatDebuff( entity player )
+{
+	return StatusEffect_HasSeverity( player, eStatusEffect.has_overheat_debuff )
+}
+
+
+bool function DebuffZone_HasPendingOverheatDebuff( entity player )
+{
+	return DoesPlayerHaveOverheatDebuff( player ) && player.GetPlayerOverheatingWeaponSlot() == WEAPON_INVENTORY_SLOT_INVALID
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function IsPlayerBeingTargetedByBallistic( entity player )
+{
+	return player.GetPlayerNetBool( BALLISTIC_IS_BEING_TARGETED_NETVAR )
+}
+
+
+bool function IsPlayerBeingTargetedBySilenceBallistic( entity player )
+{
+	return player.GetPlayerNetBool( BALLISTIC_IS_BEING_SILENCE_TARGETED_NETVAR )
+}
+
+
+void function OnWeaponDeactivate_DebuffZone( entity weapon )
+{
+	entity player = weapon.GetWeaponOwner()
+
+	if( !IsValid( player ) )
+		return
+
+	player.Signal( "EndTargeting" )
+
+
+		if( player != GetLocalViewPlayer() )
+			return
+
+		if ( file.targetingRui != null )
+		{
+			RuiSetBool( file.targetingRui, "isVisible", false )
+			RuiSetBool( file.targetingRui, "hasTarget", false )
+		}
+
+}
+
+void function OnWeaponTossPrep_DebuffZone( entity weapon, WeaponTossPrepParams prepParams )
+{
+	entity player = weapon.GetWeaponOwner()
+
+	if( !IsValid( player ) )
+		return
+
+
+		if ( file.targetingRui != null )
+		{
+			RuiSetBool( file.targetingRui, "isVisible", true )
+		}
+
+		thread CreateTacticalTargetingFX( player )
+
+
+
+
+
+}
+
+var function OnWeaponTossReleaseAnimEvent_DebuffZone( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+
+		if ( !(InPrediction() && IsFirstTimePredicted()) )
+			return
+
+
+	entity player = weapon.GetWeaponOwner()
+	player.Signal( "EndTargeting" )
+
+	weapon.EmitWeaponSound_1p3p( GetGrenadeThrowSound_1p( weapon ), GetGrenadeThrowSound_3p( weapon ) )
+	weapon.PlayWeaponEffect( $"", DEBUFF_ZONE_MUZZLE_FLASH_3P, "muzzle_flash" )
+	weapon.EmitWeaponNpcSound( LOUD_WEAPON_AI_SOUND_RADIUS_MP, 0.2 )
+
+	DebuffZone_FireMissileLogic( weapon, attackParams )
+
+	PlayerUsedOffhand( player, weapon )
+
+	return 0
+}
+
+var function OnWeaponToss_DebuffZone( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity weaponOwner = weapon.GetOwner()
+
+
+
+
+
+
+
+
+
+		if ( file.targetingRui != null )
+		{
+			RuiSetBool( file.targetingRui, "isVisible", false )
+			RuiSetBool( file.targetingRui, "hasTarget", false )
+		}
+
+
+	return weapon.GetAmmoPerShot()
+}
+
+void function DebuffZone_FireMissileLogic( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity owner = weapon.GetWeaponOwner()
+	bool isHoming = owner.GetPlayerNetBool( BALLISTIC_HAS_LOCKON_TARGET_NETVAR )
+	float missileSpeed = isHoming ? tuning.missileHomingSpeed :  tuning.missileNoTargetSpeed
+
+	WeaponFireMissileParams fireMissileParams
+	fireMissileParams.pos = attackParams.pos
+	fireMissileParams.dir = attackParams.dir
+	fireMissileParams.speed = missileSpeed
+	fireMissileParams.scriptTouchDamageType = DF_GIB
+	fireMissileParams.scriptExplosionDamageType = ( damageTypes.explosive | DF_NO_SELF_DAMAGE )
+	fireMissileParams.doRandomVelocAndThinkVars = false
+	fireMissileParams.clientPredicted = true
+	entity firedMissile = weapon.FireWeaponMissile( fireMissileParams )
+
+
+
+
+	EmitSoundOnEntity( firedMissile, HOMING_MISSILE_SFX_LOOP )
+	SetTeam( firedMissile, owner.GetTeam() )
+
+
+
+
+
+
+
+
+}
+
+void function OnProjectileCollision_DebuffZone( entity projectile, vector pos, vector normal, entity hitEnt, int hitBox, bool isCritical, bool isPassthrough )
+{
+	entity player = projectile.GetOwner()
+	if( IsValid( player ) )
+		player.Signal( "EndLockon" )
+	projectile.Signal( "EndMissileHoming" )
+
+	DeployableCollisionParams collisionParams
+	collisionParams.pos = pos
+	collisionParams.normal = normal
+	collisionParams.hitEnt = hitEnt
+	collisionParams.hitBox = 0
+	collisionParams.isCritical = isCritical
+
+	if( !PlantStickyEntity( projectile, collisionParams, ZERO_VECTOR, true ) )
+	{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	}
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function DebuffZone_GetAllowableStickyEnts( entity ent )
+{
+	string modelName = ent.GetModelName()
+
+	if ( modelName == "mdl/Robots/mobile_hardpoint/mobile_hardpoint_static.rmdl" )
+		return true
+
+	if( modelName == "mdl/props/crafting_siphon/crafting_siphon.rmdl" )
+		return true
+
+	return false
+}
+
+var function OnWeaponTossCancel_DebuffZone( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity player = weapon.GetOwner()
+
+	if( !IsValid( player ) )
+		return
+
+
+
+
+
+
+
+		if ( file.targetingRui != null )
+		{
+			RuiSetBool( file.targetingRui, "isVisible", false )
+			RuiSetBool( file.targetingRui, "hasTarget", false )
+		}
+
+
+	return 0
+}
+
+void function DebuffZone_OnPlayerOverheat( entity player, entity weapon )
+{
+	if( !StatusEffect_HasSeverity( player, eStatusEffect.has_overheat_debuff ) )
+		return
+
+	StatusEffect_StopAllOfType( player, eStatusEffect.has_overheat_debuff )
+	player.Signal( "EndDebuff" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	weapon.PlayWeaponEffect( DEBUFF_EXPLOSION, $"", "muzzle_flash" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CreateTargetingRui( entity player )
+{
+	if ( file.targetingRui != null )
+		return
+
+	if ( DoesPlayerHaveWeaponSling( player ) )
+	{
+		file.targetingRui = CreateCockpitPostFXRui( $"ui/targeting_rui.rpak", FULLMAP_Z_BASE )
+		RuiSetResolutionToScreenSize( file.targetingRui )
+	}
+}
+
+void function DestroyTargetingRui( entity player )
+{
+	if ( !DoesPlayerHaveWeaponSling( player ) )
+	{
+		if ( file.targetingRui != null )
+		{
+			RuiDestroyIfAlive( file.targetingRui )
+			file.targetingRui = null
+		}
+	}
+}
+
+void function CreateTacticalTargetingFX( entity player )
+{
+	EndSignal( player, "OnDeath", "OnDestroy", "EndTargeting" )
+
+	int fxId = GetParticleSystemIndex( FX_TACTICAL_RANGE_INDICATOR )
+	int pulseVFX = StartParticleEffectOnEntity( player, fxId, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	float adjustedRange = tuning.targetingMaxRange
+	EffectSetControlPointVector( pulseVFX, 1, <adjustedRange, 0, 0> )
+
+	int cockpitVFX = StartParticleEffectOnEntityWithPos( player, COCKPIT_TACT_IDLE, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+	EffectSetIsWithCockpit( cockpitVFX, true )
+	EffectSetControlPointVector( cockpitVFX, 2, <1, .25, 0> )
+
+	OnThreadEnd(
+		function() : ( pulseVFX, cockpitVFX, player )
+		{
+			if ( EffectDoesExist( pulseVFX ) )
+				EffectStop( pulseVFX, false, true )
+
+			if( EffectDoesExist( cockpitVFX ) )
+				EffectStop( cockpitVFX, false, true )
+		}
+	)
+
+	WaitForever()
+}
+
+void function SetHasTargetForTargetingRui( entity player, bool hasTarget )
+{
+	if (file.targetingRui  != null )
+	{
+		RuiSetBool( file.targetingRui, "hasTarget", hasTarget )
+	}
+}
+
+void function OnClientAnimEvent_DebuffZone( entity weapon, string name )
+{
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( name == MISSILE_FIRE_SCREEN_SHAKE )
+		ClientScreenShake( SHAKE_AMPLITUDE, SHAKE_FREQUENCY, SHAKE_DURATION, SHAKE_DIRECTION )
+}
+
+void function DebuffZone_OverheatDebuffEnabled( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if( !OverheatStatusChanged( ent, actuallyChanged ) )
+		return
+
+	ent.Signal( "EndDebuff" )
+
+
+	thread WeaponVFXThread( ent )
+	thread StartDebuff_Thread( ent )
+
+
+
+
+
+
+
+}
+
+void function DebuffZone_OverheatDebuffDisabled( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if( !OverheatStatusChanged( ent, actuallyChanged ) )
+		return
+
+	ent.Signal( "EndDebuff" )
+
+
+
+
+}
+
+bool function OverheatStatusChanged( entity ent, bool actuallyChanged )
+{
+	entity viewPlayer = GetLocalViewPlayer()
+	if( ent != viewPlayer || !actuallyChanged )
+		return false
+
+	return true
+}
+
+
+void function StartDebuff_Thread( entity player )
+
+
+
+{
+ 	player.EndSignal( "OnDeath", "OnDestroy", "BleedOut_OnStartDying", "EndDebuff" )
+
+
+	entity activeWeapon = GetActivePrimaryWeapon( player )
+	int localOverheatWeaponSlot = GetSlotForWeapon( player, activeWeapon )
+	localOverheatWeaponSlot = player.SetPlayerOverheatState_new( localOverheatWeaponSlot, true )
+	ResetInventoryMenu( player )
+
+
+	var debuffProgressRui = CreateFullscreenRui( $"ui/debuff_progress.rpak", 32000 )
+
+	int fxHandle
+	fxHandle = StartParticleEffectOnEntityWithPos( player, COCKPIT_DEBUFF_ZONE_SCREEN_FX, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, player.EyePosition(), <0, 0, 0> )
+	if( EffectDoesExist( fxHandle ) )
+	{
+		EffectSetIsWithCockpit( fxHandle, true )
+		EffectSetControlPointVector( fxHandle, 2, <0, 1, 0> )
+		EffectSetControlPointVector( fxHandle, 3, <0.8,0.8,0.8> )
+	}
+
+	RuiSetImage( debuffProgressRui, "iconImage", $"rui/hud/character_abilities/overheat_icon" )
+
+
+	OnThreadEnd(
+		function() : ( player, localOverheatWeaponSlot, fxHandle, debuffProgressRui )
+		{
+			RuiDestroyIfAlive( debuffProgressRui )
+
+			if ( EffectDoesExist( fxHandle ) )
+				EffectStop( fxHandle, false, true )
+
+			if( IsValid( player ) )
+			{
+				if( localOverheatWeaponSlot != WEAPON_INVENTORY_SLOT_INVALID )
+				{
+					player.SetPlayerOverheatState_new( localOverheatWeaponSlot, false )
+				}
+				ResetInventoryMenu( player )
+			}
+		}
+	)
+
+
+
+
+
+
+
+
+
+
+
+
+	while( debuffProgressRui != null )
+	{
+
+		int overheatWeaponSlot = player.GetPlayerOverheatingWeaponSlot()
+		float currentOverheatValue = player.GetPlayerOverheatValue_new( overheatWeaponSlot )
+
+
+
+
+		RuiSetFloat( debuffProgressRui, "progress", currentOverheatValue / tuning.maxHeatAmount )
+
+		int currentOverheatThreshold = int( currentOverheatValue / tuning.heatAmountBetweenThresholds )
+		if( EffectDoesExist( fxHandle ) && currentOverheatThreshold < DebuffZone_GetNumberOfThresholds() - 1 )
+		{
+			EffectSetControlPointVector( fxHandle, 2, THRESHOLD_COLORS[currentOverheatThreshold] )
+			EffectSetControlPointVector( fxHandle, 3, THRESHOLD_ALPHA[currentOverheatThreshold] )
+		}
+
+
+		entity currentActiveWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+		int currentActiveWeaponSlot = GetSlotForWeapon( player, currentActiveWeapon )
+		RuiSetBool( debuffProgressRui, "hideProgressBar", !player.IsPlayerOverheating_new( currentActiveWeaponSlot ) )
+
+
+		WaitFrame()
+	}
+}
+
+
+void function UpdateDebuffIcon( entity selectedWeapon )
+{
+	entity player = GetLocalViewPlayer()
+	if( !IsValid( player ) )
+		return
+
+	if( DoesPlayerHaveOverheatDebuff( player ) )
+	{
+		var weaponRui = GetWeaponRui()
+		if( weaponRui == null || !RuiIsAlive( weaponRui ) )
+			return
+
+		var slingRui = GetSlingPassiveRui()
+		int slot = GetSlotForWeapon( player, selectedWeapon )
+
+		RuiSetBool( weaponRui, "showOverheatTab0", false )
+		RuiSetBool( weaponRui, "showOverheatTab1", false )
+		if( slingRui != null && RuiIsAlive( slingRui ) )
+		{
+			RuiSetBool( slingRui, "showOverheatTabSling", false )
+		}
+
+		bool slingWeaponSelected = slot == SLING_WEAPON_SLOT
+		bool slingOverheating    = player.IsPlayerOverheating_new( SLING_WEAPON_SLOT )
+
+		if( slingWeaponSelected )
+		{
+			if( slingOverheating )
+			{
+				RuiSetBool( weaponRui, "showOverheatTab1", true )
+			}
+			else
+			{
+				if( slingRui != null && RuiIsAlive( slingRui ) )
+				{
+					RuiSetBool( slingRui, "showOverheatTabSling", true )
+				}
+			}
+		}
+		else
+		{
+			if ( player.IsPlayerOverheating_new( WEAPON_INVENTORY_SLOT_PRIMARY_0 ) && IsValid( player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_0 ) ) )
+			{
+				RuiSetBool( weaponRui, "showOverheatTab0", true )
+			}
+			else if ( player.IsPlayerOverheating_new( WEAPON_INVENTORY_SLOT_PRIMARY_1 ) && IsValid( player.GetNormalWeapon( WEAPON_INVENTORY_SLOT_PRIMARY_1 ) ) )
+			{
+				RuiSetBool( weaponRui, "showOverheatTab1", true )
+			}
+			else if ( slingOverheating )
+			{
+				if( slingRui != null && RuiIsAlive( slingRui ) )
+				{
+					RuiSetBool( slingRui, "showOverheatTabSling", true )
+				}
+			}
+		}
+	}
+}
+
+
+void function WeaponVFXThread( entity player )
+{
+	EndSignal( player, "OnDeath", "OnDestroy", "BleedOut_OnStartDying", "EndDebuff" )
+
+	entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+
+	bool overheatEffectSet = false
+	bool hintTriggered     = false
+	UpdateDebuffIcon( activeWeapon )
+
+	var weaponRui = GetWeaponRui()
+	var slingRui = GetSlingPassiveRui()
+
+
+	if( IsValid( activeWeapon ) && IsBitFlagSet( activeWeapon.GetWeaponTypeFlags(), WPT_PRIMARY ) && activeWeapon.DoesWeaponPlayerOverheat() )
+	{
+		activeWeapon.PlayWeaponEffect( DEBUFF_WEAPON_EFFECT_1P, $"", "MENU_ROTATE" )
+
+
+		if( !hintTriggered )
+		{
+			
+			hintTriggered = true
+		}
+
+		overheatEffectSet = true
+
+
+		WaitFrame()
+	}
+
+	OnThreadEnd(
+		function() : ( player )
+		{
+			if( !IsValid( player ) )
+				return
+
+
+			
+
+			var weaponRui = GetWeaponRui()
+			var slingRui = GetSlingPassiveRui()
+
+			if( weaponRui != null )
+			{
+				if ( RuiIsAlive( weaponRui ) )
+				{
+					RuiSetBool( weaponRui, "showOverheatTab0", false )
+					RuiSetBool( weaponRui, "showOverheatTab1", false )
+					RuiSetBool( weaponRui, "showOverheatBorder", false )
+				}
+			}
+
+			if( slingRui != null )
+			{
+				if ( RuiIsAlive( slingRui ) )
+				{
+					RuiSetBool( slingRui, "showOverheatTabSling", false )
+				}
+			}
+
+
+			entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+			if( IsValid( activeWeapon ) && IsBitFlagSet( activeWeapon.GetWeaponTypeFlags(), WPT_PRIMARY ) )
+			{
+				activeWeapon.StopWeaponEffect( DEBUFF_WEAPON_EFFECT_1P, $"" )
+			}
+		}
+	)
+
+	while( true )
+	{
+		entity currentActiveWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand )
+
+
+		if( player.ContextAction_IsMeleeExecution() )
+		{
+			overheatEffectSet = false
+			WaitFrame()
+			continue
+		}
+
+		if ( !IsValid( currentActiveWeapon ) || !IsBitFlagSet( currentActiveWeapon.GetWeaponTypeFlags(), WPT_PRIMARY ) )
+		{
+			{
+				overheatEffectSet = false
+
+				WaitFrame()
+				continue
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		int currentActiveWeaponSlot = GetSlotForWeapon( player, currentActiveWeapon )
+		if( currentActiveWeapon.DoesWeaponPlayerOverheat() && player.IsPlayerOverheating_new( currentActiveWeaponSlot ) )
+		{
+			if( weaponRui != null )
+			{
+				if ( RuiIsAlive( weaponRui ) )
+				{
+					RuiSetFloat( weaponRui, "overheatProgress", player.GetPlayerOverheatValue_new( currentActiveWeaponSlot ) / tuning.maxHeatAmount )
+					RuiSetBool( weaponRui, "showOverheatBorder", true )
+				}
+			}
+
+			if( slingRui != null )
+			{
+				if ( RuiIsAlive( slingRui ) )
+				{
+					RuiSetFloat( slingRui, "overheatProgress", player.GetPlayerOverheatValue_new( currentActiveWeaponSlot ) / tuning.maxHeatAmount )
+				}
+			}
+
+			if( !overheatEffectSet )
+			{
+				currentActiveWeapon.PlayWeaponEffect( DEBUFF_WEAPON_EFFECT_1P, $"", "MENU_ROTATE" )
+
+				if( !hintTriggered )
+				{
+					
+					hintTriggered = true
+				}
+
+				overheatEffectSet = true
+			}
+		}
+		else if( !player.IsPlayerOverheating_new( currentActiveWeaponSlot ) )
+		{
+			overheatEffectSet = false
+
+			if( weaponRui != null )
+			{
+				if ( RuiIsAlive( weaponRui ) )
+				{
+					RuiSetBool( weaponRui, "showOverheatBorder", false )
+				}
+			}
+		}
+
+		activeWeapon = currentActiveWeapon
+
+
+
+
+
+
+
+
+
+		WaitFrame()
+	}
+}
+
+void function ServerCallback_CreateOverHeatIconRui( entity target )
+{
+	if( !IsValid( target ) || target in file.overheatIconRui )
+		return
+
+	entity player = GetLocalClientPlayer()
+	var rui = RuiCreate( $"ui/overheat_on_player.rpak", clGlobal.topoFullScreen, RUI_DRAW_HUD, RuiCalculateDistanceSortKey( player.EyePosition(), target.GetOrigin() ) )
+
+	InitHUDRui( rui )
+
+	RuiTrackFloat3( rui, "pos", target, RUI_TRACK_OVERHEAD_FOLLOW )
+	RuiKeepSortKeyUpdated( rui, true, "pos" )
+
+	file.overheatIconRui[target] <- rui
+
+	thread TrackOverheatIconLifeTimeAndVisibility( player, target )
+}
+
+void function TrackOverheatIconLifeTimeAndVisibility( entity player, entity target )
+{
+	EndSignal( target, "OnDeath", "OnDestroy", "BleedOut_OnStartDying", "EndDebuff" )
+	EndSignal( player, "OnDeath", "OnDestroy" )
+
+	OnThreadEnd(
+		function() : ( target )
+		{
+			RuiDestroyIfAlive( file.overheatIconRui[target] )
+			delete file.overheatIconRui[target]
+		}
+	)
+
+	while( DoesPlayerHaveOverheatDebuff( target ) )
+	{
+		bool isVisible = OverheatIconShouldBeVisible( player, target )
+
+		RuiSetBool( file.overheatIconRui[target], "isDetectedBySeer", StatusEffect_HasSeverity( target, eStatusEffect.seer_detected ) )
+		RuiSetBool( file.overheatIconRui[target], "isVisible", isVisible )
+
+		int overheatWeaponSlot = target.GetPlayerOverheatingWeaponSlot()
+		RuiSetFloat( file.overheatIconRui[target], "progress", target.GetPlayerOverheatValue_new( overheatWeaponSlot ) / tuning.maxHeatAmount )
+
+
+
+		if (target.IsPlayer() && target.GetPlayerSettingsMods().contains( "targetinfo_ffa_squad" ) )
+			RuiSetFloat( file.overheatIconRui[target], "yOffset", -40 )
+
+		RuiSetBool( file.overheatIconRui[target], "isShowingEnemyHPBar", DisplayEnemyHealthBar() )
+
+
+
+		if( target.IsPlayer() )
+		{
+			entity currentActiveWeapon  = target.GetActiveWeapon( eActiveInventorySlot.mainHand )
+			int currentActiveWeaponSlot = GetSlotForWeapon( target, currentActiveWeapon )
+			bool showOverheatIcon       = target.IsPlayerOverheating_new( currentActiveWeaponSlot )
+			RuiSetBool( file.overheatIconRui[target], "showSwappedWeaponIcon", !showOverheatIcon )
+		}
+
+
+		WaitFrame()
+	}
+}
+bool function OverheatIconShouldBeVisible( entity player, entity target )
+{
+	if( target.IsCloaked( true ) )
+		return false
+
+	if( target.IsPhaseShiftedOrPending() )
+		return false
+
+	if( PlayerCanSee( player, target, true, OVERHEAT_ICON_VISIBILITY_FOV ) )
+		return true
+
+	return false
+}
+
+int function DebuffZone_GetNumberOfThresholds()
+{
+	int thresholds = int( tuning.maxHeatAmount / tuning.heatAmountBetweenThresholds )
+	return thresholds
+}
+
+void function BallisticSilence_StartVisualEffect( entity ent, int statusEffect, bool actuallyChanged )
+{
+	if ( !actuallyChanged && GetLocalViewPlayer() == GetLocalClientPlayer() )
+		return
+
+	if ( ent != GetLocalViewPlayer() )
+		return
+
+	SilenceSettings silenceSettings
+	silenceSettings.visualsStatusEffect = statusEffect
+	silenceSettings.sfx1p = GLOBAL_SILENCE_1P
+	silenceSettings.vfx1p = FX_SILENCE_BALLISTIC_VICTIM_1P
+
+	Silence_StartVisualEffects( ent, silenceSettings )
+}
+
+
+entity function GetActivePrimaryWeapon( entity character )
+{
+	if( character.IsPlayer() )
+	{
+		return character.GetLatestPrimaryWeapon( eActiveInventorySlot.mainHand )
+	}
+
+	return character.GetActiveWeapon( eActiveInventorySlot.mainHand )
+}
+
+float function DebuffZone_GetOverheatDuration()
+{
+	return tuning.debuffDuration
+} 

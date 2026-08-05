@@ -1,0 +1,1420 @@
+
+global function MpAbilityShifter_Init
+global function PhaseShift
+global function CodeCallback_EnterPhaseShift
+global function CodeCallback_ExitPhaseShift
+global function CancelPhaseShift
+
+
+
+
+
+
+
+
+
+
+
+
+
+const SHIFTER_OUTRO_TIME_BEFORE_END = 1.5
+
+const SHIFTER_PRE_FX = $"P_warpjump_FP"
+
+const SHIFTER_APPEAR_FX = $"P_phase_dash_end_fp"
+const SHIFTER_APPEAR_FX_TITAN = $"P_phase_shift_main_XO"
+const SHIFTER_DISAPPEAR_FX = $"P_phase_shift_main"
+const SHIFTER_LOOP_FX = $"P_phase_shift_main"
+const SHIFTER_DISAPPEAR_FX_TITAN = $"P_phase_shift_main_XO"
+
+const SHIFTER_DASH_APPEAR_FX = $"P_phase_dash_end"
+const SHIFTER_DASH_DISAPPEAR_FX = $"P_phase_dash_start"
+const TRANSPORT_PORTAL_TRAILS_FX = $"P_alter_ulti_warp_trail"
+const SHIFTER_DASH_DISAPPEAR_ON_WRAITH_FX = $"P_phase_dash_start_mdl"
+
+
+const asset VFX_SHIFTER_TRAIL_CLOCKUP = $"P_clockup_breach_trail"
+const asset VFX_SHIFTER_APPEAR_CLOCKUP_1P = $"P_clockup_breach_FP_shockwave"
+const asset VFX_SHIFTER_APPEAR_CLOCKUP_3P = $"P_clockup_breach_end"
+const asset VFX_SHIFTER_SCREEN_CLOCKUP = $"P_clockup_breach_FP"
+const asset VFX_SHIFTER_WORLD_CLOCKUP = $"P_clockup_breach_inside"
+const string CLOCKUP_SHIFTER_COLORCORRECTION = "materials/correction/fx_cyber_shift.raw_hdr"
+const string SFX_CLOCKUP_SHIFTER_START_1P = "Clockup_Blackwall_Breach_Phase_Start_1P"
+const string SFX_CLOCKUP_SHIFTER_START_3P = "Clockup_Blackwall_Breach_Phase_Start_3P"
+const string SFX_CLOCKUP_SHIFTER_LOOP_1P = "Clockup_Blackwall_Breach_Phase_Loop_1P"
+const string SFX_CLOCKUP_SHIFTER_LOOP_3P = "Clockup_Blackwall_Breach_Phase_Loop_3P"
+const string SFX_CLOCKUP_SHIFTER_END_1P = "Clockup_Blackwall_Breach_Phase_End_1P"
+const string SFX_CLOCKUP_SHIFTER_END_3P = "Clockup_Blackwall_Breach_Phase_End_3P"
+const string SFX_CLOCKUP_SHIFTER_PRE_END_SOUND_1P = "Clockup_Blackwall_Breach_Phase_WarningToEnd_1P"
+const string SFX_CLOCKUP_SHIFTER_PRE_END_SOUND_3P = "Clockup_Blackwall_Breach_Phase_WarningToEnd_3P"
+
+
+const string SHIFTER_MOVER_SCRIPTNAME = "phaseshift_mover"
+
+
+const SHIFTER_GATE_DISAPPEAR_FX = $"P_wrth_tt_dash_3P"
+
+
+const SHIFTER_SCREEN_FX = $"P_phase_shift_screen"
+const SHIFTER_PERSONAL_FX = $"P_phase_shift_player_noghosts"
+const SHIFTER_PERSONAL_WRAITH_FX = $"P_phase_shift_player"
+const SHIFTER_SCREEN_FX_START = $"P_phase_shift_screen_start"
+const SHIFTER_COLORCORRECTION = "materials/correction/fx_phase_shift.raw_hdr"
+
+const SHIFTER_PRE_SOUND_1P = "Pilot_PhaseShift_PreActivate_1P"
+const SHIFTER_PRE_SOUND_3P = "Pilot_PhaseShift_PreActivate_3P"
+global const SHIFTER_START_SOUND_1P = "Pilot_PhaseShift_Activate_1P"
+global const SHIFTER_START_SOUND_3P = "Pilot_PhaseShift_Activate_3P"
+global const SHIFTER_REWIND_START_SOUND_1P = "CosmicBox_PhaseRewind_Activate_1p"
+global const SHIFTER_REWIND_START_SOUND_3P = "CosmicBox_PhaseRewind_Activate_3p"
+const SHIFTER_LOOP_SOUND_1P = "Pilot_PhaseShift_Loop_1P"
+const SHIFTER_LOOP_SOUND_3P = "Pilot_PhaseShift_Loop_3P"
+const SHIFTER_PRE_END_SOUND_1P = "Pilot_PhaseShift_WarningToEnd_1P"
+const SHIFTER_PRE_END_SOUND_3P = "Pilot_PhaseShift_WarningToEnd_3P"
+global const SHIFTER_END_SOUND_1P = "Pilot_PhaseShift_End_1P"
+global const SHIFTER_END_SOUND_3P = "Pilot_PhaseShift_End_3P"
+
+const SHIFTER_START_SOUND_3P_BREACH = "Ash_PhaseBreach_PortalOpen_Enter_3p"
+const SHIFTER_LOOP_SOUND_1P_BREACH = "Ash_PhaseBreach_loop_1p"
+const SHIFTER_LOOP_SOUND_3P_BREACH = "Ash_PhaseBreach_loop_3p"
+const SHIFTER_PRE_END_SOUND_1P_BREACH = "Ash_PhaseBreach_warningtoend_1p"
+const SHIFTER_PRE_END_SOUND_3P_BREACH = "Ash_PhaseBreach_warningtoend_3p"
+const SHIFTER_END_SOUND_1P_BREACH = "Ash_PhaseBreach_End_1p"
+const SHIFTER_END_SOUND_3P_BREACH = "Ash_PhaseBreach_End_3p"
+
+
+const SHIFTER_END_SOUND_1P_TRANSPORT = "Alter_Ult_Teleport_VoidExit_1p"
+const SHIFTER_END_SOUND_3P_TRANSPORT = "Alter_Ult_Teleport_VoidExit_3p"
+const SHIFTER_LOOP_SOUND_1P_TRANSPORT = "Alter_Ult_Teleport_VoidTravel_1p"
+const SHIFTER_LOOP_SOUND_3P_TRANSPORT = "Alter_Ult_Teleport_VoidTravel_3p"
+
+
+
+const SHIFTER_END_SOUND_1P_DOOR = "Alter_Tac_Portal_VoidExit_1p"
+const SHIFTER_END_SOUND_3P_DOOR = "Alter_Tac_Portal_VoidExit_3p"
+const SHIFTER_LOOP_SOUND_1P_DOOR = "Alter_Tac_Portal_VoidTravel_1p"
+const SHIFTER_LOOP_SOUND_3P_DOOR = "Alter_Tac_Portal_VoidTravel_3p"
+
+const GATE_PRE_SOUND_1P = "Olympus_phaseshift_preactivate_1p"
+const GATE_PRE_SOUND_3P = "Olympus_phaseshift_preactivate_3p"
+global const GATE_START_SOUND_1P = "Olympus_phaseshift_activate_1p"
+global const GATE_START_SOUND_3P = "Olympus_phaseshift_activate_3p"
+const GATE_LOOP_SOUND_1P = "Olympus_phaseshift_loop_1p"
+const GATE_LOOP_SOUND_3P = "Olympus_phaseshift_loop_3p"
+const GATE_PRE_END_SOUND_1P = "Olympus_phaseshift_warningtoend_1p"
+const GATE_PRE_END_SOUND_3P = "Olympus_phaseshift_warningtoend_3p"
+global const GATE_END_SOUND_1P = "Olympus_phaseshift_end_1p"
+global const GATE_END_SOUND_3P = "Olympus_phaseshift_end_3p"
+
+const SHIFTER_PRE_SOUND_1P_TITAN = "Pilot_PhaseShift_PreActivate_1P"
+const SHIFTER_PRE_SOUND_3P_TITAN = "Pilot_PhaseShift_PreActivate_3P"
+global const SHIFTER_START_SOUND_1P_TITAN = "titan_phasedash_activate_1p"
+global const SHIFTER_START_SOUND_3P_TITAN = "titan_phasedash_activate_3p"
+const SHIFTER_LOOP_SOUND_1P_TITAN = "titan_phasedash_loop_1p"
+const SHIFTER_LOOP_SOUND_3P_TITAN = "titan_phasedash_loop_3p"
+const SHIFTER_PRE_END_SOUND_1P_TITAN = "titan_phasedash_warningtoend_1p"
+const SHIFTER_PRE_END_SOUND_3P_TITAN = "titan_phasedash_warningtoend_3p"
+global const SHIFTER_END_SOUND_1P_TITAN = "titan_phasedash_end_1p"
+global const SHIFTER_END_SOUND_3P_TITAN = "titan_phasedash_end_3p"
+
+const PHASE_DOME_3P_ACTIVATE = "Pilot_PhaseShift_Dome_Activate_3p"
+const PHASE_DOME_3P_END = "Pilot_PhaseShift_Dome_End_3p"
+
+const PHASE_DOME_START_FX = $"P_phase_dash_start_small"
+const PHASE_DOME_INSIDE_FX = $"P_phase_dash_start_small_mdl"
+
+global const RECONSTRUCT_REWIND_TICK = 0.1
+global const RECONSTRUCT_REWIND_COUNT = 100
+global const RECONSTRUCT_END_HOLD_TIME = 0.1
+
+const int TELEFRAG_DAMAGE = 5000
+
+struct
+{
+
+
+
+
+
+	table< entity, int > playerToPhaseShiftStatusEffect
+} file
+
+void function CodeCallback_EnterPhaseShift( entity ent )
+{
+	PhaseShift( ent, 0.0, 999.0 )
+}
+
+
+void function CodeCallback_ExitPhaseShift( entity ent )
+{
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function CancelPhaseShift( entity ent )
+{
+	int phaseShiftType = ent.GetPhaseShiftType()
+	ent.PhaseShiftCancel()
+
+
+	if( ent in file.playerToPhaseShiftStatusEffect )
+	{
+		StatusEffect_Stop( ent, file.playerToPhaseShiftStatusEffect[ ent ] )
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+void function MpAbilityShifter_Init()
+{
+
+		
+		ColorCorrection_RegisterPhaseShift( SHIFTER_COLORCORRECTION, PHASETYPE_DEFAULT )
+
+		ColorCorrection_RegisterPhaseShift( CLOCKUP_SHIFTER_COLORCORRECTION, PHASETYPE_CLOCKUP )
+
+
+		thread ClientPhaseShiftFirstPersonFXThread()
+
+		
+
+
+	PrecacheParticleSystem( SHIFTER_PRE_FX )
+	PrecacheParticleSystem( SHIFTER_APPEAR_FX )
+	PrecacheParticleSystem( SHIFTER_APPEAR_FX_TITAN )
+	PrecacheParticleSystem( SHIFTER_DISAPPEAR_FX )
+	PrecacheParticleSystem( SHIFTER_LOOP_FX )
+	PrecacheParticleSystem( SHIFTER_DISAPPEAR_FX_TITAN )
+	PrecacheParticleSystem( SHIFTER_PERSONAL_FX )
+	PrecacheParticleSystem( SHIFTER_PERSONAL_WRAITH_FX )
+	PrecacheParticleSystem( SHIFTER_SCREEN_FX )
+	PrecacheParticleSystem( SHIFTER_SCREEN_FX_START )
+	PrecacheParticleSystem( SHIFTER_DASH_APPEAR_FX )
+	PrecacheParticleSystem( SHIFTER_DASH_DISAPPEAR_FX )
+	PrecacheParticleSystem( TRANSPORT_PORTAL_TRAILS_FX )
+	PrecacheParticleSystem( SHIFTER_DASH_DISAPPEAR_ON_WRAITH_FX )
+	PrecacheParticleSystem( PHASE_DOME_START_FX )
+	PrecacheParticleSystem( PHASE_DOME_INSIDE_FX )
+
+
+	PrecacheParticleSystem( VFX_SHIFTER_SCREEN_CLOCKUP )
+	PrecacheParticleSystem( VFX_SHIFTER_WORLD_CLOCKUP )
+	PrecacheParticleSystem( VFX_SHIFTER_TRAIL_CLOCKUP )
+	PrecacheParticleSystem( VFX_SHIFTER_APPEAR_CLOCKUP_1P )
+	PrecacheParticleSystem( VFX_SHIFTER_APPEAR_CLOCKUP_3P )
+
+
+	PrecacheScriptString( SHIFTER_MOVER_SCRIPTNAME )
+
+
+		PrecacheParticleSystem( SHIFTER_GATE_DISAPPEAR_FX )
+
+
+	MpAbilityPhaseWalk_Init()
+
+	RegisterSignal( "StartPhaseShift" )
+	RegisterSignal( "StopPhaseShift" )
+	RegisterSignal( "ForceStopPhaseShift" )
+	RegisterSignal( "PlayPhaseReflexLoopFX" )
+	RegisterSignal( "StartTrackingPositions" )
+	RegisterSignal( "EndTrackingPositions" )
+	RegisterSignal( "PhaseRewindCrouchPlayer" )
+	RegisterSignal( "PhaseRewindStop" )
+}
+
+
+bool function PhaseShift( entity ent, float warmupTime, float duration, int shiftStyle = PHASETYPE_DEFAULT, bool fxOnly = false )
+{
+	if ( !IsAlive( ent ) )
+		return false
+
+	if ( ent.IsPhaseShifted() )
+		return false
+
+	
+	
+	if ( ent.IsPlayer() )
+	{
+		bool isPlayerRodeoing = false
+
+
+
+
+
+
+		entity proxy = ent.GetFirstPersonProxy()
+		if ( (ent.ContextAction_IsActive() || (proxy != null && proxy.Anim_IsActive()))
+				&& !ent.IsZiplining()
+				&& !ent.ContextAction_IsLeeching()
+				&& !PlayerDrone_IsPlayerInDroneView( ent )
+				&& !HoverVehicle_IsPlayerInAnyVehicle( ent )
+				&& !Crafting_IsPlayerAtWorkbench( ent )
+				&& !(IsEntNewcastleReviver( ent ))
+				&& !(IsEntNewcastleReviveTarget( ent ))
+				&& !isPlayerRodeoing )
+		{
+			return false
+		}
+
+		bool seeOtherNonShifters = false
+
+		int statusEffectHandle = SE_INVALID_HANDLE
+		switch ( shiftStyle )
+		{
+			case PHASETYPE_BALANCE:
+			case PHASETYPE_REWIND:
+				seeOtherNonShifters = true
+				statusEffectHandle = StatusEffect_AddTimed( ent, eStatusEffect.speed_boost, 0.05, duration, 0.25 )
+				break
+
+
+			case PHASETYPE_GATE:
+				statusEffectHandle = StatusEffect_AddTimed( ent, eStatusEffect.speed_boost, 0.05, duration, 0.25 )
+				break
+
+
+			case PHASETYPE_BREACH:
+				if ( IsVoidVisionEnabled_PhaseBreach() )
+				{
+					seeOtherNonShifters = true
+				}
+				statusEffectHandle = StatusEffect_AddTimed( ent, eStatusEffect.speed_boost, 0.05, duration, 0.25 )
+				break
+
+			case PHASETYPE_TUNNEL:
+				if ( IsVoidVisionEnabled_PhaseTunnel() )
+				{
+					seeOtherNonShifters = true
+				}
+				statusEffectHandle = StatusEffect_AddTimed( ent, eStatusEffect.speed_boost, 0.05, duration, 0.25 )
+				break
+
+			case PHASETYPE_TRANSPORT:
+				statusEffectHandle = StatusEffect_AddTimed( ent, eStatusEffect.speed_boost, 0.05, duration, 0.25 )
+				seeOtherNonShifters = true
+				break
+
+			case PHASETYPE_DOOR:
+				seeOtherNonShifters = true
+
+				if ( PHASE_DOOR_LOGGING )
+				{
+					printt( "PHASE DOOR: Starting phase for: " + ent )
+				}
+				break
+
+			case PHASETYPE_DASH:
+
+
+
+				break
+
+
+			case PHASETYPE_CLOCKUP:
+				seeOtherNonShifters = true
+				break
+
+
+
+
+
+
+
+
+			default:
+				break
+		}
+
+		file.playerToPhaseShiftStatusEffect[ent] <- statusEffectHandle
+		ent.SetSeeOtherNonShifters( seeOtherNonShifters )
+
+		
+		if ( !fxOnly )
+			ent.PhaseShiftBegin( warmupTime, duration, shiftStyle )
+
+		ent.StopJetPack()
+
+
+
+
+			thread ClientPhaseShiftWarmupThread( ent, warmupTime, shiftStyle )
+
+
+		return true
+	}
+	else
+	{
+		
+		if ( !fxOnly )
+			ent.PhaseShiftBegin( warmupTime, duration, shiftStyle )
+
+
+
+
+
+		return true
+	}
+
+	unreachable
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClientPhaseShiftWarmupThread( entity player, float warmupTime, int shiftStyle = PHASETYPE_DEFAULT )
+{
+	player.EndSignal( "OnDeath" )
+
+	if ( player != GetLocalViewPlayer() )
+		return
+	if ( InPrediction() && !IsFirstTimePredicted() )
+		return
+
+	if ( warmupTime <= 0 )
+		return
+
+	int index = GetParticleSystemIndex( SHIFTER_PRE_FX )
+	int fxID  = StartParticleEffectInWorldWithHandle( index, ZERO_VECTOR, ZERO_VECTOR )
+
+	OnThreadEnd(
+		function() : ( fxID )
+		{
+			EffectStop( fxID, true, true )
+		}
+	)
+
+	if ( player.IsTitan() )
+	{
+		EmitSoundOnEntity( player, SHIFTER_PRE_SOUND_1P_TITAN )
+	}
+	else
+	{
+		if ( shiftStyle == PHASETYPE_GATE )
+			EmitSoundOnEntity( player, GATE_PRE_SOUND_1P )
+		else
+			EmitSoundOnEntity( player, SHIFTER_PRE_SOUND_1P )
+	}
+
+	wait warmupTime
+}
+
+void function ClientPhaseShiftFirstPersonFXThread()
+{
+	int effectSparkles
+	int effectScreen
+	int phaseShiftType	  = PHASETYPE_BALANCE
+	bool effectsAreActive = false
+	bool endSoundPlayed   = false
+	entity ourPlayer      = null
+	array<int> vfxArray   = []
+
+	while ( true )
+	{
+		if ( effectsAreActive )
+		{
+			entity localViewPlayer = GetLocalViewPlayer()
+
+			bool needShutdown = false
+			if ( !IsValid( ourPlayer ) || !IsAlive( ourPlayer ) )
+				needShutdown = true
+			else if ( ourPlayer != localViewPlayer )
+				needShutdown = true
+			else if ( !ourPlayer.IsPhaseShifted() )
+				needShutdown = true
+
+			if ( needShutdown )
+			{
+				if ( IsValid( ourPlayer ) && (ourPlayer == localViewPlayer) )
+				{
+					bool playDefaultVFX = true
+					if ( ourPlayer.IsTitan() )
+					{
+						EmitSoundOnEntity( ourPlayer, SHIFTER_END_SOUND_1P_TITAN )
+					}
+					else if ( StatusEffect_HasSeverity( ourPlayer, eStatusEffect.phase_gate_tracking ) )
+					{
+						EmitSoundOnEntity( ourPlayer, GATE_END_SOUND_1P )
+					}
+					else
+					{
+						switch ( phaseShiftType )
+						{
+
+							case PHASETYPE_CLOCKUP:
+							{
+								
+								playDefaultVFX = false
+								int fxIndexScreen = GetParticleSystemIndex( VFX_SHIFTER_APPEAR_CLOCKUP_1P )
+								int fxEMPBuildup1P = StartParticleEffectOnEntityWithPos( ourPlayer, fxIndexScreen, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID, ourPlayer.EyePosition(), <0, 0, 0> )
+								EffectSetIsWithCockpit( fxEMPBuildup1P, true )
+
+								
+								StopSoundOnEntity( ourPlayer, SFX_CLOCKUP_SHIFTER_LOOP_1P )
+								break
+							}
+
+
+
+
+
+
+
+
+
+
+
+							case PHASETYPE_DOOR:
+							case PHASETYPE_TRANSPORT:
+							case PHASETYPE_REWIND:
+								break
+
+							default:
+							{
+								EmitSoundOnEntity( ourPlayer, SHIFTER_END_SOUND_1P )
+								break
+							}
+						}
+					}
+
+					if ( playDefaultVFX )
+					{
+						int fxIndexScreen = GetParticleSystemIndex( SHIFTER_SCREEN_FX_START )
+						StartParticleEffectInWorldWithHandle( fxIndexScreen, ZERO_VECTOR, ZERO_VECTOR )
+
+						int fxIndexWorld     = GetParticleSystemIndex( SHIFTER_APPEAR_FX )
+						vector viewAngles    = ourPlayer.EyeAngles()
+						vector viewForward   = AnglesToForward( viewAngles )
+						vector viewForward2d = Normalize( <viewForward.x, viewForward.y, 0> )
+						StartParticleEffectOnEntityWithPos( ourPlayer, fxIndexWorld, FX_PATTACH_ABSORIGIN, ATTACHMENTID_INVALID, (viewForward2d * 30), ZERO_VECTOR )
+					}
+
+					StopSoundOnEntity( ourPlayer, GATE_LOOP_SOUND_1P )
+					StopSoundOnEntity( ourPlayer, SHIFTER_LOOP_SOUND_1P )
+					StopSoundOnEntity( ourPlayer, SHIFTER_LOOP_SOUND_1P_TITAN )
+					StopSoundOnEntity( ourPlayer, SHIFTER_LOOP_SOUND_1P_BREACH )
+					StopSoundOnEntity( ourPlayer, SHIFTER_LOOP_SOUND_1P_TRANSPORT )
+					StopSoundOnEntity( ourPlayer, SHIFTER_LOOP_SOUND_1P_DOOR )
+				}
+
+				ClientPhaseShift_SCRIPT_HACKS_OFF()
+
+				foreach ( int effectHandle in vfxArray )
+				{
+					EffectStop( effectHandle, true, true )
+				}
+				vfxArray.clear()
+
+				effectsAreActive = false
+				ourPlayer        = null
+				endSoundPlayed   = false
+
+				Chroma_PhaseShiftEnding()
+			}
+		}
+
+		if ( !effectsAreActive )
+		{
+			entity localViewPlayer = GetLocalViewPlayer()
+
+			if ( IsValid( localViewPlayer ) && localViewPlayer.IsPhaseShifted() && localViewPlayer.GetTeam() != TEAM_SPECTATOR )
+			{
+				phaseShiftType = localViewPlayer.GetPhaseShiftType()
+
+				
+				{
+					int fxIndex
+
+
+					if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_CLOCKUP )
+					{
+						fxIndex = 0
+					}
+					else
+
+					{
+						if ( localViewPlayer.HasPassive( ePassives.PAS_VOICES ) )
+						{
+							fxIndex = GetParticleSystemIndex( SHIFTER_PERSONAL_WRAITH_FX )
+						}
+						else
+						{
+							switch ( phaseShiftType )
+							{
+
+
+
+
+
+
+								default:
+									fxIndex = GetParticleSystemIndex( SHIFTER_PERSONAL_FX )
+									break
+							}
+
+						}
+					}
+
+					if ( fxIndex != 0 )
+					{
+						int attachIdx = localViewPlayer.LookupAttachment( "CHESTFOCUS" )
+						effectSparkles = StartParticleEffectOnEntity( localViewPlayer, fxIndex, FX_PATTACH_POINT_FOLLOW, attachIdx )
+						vfxArray.append( effectSparkles )
+					}
+				}
+
+
+				if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_CLOCKUP )
+				{
+					int screenFXIndex = GetParticleSystemIndex( VFX_SHIFTER_SCREEN_CLOCKUP )
+					if ( screenFXIndex != 0 )
+					{
+						int screenFXHandle = StartParticleEffectInWorldWithHandle( screenFXIndex, ZERO_VECTOR, ZERO_VECTOR )
+						vfxArray.append( screenFXHandle )
+					}
+
+					int worldFXIndex = GetParticleSystemIndex( VFX_SHIFTER_WORLD_CLOCKUP )
+					if ( worldFXIndex != 0 )
+					{
+						int attachIdx = localViewPlayer.LookupAttachment( "CHESTFOCUS" )
+						int worldFXHandle = StartParticleEffectOnEntity( localViewPlayer, worldFXIndex, FX_PATTACH_POINT_FOLLOW, attachIdx )
+						vfxArray.append( worldFXHandle )
+					}
+				}
+				else
+
+				{
+					
+					{
+						int fxIndex
+						switch ( phaseShiftType )
+						{
+
+
+
+
+
+
+							default:
+								fxIndex = GetParticleSystemIndex( SHIFTER_SCREEN_FX )
+								break
+						}
+						if( fxIndex != 0 )
+						{
+							effectScreen = StartParticleEffectInWorldWithHandle( fxIndex, ZERO_VECTOR, ZERO_VECTOR )
+							vfxArray.append( effectScreen )
+						}
+					}
+
+					
+					{
+						int fxIndex
+						switch ( phaseShiftType )
+						{
+
+
+
+
+
+
+							default:
+								fxIndex = GetParticleSystemIndex( SHIFTER_SCREEN_FX_START )
+								break
+						}
+						if( fxIndex != 0 )
+						{
+							StartParticleEffectInWorldWithHandle( fxIndex, ZERO_VECTOR, ZERO_VECTOR )
+						}
+					}
+				}
+
+				
+				{
+					entity viewModelEntity  = localViewPlayer.GetViewModelEntity( eActiveInventorySlot.mainHand )
+					entity firstPersonProxy = localViewPlayer.GetPredictedFirstPersonProxy()
+
+					if ( IsValid( viewModelEntity ) )
+					{
+						viewModelEntity.Highlight_HideInside( 0.0 )
+						viewModelEntity.Highlight_HideOutline( 0.0 )
+					}
+
+					if ( IsValid( firstPersonProxy ) )
+					{
+						firstPersonProxy.Highlight_HideInside( 0.0 )
+						firstPersonProxy.Highlight_HideOutline( 0.0 )
+					}
+				}
+
+				ClientPhaseShift_SCRIPT_HACKS_ON()
+
+				if ( localViewPlayer.IsTitan() )
+				{
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_START_SOUND_1P_TITAN )
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_LOOP_SOUND_1P_TITAN )
+				}
+				else if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_GATE )
+				{
+					EmitSoundOnEntity( localViewPlayer, GATE_START_SOUND_1P )
+					EmitSoundOnEntity( localViewPlayer, GATE_LOOP_SOUND_1P )
+				}
+				else if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_BREACH )
+				{
+					EmitSoundAtPosition( TEAM_ANY, localViewPlayer.GetOrigin(), SHIFTER_START_SOUND_3P_BREACH )
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_LOOP_SOUND_1P_BREACH )
+				}
+				else if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_TRANSPORT )
+				{
+					
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_LOOP_SOUND_1P_TRANSPORT )
+				}
+				else if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_DOOR )
+				{
+					
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_LOOP_SOUND_1P_DOOR )
+				}
+				else if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_REWIND )
+				{
+					
+				}
+
+				else if ( localViewPlayer.GetPhaseShiftType() == PHASETYPE_CLOCKUP )
+				{
+					EmitSoundOnEntity( localViewPlayer, SFX_CLOCKUP_SHIFTER_START_1P )
+					EmitSoundOnEntity( localViewPlayer, SFX_CLOCKUP_SHIFTER_LOOP_1P )
+				}
+
+				else
+				{
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_START_SOUND_1P )
+					EmitSoundOnEntity( localViewPlayer, SHIFTER_LOOP_SOUND_1P )
+				}
+
+				effectsAreActive = true
+				ourPlayer        = localViewPlayer
+
+				Chroma_PhaseShiftStarting()
+			}
+		}
+
+		WaitFrame()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClientPhaseShift_SCRIPT_HACKS_ON()
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+
+	localViewPlayer.Signal( "StartPhaseShift" )
+
+	if ( localViewPlayer == GetLocalClientPlayer() )
+	{
+		
+		
+		
+	}
+}
+
+void function ClientPhaseShift_SCRIPT_HACKS_OFF()
+{
+	entity localViewPlayer = GetLocalViewPlayer()
+	
+	
+	
+
+	
+	
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

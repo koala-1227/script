@@ -1,0 +1,4491 @@
+
+
+
+
+
+global function GamemodeUtility_Init
+global function GamemodeUtility_IsJIPEnabledInPlaylist	
+global function GamemodeUtility_GetMixtapeAbandonPenaltyActive
+global function GamemodeUtility_ParseCircleString 
+global function GamemodeUtility_ParseVectorString 
+global function GamemodeUtility_ParseStringOfVectors 
+global function GamemodeUtility_GetKillReplayActive 
+global function GamemodeUtility_CanSkipDeathCam 
+global function GamemodeUtility_GetIsTeamIndexValidPlayerTeam 
+global function GameModeUtility_GetOrdnanceDefaultIsFinite 
+global function GamemodeUtility_AreRoundsEnabledInPlaylist 
+global function GamemodeUtility_AreRoundsEnabled 
+global function GamemodeUtility_Rounds_IsWinBy2 
+global function GamemodeUtility_GetMinScoreToWin 
+global function GamemodeUtility_GetWinBy2MaxTies 
+global function GamemodeUtility_GetMaxRoundsToPlay 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function GamemodeUtility_GetTeamOrAllianceScore 
+global function GamemodeUtility_GetAllianceScoreFromTeam 
+global function GamemodeUtility_GetScoreDifference	
+global function GamemodeUtility_GetScoreDifferenceBetweenTeams	
+global function GamemodeUtility_GetAllPlayerTeamsOrAlliances 
+global function GamemodeUtility_GetAllTeamsOrAlliances 
+global function GamemodeUtility_GetWinningTeamOrAlliance	
+global function GamemodeUtility_GetWinningAlliance	
+global function GamemodeUtility_GetWinningTeamOrAllianceScore	
+global function GamemodeUtility_GetAlliancesOrTeamsSortedByScore 
+global function GamemodeUtility_GetAlliancesOrTeamsSortedByEliminationAndScore 
+global function GamemodeUtility_IsTeamOrAllianceEliminated 
+global function GamemodeUtility_IsJIPEnabled	
+global function GamemodeUtility_IsJIPPlayerSpawnBonusPending 
+global function GamemodeUtility_IsPlayerAbandoning  
+global function GamemodeUtility_GetAbandonPenaltyLength 
+global function GamemodeUtility_AddCallback_OnPlayerJoinedMatchInProgress 
+global function GamemodeUtility_GetMatchTimeLimit 
+global function GamemodeUtility_GetMatchTimeLimitWarning 
+global function GamemodeUtility_GetMaxPlayersToShowOnPodium 
+global function GamemodeUtility_IsSpectatorEnabled 
+global function GamemodeUtility_IsPlacementPopupEnabled 
+global function GamemodeUtility_GetPlayerArrayOfTeamOrAlliance 
+global function GamemodeUtility_GetTeamOrAllianceFromEntity 
+global function GamemodeUtility_GetObjectiveProgressPercentIntFromFloat 
+global function GamemodeUtility_GetLoadoutBonusOrdinanceCount 
+global function GamemodeUtility_GetIsUsingInfiniteHealItems 
+global function GamemodeUtility_GetIsAutomaticLegendUpgrades 
+global function GamemodeUtility_GetIsAutomaticLegendUpgradesSkipLevelCheck 
+global function GamemodeUtility_GetRoundBasedNumTies 
+global function GamemodeUtility_IsMatchPoint 
+global function GamemodeUtility_IsFinalRound 
+global function GamemodeUtility_IsTieBreaker 
+
+
+
+global function GamemodeUtility_ServerCallback_DisplayMatchTimeLimitWarning	
+global function GamemodeUtility_ServerCallback_PlayMatchEndingCountdownAudio 
+global function GamemodeUtility_AnnouncementMessageWarning	
+global function GamemodeUtility_GetColorVectorForCaptureObjectiveState	
+global function GamemodeUtility_IsPlayerOnTeamObserver	
+global function GamemodeUtility_GetLocalTeamPlayers 
+global function GamemodeUtility_ServerCallback_PlayerJoinedMatchInProgress 
+global function GamemodeUtility_ServerCallback_TriggerScanOfVictimTeam 
+global function GamemodeUtility_ManageDVSTweakOnPlayer_OnRedeploy_Thread 
+
+
+
+
+
+
+
+
+
+
+
+
+global function GetWinningTeam
+
+global function IsFFAGame
+global function IsMultiTeamMission
+global function GetExpectedSquadSize
+global function IsMultiTeamPvPGame
+global function Is2TeamPvPGame
+global function IsSingleTeamMode
+global function IsLastPlaylistSolo
+global function IsDuoMode
+global function IsPVEMode
+
+global function IsCurrentModeMixtape
+global function GameModeHasCapturePoints
+
+
+
+
+
+
+
+
+global const string GADGET_SLOT = "gadgetslot"
+global const string ARMOR_SLOT = "armor"
+global const string HELMET_SLOT = "helmet"
+global const string INCAPSHIELD_SLOT = "incapshield"
+global const string BACKPACK_SLOT = "backpack"
+
+const float UNSET_VAR_FLOAT = -1
+const int UNSET_VAR_INT = -1
+global const int EXPECTED_PARSED_CIRCLE_VALUE_COUNT = 4
+
+global const string GAMEMODEUTILITY_NETVAR_NUM_TIES = "rounds_winby2_numties"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const float GAMEMODEUTILITY_DEFAULT_MESSAGE_DURATION = 5.0 
+const float GAMEMODEUTILITY_MATCH_TIME_LIMIT_WARNING_TIME = 300.0 
+const string GAMEMODEUTILITY_NETVAR_MATCH_START = "matchStartTime"
+const string GAMEMODEUTILITY_NETVAR_MATCH_END = "matchEndTime"
+const int GAMEMODEUTILITY_FINAL_COUNTDOWN_DURATION = 10
+const string GAMEMODEUTILITY_FINAL_COUNTDOWN_SFX = "FreeDM_UI_InGame_Timer_10Seconds_1P"
+
+
+
+global const string SIGNAL_DVS_TRACKING_STOP = "Gamemode_DVSTrackingStop"
+
+const string SFX_MATCH_TIME_LIMIT = "Ctrl_Match_End_Warning_1p"	
+const string SFX_JOIN_MATCH_IN_PROGRESS = "Ctrl_New_Player_Joined" 
+
+
+
+
+global enum eGamemodeUtilityCaptureObjectiveColorState
+{
+	NEUTRAL,
+	CONTESTED,
+	FRIENDLY_OWNED,
+	ENEMY_OWNED
+}
+
+
+
+
+
+
+
+
+
+
+struct {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		bool isLoweringDVSForGamemode = false 
+
+
+
+		array< void functionref( entity ) > onPlayerJoinedMatchInProgressCallbackFuncs 
+
+} file
+
+void function GamemodeUtility_Init()
+{
+
+
+
+
+
+
+		RegisterNetworkedVariable( GAMEMODEUTILITY_NETVAR_MATCH_START, SNDC_GLOBAL_NON_REWIND, SNVT_TIME, -1.0 )
+		RegisterNetworkedVariable( GAMEMODEUTILITY_NETVAR_MATCH_END, SNDC_GLOBAL_NON_REWIND, SNVT_TIME, 0.0 )
+
+
+	Remote_RegisterClientFunction( "GamemodeUtility_ServerCallback_DisplayMatchTimeLimitWarning", "bool" )
+	Remote_RegisterClientFunction( "GamemodeUtility_ServerCallback_PlayMatchEndingCountdownAudio" )
+	RegisterNetworkedVariable( "mixtape_isLeaverPenaltyEnabledForMatch", SNDC_GLOBAL, SNVT_BOOL, true )
+
+	Remote_RegisterClientFunction( "ServertoClient_LTM_AnnouncementSplash" )
+
+
+		RegisterNetVarBoolChangeCallback( "mixtape_isLeaverPenaltyEnabledForMatch", GamemodeUtility_OnLeaverPenaltyStatusChanged )
+		RegisterNetVarTimeChangeCallback( GAMEMODEUTILITY_NETVAR_MATCH_START, GamemodeUtility_OnMatchStartTimeChanged )
+		RegisterNetVarTimeChangeCallback( GAMEMODEUTILITY_NETVAR_MATCH_END, GamemodeUtility_OnMatchEndTimeChanged )
+
+
+
+		
+		if ( !IsEliminationBased() )
+			RegisterNetworkedVariable( "deaths", SNDC_PLAYER_GLOBAL, SNVT_INT, 0 )
+
+
+
+	
+	if ( GamemodeUtility_IsJIPEnabledInPlaylist() )
+	{
+
+			RegisterNetworkedVariable( "GamemodeUtility_HasJIPPlayerReceivedSpawnBonus", SNDC_PLAYER_EXCLUSIVE, SNVT_BOOL, false )
+
+		Remote_RegisterClientFunction( "GamemodeUtility_ServerCallback_PlayerJoinedMatchInProgress", "entity" )
+	}
+
+	if ( GamemodeUtility_ShouldPingVictimSquadLocationOnDown() || GamemodeUtility_ShouldPingVictimSquadLocationOnKill() )
+		Remote_RegisterClientFunction( "GamemodeUtility_ServerCallback_TriggerScanOfVictimTeam", "int", 0, TEAM_MULTITEAM_FIRST + MAX_TEAMS + 1 )
+
+	if ( GamemodeUtility_AreRoundsEnabledInPlaylist() )
+	{
+		RegisterNetworkedVariable( GAMEMODEUTILITY_NETVAR_NUM_TIES, SNDC_GLOBAL, SNVT_INT, 0 )
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		RegisterSignal( SIGNAL_DVS_TRACKING_STOP )
+
+		if ( GamemodeUtility_GetShouldTweakDVSForGamemode() )
+		{
+			AddCreateCallback( "player", GamemodeUtility_OnPlayerCreated_DVSCallback_Client ) 
+		}
+
+		if ( GamemodeUtility_ShouldPingVictimSquadLocationOnDown() || GamemodeUtility_ShouldPingVictimSquadLocationOnKill() )
+		{
+			RegisterSignal( "StartedVictimSquadMapScan" )
+		}
+
+
+
+
+
+}
+
+
+void function RegisterDocs()
+{
+	#document( "GamemodeUtility_IsJIPEnabledInPlaylist", "Check if Join In Progress is enabled through playlist vars" )
+	
+	
+	
+	#document( "GamemodeUtility_GetKillReplayActive", "Check kill replay in playlist" )
+	#document( "GamemodeUtility_CanSkipDeathCam", "Check if death cam can be skipped in playlist" )
+	#document( "GamemodeUtility_GetIsTeamIndexValidPlayerTeam", "Return whether the passed in team index is within the valid player team range for the mode" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		#document( "GamemodeUtility_GetTeamOrAllianceScore", "Get the score of the passed in team or alliance. The function does the team vs alliance checks for you" )
+		#document( "GamemodeUtility_GetAllianceScoreFromTeam", "Get the alliance score from the passed in team" )
+		#document( "GamemodeUtility_GetScoreDifference", "Get the difference in score between the highest scoring team or alliance ( team vs alliance checks done for you) and the lowest scoring team or alliance" )
+		#document( "GamemodeUtility_GetScoreDifferenceBetweenTeams", "Get the difference in score between the highest scoring team and the lowest scoring team" )
+		#document( "GamemodeUtility_GetAllPlayerTeamsOrAlliances", "Return an array of all teams or alliances ( depending on what the mode is using ), Only return valid player teams" )
+		#document( "GamemodeUtility_GetAllTeamsOrAlliances", "Return an array of all teams or alliances ( depending on what the mode is using )" )
+		#document( "GamemodeUtility_GetWinningTeamOrAlliance", "Get the team or alliance with the highest score ( team vs alliance checks done for you)" )
+		#document( "GamemodeUtility_GetWinningAlliance", "Get the alliance with the highest score" )
+		#document( "GamemodeUtility_GetWinningTeamOrAllianceScore", "Get the score of the team or alliance that has the highest score ( team vs alliance checks done for you)" )
+		#document( "GamemodeUtility_GetAlliancesOrTeamsSortedByScore", "Returns an array of teams or alliances ( depending on what the mode is using ) sorted by score" )
+		#document( "GamemodeUtility_GetAlliancesOrTeamsSortedByEliminationAndScore", "Returns an array of teams or alliances ( depending on what the mode is using ) sorted by whether they are eliminated first and score second" )
+		#document( "GamemodeUtility_IsTeamOrAllianceEliminated", "Returns whether the passed in team or alliance is eliminated ( based on the respawnstatus netvar being eRespawnStatus.PLAYER_ELIMINATED for any player in that team or alliance )" )
+		#document( "GamemodeUtility_IsJIPEnabled", "Check if Join In Progress is enabled ( playlist and convar )" )
+		#document( "GamemodeUtility_IsJIPPlayerSpawnBonusPending", "Get whether this JIP player is waiting to receive whatever bonus the mode wants to award on first spawn" )
+		#document( "GamemodeUtility_IsPlayerAbandoning ", "Check will a player get a penalty if they leave" )
+		#document( "GamemodeUtility_GetAbandonPenaltyLength", "How long will a player be penalized" )
+		#document( "GamemodeUtility_AddCallback_OnPlayerJoinedMatchInProgress", "Triggers for players that have joined as a JIP player for the first time in a match" )
+		#document( "GamemodeUtility_GetMatchTimeLimit", "Get the time limit set for this mode through playlist vars" )
+		#document( "GamemodeUtility_GetMatchTimeLimitWarning", "Get the match time remaining warning for this mode through playlist vars" )
+		#document( "GamemodeUtility_GetMaxPlayersToShowOnPodium", "Get max number of players to show on the start/end podium sequences" )
+		#document( "GamemodeUtility_IsSpectatorEnabled", "Get whether to enable spectate from playlist" )
+		#document( "GamemodeUtility_IsPlacementPopupEnabled", "Get whether placement popup text is enabled from playlist" )
+		#document( "GamemodeUtility_GetPlayerArrayOfTeamOrAlliance", "Automatically get an array of team or alliance players based on whether the mode is using Alliances or Not" )
+		#document( "GamemodeUtility_GetPlayerTeamOrAlliance", "Automatically get the team or the alliance of the passed in player based on whether the mode is using Alliances or Not" )
+		#document( "GamemodeUtility_GetObjectiveProgressPercentIntFromFloat", "Get objective progress in int form instead of float ( 10 percent is 0.1 in objective logic, convert that to 10 instead )" )
+		#document( "GamemodeUtility_GetLoadoutBonusOrdinanceCount", "get value for bonus ordinance to give players in their loadouts" )
+		#document( "GamemodeUtility_IsTieBreaker", "In regular games this is just a tie between all teams, In Round based games this is a tie between all teams but the min number of rounds to win is respected (don't care about ties until they could lead to match point" )
+
+
+
+		#document( "GamemodeUtility_ServerCallback_DisplayMatchTimeLimitWarning", "Callback on the Client triggered by the Server to display a warning message when the match time limit is nearing and when it is reached" )
+		#document( "GamemodeUtility_ServerCallback_PlayMatchEndingCountdownAudio", "Callback on the Clien triggered by the Server to play a countdown audio near the end of the match" )
+		#document( "GamemodeUtility_AnnouncementMessageWarning", "Function used to display warning messages on the top center of the screen" )
+		#document( "GamemodeUtility_GetColorVectorForCaptureObjectiveState", "Get colors that respect color blind settings used for different capture objective states ( used for modes like Control and Winter Express )" )
+		#document( "GamemodeUtility_IsPlayerOnTeamObserver", "Return whether the player is on the Observer Team" )
+		#document( "GamemodeUtility_GetLocalTeamPlayers", "Get an array of players that is on the local players team/alliance or the enemy team/alliance. Adjusts for Observers ( assigns them to a team )" )
+		#document( "GamemodeUtility_ServerCallback_PlayerJoinedMatchInProgress", "Play SFX or do other events on the Client when a player has joined as a join in progress player" )
+		#document( "GamemodeUtility_ServerCallback_TriggerScanOfVictimTeam", "Server to Client call to trigger a scan showing the locations of all the players in the team of a player that got killed or knocked" )
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_IsJIPEnabled()
+{
+	return GetConVarBool( "match_jip" ) && GamemodeUtility_IsJIPEnabledInPlaylist() && GetGameState() < eGameState.Resolution
+}
+
+
+
+bool function GamemodeUtility_IsJIPEnabledInPlaylist()
+{
+	return GetCurrentPlaylistVarBool( "match_jip", false )
+}
+
+
+bool function GamemodeUtility_GetShouldTweakDVSForGamemode()
+{
+	return GetCurrentPlaylistVarBool( "should_tweak_dvs_for_gamemode", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function GamemodeUtility_GetMatchTimeLimit()
+{
+	float matchTimeLimit = GetCurrentPlaylistVarFloat( "match_time_limit", UNSET_VAR_FLOAT ) 
+
+#if DEV
+		printt( "GAMEMODE UTILITY: Grabbing the match time limit playlist var: match_time_limit. It is returning: " + matchTimeLimit )
+#endif
+
+	return matchTimeLimit
+}
+
+
+float function GamemodeUtility_GetMatchTimeLimitWarning()
+{
+	return GetCurrentPlaylistVarFloat ( "match_time_remaining_warning", GAMEMODEUTILITY_MATCH_TIME_LIMIT_WARNING_TIME )
+}
+
+int function GamemodeUtility_GetMaxPlayersToShowOnPodium()
+{
+	return GetCurrentPlaylistVarInt( "podium_max_players_to_show", GetExpectedSquadSize() )
+}
+
+bool function GamemodeUtility_IsSpectatorEnabled()
+{
+	return GetCurrentPlaylistVarBool( "spectator_enabled", true )
+}
+
+bool function GamemodeUtility_IsPlacementPopupEnabled()
+{
+	return GetCurrentPlaylistVarBool( "placement_popup", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_ShouldPingVictimSquadLocationOnDown()
+{
+	return GetCurrentPlaylistVarBool( "map_ping_victim_squad_on_down", false )
+}
+
+
+bool function GamemodeUtility_ShouldPingVictimSquadLocationOnKill()
+{
+	return GetCurrentPlaylistVarBool( "map_ping_victim_squad_on_kill", false )
+}
+
+
+float function GamemodeUtility_GetDurationOfVictimSquadMapPing()
+{
+	return GetCurrentPlaylistVarFloat( "victim_squad_map_ping_duration", 0.0 )
+}
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_GetKillReplayActive()
+{
+	return GetCurrentPlaylistVarBool( "killreplay_enabled", false )
+}
+
+bool function GamemodeUtility_CanSkipDeathCam()
+{
+	return GetCurrentPlaylistVarBool( "deathcam_can_skip", true )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GamemodeUtility_GetLoadoutBonusOrdinanceCount()
+{
+	return GetCurrentPlaylistVarInt( "set_loadout_bonus_ordinance_count", 1 )
+}
+
+
+
+
+bool function GamemodeUtility_GetIsUsingInfiniteHealItems()
+{
+	return GetCurrentPlaylistVarBool( "infinite_heal_items", false )
+}
+
+
+
+
+bool function GamemodeUtility_GetIsAutomaticLegendUpgrades()
+{
+	return GetCurrentPlaylistVarBool( "auto_legend_upgrades", false )
+}
+
+
+
+
+bool function GamemodeUtility_GetIsAutomaticLegendUpgradesSkipLevelCheck()
+{
+	return GetCurrentPlaylistVarBool( "auto_legend_upgrades_skip_level_check", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_AddCallback_OnPlayerJoinedMatchInProgress( void functionref( entity ) func )
+{
+	Assert( !file.onPlayerJoinedMatchInProgressCallbackFuncs.contains( func ), "GAMEMODE UTILITY: Already added " + string( func ) + " to onPlayerJoinedMatchInProgressCallbackFuncs" )
+	file.onPlayerJoinedMatchInProgressCallbackFuncs.append( func )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_OnPlayerCreated_DVSCallback_Client( entity player )
+{
+	
+	if ( GetGameState() <= eGameState.Playing )
+	{
+		entity localClientPlayer = GetLocalClientPlayer()
+
+		if ( IsValid( player ) && IsValid( localClientPlayer ) && player == GetLocalClientPlayer() )
+			thread GamemodeUtility_ManageDVSTweakOnPlayer_Thread()
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_OnLeaverPenaltyStatusChanged( entity player, bool isLeaverPenaltyEnabled )
+{
+	if ( !isLeaverPenaltyEnabled )
+		Obituary_Print_Localized( Localize( "#GAMEMODES_LEAVER_PENALTY_DEACTIVATED" ).toupper() )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_ServerCallback_TriggerScanOfVictimTeam( int victimTeam )
+{
+	
+	if ( GetAllTeams().contains( victimTeam ) )
+		thread RunVictimSquadMapScan_Thread( victimTeam )
+}
+
+
+
+
+const float POST_PULSE_WAIT = 1.0 
+const float SCAN_FADE_DURATION = 1.5
+void function RunVictimSquadMapScan_Thread( int victimTeam )
+{
+#if DEV
+		Assert( IsNewThread(), "Must be threaded off" )
+#endif
+
+	if ( IsValid( clGlobal.levelEnt ) )
+		EndSignal( clGlobal.levelEnt, "OnDestroy" )
+
+	entity localPlayer = GetLocalClientPlayer()
+
+	if ( !IsValid( localPlayer ) || !IsAlive( localPlayer ) )
+		return
+
+	
+	localPlayer.Signal( "StartedVictimSquadMapScan" )
+
+	EndSignal( localPlayer, "OnDestroy", "OnDeath", "StartedVictimSquadMapScan" )
+
+	array<var> fullMapRuis
+	array<var> minimapRuis
+
+	OnThreadEnd(
+		function() : ( fullMapRuis, minimapRuis )
+		{
+			foreach( var ruiToDestroy in fullMapRuis )
+			{
+				Fullmap_RemoveRui( ruiToDestroy )
+				RuiDestroyIfAlive( ruiToDestroy )
+			}
+
+			foreach( var ruiToDestroy in minimapRuis)
+			{
+				Minimap_CommonCleanup( ruiToDestroy )
+			}
+		}
+	)
+
+	float scanDuration = GamemodeUtility_GetDurationOfVictimSquadMapPing()
+	if ( scanDuration > 0.0 )
+	{
+		
+		vector pulseOrigin = localPlayer.GetOrigin()
+		FullMap_PlayCryptoPulseSequence( pulseOrigin, true, scanDuration + POST_PULSE_WAIT )
+
+		
+		wait POST_PULSE_WAIT
+
+		
+		int team = localPlayer.GetTeam()
+		array< entity > livingVictimsArray = GetPlayerArrayOfTeam_Alive( victimTeam )
+		array< entity > scanEntsArray
+		
+		foreach ( victim in livingVictimsArray )
+		{
+			if ( !Bleedout_IsBleedingOut( victim ) )
+				scanEntsArray.append( victim )
+		}
+
+		
+		float startTime = Time()
+		float totalScanDurationWithFadeOut = scanDuration + SCAN_FADE_DURATION
+		float endTime = startTime + totalScanDurationWithFadeOut
+		float timeToStartFade = startTime + scanDuration
+
+		
+		foreach( entity victim in scanEntsArray )
+		{
+
+
+
+
+
+			
+			var fRui = FullMap_AddEnemyLocation( victim )
+			fullMapRuis.append( fRui )
+
+			
+			var mRui = Minimap_AddEnemyToMinimap( victim )
+			minimapRuis.append( mRui )
+			RuiSetGameTime( mRui, "fadeStartTime", timeToStartFade )
+			RuiSetGameTime( mRui, "fadeEndTime", endTime )
+		}
+
+		
+		wait totalScanDurationWithFadeOut
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_OnMatchStartTimeChanged( entity player, float time )
+{
+	var rui = ClGameState_GetRui()
+	if ( RuiIsAlive( rui ) )
+	{
+		if ( RuiHasGameTimeArg( rui, "matchStartTime" ) )
+		{
+			RuiSetGameTime( rui, "matchStartTime", time )
+		}
+	}
+}
+
+
+
+void function GamemodeUtility_OnMatchEndTimeChanged( entity player, float time )
+{
+	var rui = ClGameState_GetRui()
+	if ( RuiIsAlive( rui ) )
+	{
+		if ( RuiHasGameTimeArg( rui, "matchEndTime" ) )
+		{
+			RuiSetGameTime( rui, "matchEndTime", time )
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_ServerCallback_DisplayMatchTimeLimitWarning( bool isFinalWarning )
+{
+	entity player = GetLocalViewPlayer()
+	if ( !IsValid( player ) )
+		return
+
+	
+	if ( GamemodeUtility_GetMatchTimeLimitWarning() < 60 )
+		return
+
+	string message = Localize( "#CONTROL_MATCH_TIMELIMIT_WARNING", GamemodeUtility_GetMatchTimeLimitWarning()/ 60 )
+	if ( isFinalWarning )
+		message = Localize( "#CONTROL_MATCH_TIMELIMIT_GAMEEND" )
+
+	GamemodeUtility_AnnouncementMessageWarning( player, message, GamemodeUtility_GetColorVectorForCaptureObjectiveState( eGamemodeUtilityCaptureObjectiveColorState.ENEMY_OWNED ), SFX_MATCH_TIME_LIMIT, GAMEMODEUTILITY_DEFAULT_MESSAGE_DURATION )
+}
+
+
+
+void function GamemodeUtility_ServerCallback_PlayMatchEndingCountdownAudio()
+{
+	thread GamemodeUtility_ServerCallback_PlayMatchEndingCountdownAudio_Thread()
+}
+
+
+
+void function GamemodeUtility_ServerCallback_PlayMatchEndingCountdownAudio_Thread()
+{
+	if ( IsValid( clGlobal.levelEnt ) )
+		EndSignal( clGlobal.levelEnt, "OnDestroy" )
+
+	int secondsElapsed = 0
+	while ( secondsElapsed < GAMEMODEUTILITY_FINAL_COUNTDOWN_DURATION )
+	{
+		if ( IsValid( GetLocalClientPlayer() ) )
+			EmitSoundOnEntity( GetLocalClientPlayer(), GAMEMODEUTILITY_FINAL_COUNTDOWN_SFX )
+
+		secondsElapsed += 1
+		wait 1.0
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_IsJIPPlayerSpawnBonusPending( entity player )
+{
+	if ( !IsValid( player ) || !GamemodeUtility_IsJIPEnabledInPlaylist() )
+		return false
+
+	return player.GetPlayerNetBool( "GamemodeUtility_HasJIPPlayerReceivedSpawnBonus" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_ServerCallback_PlayerJoinedMatchInProgress( entity jipPlayer )
+{
+	entity localPlayer = GetLocalClientPlayer()
+	if ( !IsValid( localPlayer ) || !IsValid( jipPlayer ) )  
+		return
+
+	
+	foreach( playerJoinedMatchInProgressFunc in file.onPlayerJoinedMatchInProgressCallbackFuncs )
+	{
+		playerJoinedMatchInProgressFunc( jipPlayer )
+	}
+
+	
+	int jipPlayerTeamOrAlliance = AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllianceFromTeam( jipPlayer.GetTeam() ) : jipPlayer.GetTeam()
+	int localPlayerTeamOrAlliance = AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllianceFromTeam( localPlayer.GetTeam() ) : localPlayer.GetTeam()
+	if ( jipPlayerTeamOrAlliance == localPlayerTeamOrAlliance )
+		EmitUISound( SFX_JOIN_MATCH_IN_PROGRESS )
+}
+
+
+
+
+int function GamemodeUtility_GetScoreDifference()
+{
+	if ( AllianceProximity_IsUsingAlliances() )
+		return AllianceProximity_GetAllianceScoreDifference()
+
+	return GamemodeUtility_GetScoreDifferenceBetweenTeams()
+}
+
+
+
+
+int function GamemodeUtility_GetScoreDifferenceBetweenTeams()
+{
+	int lowestScore = -1
+	int highestScore = 0
+	int currentTeamScore = 0
+	array < int > allTeamsArray = GetAllValidPlayerTeams()
+
+	foreach( team in allTeamsArray )
+	{
+		currentTeamScore = GameRules_GetTeamScore( team )
+		lowestScore = currentTeamScore < lowestScore || lowestScore == -1 ? currentTeamScore : lowestScore
+		highestScore = currentTeamScore > highestScore ? currentTeamScore : highestScore
+	}
+
+	return highestScore - lowestScore
+}
+
+
+
+
+int function GamemodeUtility_GetWinningTeamOrAlliance( bool shouldReturnInvalidInCaseOfTie )
+{
+	if ( AllianceProximity_IsUsingAlliances() )
+		return GamemodeUtility_GetWinningAlliance( shouldReturnInvalidInCaseOfTie )
+
+	int winningTeam = GetWinningTeam( shouldReturnInvalidInCaseOfTie )
+
+	
+	
+	int fallbackTeam = TEAM_INVALID
+	if ( !shouldReturnInvalidInCaseOfTie )
+		fallbackTeam = TEAM_MULTITEAM_FIRST
+
+	return winningTeam < TEAM_MULTITEAM_FIRST ? fallbackTeam : winningTeam
+}
+
+
+
+
+int function GamemodeUtility_GetWinningAlliance( bool shouldReturnInvalidInCaseOfTie )
+{
+	int winningAlliance = ALLIANCE_NONE
+	int highestScore = 0
+	int currentScoreBeingTested = 0
+	array < int > allAlliancesArray = AllianceProximity_GetAllAlliances()
+
+	foreach( alliance in allAlliancesArray )
+	{
+		currentScoreBeingTested = GetAllianceTeamsScore( alliance )
+
+		if ( shouldReturnInvalidInCaseOfTie && currentScoreBeingTested == highestScore && winningAlliance != alliance ) 
+		{
+			winningAlliance = ALLIANCE_NONE
+		}
+		else if ( currentScoreBeingTested > highestScore )
+		{
+			winningAlliance = alliance
+			highestScore = currentScoreBeingTested
+		}
+	}
+
+	return winningAlliance
+}
+
+
+
+
+int function GamemodeUtility_GetWinningTeamOrAllianceScore()
+{
+	int winningTeamOrAlliance = GamemodeUtility_GetWinningTeamOrAlliance( false )
+
+	return GamemodeUtility_GetTeamOrAllianceScore( winningTeamOrAlliance )
+}
+
+
+
+
+int function GamemodeUtility_GetTeamOrAllianceScore( int teamOrAlliance )
+{
+	int teamScore = 0
+
+	if ( teamOrAlliance != TEAM_INVALID )
+	{
+		if ( AllianceProximity_IsUsingAlliances() )
+		{
+			teamScore = GetAllianceTeamsScore( teamOrAlliance )
+		}
+		else
+		{
+			teamScore =  GamemodeUtility_AreRoundsEnabled() ? GameRules_GetTeamScore2( teamOrAlliance ) : GameRules_GetTeamScore( teamOrAlliance )
+		}
+	}
+
+	return teamScore
+}
+
+
+
+
+int function GamemodeUtility_GetAllianceScoreFromTeam( int team )
+{
+	int allianceIndex = AllianceProximity_GetAllianceFromTeam( team )
+	return GetAllianceTeamsScore( allianceIndex )
+}
+
+
+
+
+
+array < int > function GamemodeUtility_GetAlliancesOrTeamsSortedByScore( bool shouldExcludeEliminated )
+{
+	array < int > teamsOrAlliances = GamemodeUtility_GetAllPlayerTeamsOrAlliances()
+
+	if ( shouldExcludeEliminated )
+	{
+		array < int >  nonEliminatedTeamsOrAlliances = []
+
+		foreach( teamOrAlliance in teamsOrAlliances )
+		{
+			if ( !GamemodeUtility_IsTeamOrAllianceEliminated( teamOrAlliance ) )
+				nonEliminatedTeamsOrAlliances.append( teamOrAlliance )
+		}
+
+		teamsOrAlliances = nonEliminatedTeamsOrAlliances
+	}
+
+	teamsOrAlliances.sort( int function( int a, int b )
+	{
+		int aScore = GamemodeUtility_GetTeamOrAllianceScore( a )
+		int bScore = GamemodeUtility_GetTeamOrAllianceScore( b )
+
+		if ( aScore > bScore )
+			return -1
+		else if ( aScore < bScore )
+			return 1
+
+		return 0
+	}
+	)
+
+	return teamsOrAlliances
+}
+
+
+
+
+array < int > function GamemodeUtility_GetAlliancesOrTeamsSortedByEliminationAndScore()
+{
+	array < int > teamsOrAlliances = GamemodeUtility_GetAllPlayerTeamsOrAlliances()
+
+	teamsOrAlliances.sort( int function( int a, int b )
+	{
+		int aScore = GamemodeUtility_GetTeamOrAllianceScore( a )
+		int bScore = GamemodeUtility_GetTeamOrAllianceScore( b )
+		bool aIsEliminated = GamemodeUtility_IsTeamOrAllianceEliminated( a )
+		bool bIsEliminated = GamemodeUtility_IsTeamOrAllianceEliminated( b )
+
+		
+		if ( bIsEliminated && !aIsEliminated )
+			return -1
+		else if ( aIsEliminated && !bIsEliminated )
+			return 1
+
+		
+		if ( aScore > bScore )
+			return -1
+		else if ( aScore < bScore )
+			return 1
+
+		return 0
+	}
+	)
+
+	return teamsOrAlliances
+}
+
+
+
+
+
+array < int > function GamemodeUtility_GetAllPlayerTeamsOrAlliances()
+{
+	return AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllAlliances() : GetAllValidPlayerTeams()
+}
+
+
+
+
+array < int > function GamemodeUtility_GetAllTeamsOrAlliances()
+{
+	return AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllAlliances() : GetAllTeams()
+}
+
+
+
+
+bool function GamemodeUtility_IsTeamOrAllianceEliminated( int teamOrAlliance )
+{
+	array < entity > teamOrAlliancePlayers = GamemodeUtility_GetPlayerArrayOfTeamOrAlliance( teamOrAlliance, false )
+
+	foreach ( player in teamOrAlliancePlayers )
+	{
+		if ( !IsValid( player ) )
+			continue
+
+		
+		if ( GetRespawnStatus( player ) != eRespawnStatus.SQUAD_ELIMINATED )
+			return false
+	}
+
+	return true
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_IsPlayerAbandoning( entity player )
+{
+	if ( !GamemodeUtility_GetMixtapeAbandonPenaltyActive() )
+		return false
+
+	if ( GetGameState() >= eGameState.WinnerDetermined )
+		return false
+
+	if ( !GetGlobalNetBool( "mixtape_isLeaverPenaltyEnabledForMatch" ) )
+		return false
+
+	if ( GetGameState() >= eGameState.Prematch && !SharedRanked_DidPlayerEverHaveAFullTeam( player ) )
+		return false
+
+	return true
+}
+
+
+
+
+int function GamemodeUtility_GetAbandonPenaltyLength( entity player )
+{
+	if( !IsValid( player ) )
+		return 0
+
+	int numGamesAbandoned = expect int ( player.GetPersistentVar( "numControlAbandons" ) ) + 1
+
+	int banLength
+	if ( numGamesAbandoned >= 4 )
+		banLength = GetCurrentPlaylistVarInt( "mixtape_abandon_penalty_time_4", 60 * 20 ) 
+	else
+		banLength = GetCurrentPlaylistVarInt( "mixtape_abandon_penalty_time_" + numGamesAbandoned , 60 * 2 ) 
+
+	return banLength
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_AnnouncementMessageWarning( entity player, string messageText, vector titleColor, string soundAlias, float duration )
+{
+	AnnouncementData announcement = Announcement_Create( messageText )
+	Announcement_SetHeaderText( announcement, " " )
+	Announcement_SetSubText( announcement, " " )
+	Announcement_SetStyle( announcement, ANNOUNCEMENT_STYLE_GENERIC_WARNING )
+	Announcement_SetSoundAlias( announcement, soundAlias )
+	Announcement_SetPurge( announcement, true )
+	Announcement_SetPriority( announcement, 200 ) 
+	Announcement_SetDuration( announcement, duration )
+
+	Announcement_SetTitleColor( announcement, titleColor )
+	Announcement_SetVerticalOffset( announcement, 140 )
+	AnnouncementFromClass( player, announcement )
+}
+
+
+
+
+vector function GamemodeUtility_GetColorVectorForCaptureObjectiveState( int objectiveState, bool isRuiUIColor = false )
+{
+	vector color
+
+	switch( objectiveState )
+	{
+		case eGamemodeUtilityCaptureObjectiveColorState.NEUTRAL:
+			color = GetKeyColor( COLORID_COLORSWATCH_WHITE )
+			break
+		case eGamemodeUtilityCaptureObjectiveColorState.CONTESTED:
+			color = GetKeyColor( COLORID_CONTROL_CONTESTED )
+			break
+		case eGamemodeUtilityCaptureObjectiveColorState.FRIENDLY_OWNED:
+			color = GetKeyColor( COLORID_CONTROL_FRIENDLY )
+			break
+		case eGamemodeUtilityCaptureObjectiveColorState.ENEMY_OWNED:
+			color = GetKeyColor( COLORID_CONTROL_ENEMY )
+			break
+		default:
+			color = GetKeyColor( COLORID_COLORSWATCH_WHITE )
+			break
+	}
+
+	if ( isRuiUIColor )
+		color = SrgbToLinear( color / 255 )
+
+	return color
+}
+
+
+
+bool function GamemodeUtility_IsPlayerOnTeamObserver( entity player )
+{
+	if( !IsValid( player ) )
+		return false
+
+	return player.GetTeam() == TEAM_SPECTATOR
+}
+
+
+
+
+
+array<entity> function GamemodeUtility_GetLocalTeamPlayers( bool friendly )
+{
+	
+	int localPlayerTeam = GetLocalClientPlayer().GetTeam()
+	if ( IsLocalPlayerOnTeamSpectator() )
+		localPlayerTeam = TEAM_IMC
+
+	
+	int teamOrAllianceToReturn
+	array<entity> localTeamPlayersArray
+
+	if ( AllianceProximity_IsUsingAlliances() )
+	{
+		int localPlayerAlliance = AllianceProximity_GetAllianceFromTeamWithObserverCorrection( localPlayerTeam )
+		
+		teamOrAllianceToReturn = friendly ? localPlayerAlliance : AllianceProximity_GetOtherAlliance( localPlayerAlliance )
+		localTeamPlayersArray = AllianceProximity_GetAllPlayersInAlliance( teamOrAllianceToReturn, false )
+	}
+	else
+	{
+		teamOrAllianceToReturn = friendly ? localPlayerTeam : GetOtherTeam( localPlayerTeam )
+		localTeamPlayersArray = GetPlayerArrayOfTeam( teamOrAllianceToReturn )
+	}
+
+	return localTeamPlayersArray
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_GetMixtapeAbandonPenaltyActive()
+{
+	return GetCurrentPlaylistVarBool( "mixtape_match_abandon_penalty", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GamemodeUtility_GetMaxDroppedGrenadesOnDeath()
+{
+	return GetCurrentPlaylistVarInt( "grenade_ondeath_max_spawncount", 1 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+float function GetPlaylistVar_DeathboxDuration()
+{
+	return GetCurrentPlaylistVarFloat( "deathbox_duration", 60.0 )
+}
+
+float function GetPlaylistVar_DeathboxDestroyOnPlayerProximityDistance()
+{
+	return GetCurrentPlaylistVarFloat( "deathbox_destroy_on_player_proximity_distance", 400.0 )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_ManageDVSTweakOnPlayer_Thread()
+{
+#if DEV
+		Assert( IsNewThread(), "Must be threaded off" )
+#endif
+
+	entity localPlayer = GetLocalClientPlayer()
+	if ( !IsValid( localPlayer ) )
+		return
+
+	printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " is running for " + localPlayer )
+
+	EndSignal( localPlayer, SIGNAL_DVS_TRACKING_STOP )
+	EndSignal( localPlayer, "OnDestroy" )
+
+	
+	if ( localPlayer.GetPlayerNetBool( "isJumpingWithSquad" ) || localPlayer.GetPlayerNetBool( "isJumpmaster" ) ||  GetGameState() < eGameState.Playing )
+	{
+		localPlayer.WaitSignal( "DroppodLanded" )
+	}
+
+	if ( GetGameState() < eGameState.WinnerDetermined )
+	{
+		printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " is going to set LowerDVSForGameMode to true ( player landed from free fall )" )
+		GamemodeUtility_SetDVSSettingsForGamemode( true )
+
+		OnThreadEnd(
+			function() : ( localPlayer )
+			{
+				printt( "GAMEMODE UTILITY: GamemodeUtility_ManageDVSTweakOnPlayer_Thread is going to set LowerDVSForGameMode to false from thread end function" )
+				GamemodeUtility_SetDVSSettingsForGamemode( false )
+			}
+		)
+	}
+
+	
+	ClWaittillGameStateOrHigher( eGameState.WinnerDetermined )
+}
+
+
+
+
+
+
+
+
+void function GamemodeUtility_ManageDVSTweakOnPlayer_OnRedeploy_Thread()
+{
+#if DEV
+		Assert( IsNewThread(), "Must be threaded off" )
+#endif
+
+	if ( !GamemodeUtility_GetShouldTweakDVSForGamemode() )
+		return
+
+	if ( GetGameState() >= eGameState.WinnerDetermined )
+		return
+
+	entity localPlayer = GetLocalClientPlayer()
+	if ( !IsValid( localPlayer ) )
+		return
+
+	printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " is running for " + localPlayer )
+
+	Signal( localPlayer, SIGNAL_DVS_TRACKING_STOP )
+	EndSignal( localPlayer, SIGNAL_DVS_TRACKING_STOP )
+	EndSignal( localPlayer, "OnDestroy" )
+
+	localPlayer.WaitSignal( "DroppodLanded" )
+	if ( GetGameState() < eGameState.WinnerDetermined )
+	{
+		printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " is going to set LowerDVSForGameMode to true ( player landed from free fall )" )
+		GamemodeUtility_SetDVSSettingsForGamemode( true )
+
+		OnThreadEnd(
+			function() : ( localPlayer )
+			{
+				printt( "GAMEMODE UTILITY: GamemodeUtility_ManageDVSTweakOnPlayer_Thread is going to set LowerDVSForGameMode to false from thread end function" )
+				GamemodeUtility_SetDVSSettingsForGamemode( false )
+			}
+		)
+	}
+
+	
+	ClWaittillGameStateOrHigher( eGameState.WinnerDetermined )
+}
+
+
+
+
+
+
+
+
+
+void function GamemodeUtility_SetDVSSettingsForGamemode( bool shouldEnableForcedDVSSettings )
+{
+	printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " Running with shouldEnableForcedDVSSettings : " + shouldEnableForcedDVSSettings )
+
+	
+	if ( shouldEnableForcedDVSSettings && GamemodeUtility_GetShouldTweakDVSForGamemode() && !file.isLoweringDVSForGamemode )
+	{
+		LowerDVSForGameMode ( true )
+		file.isLoweringDVSForGamemode = true
+		printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " Set LowerDVSForGameMode to : true" )
+	}
+
+	
+	if ( !shouldEnableForcedDVSSettings && file.isLoweringDVSForGamemode)
+	{
+		LowerDVSForGameMode ( false )
+		file.isLoweringDVSForGamemode = false
+		printt( "GAMEMODE UTILITY: " +  FUNC_NAME() + " Set LowerDVSForGameMode to : false" )
+	}
+}
+
+
+
+bool function GamemodeUtility_GetIsTeamIndexValidPlayerTeam( int teamIndex )
+{
+	return TEAM_MULTITEAM_FIRST <= teamIndex && teamIndex < MAX_TEAMS + TEAM_MULTITEAM_FIRST
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GameModeUtility_GetThirdPersonMode()
+{
+	return GetCurrentPlaylistVarBool( "third_person_mode", false )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array < entity > function GamemodeUtility_GetPlayerArrayOfTeamOrAlliance( int teamOrAlliance, bool shouldReturnLivingPlayersOnly )
+{
+	if ( shouldReturnLivingPlayersOnly )
+		return AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllPlayersInAlliance( teamOrAlliance, true ) : GetPlayerArrayOfTeam_Alive( teamOrAlliance )
+
+	return AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllPlayersInAlliance( teamOrAlliance, false ) : GetPlayerArrayOfTeam( teamOrAlliance )
+}
+
+
+
+
+
+int function GamemodeUtility_GetTeamOrAllianceFromEntity( entity queryEntity )
+{
+	return AllianceProximity_IsUsingAlliances() ? AllianceProximity_GetAllianceFromTeam( queryEntity.GetTeam() ) : queryEntity.GetTeam()
+}
+
+
+
+
+int function GamemodeUtility_GetObjectiveProgressPercentIntFromFloat( float progressPercent )
+{
+	const int PERCENTAGE_MULTIPLIER = 100
+	return int( progressPercent * PERCENTAGE_MULTIPLIER )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array< vector > function GamemodeUtility_ParseStringOfVectors( string positionsRawString )
+{
+	array<string> positionStrings = GetTrimmedSplitString( positionsRawString, "," )
+	array<vector> positions
+	foreach( positionString in positionStrings )
+	{
+		vector pos = GamemodeUtility_ParseVectorString( positionString )
+		positions.append( pos )
+	}
+
+	return positions
+}
+
+vector function GamemodeUtility_ParseVectorString( string vectorString )
+{
+	array< string > valuesAsStrings = GetTrimmedSplitString( vectorString, WHITESPACE_CHARACTERS )
+	Assert( valuesAsStrings.len() == 3, "vectorString should have format \"x y z\"")
+
+	vector vec = < float( valuesAsStrings[0] ), float( valuesAsStrings[1] ), float( valuesAsStrings[2] ) >
+	return vec
+}
+
+
+array< float > function GamemodeUtility_ParseCircleString( string circleString )
+{
+	
+	
+	
+	array< float > circleValuesArray
+	
+	array< string > circleStringValuesArray = GetTrimmedSplitString( circleString, "," )
+
+	
+	circleString            = GamemodeUtility_GetParsedStringForCircleValues( circleStringValuesArray )
+	circleStringValuesArray = GetTrimmedSplitString( circleString, "<" )
+
+	
+	circleString            = GamemodeUtility_GetParsedStringForCircleValues( circleStringValuesArray )
+	circleStringValuesArray = GetTrimmedSplitString( circleString, ">" )
+
+	
+	circleString            = GamemodeUtility_GetParsedStringForCircleValues( circleStringValuesArray )
+	circleStringValuesArray = GetTrimmedSplitString( circleString, " " )
+
+	
+	foreach( item in circleStringValuesArray )
+	{
+		circleValuesArray.append( float( item ) )
+	}
+
+	return circleValuesArray
+}
+
+
+string function GamemodeUtility_GetParsedStringForCircleValues( array< string > stringValuesArray )
+{
+	string parsedPlaylistString = ""
+	foreach( item in stringValuesArray )
+	{
+		parsedPlaylistString += " " + item
+	}
+
+	return parsedPlaylistString
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GetWinningTeam( bool shouldReturnInvalidInCaseOfTie = true )
+{
+	int currentWinningTeam = GetNetWinningTeam()
+	if ( currentWinningTeam != -1 )
+		return currentWinningTeam
+
+	int maxScore = -1
+	int currentScore
+	int winningTeam = TEAM_UNASSIGNED
+	array < int > allTeamsArray = GetAllValidPlayerTeams()
+
+	foreach ( playerTeam in allTeamsArray )
+	{
+		if ( IsRoundBased() )
+			currentScore = GameRules_GetTeamScore2( playerTeam )
+		else
+			currentScore = GameRules_GetTeamScore( playerTeam )
+
+		if ( shouldReturnInvalidInCaseOfTie && currentScore == maxScore && winningTeam != playerTeam ) 
+		{
+			winningTeam = TEAM_UNASSIGNED
+		}
+		else if ( currentScore > maxScore )
+		{
+			maxScore = currentScore
+			winningTeam = playerTeam
+		}
+	}
+
+	return winningTeam
+}
+
+
+bool function IsFFAGame()
+{
+	return (MAX_TEAMS == MAX_PLAYERS)
+}
+
+bool function IsMultiTeamMission()
+{
+	if ( IsSingleTeamMode() )
+		return false
+	return true
+}
+
+
+int function GetExpectedSquadSize( entity player = null )
+{
+	
+	return int ( GetCurrentPlaylistVarFloat( "max_players", 60 ) / GetCurrentPlaylistVarFloat( "max_teams", 20 ) )
+}
+
+bool function IsMultiTeamPvPGame()
+{
+	return (MAX_TEAMS > 2)
+}
+
+bool function Is2TeamPvPGame()
+
+{
+	return (MAX_TEAMS == 2)
+}
+
+bool function IsSingleTeamMode()
+{
+	return (1 == GetCurrentPlaylistVarInt( "max_teams", 2 ))
+}
+
+bool function IsLastPlaylistSolo( entity player )
+{
+	return GetPersistentLastGameTypeFlag( player, eGameType.SOLO )
+}
+
+bool function IsDuoMode()
+{
+	return (GetCurrentPlaylistVarFloat( "max_players", 60 ) / GetCurrentPlaylistVarFloat( "max_teams", 20 ) == 2.0)
+}
+
+bool function IsPVEMode()
+{
+
+
+
+	return false
+
+}
+
+
+
+bool function IsCurrentModeMixtape()
+{
+	return GameMode_IsActive( eGameModes.CONTROL ) || GameMode_IsActive( eGameModes.FREEDM )
+}
+
+
+
+bool function GameModeHasCapturePoints()
+{
+
+		return clGlobal.hardpointStringIDs.len() > 0
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int function GamemodeUtility_GetRoundBasedNumTies()
+{
+	if ( IsRoundBased() )
+	{
+		return GetGlobalNetInt( GAMEMODEUTILITY_NETVAR_NUM_TIES )
+	}
+
+	return 0
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool function GamemodeUtility_IsMatchPoint()
+{
+	bool isRoundBased = IsRoundBased()
+	
+	if ( !isRoundBased || !GamemodeUtility_Rounds_IsWinBy2() )
+	{
+		int scoreLimit = isRoundBased ? GetRoundScoreLimit_FromPlaylist() : GetScoreLimit_FromPlaylist()
+		if ( GamemodeUtility_GetWinningTeamOrAllianceScore() + 1 >= scoreLimit )
+		{
+			return true
+		}
+	}
+	else 
+	{
+		if ( GamemodeUtility_IsFinalRound() )
+			return true
+
+		
+		array < int > allTeamsOrAlliances = GamemodeUtility_GetAllPlayerTeamsOrAlliances()
+		int highestScore = 0
+		int secondHighestScore = 0
+		foreach ( teamOrAlliance in allTeamsOrAlliances )
+		{
+			int currentScore = GamemodeUtility_GetTeamOrAllianceScore( teamOrAlliance )
+
+			if ( currentScore > highestScore )
+			{
+				highestScore = currentScore
+			}
+			else if ( currentScore > secondHighestScore )
+			{
+				secondHighestScore = currentScore
+			}
+		}
+
+		
+		int minScoreToWin = GamemodeUtility_GetMinScoreToWin()
+		if ( highestScore + 1 >= minScoreToWin && highestScore > secondHighestScore ) 
+		{
+			return true
+		}
+	}
+
+	return false
+}
+
+
+
+bool function GamemodeUtility_IsFinalRound()
+{
+	return GetRoundsPlayed() == GamemodeUtility_GetMaxRoundsToPlay() - 1
+}
+
+
+
+
+int function GamemodeUtility_GetMinScoreToWin()
+{
+	int minScoreToWin = GetScoreLimit_FromPlaylist()
+	if ( GamemodeUtility_AreRoundsEnabled() )
+	{
+		minScoreToWin = GamemodeUtility_Rounds_IsWinBy2() ? GetCurrentPlaylistVarInt( "rounds_win_by_2_min_score", 1 ) : GetRoundScoreLimit_FromPlaylist()
+	}
+
+	return minScoreToWin
+}
+
+
+
+bool function GamemodeUtility_IsTieBreaker()
+{
+	if ( !GamemodeUtility_AreRoundsEnabled() || !GamemodeUtility_Rounds_IsWinBy2() )
+	{
+		return false
+	}
+
+	bool isTieBreaker = true
+	array < int > allTeamOrAlliances = GamemodeUtility_GetAllPlayerTeamsOrAlliances()
+
+	int previousTeamOrAllianceScore = UNSET_VAR_INT
+	foreach ( teamOrAlliance in allTeamOrAlliances )
+	{
+		int teamOrAllianceScore = GamemodeUtility_GetTeamOrAllianceScore( teamOrAlliance )
+
+		
+		if ( teamOrAllianceScore <=  GamemodeUtility_GetMinScoreToWin() || ( previousTeamOrAllianceScore > UNSET_VAR_INT && teamOrAllianceScore != previousTeamOrAllianceScore ) )
+		{
+			isTieBreaker = false
+			break
+		}
+
+		previousTeamOrAllianceScore = teamOrAllianceScore
+	}
+
+	return isTieBreaker
+}
+
+
+int function GamemodeUtility_GetMaxRoundsToPlay()
+{
+	Assert( GamemodeUtility_AreRoundsEnabled(), "GAMEMODE UTILITY: " + FUNC_NAME() + " ran in a non round based mode" )
+
+	return GetRoundScoreLimit_FromPlaylist() * 2 - 1
+}
+
+bool function GamemodeUtility_AreRoundsEnabled()
+{
+	bool areRoundsEnabled = GamemodeUtility_AreRoundsEnabledInPlaylist()
+
+		areRoundsEnabled = areRoundsEnabled || IsRoundBased()
+
+	return areRoundsEnabled
+}
+
+bool function GamemodeUtility_AreRoundsEnabledInPlaylist()
+{
+	return GetCurrentPlaylistVarBool( "survival_rounds_enabled", false )
+}
+
+bool function GamemodeUtility_Rounds_IsWinBy2()
+{
+	return GetCurrentPlaylistVarBool( "rounds_win_by_2_enabled", false )
+}
+
+
+
+int function GamemodeUtility_GetWinBy2MaxTies()
+{
+	return GetCurrentPlaylistVarInt( "rounds_win_by_2_max_ties", -1 )
+}
+
+bool function GameModeUtility_GetOrdnanceDefaultIsFinite()
+{
+	return GetCurrentPlaylistVarBool( "ordnance_defaults_finite_mod", true )
+}
+ 

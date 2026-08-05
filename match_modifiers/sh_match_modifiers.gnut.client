@@ -1,0 +1,1104 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global function ShMatchModifiers_Init
+global function MatchModifiers_Enabled
+global function MatchModifiers_GetParams
+global function MatchModifiers_GetEnumString
+
+
+global function MatchModifiers_RegisterSettings
+global function MatchModifiers_RegisterModifierData
+
+global function MatchModifiers_GetDataFromIndex
+global function MatchModifiers_GetDataFromRef
+global function MatchModifiers_GetModifierIndexForStage
+global function MatchModifiers_GetActiveModifierIndexFromPackedState
+global function MatchModifiers_GetNextModifierRemovalRoundFromPackedState
+global function MatchModifiers_GetLastRoundWithModifiersFromPackedState
+global function MatchModifiers_GetActiveModifiers
+global function MatchModifiers_GetActiveTopLevelModifiers
+global function MatchModifiers_GetActiveModifierRefs
+global function MatchModifiers_GetModifierSettings
+global function MatchModifiers_IsModifierActive
+global function MatchModifiers_IsModifierOfTypeActive
+global function MatchModifiers_DoesActiveModifierLockWeapons
+
+global function MatchModifiers_CreateParamElementsTable
+
+global function MatchModifiers_IsValidIndex
+global function MatchModifiers_IsValidRef
+
+global function MatchModifiers_RegisterNestedModifier
+global function MatchModifiers_IsNestedModifier
+
+
+global function MatchModifiers_RefreshClientNestedModifiersFromNetvars
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+global function DEV_MatchModifiers_RegisterDefaultData
+global function DEV_MatchModifiers_ClearData
+global function DEV_MatchModifiers_PrintAll
+global function DEV_MatchModifiers_PrintAllActive
+global function DEV_MatchModifiers_PrintModifierByRef
+#endif
+
+
+const string PVAR_MATCH_MODIFIERS_ENABLED = "match_modifiers_enabled"
+const string PVAR_MATCH_MODIFIERS_DT_OVERRIDE = "_match_modifiers_dt_override_"
+
+global const string MATCH_MODIFIERS_NO_MODIFIER = "matchmod_none"
+
+
+global const string MATCHMOD_ACTIVE_STATE_NETVAR = "matchModActiveState"
+global const int MATCHMOD_ACTIVE_STATE_NONE = 255
+global const int MATCHMOD_ACTIVE_STATE_REMOVAL_ROUND_BIAS = 1
+const string MATCHMOD_NETVAR_STAGE_MAP_0 = "matchModRoundMapping0"
+const string MATCHMOD_NETVAR_STAGE_MAP_1 = "matchModRoundMapping1"
+const string MATCHMOD_NETVAR_NESTED_STATE_0 = "matchModNestedState0"
+const string MATCHMOD_NETVAR_NESTED_STATE_1 = "matchModNestedState1"
+const int MATCHMOD_NESTED_STATE_BITS_PER_NETVAR = 32
+const int MATCHMOD_NESTED_STATE_NETVAR_COUNT = 2
+
+
+const asset MATCH_MODIFIERS_ASSET_DEFINITIONS = $"datatable/match_modifiers/match_modifiers.rpak"
+
+global struct MatchModifierActionData
+{
+	int    modifier
+	string params
+}
+
+global struct MatchModifierData
+{
+	string ref
+	int    index
+
+	MatchModifierActionData & action
+
+	string name
+	string description
+	string author
+	string flavor
+	asset  image = $""
+	asset  background = $""
+	string activationSound
+	string deactivationSound
+}
+
+global struct MatchModifierSettings
+{
+	
+	void functionref (MatchModifierData) Init
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		void functionref ( MatchModifierData ) viewOnUpdated
+		void functionref ( MatchModifierData ) viewOnActivated
+		void functionref ( MatchModifierData ) viewOnDeactivated
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+struct {
+	table<string, MatchModifierData>  refToData
+	table<int, string>                indexToRef
+	table<int, MatchModifierSettings> modifierToSettings
+	array<string>			  	  modifierRefStartedByCombo = []
+	array<string> activeTopLevelModifierRefs = []
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+} file
+
+bool function MatchModifiers_Enabled()
+{
+	return GetCurrentPlaylistVarBool( PVAR_MATCH_MODIFIERS_ENABLED, false )
+}
+
+void function ShMatchModifiers_Init()
+{
+	if ( !MatchModifiers_Enabled() )
+		return
+
+	ShMatchModifiers_Init_Internal()
+
+
+		RegisterNetworkedVariable( "matchModRoundMapping0", SNDC_GLOBAL_NON_REWIND, SNVT_BIG_INT, 0 ) 
+		RegisterNetworkedVariable( "matchModRoundMapping1", SNDC_GLOBAL_NON_REWIND, SNVT_BIG_INT, 0 ) 
+		RegisterNetworkedVariable( "matchModNestedState0", SNDC_GLOBAL_NON_REWIND, SNVT_BIG_INT, 0 )
+		RegisterNetworkedVariable( "matchModNestedState1", SNDC_GLOBAL_NON_REWIND, SNVT_BIG_INT, 0 )
+		RegisterNetworkedVariable( "matchModActiveState", SNDC_GLOBAL_NON_REWIND, SNVT_BIG_INT, 255 ) 
+
+}
+
+void function ShMatchModifiers_Init_Internal()
+{
+
+		MatchModifiers_Common_Init()
+
+}
+
+
+void function MatchModifiers_RegisterSettings( int modifier, MatchModifierSettings settings )
+{
+	if ( modifier in file.modifierToSettings )
+		return
+
+	Assert( settings.Init!= null, "Attempting to register MatchModifierSettings for " + MatchModifiers_GetEnumString( modifier ) + " with no Init function." )
+
+
+
+
+
+
+
+	file.modifierToSettings[modifier] <- settings
+}
+
+void function MatchModifiers_RegisterModifierData( asset dataTableAsset )
+{
+	if ( !MatchModifiers_Enabled() )
+		return
+
+	MatchModifiers_RegisterData_Internal( dataTableAsset )
+}
+
+
+void function MatchModifiers_RegisterNestedModifier( int modifier, string nestedRef )
+{
+	MatchModifierData data = MatchModifiers_GetDataFromIndex( modifier )
+	Assert( data.action.modifier == eMatchModifier.COMBO, format( "Attempting to register nested reference on non-combo modifier %s", data.ref ) )
+
+	string nestedRefUpper = nestedRef.toupper()
+	if ( !file.modifierRefStartedByCombo.contains( nestedRefUpper ) )
+	{
+		file.modifierRefStartedByCombo.append( nestedRefUpper )
+	}
+
+
+
+
+}
+
+void function MatchModifiers_ClearNestedModifiers()
+{
+	file.modifierRefStartedByCombo.clear()
+
+
+
+
+}
+
+bool function MatchModifiers_IsNestedModifier( string nestedRef )
+{
+	return file.modifierRefStartedByCombo.contains( nestedRef.toupper() )
+}
+
+void function MatchModifiers_RegisterData_Internal( asset dataTableAsset )
+{
+	var dataTable = GetDataTable( dataTableAsset )
+	int numRows   = GetDataTableRowCount( dataTable )
+	Assert( numRows <= MATCHMOD_NESTED_STATE_BITS_PER_NETVAR * MATCHMOD_NESTED_STATE_NETVAR_COUNT, format( "MatchModifiers_RegisterData_Internal: %d match modifier rows exceed nested replication capacity of %d", numRows, MATCHMOD_NESTED_STATE_BITS_PER_NETVAR * MATCHMOD_NESTED_STATE_NETVAR_COUNT ) )
+
+	int featureFlagColumn = GetDataTableColumnByName( dataTable, "featureFlag" )
+	int refColumn         = GetDataTableColumnByName( dataTable, "ref" )
+
+	for ( int i = 0; i < numRows; i++ )
+	{
+		MatchModifierData data
+
+		data.ref = GetDataTableString( dataTable, i, refColumn ).toupper()
+		bool active = Playlist_GetDataTableBool( data.ref, dataTable, i, "active", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		if ( !active )
+			continue
+
+		data.name        = Playlist_GetDataTableString( data.ref, dataTable, i, "name", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.description = Playlist_GetDataTableString( data.ref, dataTable, i, "description", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.author      = Playlist_GetDataTableString( data.ref, dataTable, i, "author", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.flavor      = Playlist_GetDataTableString( data.ref, dataTable, i, "flavor", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.image       = Playlist_GetDataTableAssetNoPrecache( data.ref, dataTable, i, "image", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.background  = Playlist_GetDataTableAssetNoPrecache( data.ref, dataTable, i, "background", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.activationSound      	= Playlist_GetDataTableString( data.ref, dataTable, i, "activationSound", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		data.deactivationSound      = Playlist_GetDataTableString( data.ref, dataTable, i, "deactivationSound", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+
+		MatchModifierActionData action
+		string modifierString = Playlist_GetDataTableString( data.ref, dataTable, i, "modifier", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+		modifierString  = modifierString.toupper()
+		Assert( modifierString in eMatchModifier, "Modifier " + modifierString + " needs to match eMatchModifier" )
+		action.modifier = eMatchModifier[modifierString]
+		action.params   = Playlist_GetDataTableString( data.ref, dataTable, i, "params", PVAR_MATCH_MODIFIERS_DT_OVERRIDE )
+
+
+
+		data.action = action
+
+		
+		
+		
+		
+		MatchModifiers_InitModifier( data )
+
+		data.index = i
+		file.indexToRef[i] <- data.ref
+		file.refToData[data.ref] <- data
+	}
+}
+
+int function MatchModifiers_PackActiveState( int modifierIndex, int nextModifierRemovalRound, bool lastRoundWithModifiers )
+{
+	Assert( modifierIndex >= 0 && modifierIndex <= MATCHMOD_ACTIVE_STATE_NONE, format( "MatchModifiers_PackActiveState: Invalid modifier index %d", modifierIndex ) )
+
+	int encodedNextModifierRemovalRound = nextModifierRemovalRound + MATCHMOD_ACTIVE_STATE_REMOVAL_ROUND_BIAS
+	Assert( encodedNextModifierRemovalRound >= 0 && encodedNextModifierRemovalRound <= 15, format( "MatchModifiers_PackActiveState: Invalid removal round %d", nextModifierRemovalRound ) )
+
+	int packed = modifierIndex & 0xFF
+	packed = packed | ( ( encodedNextModifierRemovalRound & 0xF ) << 8 )
+
+	if ( lastRoundWithModifiers )
+	{
+		packed = packed | ( 1 << 12 )
+	}
+
+	return packed
+}
+
+string function MatchModifiers_GetNestedStateNetvarName( int netvarIndex )
+{
+	switch ( netvarIndex )
+	{
+		case 0:
+			return MATCHMOD_NETVAR_NESTED_STATE_0
+		case 1:
+			return MATCHMOD_NETVAR_NESTED_STATE_1
+	}
+
+	Assert( false, format( "MatchModifiers_GetNestedStateNetvarName: Invalid netvar index %d", netvarIndex ) )
+	return MATCHMOD_NETVAR_NESTED_STATE_0
+}
+
+int function MatchModifiers_GetNestedStateNetvarIndexForModifierIndex( int modifierIndex )
+{
+	Assert( modifierIndex >= 0 && modifierIndex < ( MATCHMOD_NESTED_STATE_NETVAR_COUNT * MATCHMOD_NESTED_STATE_BITS_PER_NETVAR ), format( "MatchModifiers_GetNestedStateNetvarIndexForModifierIndex: Invalid modifier index %d", modifierIndex ) )
+	return modifierIndex / MATCHMOD_NESTED_STATE_BITS_PER_NETVAR
+}
+
+int function MatchModifiers_GetNestedStateBitMaskForModifierIndex( int modifierIndex )
+{
+	Assert( modifierIndex >= 0 && modifierIndex < ( MATCHMOD_NESTED_STATE_NETVAR_COUNT * MATCHMOD_NESTED_STATE_BITS_PER_NETVAR ), format( "MatchModifiers_GetNestedStateBitMaskForModifierIndex: Invalid modifier index %d", modifierIndex ) )
+	return 1 << ( modifierIndex % MATCHMOD_NESTED_STATE_BITS_PER_NETVAR )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array<string> function MatchModifiers_GetClientNestedModifierRefsFromNetvars()
+{
+	array<string> nestedRefs
+
+	for ( int netvarIndex = 0; netvarIndex < MATCHMOD_NESTED_STATE_NETVAR_COUNT; netvarIndex++ )
+	{
+		int packed = GetGlobalNonRewindNetInt( MatchModifiers_GetNestedStateNetvarName( netvarIndex ) )
+		if ( packed == 0 )
+			continue
+
+		for ( int bitIndex = 0; bitIndex < MATCHMOD_NESTED_STATE_BITS_PER_NETVAR; bitIndex++ )
+		{
+			int modifierIndex = netvarIndex * MATCHMOD_NESTED_STATE_BITS_PER_NETVAR + bitIndex
+			if ( !MatchModifiers_IsValidIndex( modifierIndex ) )
+				continue
+
+			int bitMask = 1 << bitIndex
+			if ( ( packed & bitMask ) == 0 )
+				continue
+
+			nestedRefs.append( MatchModifiers_GetDataFromIndex( modifierIndex ).ref )
+		}
+	}
+
+	return nestedRefs
+}
+
+void function MatchModifiers_RefreshClientNestedModifiersFromNetvars( bool shouldNotifyView = true )
+{
+	array<string> replicatedNestedRefs = MatchModifiers_GetClientNestedModifierRefsFromNetvars()
+	array<string> previousNestedRefs
+	foreach ( string nestedRef in file.modifierRefStartedByCombo )
+	{
+		previousNestedRefs.append( nestedRef )
+	}
+
+	foreach ( string previousNestedRef in previousNestedRefs )
+	{
+		if ( replicatedNestedRefs.contains( previousNestedRef ) )
+			continue
+
+		file.modifierRefStartedByCombo.fastremovebyvalue( previousNestedRef )
+		if ( shouldNotifyView )
+		{
+			MatchModifiers_View_OnModifierDeactivated( MatchModifiers_GetDataFromRef( previousNestedRef ), true )
+		}
+	}
+
+	foreach ( string replicatedNestedRef in replicatedNestedRefs )
+	{
+		if ( file.modifierRefStartedByCombo.contains( replicatedNestedRef ) )
+			continue
+
+		file.modifierRefStartedByCombo.append( replicatedNestedRef )
+		if ( shouldNotifyView )
+		{
+			MatchModifiers_View_OnModifierActivated( MatchModifiers_GetDataFromRef( replicatedNestedRef ), true )
+		}
+	}
+}
+
+
+int function MatchModifiers_GetActiveModifierIndexFromPackedState( int packed )
+{
+	return packed & 0xFF
+}
+
+int function MatchModifiers_GetNextModifierRemovalRoundFromPackedState( int packed )
+{
+	return ( ( packed >> 8 ) & 0xF ) - MATCHMOD_ACTIVE_STATE_REMOVAL_ROUND_BIAS
+}
+
+bool function MatchModifiers_GetLastRoundWithModifiersFromPackedState( int packed )
+{
+	return bool( ( packed >> 12 ) & 1 )
+}
+
+void function MatchModifiers_InitModifier( MatchModifierData data )
+{
+	MatchModifierSettings settings = MatchModifiers_GetModifierSettings( data.action.modifier )
+
+	if ( settings.Init != null )
+		settings.Init( data )
+}
+
+
+
+
+
+
+
+
+
+
+
+MatchModifierData function MatchModifiers_GetDataFromIndex( int index )
+{
+	Assert( MatchModifiers_IsValidIndex( index ), "Index " + index + " not found in MatchModifier indexToRef" )
+	string ref = file.indexToRef[index]
+	return MatchModifiers_GetDataFromRef( ref )
+}
+
+MatchModifierData function MatchModifiers_GetDataFromRef( string ref )
+{
+	string refToUpper = ref.toupper()
+	Assert( MatchModifiers_IsValidRef( refToUpper ), "Ref " + ref + " not found in MatchModifier refToData" )
+	return file.refToData[refToUpper]
+}
+
+int function MatchModifiers_GetModifierIndexForStage( int stage )
+{
+	int packed
+	int shift
+
+	if ( stage >= 0 && stage <= 3 )
+	{
+		packed = GetGlobalNonRewindNetInt( MATCHMOD_NETVAR_STAGE_MAP_0 )
+		shift = stage * 8
+	}
+	else if ( stage >= 4 && stage <= 7 )
+	{
+		packed = GetGlobalNonRewindNetInt( MATCHMOD_NETVAR_STAGE_MAP_1 )
+		shift = ( stage - 4 ) * 8
+	}
+	else
+	{
+		return MATCHMOD_ACTIVE_STATE_NONE
+	}
+
+	return ( packed >> shift ) & 0xFF
+}
+
+
+int function MatchModifiers_GetClientActiveTopLevelModifierIndex()
+{
+	if ( !MatchModifiers_Enabled() )
+		return MATCHMOD_ACTIVE_STATE_NONE
+
+	if ( !IsFullyConnected() )
+		return MATCHMOD_ACTIVE_STATE_NONE
+
+	return MatchModifiers_GetActiveModifierIndexFromPackedState( GetGlobalNonRewindNetInt( MATCHMOD_ACTIVE_STATE_NETVAR ) )
+}
+
+bool function MatchModifiers_HasClientActiveTopLevelModifier()
+{
+	return MatchModifiers_IsValidIndex( MatchModifiers_GetClientActiveTopLevelModifierIndex() )
+}
+
+MatchModifierData function MatchModifiers_GetClientActiveTopLevelModifier()
+{
+	int modifierIndex = MatchModifiers_GetClientActiveTopLevelModifierIndex()
+	Assert( MatchModifiers_IsValidIndex( modifierIndex ), format( "MatchModifiers_GetClientActiveTopLevelModifier: Invalid modifier index %d", modifierIndex ) )
+	return MatchModifiers_GetDataFromIndex( modifierIndex )
+}
+
+
+table <string, array<string> > function MatchModifiers_CreateParamElementsTable( array<string> params )
+{
+	table <string, array<string> > paramElementTable
+	foreach ( string param in params )
+	{
+		array<string> splitParams = GetTrimmedSplitString( param, ":" )
+		string paramKey           = splitParams[0]
+		splitParams.fastremove( 0 )
+
+		if ( paramKey in paramElementTable )
+		{
+			paramElementTable[paramKey].extend( splitParams )
+		}
+		else
+		{
+			paramElementTable[paramKey] <- splitParams
+		}
+	}
+	return paramElementTable
+}
+
+bool function MatchModifiers_IsValidIndex( int index )
+{
+	return index in file.indexToRef
+}
+
+bool function MatchModifiers_IsValidRef( string ref )
+{
+	string refToUpper = ref.toupper()
+	return refToUpper in file.refToData
+}
+
+MatchModifierSettings function MatchModifiers_GetModifierSettings( int modifier )
+{
+	Assert( modifier in file.modifierToSettings, "Modifier " + modifier + " not found in MatchModifier modifierToSettings" )
+	return file.modifierToSettings[modifier]
+}
+
+
+array<string> function MatchModifiers_GetParams( MatchModifierActionData actionData )
+{
+	return GetTrimmedSplitString( actionData.params, "," )
+}
+
+string function MatchModifiers_GetEnumString( int modifier )
+{
+	return GetEnumString( "eMatchModifier", modifier )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+array<MatchModifierData> function MatchModifiers_GetActiveModifiers()
+{
+	array<MatchModifierData> active
+
+
+		if ( MatchModifiers_HasClientActiveTopLevelModifier() )
+		{
+			active.append( MatchModifiers_GetClientActiveTopLevelModifier() )
+		}
+
+		foreach ( string nestedRef in file.modifierRefStartedByCombo )
+		{
+			if ( MatchModifiers_IsValidRef( nestedRef ) )
+			{
+				active.append( MatchModifiers_GetDataFromRef( nestedRef ) )
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	return active
+}
+
+
+array<MatchModifierData> function MatchModifiers_GetActiveTopLevelModifiers()
+{
+
+		array<MatchModifierData> activeTopLevelModifiers
+		if ( MatchModifiers_HasClientActiveTopLevelModifier() )
+		{
+			activeTopLevelModifiers.append( MatchModifiers_GetClientActiveTopLevelModifier() )
+		}
+		return activeTopLevelModifiers
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+bool function MatchModifiers_IsModifierActive( string modifierRef )
+{
+	return MatchModifiers_GetActiveModifierRefs().contains( modifierRef.toupper() )
+}
+
+bool function MatchModifiers_IsModifierOfTypeActive( int type )
+{
+	foreach ( MatchModifierData matchModData in MatchModifiers_GetActiveModifiers() )
+	{
+		if ( matchModData.action.modifier == type )
+		{
+			return true
+		}
+	}
+	return false
+}
+
+bool function MatchModifiers_DoesActiveModifierLockWeapons()
+{
+	return MatchModifiers_Enabled() && MatchModifiers_IsModifierOfTypeActive( eMatchModifier.REPLACE_WEAPON )
+}
+
+array<string> function MatchModifiers_GetActiveModifierRefs()
+{
+	array<string> active
+
+	foreach ( MatchModifierData data in MatchModifiers_GetActiveModifiers() )
+	{
+		active.append( data.ref )
+	}
+
+	return active
+}
+
+
+#if DEV
+void function DEV_MatchModifiers_RegisterDefaultData()
+{
+	
+
+
+
+	DEV_MatchModifiers_ClearData()
+	ShMatchModifiers_Init_Internal()
+	MatchModifiers_RegisterData_Internal( MATCH_MODIFIERS_ASSET_DEFINITIONS )
+}
+
+void function DEV_MatchModifiers_ClearData()
+{
+	file.refToData.clear()
+	file.indexToRef.clear()
+	file.modifierToSettings.clear()
+}
+
+void function DEV_MatchModifiers_PrintAll()
+{
+	printt( "All Modifiers" )
+	foreach ( string ref, MatchModifierData data in file.refToData )
+	{
+		DEV_MatchModifiers_PrintModifier( data )
+	}
+}
+
+void function DEV_MatchModifiers_PrintAllActive()
+{
+	printt( "All Active Modifiers" )
+	array<MatchModifierData> active = MatchModifiers_GetActiveModifiers()
+	foreach ( MatchModifierData data in active )
+	{
+		DEV_MatchModifiers_PrintModifier( data )
+	}
+}
+
+void function DEV_MatchModifiers_PrintModifierByRef( string ref )
+{
+	DEV_MatchModifiers_PrintModifier( file.refToData[ref] )
+}
+
+void function DEV_MatchModifiers_PrintModifier( MatchModifierData data )
+{
+	printt( "--- Match Modifier ---" )
+	printt( "Ref:    \t\t\t" + data.ref )
+
+		printt( "Name:   \t\t\t" + Localize( data.name ) )
+		printt( "Desc:   \t\t\t" + Localize( data.description ) )
+		printt( "Flav:   \t\t\t" + Localize( data.flavor ) )
+		printt( "Author: \t\t\t" + Localize( data.author ) )
+
+
+
+
+
+
+	printt( "Action: \t\t\t" + MatchModifiers_GetEnumString( data.action.modifier ) )
+	printt( "Params: \t\t\t" + data.action.params )
+}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

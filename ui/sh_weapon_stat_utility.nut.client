@@ -1,0 +1,1127 @@
+global function Sh_InitWeaponStatUtility
+
+
+global function WeaponStatData_GetStatForMod
+global function WeaponStatData_GetStatsForAllMods
+global function WeaponStatData_GetStatsDataForAttachment
+global function WeaponStatData_ShouldDisplayStats
+global function WeaponStatData_ShouldDisplayStatBars
+global function AttachmentStatData_GetAttachmentStatDataForAttachment_NoWeapon
+global function AttachmentStatData_GetExtraStatForAttachment
+global function AttachmentStatData_GetExtraStatForWeapon
+global function GetStringForWeaponRange
+global function GetAmmoTypeStringForStatsDisplay
+
+
+global function AttachmentStatData_GetExtraStatForAttachmentRef
+
+global function WeaponStatData_GetStatForWeaponBetweenAttachments
+global function WeaponStatData_GetStatsForWeaponBetweenAttachments
+global function WeaponStatData_GetModifiedStatsForWeaponBetweenAttachments
+global function WeaponStatData_GetStatsForWeaponWithAttachments
+
+global function WeaponStatData_GetWeaponROF
+global function WeaponStatData_GetWeaponDamage
+
+
+
+
+
+
+
+
+#if DEV
+global function DEV_PrintBaseStatDataForWeaponForStats
+global function DEV_PrintStatDataForWeaponWithAttachmentsForStats
+global function DEV_PrintStatDataForWeaponBetweenAttachmentsForStats
+global function DEV_PrintStatDataForWeaponWithAttachments
+global function DEV_PrintStatDataForWeaponBetweenAttachments
+global function DEV_PrintBaseStatDataForWeapon
+
+global function DEV_PrintAllCachedAttachmentStats
+
+#endif
+
+const string WEAPON_STAT_UTILITY_DEBUG_PREFIX = "Weapon Stat Utility - " 
+
+const string EMPTY_WEAPON_REF = "_empty_reference_weapon"
+
+const string AKIMBO_ACTIVE_MOD = "akimbo_active"
+
+
+const table<string, table< string, bool > > STATS_BY_ATTACHMENT_EXTRA_STAT = {
+	[ "corrupted_tactical_stock" ] = {
+		[ "movement_speed" ] = true,
+	},
+}
+
+
+const array<string> DISPLAY_STAT_VALUE_NAMES_IN_GAME = [ "damage_near_value", "damage_headshot", "ammo_clip_size", "fire_rate",
+"reloadempty_time", "stat_accuracy", "stat_hipfire", "stat_handling", "ammo_stockpile_max" ]
+
+
+
+const array<string> DISPLAY_STAT_VALUE_NAMES = [ "damage_near_value", "damage_headshot", "damage_headshot_scale", "damage_leg_scale", "ammo_clip_size", "fire_rate",
+"reload_time", "reloadempty_time", "stat_accuracy", "stat_hipfire", "stat_handling" ]
+
+const table<string, string> STAT_NAME_TO_LOCALIZATION_KEY = {
+	[ "damage_near_value" ] 				= "#WEAPON_STAT_DAMAGE",
+	[ "damage_headshot" ] 					= "#WEAPON_STAT_HEADSHOT_DAMAGE",
+	[ "damage_headshot_scale" ]				= "#WEAPON_STAT_HEADSHOT_SCALE",
+	[ "damage_leg_scale" ]					= "#WEAPON_STAT_LEG_DAMAGE_SCALE",
+	[ "fire_rate" ] 						= "#WEAPON_STAT_FIRE_RATE",
+	[ "ammo_clip_size" ] 					= "#WEAPON_STAT_MAG_SIZE",
+	[ "reload_time" ] 						= "#WEAPON_STAT_TACTICAL_RELOAD_TIME",
+	[ "reloadempty_time" ] 					= "#WEAPON_STAT_RELOAD_TIME",
+	[ "stat_accuracy" ]						= "#WEAPON_STAT_RECOIL",
+	[ "stat_hipfire" ]						= "#WEAPON_STAT_HIPFIRE",
+	[ "stat_handling" ] 					= "#WEAPON_STAT_HANDLING",
+	[ "movement_speed" ]					= "#WEAPON_STAT_MOVEMENT",
+	[ "ammo_stockpile_max"]					= "#WEAPON_STAT_STOCKPILE",
+}
+
+const table<string, string> STAT_SHORT_NAME_TO_LOCALIZATION_KEY = {
+	[ "damage_near_value" ] 				= "#WEAPON_STAT_DAMAGE_SHORT",
+	[ "damage_headshot" ] 					= "#WEAPON_STAT_HEADSHOT_DAMAGE_SHORT",
+	[ "damage_headshot_scale" ]				= "#WEAPON_STAT_HEADSHOT_SCALE_SHORT",
+	[ "damage_leg_scale" ]					= "#WEAPON_STAT_LEG_DAMAGE_SCALE_SHORT",
+	[ "fire_rate" ] 						= "#WEAPON_STAT_FIRE_RATE_SHORT",
+	[ "ammo_clip_size" ] 					= "#WEAPON_STAT_MAG_SIZE_SHORT",
+	[ "reload_time" ] 						= "#WEAPON_STAT_TACTICAL_RELOAD_TIME_SHORT",
+	[ "reloadempty_time" ] 					= "#WEAPON_STAT_RELOAD_TIME_SHORT",
+	[ "stat_accuracy" ]						= "#WEAPON_STAT_RECOIL_SHORT",
+	[ "stat_hipfire" ]						= "#WEAPON_STAT_HIPFIRE_SHORT",
+	[ "stat_handling" ] 					= "#WEAPON_STAT_HANDLING_SHORT",
+	[ "movement_speed" ]					= "#WEAPON_STAT_MOVEMENT_SHORT",
+	[ "ammo_stockpile_max"]					= "#WEAPON_STAT_STOCKPILE",
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const table<string, string> STAT_NAME_TO_UNIT_SHORT_LOC_KEY =
+{
+	[ "reload_time" ] 						= "#WEAPON_STAT_TACTICAL_RELOAD_TIME_UNIT_SHORT",
+	[ "reloadempty_time" ] 					= "#WEAPON_STAT_RELOAD_TIME_UNIT_SHORT"
+}
+
+const array<string> INVERSED_STATS = [ "reload_time", "reloadempty_time" ] 
+
+
+global const float MAX_STAT_HANDLING = 100.0
+global const float MAX_STAT_ACCURACY = 100.0
+global const float MAX_STAT_HIPFIRE = 100.0
+global const float MAX_STAT_DAMAGE = 150.0
+global const float MAX_STAT_HEADSHOT_DAMAGE = 210.0
+global const float MAX_STAT_HEADSHOT_SCALE = 2.0
+global const float MAX_STAT_LEG_DAMAGE_SCALE = 1.0
+global const float MAX_STAT_MAG_SIZE = 65.0
+global const float MAX_STAT_FIRE_RATE = 1100.0
+global const float MAX_STAT_RELOAD_TIME = 6.0
+global const float MAX_STOCKPILE_AMMO = 2000.0
+
+
+struct WeaponBaseStatData
+{
+	string statRef
+	string statName
+	string statShortName
+	string statUnitShortLocKey
+
+	float statValue
+}
+
+const table<float, string> RANGE_NUM_TO_LOCALIZATION_KEY = {
+	[ 1.0 ] 	= "#WEAPON_RANGE_CLOSE",
+	[ 2.0 ] 	= "#WEAPON_RANGE_CLOSE_MID",
+	[ 3.0 ] 	= "#WEAPON_RANGE_MID",
+	[ 4.0 ] 	= "#WEAPON_RANGE_MID_FAR",
+	[ 5.0 ] 	= "#WEAPON_RANGE_FAR"
+}
+
+struct {
+
+
+
+
+
+
+		table<string, array<AttachmentStatData> > attachmentStatsByAttachmentRef = {}
+		bool hasAttachmentClientCacheLoaded = false
+
+
+	table<string, float> statMaxValues = {
+		[ "damage_near_value" ] 				= MAX_STAT_DAMAGE,
+		[ "damage_headshot" ] 					= MAX_STAT_HEADSHOT_DAMAGE,
+		[ "damage_leg_scale" ]					= MAX_STAT_LEG_DAMAGE_SCALE,
+		[ "damage_headshot_scale" ]				= MAX_STAT_HEADSHOT_SCALE,
+		[ "fire_rate" ] 						= MAX_STAT_FIRE_RATE,
+		[ "ammo_clip_size" ] 					= MAX_STAT_MAG_SIZE,
+		[ "reload_time" ] 						= MAX_STAT_RELOAD_TIME,
+		[ "reloadempty_time" ] 					= MAX_STAT_RELOAD_TIME,
+		[ "stat_accuracy" ] 					= MAX_STAT_ACCURACY,
+		[ "stat_hipfire" ] 						= MAX_STAT_HIPFIRE,
+		[ "stat_handling" ] 					= MAX_STAT_HANDLING,
+		[ "ammo_stockpile_max" ]				= MAX_STOCKPILE_AMMO
+	}
+} file
+
+void function Sh_InitWeaponStatUtility()
+{
+
+
+
+
+
+		AddCallback_EntitiesDidLoad( AttachmentStatData_EntitiesDidLoad )
+
+
+
+
+
+}
+
+
+
+WeaponStatData function WeaponStatData_GetStatForMod( entity weapon, LootData attachmentData, string statRef )
+{
+	WeaponStatData data
+
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+
+	if ( !SURVIVAL_Loot_IsRefValid( weaponData.ref ) )
+		return data
+
+	array<string> currentlyEquipedAttachments = weapon.GetMods()
+	data = WeaponStatData_GetStatForWeaponBetweenAttachments( weaponData.baseWeapon, currentlyEquipedAttachments, [attachmentData.ref], statRef )
+
+	return data
+}
+
+
+
+array<WeaponStatData> function WeaponStatData_GetStatsForAllMods( entity weapon )
+{
+	array<WeaponStatData> changedStats = []
+
+	if ( !IsValid( weapon ) )
+		return changedStats
+
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+
+	if ( !SURVIVAL_Loot_IsRefValid( weaponData.ref ) )
+		return changedStats
+
+	array<string> allMods = weapon.GetMods()
+
+	array<string> listOfAttachments = []
+
+	foreach ( mod in allMods )
+	{
+		if ( !DoesModExist( weapon, mod ) )
+			continue
+
+		listOfAttachments.append( mod )
+	}
+
+	changedStats = WeaponStatData_GetStatsForWeaponWithAttachments( weaponData.baseWeapon, listOfAttachments, DISPLAY_STAT_VALUE_NAMES_IN_GAME )
+
+	return changedStats
+}
+
+
+
+array<WeaponStatData> function WeaponStatData_GetStatsDataForAttachment( entity weapon, LootData newAttachmentData, bool isNewAttachmentEquipped = false )
+{
+	array<WeaponStatData> changedStats = []
+
+	if ( !SURVIVAL_Loot_IsRefValid( newAttachmentData.ref ) )
+		return changedStats
+
+	LootData weaponData = SURVIVAL_GetLootDataFromWeapon( weapon )
+
+	if ( !SURVIVAL_Loot_IsRefValid( weaponData.ref ) )
+		return changedStats
+
+	array<string> currentlyEquippedAttachments = weapon.GetMods()
+	array<string> newAttachments = clone currentlyEquippedAttachments
+	array<string> newAttachmentsUpdated = clone newAttachments
+	for ( int i = 0; i < newAttachments.len(); i++ )
+	{
+		string attachment = newAttachments[i]
+		if ( !SURVIVAL_Loot_IsRefValid( attachment ) )
+			continue
+
+		LootData curAttachment = SURVIVAL_Loot_GetLootDataByRef( attachment )
+		if ( curAttachment.attachmentType == newAttachmentData.attachmentType )
+		{
+			newAttachmentsUpdated.remove(i)
+
+			if ( isNewAttachmentEquipped )
+			{
+				currentlyEquippedAttachments.remove( i ) 
+			}
+
+			break
+		}
+	}
+	newAttachmentsUpdated.append( newAttachmentData.ref )
+
+	changedStats = WeaponStatData_GetModifiedStatsForWeaponBetweenAttachments( weaponData.baseWeapon, currentlyEquippedAttachments, newAttachmentsUpdated, DISPLAY_STAT_VALUE_NAMES_IN_GAME )
+
+	return changedStats
+}
+
+
+
+array<AttachmentStatData> function AttachmentStatData_GetAttachmentStatDataForAttachment_NoWeapon( LootData attachmentData )
+{
+	array<AttachmentStatData> stats = []
+
+	if ( !SURVIVAL_Loot_IsRefValid( attachmentData.ref ) )
+		return stats
+
+	if ( attachmentData.ref in file.attachmentStatsByAttachmentRef )
+	{
+		stats = file.attachmentStatsByAttachmentRef[ attachmentData.ref ]
+	}
+	else
+	{
+		Warning( "%s Attachment %s not cached", WEAPON_STAT_UTILITY_DEBUG_PREFIX, attachmentData.ref )
+	}
+
+	return stats
+}
+
+
+
+AttachmentStatData function AttachmentStatData_GetExtraStatForAttachment( LootData attachmentData )
+{
+	return AttachmentStatData_GetExtraStatForAttachmentRef( attachmentData.ref )
+}
+
+
+
+AttachmentStatData function AttachmentStatData_GetExtraStatForWeapon( entity weapon )
+{
+	AttachmentStatData extraStat
+
+	if ( !IsValid( weapon ) )
+		return extraStat
+
+	array<string> currentlyEquippedAttachments = weapon.GetMods()
+
+	foreach ( attachmentRef in currentlyEquippedAttachments )
+	{
+		if ( !SURVIVAL_Loot_IsRefValid( attachmentRef ) )
+		return extraStat
+
+		if ( attachmentRef in STATS_BY_ATTACHMENT_EXTRA_STAT )
+		{
+			foreach ( statRef, isImprovedBool in STATS_BY_ATTACHMENT_EXTRA_STAT[ attachmentRef ] )
+			{
+				extraStat.statRef = statRef
+				extraStat.statName = STAT_NAME_TO_LOCALIZATION_KEY[ statRef ]
+				extraStat.isStatImproved = ( isImprovedBool )
+			}
+		}
+
+	}
+
+	return extraStat
+}
+
+
+
+void function BuildAndCacheStatsForAttachment_Internal()
+{
+	if ( file.hasAttachmentClientCacheLoaded )
+		return
+
+	array<string> allAttachments = GetWeaponMods_Global( EMPTY_WEAPON_REF )
+	if ( allAttachments.len() == 0 )
+	{
+		Warning( "%s No attachments found to process", WEAPON_STAT_UTILITY_DEBUG_PREFIX )
+		return
+	}
+
+	foreach ( attachmentRef in allAttachments )
+	{
+		if ( !SURVIVAL_Loot_IsRefValid( attachmentRef ) )
+		{
+			Warning( "%s Skipping attachment with invalid ref %s", WEAPON_STAT_UTILITY_DEBUG_PREFIX, attachmentRef )
+			continue
+		}
+
+		if ( attachmentRef == "" )
+		{
+			Warning( "%s Skipping attachment with empty ref %s", WEAPON_STAT_UTILITY_DEBUG_PREFIX, attachmentRef )
+			continue
+		}
+		file.attachmentStatsByAttachmentRef[ attachmentRef ] <- BuildDefaultBaseStatsForAttachment( attachmentRef )
+	}
+
+	file.hasAttachmentClientCacheLoaded = true
+}
+
+
+
+array<AttachmentStatData> function BuildDefaultBaseStatsForAttachment( string attachmentRef )
+{
+	
+	array<AttachmentStatData> baseAttachmentStats = []
+
+	array<WeaponStatData> weaponStatsForEmptyWeapon = WeaponStatData_GetModifiedStatsForWeaponBetweenAttachments( EMPTY_WEAPON_REF, [], [ attachmentRef ], DISPLAY_STAT_VALUE_NAMES_IN_GAME )
+
+	foreach ( stat in weaponStatsForEmptyWeapon )
+	{
+		AttachmentStatData newAttachStat
+
+		newAttachStat.statRef = stat.statRef
+		newAttachStat.statName = stat.statName
+		newAttachStat.isStatImproved = ( stat.linearStatValAdded > 0 ) 
+
+		baseAttachmentStats.append( newAttachStat )
+	}
+
+	baseAttachmentStats.sort( SortAttachmentStatDataByPositiveToNegative )
+
+	return baseAttachmentStats
+}
+
+
+
+void function AttachmentStatData_EntitiesDidLoad()
+{
+	BuildAndCacheStatsForAttachment_Internal()
+}
+
+
+
+bool function WeaponStatData_ShouldDisplayStats( LootData attachmentData )
+{
+	if ( attachmentData.ref in file.attachmentStatsByAttachmentRef )
+		return true
+
+	return false
+}
+
+
+
+bool function WeaponStatData_ShouldDisplayStatBars()
+{
+	return GetCurrentPlaylistVarBool( "streamlined_looting_bars_enabled", true )
+}
+
+
+
+string function GetStringForWeaponRange( LootData weaponData )
+{
+	string weaponRef = weaponData.baseWeapon
+	if ( !SURVIVAL_Loot_IsRefValid( weaponRef ) )
+	{
+		Warning( "%s Not valid weapon ref, returning empty weapon range string: %s", WEAPON_STAT_UTILITY_DEBUG_PREFIX, weaponRef )
+		return ""
+	}
+
+	float rangeIndex = GetWeaponInfoFileKeyField_GlobalFloat( weaponRef, "stat_range" )
+
+	if ( !( rangeIndex in RANGE_NUM_TO_LOCALIZATION_KEY ) )
+	{
+		Warning( "%s Not valid rangeIndex in weapon txt file, returning empty weapon range string: %s", WEAPON_STAT_UTILITY_DEBUG_PREFIX, weaponRef )
+		return ""
+	}
+
+	return RANGE_NUM_TO_LOCALIZATION_KEY[ rangeIndex ]
+}
+
+
+
+string function GetAmmoTypeStringForStatsDisplay( LootData weaponData )
+{
+	string ammoString = ""
+
+	if ( !SURVIVAL_Loot_IsRefValid( weaponData.ref ) )
+	{
+		Warning( "%s Not valid weapon ref, returning empty ammo type string: %s", WEAPON_STAT_UTILITY_DEBUG_PREFIX, weaponData.ref )
+		return ammoString
+	}
+
+	if ( SURVIVAL_Loot_IsRefValid( weaponData.ammoType ) )
+	{
+		LootData ammoData = SURVIVAL_Loot_GetLootDataByRef( weaponData.ammoType )
+		ammoString = ammoData.pickupString
+	}
+	else if (  weaponData.tier == eLootTier.MYTHIC  )
+	{
+		if ( IsWeaponKeyFieldDefined( weaponData.baseWeapon, "ammo_pool_type" ) && weaponData.baseMods.contains( "crate") )
+		{
+			int ammoType = GetWeaponInfoFileKeyField_GlobalInt( weaponData.baseWeapon, "ammo_pool_type" )
+			switch ( ammoType )
+			{
+			case eAmmoPoolType.bullet:
+				return "#AMMO_TYPE_MYTHIC_BULLET"
+			case eAmmoPoolType.highcal:
+				return "#AMMO_TYPE_MYTHIC_HIGHCAL"
+			case eAmmoPoolType.special:
+				return "#AMMO_TYPE_MYTHIC_SPECIAL"
+			case eAmmoPoolType.shotgun:
+				return "#AMMO_TYPE_MYTHIC_SHOTGUN"
+			case eAmmoPoolType.sniper:
+				return "#AMMO_TYPE_MYTHIC_SNIPER"
+			case eAmmoPoolType.arrows:
+				return "#AMMO_TYPE_MYTHIC_ARROW"
+			}
+		}
+	}
+	else if ( GetWeaponInfoFileKeyField_GlobalInt( weaponData.baseWeapon, "ammo_pool_type" ) == eAmmoPoolType.arrows )
+	{
+		ammoString = "#SURVIVAL_PICKUP_ARROWS"
+	}
+	else if ( GetWeaponInfoFileKeyField_GlobalInt( weaponData.baseWeapon, "ammo_pool_type" ) == eAmmoPoolType.special )
+	{
+		ammoString = "#SURVIVAL_PICKUP_SPECIAL"
+	}
+
+	return ammoString
+}
+
+
+
+float function WeaponStatData_GetWeaponROF( string weaponRef, array<string> attachmentsRef )
+{
+	if ( weaponRef == "" )
+		return 0
+
+	float baseRof
+	float rechamberTime
+	float burstFireDelay
+	float chargeTime 
+	float chargeTimePostFire 
+	int burstCount
+
+	if ( attachmentsRef.len() > 0 )
+	{
+		baseRof = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "fire_rate" )
+		rechamberTime = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "rechamber_time" )
+		burstFireDelay = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "burst_fire_delay" )
+		chargeTime = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "charge_time" )
+		chargeTimePostFire = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "charge_cooldown_time_post_fire" )
+		burstCount = GetWeaponInfoFileKeyField_WithMods_GlobalInt( weaponRef, attachmentsRef, "burst_fire_count" )
+	}
+	else
+	{
+		baseRof = GetWeaponInfoFileKeyField_GlobalFloat( weaponRef, "fire_rate" )
+		rechamberTime = GetWeaponInfoFileKeyField_GlobalFloat( weaponRef, "rechamber_time" )
+		burstFireDelay = GetWeaponInfoFileKeyField_GlobalFloat( weaponRef, "burst_fire_delay" )
+		chargeTime = GetWeaponInfoFileKeyField_GlobalFloat( weaponRef, "charge_time" )
+		chargeTimePostFire = GetWeaponInfoFileKeyField_GlobalFloat( weaponRef, "charge_cooldown_time_post_fire" )
+		burstCount = GetWeaponInfoFileKeyField_GlobalInt( weaponRef, "burst_fire_count" )
+	}
+
+	burstCount = burstCount > 0 ? burstCount : 1
+	float totalDelay = rechamberTime + burstFireDelay + chargeTimePostFire
+
+	float finalRof = ( 60 / ( ( burstCount / baseRof ) + totalDelay ) ) * burstCount
+	return Round(finalRof, 0)
+}
+
+float function WeaponStatData_GetWeaponDamage( string weaponRef, array<string> attachmentsRef )
+{
+	if ( weaponRef == "" )
+		return 0
+
+	float projectilesPerShot = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "projectiles_per_shot" )
+	float damageNearValue = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "damage_near_value" )
+
+	if ( projectilesPerShot < 0 || damageNearValue < 0 )
+	{
+		Warning( "Missing values for calculating damage for weapon ref: " + weaponRef )
+		return -1
+	}
+
+	return projectilesPerShot * damageNearValue
+}
+
+float function WeaponStatData_GetWeaponHeadshotDamage( string weaponRef, array<string> attachmentsRef )
+{
+	
+	
+	float projectilesPerShot = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "projectiles_per_shot" )
+	float damageNearValue = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "damage_near_value" )
+	float headshotScale = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "damage_headshot_scale" )
+
+	if ( damageNearValue < 0 || headshotScale < 0 || projectilesPerShot < 0 )
+	{
+		Warning( "Missing values for calculating damage_headshot for weapon ref: " + weaponRef )
+		return -1
+	}
+
+	return Round(damageNearValue * headshotScale, 0) * projectilesPerShot
+
+}
+
+float function WeaponStatData_GetWeaponMagSize( string weaponRef, array<string> attachmentsRef )
+{
+	float magSize = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "ammo_clip_size" )
+	bool usesAmmoPool = GetWeaponInfoFileKeyField_GlobalBool( weaponRef, "uses_ammo_pool" )
+	bool usesClips = magSize > 0
+
+	if ( !usesAmmoPool && !usesClips )
+		return GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "ammo_stockpile_max" )
+
+	if ( attachmentsRef.contains( AKIMBO_ACTIVE_MOD ) )
+		return magSize * 2 
+
+	return magSize
+}
+
+float function WeaponStatData_GetWeaponReloadTime( string weaponRef, array<string> attachmentsRef )
+{
+	float reloadTime = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "reloadempty_time" )
+	bool isSegmented = GetWeaponInfoFileKeyField_GlobalBool( weaponRef, "reload_is_segmented" )
+
+	if ( isSegmented )
+	{
+		
+		float magSize = WeaponStatData_GetWeaponMagSize( weaponRef, attachmentsRef )
+		float segmentTimeEnd = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "reloadsegmentempty_time_end" )
+		float segmentTimeLoop = GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, "reloadsegment_time_loop" )
+
+		switch ( weaponRef )
+		{
+			case "mp_weapon_mastiff_crate":
+			case "mp_weapon_mastiff":
+				reloadTime = reloadTime + (segmentTimeLoop * (magSize - 2)) + segmentTimeEnd
+				break
+			case "mp_weapon_3030_crate":
+			case "mp_weapon_3030":
+				reloadTime = reloadTime + ((segmentTimeLoop * 0.85) * (magSize - 2))  + segmentTimeEnd
+				break
+		}
+	}
+
+	return reloadTime
+}
+
+
+AttachmentStatData function AttachmentStatData_GetExtraStatForAttachmentRef( string attachmentRef )
+{
+	AttachmentStatData extraStat
+
+	if ( !SURVIVAL_Loot_IsRefValid( attachmentRef ) )
+		return extraStat
+
+	if ( attachmentRef in STATS_BY_ATTACHMENT_EXTRA_STAT )
+	{
+		foreach ( statRef, isImprovedBool in STATS_BY_ATTACHMENT_EXTRA_STAT[ attachmentRef ] )
+		{
+			extraStat.statRef = statRef
+			extraStat.statName = STAT_NAME_TO_LOCALIZATION_KEY[ statRef ]
+			extraStat.isStatImproved = ( isImprovedBool )
+		}
+	}
+
+	return extraStat
+}
+
+
+
+WeaponBaseStatData function GetBaseStatForWeaponWithAttachments( string weaponRef, array<string> attachmentsRef, string statRef )
+{
+	WeaponBaseStatData data
+	data.statRef = statRef
+	data.statName = STAT_NAME_TO_LOCALIZATION_KEY[ statRef ]
+	data.statShortName = STAT_SHORT_NAME_TO_LOCALIZATION_KEY[ statRef ]
+	data.statUnitShortLocKey = GetStatUnitShortLocKeyForStatRef( statRef )
+
+	data.statValue = GetWeaponStatValue_WithMods( weaponRef, attachmentsRef, statRef )
+	return data
+}
+
+array<WeaponBaseStatData> function GetBaseStatsForWeaponWithAttachments( string weaponRef, array<string> attachmentsRef, array<string> statRefs )
+{
+	array<WeaponBaseStatData> stats
+	foreach ( stat in statRefs )
+	{
+		WeaponBaseStatData data = GetBaseStatForWeaponWithAttachments( weaponRef, attachmentsRef, stat )
+		if ( data.statValue < 0 )
+			continue
+		stats.append( data )
+	}
+	return stats
+}
+
+WeaponStatData function WeaponStatData_GetStatForWeaponBetweenAttachments( string weaponRef, array<string> currentAttachmentsRef, array<string> newAttachmentsRef, string statRef )
+{
+	WeaponBaseStatData baseData = GetBaseStatForWeaponWithAttachments( weaponRef, currentAttachmentsRef, statRef )
+
+	WeaponStatData data
+	data.statRef = statRef
+	data.statName = baseData.statName
+	data.statShortName = baseData.statShortName
+	data.statUnitShortLocKey = baseData.statUnitShortLocKey
+
+	data.newStatValue = GetWeaponStatValue_WithMods( weaponRef, newAttachmentsRef, statRef )
+	data.previousStatValue = baseData.statValue
+	data.statValAdded = data.newStatValue - data.previousStatValue
+
+	data.linearNewVal = GetLinearStatValue( statRef, data.newStatValue )
+	data.linearPreviousVal = GetLinearStatValue( statRef, data.previousStatValue )
+	data.linearStatValAdded = data.linearNewVal - data.linearPreviousVal
+
+	return data
+}
+
+
+array<WeaponStatData> function WeaponStatData_GetStatsForWeaponBetweenAttachments( string weaponRef, array<string> currentAttachmentsRef, array<string> newAttachmentsRef, array<string> statRefs )
+{
+	array<WeaponStatData> stats
+
+	foreach ( statRef in statRefs )
+	{
+		WeaponStatData data = WeaponStatData_GetStatForWeaponBetweenAttachments( weaponRef, currentAttachmentsRef, newAttachmentsRef, statRef )
+		stats.append( data )
+	}
+
+	return stats
+}
+
+
+array<WeaponStatData> function WeaponStatData_GetModifiedStatsForWeaponBetweenAttachments( string weaponRef, array<string> currentAttachmentsRef, array<string> newAttachmentsRef, array<string> statRefs )
+{
+	array<WeaponStatData> moddedStats
+
+	foreach ( statRef in statRefs )
+	{
+		WeaponStatData data = WeaponStatData_GetStatForWeaponBetweenAttachments( weaponRef, currentAttachmentsRef, newAttachmentsRef, statRef )
+
+		if ( data.previousStatValue == data.newStatValue )
+			continue
+
+		moddedStats.append( data )
+	}
+
+	return moddedStats
+}
+
+
+array<WeaponStatData> function WeaponStatData_GetStatsForWeaponWithAttachments( string weaponRef, array<string> attachmentsRef, array<string> statRefs )
+{
+	return WeaponStatData_GetStatsForWeaponBetweenAttachments( weaponRef, [], attachmentsRef, statRefs )
+}
+
+
+float function GetWeaponStatValue_WithMods( string weaponRef, array<string> attachmentsRef, string statRef )
+{
+	
+	switch ( statRef )
+	{
+		case "fire_rate":
+			return WeaponStatData_GetWeaponROF( weaponRef, attachmentsRef )
+		case "damage_near_value":
+			return WeaponStatData_GetWeaponDamage( weaponRef, attachmentsRef )
+		case "damage_headshot":
+			return WeaponStatData_GetWeaponHeadshotDamage( weaponRef, attachmentsRef )		
+		case "ammo_clip_size":
+			return WeaponStatData_GetWeaponMagSize( weaponRef, attachmentsRef )		
+		case "reloadempty_time":
+			return WeaponStatData_GetWeaponReloadTime( weaponRef, attachmentsRef )
+	}
+
+	return GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( weaponRef, attachmentsRef, statRef )
+}
+
+
+float function GetWeaponInfoFileKeyField_WithMods_Global_ToFloat( string weaponRef, array<string> attachmentsRef, string statRef )
+{
+	var statValue = GetWeaponInfoFileKeyField_WithMods_Global( weaponRef, attachmentsRef, statRef )
+
+	if ( statValue == null )
+	{
+		Warning( "Stat ref: " + statRef + " not found for weapon ref: " + weaponRef )
+		return -1
+	}
+
+	if ( IsFloat( statValue ) )
+	{
+		return expect float(statValue)
+	}
+	else if ( IsInt( statValue ) )
+	{
+		return float( expect int(statValue) )
+	}
+
+	Warning( "Stat value for " + statRef + " is not a number." )
+	return -1
+}
+
+float function GetLinearStatValue( string statRef, float statValue )
+{
+	Assert( statRef in file.statMaxValues, "Missing max stat value for stat ref: " + statRef )
+
+	float normalizedValue = statValue / file.statMaxValues[ statRef ]
+
+	if ( INVERSED_STATS.contains( statRef ) )
+		return 1.0 - normalizedValue
+
+	return normalizedValue
+}
+
+string function GetWeaponRefByItemFlavor_Internal( ItemFlavor weapon )
+{
+	if ( ItemFlavor_GetType( weapon ) != eItemType.loot_main_weapon )
+		return ""
+
+
+		if ( WeaponItemFlavor_HasTakeover( weapon ) )
+		{
+			string takeoverClassname = WeaponItemFlavor_GetTakeoverClassname( weapon )
+			if ( takeoverClassname != "" )
+				return takeoverClassname
+		}
+
+
+	return WeaponItemFlavor_GetClassname( weapon )
+}
+
+string function GetStatUnitShortLocKeyForStatRef( string statRef )
+{
+	if ( statRef in STAT_NAME_TO_UNIT_SHORT_LOC_KEY )
+		return STAT_NAME_TO_UNIT_SHORT_LOC_KEY[ statRef ]
+
+	return "%s1" 
+}
+
+
+
+int function SortAttachmentStatDataByPositiveToNegative( AttachmentStatData a, AttachmentStatData b )
+{
+	if ( a.isStatImproved && !b.isStatImproved )
+		return -1
+
+	if ( !a.isStatImproved && b.isStatImproved )
+		return 1
+
+	return 0
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if DEV
+
+void function DEV_PrintAllCachedAttachmentStats()
+{
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+	printf( "%s", FUNC_NAME() )
+	foreach ( attachmentEntry, statsArray in file.attachmentStatsByAttachmentRef )
+	{
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "  " + attachmentEntry )
+		DEV_PrintAttachmentStats( statsArray )
+		printt( "\n" )
+	}
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+}
+
+
+
+void function DEV_PrintAttachmentStats( array<AttachmentStatData> stats )
+{
+	foreach ( AttachmentStatData stat in stats )
+	{
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Ref: " + stat.statRef )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Name: " + stat.statName )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		IsImproved " + stat.isStatImproved + "\n" )
+	}
+}
+
+
+void function DEV_PrintAttachments( string label, array<string> attachmentsRef )
+{
+	if ( attachmentsRef.len() == 0 )
+	{
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "	" + label + ": NONE" )
+		return
+	}
+
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "	" + label + ": " + attachmentsRef.len() )
+	foreach ( attachment in attachmentsRef )
+	{
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Attachment: " + attachment )
+	}
+}
+
+void function DEV_PrintBaseStats( array<WeaponBaseStatData> stats )
+{
+	foreach ( WeaponBaseStatData stat in stats )
+	{
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Ref: " + stat.statRef )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Name: " + stat.statName )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Value: " + stat.statValue + "\n" )
+	}
+}
+
+void function DEV_PrintStats( array<WeaponStatData> stats )
+{
+	foreach ( WeaponStatData stat in stats )
+	{
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Ref: " + stat.statRef )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Name: " + stat.statName )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		New Stat Value: " + stat.newStatValue )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Previous Stat Value: " + stat.previousStatValue )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Stat Value Added: " + stat.statValAdded )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Linear New Value: " + stat.linearNewVal )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Linear Previous Value: " + stat.linearPreviousVal )
+		printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "		Linear Value Added: " + stat.linearStatValAdded + "\n" )
+	}
+}
+
+void function DEV_PrintBaseStatDataForWeaponForStats( string weaponRef, array<string> statRefs )
+{
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+	printf( "%s", FUNC_NAME() )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Weapon Ref: " + weaponRef )
+	DEV_PrintAttachments( "Current Attachments", [] )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Stat Refs: " + statRefs.len() )
+	array<WeaponBaseStatData> stats = GetBaseStatsForWeaponWithAttachments( weaponRef, [], statRefs )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Base Stats with attachments: " )
+	DEV_PrintBaseStats( stats )
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+}
+
+void function DEV_PrintStatDataForWeaponWithAttachmentsForStats( string weaponRef, array<string> attachmentsRef, array<string> statRefs )
+{
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+	printf( "%s", FUNC_NAME() )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Weapon Ref: " + weaponRef )
+	DEV_PrintAttachments( "Current Attachments", attachmentsRef )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Stat Refs: " + statRefs.len() )
+	array<WeaponStatData> stats = WeaponStatData_GetStatsForWeaponWithAttachments( weaponRef, attachmentsRef, statRefs )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Stats with attachments: " )
+	DEV_PrintStats( stats )
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+}
+
+void function DEV_PrintStatDataForWeaponBetweenAttachmentsForStats( string weaponRef, array<string> currentAttachmentsRef, array<string> newAttachmentsRef, array<string> statRefs )
+{
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+	printf( "%s", FUNC_NAME() )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Weapon Ref: " + weaponRef )
+	DEV_PrintAttachments( "Current Attachments", currentAttachmentsRef )
+	DEV_PrintAttachments( "New Attachments", newAttachmentsRef )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Stat Refs: " + statRefs.len() )
+	array<WeaponStatData> stats = WeaponStatData_GetStatsForWeaponBetweenAttachments( weaponRef, currentAttachmentsRef, newAttachmentsRef, statRefs )
+	printt( WEAPON_STAT_UTILITY_DEBUG_PREFIX + "Stats with attachments: " )
+	DEV_PrintStats( stats )
+	printf( WEAPON_STAT_UTILITY_DEBUG_PREFIX + " -----------------------------" )
+}
+
+void function DEV_PrintBaseStatDataForWeapon( string weaponRef )
+{
+	DEV_PrintBaseStatDataForWeaponForStats( weaponRef, DISPLAY_STAT_VALUE_NAMES )
+}
+
+void function DEV_PrintStatDataForWeaponWithAttachments( string weaponRef, array<string> attachmentsRef )
+{
+	DEV_PrintStatDataForWeaponWithAttachmentsForStats( weaponRef, attachmentsRef, DISPLAY_STAT_VALUE_NAMES )
+}
+
+void function DEV_PrintStatDataForWeaponBetweenAttachments( string weaponRef, array<string> currentAttachmentsRef, array<string> newAttachmentsRef )
+{
+	DEV_PrintStatDataForWeaponBetweenAttachmentsForStats( weaponRef, currentAttachmentsRef, newAttachmentsRef, DISPLAY_STAT_VALUE_NAMES )
+}
+#endif
+ 

@@ -1,0 +1,2059 @@
+global function MpAbilityFragDrone_Init
+global function OnWeaponToss_FragDrone
+global function OnWeaponTossReleaseAnimEvent_ability_frag_drone
+global function DoesPlayerHaveOverdrivePassive
+
+global function ServerToClient_ShowFragDroneHealthBar
+global function ServerToClient_ChangeDroneState
+global function FragDrone_EntityShouldBeHighlighted
+global function OnCreateClientPreviewFX_ability_FragDrone
+global function OnUpdateClientPreviewFX_ability_FragDrone
+global function OnDestroyClientPreviewFX_ability_FragDrone
+
+
+
+
+
+
+const asset FRAG_DRONE_MODEL = $"mdl/props/overdrive_ult_drone/overdrive_ult_drone_w.rmdl"
+
+
+const asset VFX_DRONE_DEST						= $"P_ability_axle_ult_drone_dest"
+const asset VFX_FRAG_DRONE_IDLE_TAIL			= $"P_ability_axle_ult_drone_wing_trail"
+const asset VFX_FRAG_DRONE_IDLE_WING			= $"P_ability_axle_ult_active_wing"
+const asset VFX_FRAG_DRONE_CHASE				= $"P_ability_axle_ult_drone_wing_trail"
+const asset VFX_FRAG_DRONE_BOOM_BUILDUP			= $"P_ability_axle_ultimate_repulse_buildup"
+const asset VFX_FRAG_DRONE_BOOM_BUILDUP_WING	= $"P_ability_axle_ultimate_repulse_buildup_wing"
+const asset VFX_FRAG_DRONE_VICTIM 				= $"P_ability_axle_ult_repulse_trail"
+const asset COCKPIT_TARGETING_IDLE_SCREEN_FX	= $"P_clbr_tac_screen_idle"
+const asset VFX_FRAG_DRONE_DEPLOY				= $"P_ability_axle_ult_drone_launch_trail"
+const asset LOCK_ON_MARKER						= $"P_ability_axle_ult_lockon"
+const asset VFX_DEPLOY_PREVIEW_PATH				= $"P_ability_axle_ult_gate_arrows_preview"
+const asset VFX_SCAN_AREA						= $"P_ability_axle_ult_target_wedge"
+const asset VFX_DEPLOY_GROUND_FX 				= $"P_axle_ult_graffiti"
+const asset VFX_SCAN_IDLE						= $"P_axle_ult_scan_lines"
+const asset VFX_DRONE_SPAWN						= $"P_ability_axle_ult_drone_pop_in"
+const asset VFX_ULT_PATH_EDGE 					= $"P_axle_ult_preview_edge"
+const asset VFX_ULT_CLIMB_OVER_ARROW			= $"P_axle_ult_preview_over"
+const asset VFX_ULT_OVER_EDGE_ARROW				= $"P_axle_ult_preview_under"
+const asset VFX_ULT_STOP_ARROW					= $"P_axle_ult_preview_stop"
+const asset DRONE_PATH_PREVIEW_FX				= $"mdl/fx/abilities/fx_ability_overdrive_ult_previewarrow_w.rmdl"
+
+
+const vector VFX_DRONE_TRAIL_COLOR_FRIENDLY 	= <255, 32, 162>	
+const vector VFX_DRONE_TRAIL_COLOR_ENEMY 		= <255, 32, 69>	
+const vector VFX_SCAN_AREA_COLOR				= <228, 12, 248>	
+
+
+const string DRONE_DESTROYED_SOUND				= "Overdrive_Ult_Drone_Explo_Destroyed"
+const string DRONE_EXPLODE_SOUND				= "Overdrive_Ult_Drone_Explo_OnTarget"
+const string DRONE_DETONATION_WARNING			= "Overdrive_Ult_Drone_ExplosiveWarningBeep"
+const string SEEKING_TARGET_SOUND_LOOP			= "Overdrive_Ult_Drone_SearchForTarget_LP"
+const string CHASE_TARGET_SOUND_LOOP			= "Overdrive_Ult_Drone_ChaseTarget_LP"
+const string CLIMB_OVER_SOUND					= "Overdrive_Ult_Drone_VerticalHop"
+
+const string DRONE_LOCKED_ON_1P					= "Overdrive_Ult_Drone_TargetLock_Attacker"
+const string DRONE_TARGET_LOST_1P				= "Overdrive_Ult_Drone_TargetLock_Lost_Attacker"
+const string TARGET_OF_FRAG_DRONE_LOCK_ON_1P	= "Overdrive_Ult_Drone_TargetLock_Victim"
+const string TARGET_OF_FRAG_DRONE_LOCK_ON_LOST_1P = "Overdrive_Ult_Drone_TargetLock_Lost_Victim"
+
+
+const string SIGNAME_END_SEARCH_FOR_PLAYER_TARGETS	= "EndFragDroneSearchingForPlayerTargets"
+const string SIGNAME_STOP_CHASE				= "FragDroneStopChase"
+const string STOP_HEALTH_BAR_SIGNAL			= "FragDroneStopHealthBar"
+
+
+global const string FRAG_DRONE_MOVER_SCRIPTNAME = "frag_drone_mover"
+const string IMPACT_FX_BOMB_EXPLODE = "ability_axle_ult_repulsor"
+
+
+const string DEPLOY_ANIM 			= "overdrive_killswitch_deploy"
+const string IDLE_ANIM 				= "overdrive_killswitch_idle"
+const string IDLE_TO_LOCKON_ANIM 	= "overdrive_killswitch_idle_LockOn"
+const string HIT_REACTION_ANIM 		= "overdrive_killswitch_idle_HitReaction"
+const string DIVE_TO_DETONATE_ANIM 	= "overdrive_killswitch_dive"
+
+
+const int DRONE_MOVEMENT_TRACE_MASK = TRACE_MASK_PLAYERSOLID
+const int DRONE_MOVEMENT_COLLISION_GROUP = TRACE_COLLISION_GROUP_PLAYER_MOVEMENT
+const vector DRONE_BOUNDING_MINS = < -16.1066647, -22.8009911, -3.86204815 >
+const vector DRONE_BOUNDING_MAXS = < 16.7317848, 22.8010159, 20.7043133 >
+
+
+const float HEIGHT_CORRECTION_TOLERANCE = 1.0
+const float PARENT_GROUND_HEIGHT_DIFF_TOLERANCE = 7.0
+const float FOLLOW_TARGET_DISTANCE_TOLERANCE_SQR = 25.0
+
+
+const float FRAG_DRONE_GIVE_UP_TIME = 20.0
+const float CRITICAL_SLOPE = 0.7
+const float MIN_DIST_BUFFER = 1.0
+const int PATH_ARROWS_ACTIVATION_CP	= 4
+const int PATH_ARROWS_MAX_CP = 11
+
+#if DEV
+const bool DEBUG_DRAW_CHASE_TARGET = false
+const bool DEBUG_DRAW_LOS_CHECK = false
+const bool DEBUG_DRAW_CREATE_STRAIGHT_PATH = false
+const bool DEBUG_DRAW_STRAIGHT_PATH_MOVEMENT = false
+const bool DEBUG_DRAW_CREATION_SPOT = false
+const bool DEBUG_DRAW_FIND_PATH_START = false
+const bool DAMAGE_KNOCKUP_SCALING_DEBUG = false
+const bool CLIENT_PREVIEW_FX_PERF = false
+const bool DEBUG_SCAN_CONNECT_POINT = false 
+#endif
+
+
+
+
+
+
+
+
+
+struct ArrowLocationData
+{
+	vector pos
+	bool showStop = false
+
+		bool showClimbArrow = false
+		bool showOverLedgeArrow = false
+
+}
+
+struct
+{
+
+
+
+
+
+
+
+		table< int, var > droneOffscreenRuis = {}
+		int deployPathFX
+		int deployEdgeFxLeft
+		int deployEdgeFxRight
+		int groundFX
+		int scanAreaFX
+		int stopArrowFX
+		int climbOverArrowFX
+		int overLedgeArrowFX
+		entity minDistFxProxy
+		array<entity> minDistArrows
+
+} file
+
+struct
+{
+	
+	int droneMaxHealth		= 200
+	float droneLifetime		= 15.0
+	float droneChaseTime	= 10.0
+	float droneHealthBarDuration = 1.0
+    float startHeightFromGround = 20.0
+	float startDistFromPlayer = 10.0
+	float minFwdClearance = 75.0
+	float refundTime = 0.3
+
+	
+	float maxChaseSpeed		= 450.0
+	float minChaseSpeed		= 50.0
+	float maxSearchDistance = 1000.0 
+	float startExplodeDistance = 150.0
+	float maxChaseValuesBuffer = 100.0
+	float maxHeightDiffForTargetAcquisition	= 200.0
+	float droneBufferRadius = 25.0
+	float parentVelFrac		= 0.35
+	float droneFollowMaxDistance = 50.0
+	float droneFollowMinDistance = 40.0
+	int maxTotalAdjustments = 10
+	float adjustmentDistToPosTolerance = 5.0
+	float adjustmentOffWallAvoidDist = 10.0
+
+	
+	float defaultMinTargetingDist = 160.0
+	float fovSearchAngle		= 80.0
+
+	
+	float droneMinHeight		= 50.0
+	float maxPathLength			= 1000.0
+	float pathStep				= 50.0
+	float straightPathSpeed		= 650.0
+	float timeToInitialPos		= 0.4
+	float gravityScale			= 1.25
+	float baseMinHeightUpwardsVel = 600.0
+	float baseAccel				= 100.0
+
+	
+	float lookAheadTime 		= 0.5
+	float wallClimbHeight		= 180.0
+	float offGroundAvoidanceDistFrac = 0.5
+	float fwdWallClimbTraceAdditionalDistFrac = 0.125
+	float overWallClearanceDistFrac = 0.5
+	float diagAvoidanceMaxDegreePivot = 30.0
+	float diagAvoidanceClearanceMult = 1.3
+	float initialDiagAvoidanceDegreeCheck = 10.0
+	float diagonalAvoidanceReturnTrajectoryDistToCheck = 100.0
+
+	
+	int maxMinDistArrows =  50
+	float minDistArrowPathStep = 20.0
+	bool showGroundFX 		= false
+	float scanAreaFXScaling = 4.2
+	float minUltIconVisibleDistance = 3500.0
+	float fxClimbHeight 		= 50.0
+	float maxArrowHeightDiff = 110.0
+
+	
+	float detonationTime		= 1.4
+	float explosionRadius		= 250.0
+	float proximityThreatIndicatorRange = 350.0
+	float maxExplosionDamage	= 25.0
+	float minExplosionDamage	= 25.0
+	float minKnockUpMagnitude	= 500.0
+	float minKnockupDist 		= 100.0
+	float maxKnockUpMagnitude	= 850.0
+	float xyLowSpeedLimit		= 0.0
+	float xyHighSpeedLimit		= 800.0
+	float xyLowSpeedKnockBackScale = 1.75
+	float xyHighSpeedKnockBackScale = 0.8
+	float shellshockDuration 	= 1.5
+	float highlightDuration 	= 2.0
+	
+	bool hasFriendlyKnockback	= true
+} tuning
+
+void function MpAbilityFragDrone_Init()
+{
+	RegisterTuningStruct( "tuning", "axle_ult_" )
+
+	PrecacheScriptString( "mp_ability_frag_drone" )
+	PrecacheModel( FRAG_DRONE_MODEL )
+	PrecacheModel( DRONE_PATH_PREVIEW_FX )
+
+	PrecacheParticleSystem( VFX_DRONE_DEST )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_IDLE_TAIL )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_IDLE_WING )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_CHASE )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_BOOM_BUILDUP )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_BOOM_BUILDUP_WING )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_VICTIM )
+	PrecacheParticleSystem( COCKPIT_TARGETING_IDLE_SCREEN_FX )
+	PrecacheParticleSystem( VFX_FRAG_DRONE_DEPLOY )
+	PrecacheParticleSystem( LOCK_ON_MARKER )
+	PrecacheParticleSystem( VFX_DEPLOY_PREVIEW_PATH )
+	PrecacheParticleSystem( VFX_SCAN_AREA )
+	PrecacheParticleSystem( VFX_SCAN_IDLE )
+	PrecacheParticleSystem( VFX_DRONE_SPAWN )
+	PrecacheParticleSystem( VFX_ULT_PATH_EDGE )
+	PrecacheParticleSystem( VFX_DEPLOY_GROUND_FX )
+	PrecacheParticleSystem( VFX_ULT_OVER_EDGE_ARROW )
+	PrecacheParticleSystem( VFX_ULT_CLIMB_OVER_ARROW )
+	PrecacheParticleSystem( VFX_ULT_STOP_ARROW )
+
+	Remote_RegisterClientFunction( "ServerToClient_ShowFragDroneHealthBar", "entity" )
+	Remote_RegisterClientFunction( "ServerToClient_ChangeDroneState", "entity", "bool" )
+
+
+
+
+
+
+
+
+
+		RegisterSignal( STOP_HEALTH_BAR_SIGNAL )
+
+		AddScriptNameCreateCallback( FRAG_DRONE_MOVER_SCRIPTNAME, FragDrone_OnMoverCreated )
+
+		StatusEffect_RegisterEnabledCallback( eStatusEffect.overdrive_ult_scan, UpdateHighlightOnStatusEffectChange )
+		StatusEffect_RegisterDisabledCallback( eStatusEffect.overdrive_ult_scan, UpdateHighlightOnStatusEffectChange )
+
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________SharedWeaponCallbacks___________________________(){}
+#endif
+
+var function OnWeaponToss_FragDrone( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity weaponOwner = weapon.GetOwner()
+	if ( !IsValid( weaponOwner ) )
+		return 0
+
+	if( !FragDrone_CheckForwardClearance(  weapon, weaponOwner, attackParams.dir ) )
+		return 0
+
+	return -1.0
+}
+
+var function OnWeaponTossReleaseAnimEvent_ability_frag_drone( entity weapon, WeaponPrimaryAttackParams attackParams )
+{
+	entity weaponOwner = weapon.GetOwner()
+	if ( !IsValid( weaponOwner ) )
+		return 0
+
+	if( !FragDrone_CheckForwardClearance( weapon, weaponOwner, attackParams.dir ) )
+		return 0
+
+	PlayerUsedOffhand( weaponOwner, weapon, true )
+
+
+
+
+
+
+
+
+
+	return weapon.GetAmmoPerShot()
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ClientWeaponCallbacks___________________________(){}
+#endif
+
+
+void function OnCreateClientPreviewFX_ability_FragDrone( entity weapon, entity player )
+{
+	for( int i = 0; i <= tuning.maxMinDistArrows; i++ )
+	{
+		entity arrowFXProxy = CreateMinDistArrow()
+		file.minDistArrows.append( arrowFXProxy )
+	}
+
+	file.minDistFxProxy = CreateClientSidePropDynamic( ZERO_VECTOR, ZERO_VECTOR, EMPTY_MODEL )
+	file.minDistFxProxy.EnableRenderAlways()
+
+	int pathFXID = GetParticleSystemIndex( VFX_DEPLOY_PREVIEW_PATH )
+	file.deployPathFX = StartParticleEffectOnEntity( player, pathFXID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetUpdateControlPointsImmediate( file.deployPathFX, true )
+
+	int edgeFxID = GetParticleSystemIndex( VFX_ULT_PATH_EDGE )
+	file.deployEdgeFxLeft = StartParticleEffectInWorldWithHandle( edgeFxID, ZERO_VECTOR, ZERO_VECTOR )
+	file.deployEdgeFxRight = StartParticleEffectInWorldWithHandle( edgeFxID, ZERO_VECTOR, ZERO_VECTOR )
+	EffectSetUpdateControlPointsImmediate( file.deployEdgeFxLeft, true )
+	EffectSetUpdateControlPointsImmediate( file.deployEdgeFxRight, true )
+
+	int stopArrowFxID = GetParticleSystemIndex( VFX_ULT_STOP_ARROW )
+	file.stopArrowFX = StartParticleEffectInWorldWithHandle( stopArrowFxID, ZERO_VECTOR, ZERO_VECTOR )
+	EffectSetUpdateControlPointsImmediate( file.stopArrowFX, true )
+
+	int climbOverArrowFXID = GetParticleSystemIndex( VFX_ULT_CLIMB_OVER_ARROW )
+	file.climbOverArrowFX = StartParticleEffectInWorldWithHandle( climbOverArrowFXID, ZERO_VECTOR, ZERO_VECTOR )
+	EffectSetUpdateControlPointsImmediate( file.climbOverArrowFX, true )
+
+	int overLedgeArrowFXID = GetParticleSystemIndex( VFX_ULT_OVER_EDGE_ARROW )
+	file.overLedgeArrowFX = StartParticleEffectInWorldWithHandle( overLedgeArrowFXID, ZERO_VECTOR, ZERO_VECTOR )
+	EffectSetUpdateControlPointsImmediate( file.overLedgeArrowFX, true )
+
+	int scanAreaFXID = GetParticleSystemIndex( VFX_SCAN_AREA )
+	file.scanAreaFX = StartParticleEffectOnEntity( file.minDistFxProxy, scanAreaFXID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+	EffectSetUpdateControlPointsImmediate( file.scanAreaFX, true )
+	EffectSetControlPointVector( file.scanAreaFX, 1, VFX_SCAN_AREA_COLOR ) 
+	EffectSetControlPointVector( file.scanAreaFX, 2, < tuning.scanAreaFXScaling, 0.2, 0 > ) 
+
+	if( tuning.showGroundFX )
+	{
+		int groundFXID = GetParticleSystemIndex( VFX_DEPLOY_GROUND_FX )
+		file.groundFX = StartParticleEffectOnEntity( player, groundFXID, FX_PATTACH_ABSORIGIN_FOLLOW, ATTACHMENTID_INVALID )
+		EffectSetUpdateControlPointsImmediate( file.groundFX, true )
+		EffectSetControlPointVector( file.groundFX, 1, <1,0,0> )
+	}
+}
+
+void function OnUpdateClientPreviewFX_ability_FragDrone( entity weapon, entity player )
+{
+#if DEV
+		if( CLIENT_PREVIEW_FX_PERF )
+			PerfStart( PerfIndexClient.FragDroneClientPreviewFX )
+#endif
+
+	if ( !IsValid( weapon ) )
+		return
+
+	if ( !IsValid( player ) )
+		return
+
+	
+	if( InPrediction() )
+	{
+		weapon.SetScriptFloat0( Length2D( player.GetVelocity() ) )
+	}
+
+	if( ShouldHideAllDeployFx( player ) )
+	{
+		HideAllDeployFx( player.GetOrigin() )
+		return
+	}
+	else
+	{
+		
+		EffectSetControlPointVector( file.scanAreaFX, 1, VFX_SCAN_AREA_COLOR )
+	}
+
+	vector dir = FlattenNormalizeVec( weapon.GetAttackDirection() )
+	vector angles = VectorToAngles( dir )
+	float minDist = FragDrone_GetVariableMinTargetingDistance( player, dir )
+	ArrowLocationData minDistData
+	minDistData = FragDrone_FindMinDistPos( player, dir, minDist, tuning.wallClimbHeight )
+
+	file.minDistFxProxy.SetOrigin( minDistData.pos )
+	file.minDistFxProxy.SetAngles( angles )
+
+	EffectSetControlPointVector( file.stopArrowFX, 0, minDistData.pos )
+	EffectSetControlPointVector( file.climbOverArrowFX, 0, minDistData.pos )
+	EffectSetControlPointVector( file.overLedgeArrowFX, 0, minDistData.pos )
+
+	vector stopArrowVisibility = minDistData.showStop ? <1,1,1> : ZERO_VECTOR
+	vector climbOverArrowVisibility = minDistData.showClimbArrow ? <1,1,1> : ZERO_VECTOR
+
+	EffectSetControlPointVector( file.stopArrowFX, 1, stopArrowVisibility)
+	EffectSetControlPointVector( file.climbOverArrowFX, 1, climbOverArrowVisibility )
+	EffectSetControlPointVector( file.overLedgeArrowFX, 1, ZERO_VECTOR )
+
+	FragDrone_UpdateMinDistArrows( player.GetOrigin(), dir, angles, minDist, minDistData )
+	bool shouldntShowMainPathInfo = minDistData.showStop || minDistData.showClimbArrow || minDistData.showOverLedgeArrow
+	FragDrone_UpdatePathArrows( player.GetOrigin(), minDistData.pos, dir, shouldntShowMainPathInfo )
+	FragDrone_UpdatePathEdges( player, dir, minDistData.pos, minDist, shouldntShowMainPathInfo )
+
+#if DEV
+	if( CLIENT_PREVIEW_FX_PERF )
+	{
+		PerfEnd( PerfIndexClient.FragDroneClientPreviewFX )
+		PerfDump()
+	}
+#endif
+}
+
+void function OnDestroyClientPreviewFX_ability_FragDrone( entity weapon, entity player )
+{
+	if ( EffectDoesExist( file.deployPathFX ) )
+		EffectStop( file.deployPathFX, false, true )
+
+	if ( EffectDoesExist( file.scanAreaFX ) )
+		EffectStop( file.scanAreaFX, false, true )
+
+	if( EffectDoesExist( file.deployEdgeFxLeft ) )
+		EffectStop( file.deployEdgeFxLeft, false, true )
+
+	if( EffectDoesExist( file.deployEdgeFxRight ) )
+		EffectStop( file.deployEdgeFxRight, false, true )
+
+	if( EffectDoesExist( file.groundFX ) )
+		EffectStop( file.groundFX, true, false )
+
+	if( EffectDoesExist( file.climbOverArrowFX ) )
+		EffectStop( file.climbOverArrowFX, true, false )
+
+	if( EffectDoesExist( file.overLedgeArrowFX ) )
+		EffectStop( file.overLedgeArrowFX, true, false )
+
+	if( EffectDoesExist( file.stopArrowFX ) )
+		EffectStop( file.stopArrowFX, true, false )
+
+	if ( IsValid( file.minDistFxProxy ) )
+	{
+		file.minDistFxProxy.Destroy()
+	}
+
+	foreach( entity arrow in file.minDistArrows )
+	{
+		if ( IsValid( arrow ) )
+		{
+			arrow.Destroy()
+		}
+	}
+
+	file.minDistArrows.clear()
+}
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _______________ServerCodeCallbacks_________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function __________________SharedFuncs___________________________(){}
+#endif
+
+bool function DoesPlayerHaveOverdrivePassive( entity player )
+{
+	return PlayerHasPassive( player, ePassives.PAS_OVERDRIVE )
+}
+
+bool function TraceHitAWall( TraceResults trace )
+{
+	return trace.fraction < 1.0 && trace.surfaceNormal.z < CRITICAL_SLOPE
+}
+
+bool function ShouldStopMinDistTraces( TraceResults trace, vector startPos )
+{
+	return TraceHitAWall( trace ) && Distance2DSqr( startPos, trace.endPos ) < (tuning.minFwdClearance * tuning.minFwdClearance)
+}
+
+bool function FragDrone_CheckForwardClearance( entity weapon, entity weaponOwner, vector attackDir )
+{
+	vector pathDir = FlattenNormalizeVec( attackDir )
+	float minDist = FragDrone_GetVariableMinTargetingDistance( weaponOwner, pathDir )
+	ArrowLocationData data = FragDrone_FindMinDistPos( weaponOwner, pathDir, minDist, tuning.wallClimbHeight )
+
+	if( data.showStop )
+	{
+
+			AddPlayerHint( 1.0, 0.25, $"", "#DRONE_PATH_START_FAIL" )
+			EmitSoundOnEntity( weaponOwner, "Overdrive_Ult_ClearanceWarning_1P" )
+
+		return false
+	}
+
+	return true
+}
+
+TraceResults function UpAndOverTraceCheck( vector traceStart, vector traceDir, float climbHeight, float distToCheck, array<entity> ignoreArray, vector hullUp, bool showDevTraces )
+{
+	vector upTraceStart  = traceStart
+	vector upTraceEnd    = upTraceStart + < 0, 0, climbHeight >
+	TraceResults upTrace = TraceLine( upTraceStart, upTraceEnd, ignoreArray, DRONE_MOVEMENT_TRACE_MASK, DRONE_MOVEMENT_COLLISION_GROUP )
+
+#if DEV
+		if ( showDevTraces )
+			DebugDrawLine( upTraceStart, upTrace.endPos, COLOR_BLUE, true, 2.0 )
+#endif
+
+	vector newFwdTraceStart = upTrace.endPos
+	vector newFwdTraceEnd   = newFwdTraceStart + (traceDir * distToCheck)
+
+	TraceResults fwdTrace = TraceHull(
+		newFwdTraceStart,
+		newFwdTraceEnd,
+		DRONE_BOUNDING_MINS,
+		DRONE_BOUNDING_MAXS,
+		ignoreArray,
+		DRONE_MOVEMENT_TRACE_MASK,
+		DRONE_MOVEMENT_COLLISION_GROUP,
+		hullUp
+	)
+
+#if DEV
+		if ( showDevTraces )
+			DebugDrawLine( newFwdTraceStart, fwdTrace.endPos, COLOR_LIGHT_GREEN, true, 2.0 )
+#endif
+
+	return fwdTrace
+}
+
+ArrowLocationData function FragDrone_FindMinDistPos( entity weaponOwner, vector traceDir, float minDist, float climbHeight )
+{
+	ArrowLocationData data
+	array<entity> ignoreArray = [weaponOwner]
+	vector traceOrigin = weaponOwner.GetOrigin() + <0, 0, tuning.droneMinHeight>
+
+	TraceResults fwdTrace = TraceHull(
+		traceOrigin,
+		traceOrigin + traceDir * minDist,
+		DRONE_BOUNDING_MINS,
+		DRONE_BOUNDING_MAXS,
+		ignoreArray,
+		DRONE_MOVEMENT_TRACE_MASK,
+		DRONE_MOVEMENT_COLLISION_GROUP,
+		weaponOwner.GetUpVector()
+	)
+
+#if DEV
+		if ( DEBUG_DRAW_FIND_PATH_START )
+			DebugDrawLine( traceOrigin, fwdTrace.endPos, COLOR_GREEN, true, 2.0 )
+#endif
+
+	if ( fwdTrace.fraction < 1.0 )
+	{
+		if( ShouldStopMinDistTraces( fwdTrace, traceOrigin ) )
+		{
+			data.showStop = true
+		}
+		else
+		{
+
+				bool originalTraceHitWall = fwdTrace.endPos.z < CRITICAL_SLOPE
+				float fwdClearance = originalTraceHitWall ? fwdTrace.fraction + min( 1.0 - fwdTrace.fraction, tuning.fwdWallClimbTraceAdditionalDistFrac ) : 1.0
+
+
+
+			float distToCheck = fwdClearance * minDist
+			vector startFwdTrace = traceOrigin
+			bool showDevTraces = false
+#if DEV
+				showDevTraces = DEBUG_DRAW_FIND_PATH_START
+#endif
+			TraceResults newFwdTrace = UpAndOverTraceCheck( startFwdTrace, traceDir,tuning.wallClimbHeight, distToCheck, ignoreArray, weaponOwner.GetUpVector(), showDevTraces )
+
+			if ( TraceHitAWall( newFwdTrace ) )
+			{
+				data.showStop = true
+			}
+
+			else if( originalTraceHitWall )
+			{
+				data.showClimbArrow = true
+			}
+			else
+			{
+				fwdTrace = newFwdTrace
+			}
+
+		}
+	}
+
+
+		vector startDownTrace = fwdTrace.endPos
+		vector endDownTrace = fwdTrace.endPos - < 0, 0, 3000 >
+
+		TraceResults downTrace = TraceLine( startDownTrace, endDownTrace, ignoreArray, DRONE_MOVEMENT_TRACE_MASK, DRONE_MOVEMENT_COLLISION_GROUP )
+
+#if DEV
+			if ( DEBUG_DRAW_FIND_PATH_START )
+				DebugDrawLine( startDownTrace, endDownTrace, COLOR_LIGHT_GREEN, true, 2.0 )
+#endif
+
+		data.pos = downTrace.endPos
+
+
+	return data
+}
+
+float function FragDrone_GetVariableMinTargetingDistance( entity player, vector dir )
+{
+	float playerRunSpeed = player.GetPlayerRunSpeed()
+	if( playerRunSpeed <= 0 )
+	{
+		return tuning.defaultMinTargetingDist
+	}
+
+	float playerFwdSpeed = DotProduct( dir, player.GetVelocity() )
+	float distMultiplier = max( playerFwdSpeed/playerRunSpeed, 1.0 )
+
+	return distMultiplier * tuning.defaultMinTargetingDist
+}
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function __________________ServerFuncs___________________________(){}
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function ___________________ClientFuncs___________________________(){}
+#endif
+
+
+entity function CreateMinDistArrow()
+{
+	entity proxy = CreateClientSidePropDynamic( ZERO_VECTOR, ZERO_VECTOR, DRONE_PATH_PREVIEW_FX )
+	proxy.Show()
+
+	return proxy
+}
+
+bool function ShouldHideAllDeployFx( entity player )
+{
+	if( player.IsZiplining() )
+		return true
+
+	if( player.Player_IsSkydiving() )
+		return true
+
+	if( player.IsMantling() )
+		return true
+
+	if( player.IsWallRunning() )
+		return true
+
+	return false
+}
+
+void function HideAllDeployFx( vector playerOrigin )
+{
+	foreach( arrow in file.minDistArrows )
+	{
+		arrow.Hide()
+	}
+
+	for( int cp = PATH_ARROWS_ACTIVATION_CP; cp <= PATH_ARROWS_MAX_CP; cp++ )
+	{
+		int indexMain = (cp - PATH_ARROWS_ACTIVATION_CP)
+		EffectSetControlPointVector( file.deployPathFX, cp, playerOrigin )
+	}
+
+	EffectSetControlPointVector( file.deployPathFX, 1, ZERO_VECTOR )
+	EffectSetControlPointVector( file.deployPathFX, 2, ZERO_VECTOR )
+	EffectSetControlPointVector( file.deployPathFX, 3, ZERO_VECTOR )
+
+	EffectSetControlPointVector( file.deployEdgeFxRight, 30, ZERO_VECTOR )
+	EffectSetControlPointVector( file.deployEdgeFxLeft, 30, ZERO_VECTOR )
+
+	EffectSetControlPointVector( file.climbOverArrowFX, 0, playerOrigin )
+	EffectSetControlPointVector( file.climbOverArrowFX, 1, ZERO_VECTOR )
+
+	EffectSetControlPointVector( file.overLedgeArrowFX, 0, playerOrigin )
+	EffectSetControlPointVector( file.overLedgeArrowFX, 1, ZERO_VECTOR )
+
+	EffectSetControlPointVector( file.stopArrowFX, 0, playerOrigin )
+	EffectSetControlPointVector( file.stopArrowFX, 1, ZERO_VECTOR )
+
+	EffectSetControlPointVector( file.scanAreaFX, 1, ZERO_VECTOR )
+	file.minDistFxProxy.SetOrigin( playerOrigin )
+}
+
+void function FragDrone_UpdateMinDistArrows( vector origin, vector dir, vector angles, float minDist, ArrowLocationData data )
+{
+	foreach( arrow in file.minDistArrows )
+	{
+		arrow.Hide()
+	}
+
+	float maxPathLength = min( minDist, tuning.minDistArrowPathStep * float( tuning.maxMinDistArrows ) )
+	array<ArrowLocationData> arrowPositions = FragDrone_CreatePathPreviewPositions( origin, dir, tuning.minDistArrowPathStep, maxPathLength )
+	for( int i = 0; i < arrowPositions.len(); i++ )
+	{
+		if( i == arrowPositions.len() - 1 )
+		{
+			if( arrowPositions[i].showClimbArrow )
+			{
+				EffectSetControlPointVector( file.climbOverArrowFX, 1, <1,1,1> )
+				EffectSetControlPointVector( file.climbOverArrowFX, 0, arrowPositions[i].pos )
+				data.showClimbArrow = true
+			}
+			else if( arrowPositions[i].showOverLedgeArrow )
+			{
+				EffectSetControlPointVector( file.overLedgeArrowFX, 1, <1,1,1> )
+				EffectSetControlPointVector( file.overLedgeArrowFX, 0, arrowPositions[i].pos )
+				data.showOverLedgeArrow = true
+			}
+		}
+		else
+		{
+			file.minDistArrows[i].SetOrigin( arrowPositions[i].pos )
+			file.minDistArrows[i].SetAngles( angles )
+			file.minDistArrows[i].Show()
+		}
+	}
+}
+
+void function FragDrone_UpdatePathArrows( vector ownerOrigin, vector minDistPos, vector dir, bool shouldntShow )
+{
+	table<int, int> cpVisibilities
+	if( shouldntShow )
+	{
+		for( int cp = PATH_ARROWS_ACTIVATION_CP; cp <= PATH_ARROWS_MAX_CP; cp++ )
+		{
+			int indexMain = (cp - PATH_ARROWS_ACTIVATION_CP)
+			EffectSetControlPointVector( file.deployPathFX, cp, minDistPos )
+			cpVisibilities[cp] <- 0
+		}
+	}
+	else
+	{
+		float pathStepMain = tuning.pathStep
+		float pathLength = pathStepMain * ( PATH_ARROWS_MAX_CP - PATH_ARROWS_ACTIVATION_CP + 1 )
+		array<ArrowLocationData > pathPointsMain = FragDrone_CreatePathPreviewPositions( minDistPos, dir, pathStepMain, pathLength )
+
+		for( int cp = PATH_ARROWS_ACTIVATION_CP; cp <= PATH_ARROWS_MAX_CP; cp++ )
+		{
+			int indexMain = (cp - PATH_ARROWS_ACTIVATION_CP)
+			if( indexMain < pathPointsMain.len() )
+			{
+				if( indexMain == pathPointsMain.len() - 1 )
+				{
+					if ( pathPointsMain[indexMain].showClimbArrow )
+					{
+						EffectSetControlPointVector( file.climbOverArrowFX, 1, <1, 1, 1> )
+						EffectSetControlPointVector( file.climbOverArrowFX, 0, pathPointsMain[indexMain].pos )
+						cpVisibilities[cp] <- 0
+					}
+					else if ( pathPointsMain[indexMain].showOverLedgeArrow )
+					{
+						EffectSetControlPointVector( file.overLedgeArrowFX, 1, <1, 1, 1> )
+						EffectSetControlPointVector( file.overLedgeArrowFX, 0, pathPointsMain[indexMain].pos )
+						cpVisibilities[cp] <- 0
+					}
+					else if ( pathPointsMain[indexMain].showStop )
+					{
+						EffectSetControlPointVector( file.stopArrowFX, 1, <1, 1, 1> )
+						EffectSetControlPointVector( file.stopArrowFX, 0, pathPointsMain[indexMain].pos )
+						cpVisibilities[cp] <- 0
+					}
+					else
+					{
+						cpVisibilities[cp] <- 1
+					}
+				}
+				else
+				{
+					EffectSetControlPointVector( file.deployPathFX, cp, pathPointsMain[indexMain].pos )
+					cpVisibilities[cp] <- 1
+				}
+			}
+			else
+			{
+				EffectSetControlPointVector( file.deployPathFX, cp, pathPointsMain[pathPointsMain.len() - 1 ].pos )
+				cpVisibilities[cp] <- 0
+			}
+		}
+	}
+
+
+	vector cp1_3Visibility = <cpVisibilities[4], cpVisibilities[5], cpVisibilities[6]>
+	vector cp4_6Visibility = <cpVisibilities[7], cpVisibilities[8], cpVisibilities[9]>
+	vector cp7_8Visibility = <cpVisibilities[10], cpVisibilities[11], 0>
+
+	EffectSetControlPointVector( file.deployPathFX, 1, cp1_3Visibility )
+	EffectSetControlPointVector( file.deployPathFX, 2, cp4_6Visibility )
+	EffectSetControlPointVector( file.deployPathFX, 3, cp7_8Visibility )
+}
+
+void function FragDrone_UpdatePathEdges( entity player, vector dir, vector minDistPos, float minDist, bool shouldntShow )
+{
+	EffectSetControlPointVector( file.deployEdgeFxRight, 0, minDistPos )
+	EffectSetControlPointVector( file.deployEdgeFxLeft, 0, minDistPos )
+
+	if( shouldntShow )
+	{
+		
+		EffectSetControlPointVector( file.deployEdgeFxRight, 30, ZERO_VECTOR )
+		EffectSetControlPointVector( file.deployEdgeFxLeft, 30, ZERO_VECTOR )
+		return
+	}
+	else
+	{
+		EffectSetControlPointVector( file.deployEdgeFxRight, 30, <1,1,1> )
+		EffectSetControlPointVector( file.deployEdgeFxLeft, 30, <1,1,1>  )
+	}
+
+	vector rotVec = player.GetUpVector()
+	vector rightEdgeDir = VectorRotateAxis( dir, player.GetUpVector(), tuning.fovSearchAngle )
+	vector leftEdgeDir = VectorRotateAxis( dir, player.GetUpVector(), -tuning.fovSearchAngle )
+
+	const int minEdgeCP = 0
+	const int maxEdgeCP = 12
+	array<vector> edgePointsLeft
+	array<vector> edgePointsRight
+
+	for( int cp = minEdgeCP; cp <= maxEdgeCP; cp++ )
+	{
+		edgePointsRight.append( minDistPos + rightEdgeDir * tuning.pathStep * cp )
+		edgePointsLeft.append( minDistPos + leftEdgeDir * tuning.pathStep * cp )
+
+		int edgePointsIndex = cp - minEdgeCP
+		if( edgePointsIndex < edgePointsLeft.len() )
+			EffectSetControlPointVector( file.deployEdgeFxLeft, cp, edgePointsLeft[edgePointsIndex] )
+		else
+			EffectSetControlPointVector( file.deployEdgeFxLeft, cp, edgePointsLeft[edgePointsLeft.len() - 1] )
+
+		if( edgePointsIndex < edgePointsRight.len() )
+			EffectSetControlPointVector( file.deployEdgeFxRight, cp, edgePointsRight[edgePointsIndex] )
+		else
+			EffectSetControlPointVector( file.deployEdgeFxRight, cp,  edgePointsRight[edgePointsRight.len() - 1] )
+	}
+}
+
+array<ArrowLocationData> function FragDrone_CreatePathPreviewPositions( vector startPos, vector dir, float pathStep, float maxPathLength, array<entity> ignoreEnts = [] )
+{
+	vector fwdTraceStart = startPos
+	array<ArrowLocationData> pathPositions
+
+	ArrowLocationData startData
+	startData.pos = startPos
+	pathPositions.append( startData )
+
+	fwdTraceStart += <0, 0, tuning.droneMinHeight>
+	int numSteps = int( floor(maxPathLength / pathStep) )
+	for( int i = 0; i < numSteps; i++ )
+	{
+		ArrowLocationData data
+		ArrowLocationData prevArrow = pathPositions.top()
+
+		vector fwdTraceEnd = fwdTraceStart + ( dir * pathStep )
+
+		TraceResults fwdTrace = TraceHull(
+			fwdTraceStart,
+			fwdTraceEnd,
+			DRONE_BOUNDING_MINS,
+			DRONE_BOUNDING_MAXS,
+			ignoreEnts,
+			DRONE_MOVEMENT_TRACE_MASK,
+			DRONE_MOVEMENT_COLLISION_GROUP,
+			UP_VECTOR
+		)
+
+#if DEV
+			if( DEBUG_DRAW_CREATE_STRAIGHT_PATH )
+				DebugDrawLine( fwdTraceStart, fwdTrace.endPos, COLOR_GREEN, true, 0.1 )
+#endif
+
+		vector newFwdTraceStart
+		if( TraceHitAWall( fwdTrace ) )
+		{
+			float fwdClearance = fwdTrace.fraction + min( 1.0 - fwdTrace.fraction, tuning.fwdWallClimbTraceAdditionalDistFrac )
+			float distToCheck = fwdClearance * pathStep
+			bool showDevTraces = false
+#if DEV
+				showDevTraces = DEBUG_DRAW_CREATE_STRAIGHT_PATH
+#endif
+			fwdTrace = UpAndOverTraceCheck( fwdTraceStart, dir, tuning.wallClimbHeight, distToCheck, ignoreEnts, UP_VECTOR, showDevTraces )
+
+			if( TraceHitAWall( fwdTrace ) )
+				prevArrow.showStop = true
+			else
+				prevArrow.showClimbArrow = true
+
+			break
+		}
+
+		vector startDownTrace = fwdTrace.endPos
+		vector endDownTrace = startDownTrace - <0, 0, 3000.0>
+
+		TraceResults downTrace = TraceLine( startDownTrace, endDownTrace, ignoreEnts, DRONE_MOVEMENT_TRACE_MASK, DRONE_MOVEMENT_COLLISION_GROUP )
+
+		vector heightPosToTest = downTrace.endPos
+		if( prevArrow.pos.z - heightPosToTest.z > tuning.maxArrowHeightDiff )
+		{
+			prevArrow.showOverLedgeArrow = true
+			break
+		}
+
+#if DEV
+			if( DEBUG_DRAW_CREATE_STRAIGHT_PATH )
+			{
+				DebugDrawLine( fwdTrace.endPos, downTrace.endPos, COLOR_AQUA, true, 0.1 )
+				DebugDrawSphere( fwdTraceStart, 5.0, COLOR_RED, true, 0.1 )
+			}
+#endif
+
+		data.pos = downTrace.endPos
+		pathPositions.append( data )
+		fwdTraceStart = heightPosToTest + <0, 0, tuning.droneMinHeight>
+	}
+
+	return pathPositions
+}
+
+bool function FragDrone_EntityShouldBeHighlighted( entity viewPlayer, entity hitPlayer )
+{
+	return StatusEffect_HasSeverity( hitPlayer, eStatusEffect.overdrive_ult_scan )
+}
+
+void function FragDrone_OnMoverCreated( entity ent )
+{
+	if ( ent.GetOwner() == GetLocalViewPlayer() )
+		thread FragDrone_CreateAndManageHUDMarker( ent )
+}
+
+void function FragDrone_CreateAndManageHUDMarker( entity drone )
+{
+	EndSignal( drone, "OnDestroy" )
+
+	var rui = CreateFullscreenRui( $"ui/frag_drone_offscreen.rpak", RuiCalculateDistanceSortKey( GetLocalViewPlayer().EyePosition(), drone.GetOrigin() ) )
+	RuiTrackFloat3( rui, "playerAngles", GetLocalViewPlayer(), RUI_TRACK_CAMANGLES_FOLLOW )
+	RuiTrackFloat3( rui, "pos", drone, RUI_TRACK_OVERHEAD_FOLLOW )
+	RuiSetAsset( rui, "icon", $"rui/hud/ultimate_icons/ultimate_overdrive" )
+	RuiSetFloat( rui, "minUltIconVisibleDistance", tuning.minUltIconVisibleDistance )
+
+	int droneEHandle = drone.GetEncodedEHandle()
+	file.droneOffscreenRuis[ droneEHandle ] <- rui
+
+	OnThreadEnd(
+		function() : ( rui, droneEHandle )
+		{
+			thread function() : ( rui, droneEHandle )
+			{
+				if( droneEHandle in file.droneOffscreenRuis )
+					delete file.droneOffscreenRuis[ droneEHandle ]
+
+				vector detonatedColor = SrgbToLinear( GetKeyColor( COLORID_ENEMY ) / 255.0 )
+				RuiSetColorAlpha( rui, "bgColor", detonatedColor, 1 )
+				RuiSetColorAlpha( rui, "iconColor", detonatedColor, 1 )
+				RuiSetAsset( rui, "icon", $"rui/hud/ultimate_icons/ultimate_overdrive_detonated" )
+				Wait( 1.0 )
+				RuiDestroyIfAlive( rui )
+			}()
+		}
+	)
+
+	WaitForever()
+}
+
+void function ServerToClient_ShowFragDroneHealthBar( entity victim )
+{
+	entity attacker = GetLocalViewPlayer()
+
+	if ( GetTotalLOSRequiredNoRestoreReconScans( attacker, victim ) > 0 )
+	{
+		var rui = null
+		if ( victim in attacker.p.reconScanRUIs )
+		{
+			rui = attacker.p.reconScanRUIs[victim]
+			if ( IsValid( rui ) && RuiIsAlive( rui ) )
+			{
+				attacker.p.damageHealthBarStartTime[victim] <- Time()
+				return
+			}
+		}
+	}
+	thread FragDrone_HealthBarThink( attacker, victim )
+}
+
+void function FragDrone_HealthBarThink( entity attacker, entity victim ) 
+{
+	if( !IsValid( victim ) )
+		return
+
+	EndSignal( victim, "OnDeath" )
+	EndSignal( victim, "OnDestroy" )
+
+	EndSignal( victim, "EnemyHealthBarEnd" )
+
+	Signal( victim, STOP_HEALTH_BAR_SIGNAL )
+	EndSignal( victim, STOP_HEALTH_BAR_SIGNAL )
+
+	OnThreadEnd(
+		function() : ( attacker, victim )
+		{
+			ReconScan_RemoveHudForSimpleEntity( attacker, victim )
+		}
+	)
+
+	attacker.p.damageHealthBarStartTime[victim] <- Time()
+
+	var rui = ReconScan_ShowHudForSimpleEntity( attacker, victim )
+
+	while ( Time() < attacker.p.damageHealthBarStartTime[victim] + tuning.droneHealthBarDuration )
+	{
+		if ( IsValid( victim ) )
+		{
+			if( ShouldHideHealthForPlayer( victim ) )
+			{
+				RuiSetBool( rui, "isVisible", false )
+				return
+			}
+		}
+		WaitFrame()
+	}
+}
+
+void function ServerToClient_ChangeDroneState( entity drone, bool isSeeking )
+{
+	if( !IsValid( drone ) )
+		return
+
+	int droneEHandle = drone.GetEncodedEHandle()
+	if ( !( droneEHandle in file.droneOffscreenRuis ) )
+		return
+
+	var rui = file.droneOffscreenRuis[ drone.GetEncodedEHandle() ]
+
+	if( isSeeking )
+	{
+		RuiSetColorAlpha( rui, "bgColor", SrgbToLinear( COLOR_DARK_GRAY / 255.0 ), 1 )
+		RuiSetAsset( rui, "icon", $"rui/hud/ultimate_icons/ultimate_overdrive_seek" )
+		RuiSetBool( rui, "isHighlighted", false )
+	}
+	else
+	{
+		RuiSetColorAlpha( rui, "bgColor", <1, 1, 1>, 1 )
+		RuiSetAsset( rui, "icon", $"rui/hud/ultimate_icons/ultimate_overdrive_targeted" )
+		RuiSetBool( rui, "isHighlighted", true )
+	}
+}
+
+ 

@@ -1,0 +1,1330 @@
+global function PvEAirdrops_Init
+global function PvEAirdrops_GetRestrictedLootPanelForAirdropLoot
+
+
+
+
+
+global function ServerToClient_PvEAirdrops_AnnounceAirdropsIncoming
+global function ServerToClient_PvEAirdrops_OnPlayerEntersEncounter
+global function ServerToClient_PvEAirdrops_OnPlayerLeavesEncounter
+global function ServerToClient_PvEAirdrops_OnEncounterComplete
+
+global const string TARGETNAME_PVE_AIRDROP = "pve_airdrop"
+global const string TARGETNAME_PVE_AIRDROP_SHIELD = "pve_airdrop_shield"
+const string SCRIPTNAME_PVE_AIRDROPS_PING_ICON = "waypoint_pve_airdrop"
+
+const int NUM_NPC_ATTACHEMENTS = 3
+const string NPC_ATTACHMENT_PREFIX = "door_open_" 
+
+const asset EVENT_ICON = $"rui/events/s27aerodyn/s27aerodynamic_event_icon"
+const asset MINIMAP_ICON = $"rui/hud/gametype_icons/survival/spectre_package_icon"
+
+const int PVE_AIR_DROP_BAD_PLACE_RADIUS = 1000
+
+const float NPC_PATROL_RANGE = 600
+const asset NPC_ENGAGEMENT_RANGE_BLOCKER = $"mdl/fx/fx_shield_secured_drop.rmdl"
+
+const array<array<string> > PVE_AIRDROP_DEFAULT_LOOT = [ [ "pve_airdrop_a" ], [ "pve_airdrop_b" ], [ "pve_airdrop_c" ] ]
+
+const vector PVE_AIRDROP_ANNOUNCEMENT_COLOUR = <255, 65, 50>
+const vector PVE_AIRDROP_BEAM_COLOUR_INACTIVE =  <235, 166, 65>  
+const vector PVE_AIRDROP_BEAM_COLOUR_ACTIVE = <255, 65, 50>
+const vector PVE_AIRDROPS_DOOR_WARNING_FX_COLOR = <255, 255, 255>
+const vector OFFSET_PVE_AIRDROPS_PING_ICON = < 0, 0, 75.0 >
+
+const float SOUND_PVE_AIRDROP_CODE_CONTROLLER = 10.0
+
+const asset VFX_PVE_AIRDROPS_EMP_BURST																	= $"P_impact_dpod_shockwave"
+const asset VFX_PVE_AIRDROPS_SHIELD_START																= $"P_shield_secured_drop"
+const asset VFX_PVE_AIRDROPS_SHIELD_END																	= $"P_shield_secured_drop_end"
+const asset VFX_PVE_AIRDROPS_HOLO																		= $"P_icon_droppod_spectre_holo"
+const asset VFX_PVE_AIRDROPS_WARNING_HOLO																= $"P_icon_droppod_warning_holo"
+const asset VFX_PVE_AIRDROPS_DOOR_LIGHT_LEFT															= $"P_light_droppod_door_le"
+const asset VFX_PVE_AIRDROPS_DOOR_LIGHT_RIGHT															= $"P_light_droppod_door_ri"
+
+const string SFX_PVE_AIRDROPS_EMP_BURST																	= "SpectreDome_AirDrop_Burst"
+const string SFX_PVE_AIRDROPS_LAND_STEAM																= "SpectreDome_AirDrop_SmokeScreen"
+const string SFX_PVE_AIRDROPS_BEAM_ACTIVATE																= "SpectreDome_UI_Beam_Activate_3P"
+const string SFX_PVE_AIRDROPS_BEAM_DEACTIVATE															= "SpectreDome_UI_Beam_Deactivate_3P"
+const string SFX_PVE_AIRDROPS_BEAM_ACTIVATE_1P															= "SpectreDome_UI_Beam_Activate_1P"
+const string SFX_PVE_AIRDROPS_SHIELD_SUSTAIN															= "SpectreDome_Hologram_LP"
+const string SFX_PVE_AIRDROPS_SHIELD_END																= "SpectreDome_Hologram_Ends"
+
+const asset MODEL_PVE_AIRDROPS_DROPPOD_ADDITIVE_MODEL													= $"mdl/vehicle/dropped_loot/secured_airdrop_additions.rmdl"
+
+const string PVE_AIRDROPS_DROPPOD_ADDITIVE_MODEL_ATTACH_POINT											= "ORIGIN"
+const int PVE_AIRDROPS_DROPPOD_SKIN																		= 6
+const int PVE_AIRDROPS_SPECTRE_SKIN																		= 1
+const int PVE_AIRDROPS_SHOTGUN_SPECTRE_SKIN																= 2
+
+const int PVE_AIRDROPS_MAX_NPC_COUNT_DEFAULT															= 6
+const float PVE_AIRDROPS_MODEL_RADIUS 																	= 235.0
+const float PVE_AIRDROPS_EMP_RADIUS_METERS_MAX															= 15.2
+const float PVE_AIRDROPS_EMP_RADIUS_GROWTH_TIME															= 0.1
+const float PVE_AIRDROPS_EMP_DAMAGE																		= 50
+const float PVE_AIRDROPS_ENCOUNTER_AGGRO_COOLDOWN														= 5.0
+const float PVE_AIRDROPS_SHIELD_START_ANIM_TIME															= 0.1
+const float PVE_AIRDROPS_SHIELD_END_ANIM_TME															= 10.0
+const float PVE_AIRDROPS_COLOR_TRANSITION_TIME															= 0.5
+
+const string SIG_PVE_AIRDROPS_CHECK_FOR_STATE_UPDATE													= "PvE_Airdrops_Check_For_State_Update"
+const string SIG_PVE_AIRDROPS_COLOR_TRANSITION_START													= "PvE_Airdrops_Color_Transition_Start"
+
+struct AirdropData
+{
+	int dropCount
+	array<vector> potentialSpots
+	float preWait
+	bool startOnShrink
+	array< array<string> > content
+}
+
+struct PvEDroppodEncounter
+{
+	entity blocker
+	entity oobTrigger
+	entity beamFX
+	entity shieldFX
+	entity holoFX
+	array< entity > doorWarningFXs
+	array< entity > doorLightFXs
+	vector currentColor
+	float colorTransitionTimeRemaining
+	array<entity> npcs
+	table< int, array<entity> > teamIdToPlayersInEncounter
+	array<entity> exitingPlayersQueue
+	table< entity, float > exitingPlayerToEncounterRemovalTime
+}
+
+struct {
+	table<int, AirdropData> airdropData
+	table<entity, PvEDroppodEncounter> activeEncounters
+	var destroySpectresRui = null
+	bool playerInBubble = false
+
+
+
+
+} file
+
+void function PvEAirdrops_Init()
+{
+	if ( !GetCurrentPlaylistVarBool( "pve_airdrops_enable", false ) )
+		return
+
+	NPCs_Init()
+
+	PvEAirdrops_RegisterWPObjective()
+
+	PrecacheModel( MODEL_PVE_AIRDROPS_DROPPOD_ADDITIVE_MODEL )
+	PrecacheModel( NPC_ENGAGEMENT_RANGE_BLOCKER )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_EMP_BURST )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_SHIELD_START )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_SHIELD_END )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_HOLO )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_WARNING_HOLO )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_DOOR_LIGHT_LEFT )
+	PrecacheParticleSystem( VFX_PVE_AIRDROPS_DOOR_LIGHT_RIGHT )
+	PrecacheScriptString( SCRIPTNAME_PVE_AIRDROPS_PING_ICON )
+
+	Remote_RegisterClientFunction( string( ServerToClient_PvEAirdrops_AnnounceAirdropsIncoming ) )
+	Remote_RegisterClientFunction( string( ServerToClient_PvEAirdrops_OnPlayerEntersEncounter ), "entity" )
+	Remote_RegisterClientFunction( string( ServerToClient_PvEAirdrops_OnPlayerLeavesEncounter ), "entity" )
+	Remote_RegisterClientFunction( string( ServerToClient_PvEAirdrops_OnEncounterComplete ) )
+
+	RegisterSignal( SIG_PVE_AIRDROPS_CHECK_FOR_STATE_UPDATE )
+	RegisterSignal( SIG_PVE_AIRDROPS_COLOR_TRANSITION_START )
+
+
+		SetMapFeatureItem( 500, Localize( "#SECURED_AIRDROPS" ), Localize( "#SECURED_AIRDROPS_DESC" ), MINIMAP_ICON )
+
+		AddTargetNameCreateCallback( TARGETNAME_PVE_AIRDROP_SHIELD, PvEAirDrops_ClientDropPodShieldCreated )
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+int function PvEAirdrops_GetMaxNPCCount()
+{
+	return minint( GetCurrentPlaylistVarInt( "pve_airdrops_max_npc_count", PVE_AIRDROPS_MAX_NPC_COUNT_DEFAULT ), PVE_AIRDROPS_MAX_NPC_COUNT_DEFAULT )
+}
+
+int function PvEAirdrops_GetMainNPCCount()
+{
+	return minint( GetCurrentPlaylistVarInt( "pve_airdrops_main_npc_count", 3 ), 3 )
+}
+
+int function PvEAirdrops_GetMainNPCDifficulty()
+{
+	return GetCurrentPlaylistVarInt( "pve_airdrops_main_npc_difficulty", 2 )
+}
+
+float function PvEAirdrops_GetEMPDamage()
+{
+	return GetCurrentPlaylistVarFloat( "pve_airdrops_emp_damage", PVE_AIRDROPS_EMP_DAMAGE )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PvEAirdrops_RegisterWPObjective()
+{
+	WPObjective_Settings settings
+
+	settings.scriptName = SCRIPTNAME_PVE_AIRDROPS_PING_ICON
+
+	settings.enumWaypoint = eWaypoint.AIRDROP_PVE
+	settings.enumPingType = ePingType.AIRDROP_PVE
+	settings.enumCommsAction = eCommsAction.PING_AIRDROP_PVE
+	settings.enumMinimapObject_prop_script = eMinimapObject_prop_script.PVE_AIRDROP
+
+	settings.iconInWorld = MINIMAP_ICON
+	settings.iconMap = MINIMAP_ICON
+
+	settings.worldIconPingDistance = 3000.0
+	settings.worldIconMinAlphaDistance = 3000.0
+	settings.worldIconMaxAlphaDistance = 3500.0
+
+	settings.pingText = "#SECURED_AIRDROPS"
+
+	WPObjective_Register( settings )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_PvEAirdrops_AnnounceAirdropsIncoming()
+{
+
+	
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	mainBanner.mainText = Localize( "#SECURED_AIRDROPS_INCOMING" )
+	mainBanner.mainIcon1 = EVENT_ICON
+	CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+	mainBanner.imageContainerFrameColor = ( GetKeyColor( COLORID_FRAME_LOOT_TIER5 ) / 255 )
+	mainBanner.frameColor = ( GetKeyColor( COLORID_FRAME_LOOT_TIER5 ) / 255 )
+	mainBanner.textureColor = ( COLOR_BLACK / 255)
+	mainBanner.imageContainerHeight = 75.0
+	mainBanner.imageContainerLeftPadding = 60.0
+	mainBanner.imageContainerRightPadding = 60.0
+	mainBanner.imageContainerVerticalPadding = 12.0
+	mainBanner.leftEndPadding = 110.0
+	mainBanner.rightEndPadding = 110.0
+
+	
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner ] )
+	CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.GLOBAL )
+
+
+
+}
+
+void function PvEAirdrops_ShowDestroySpectresMessage()
+{
+
+		file.playerInBubble = true
+
+		if ( file.destroySpectresRui == null )
+		{
+			file.destroySpectresRui = CreateCockpitPostFXRui( $"ui/pve_airdrop_message_hud.rpak", HUD_Z_BASE )
+			RuiSetBool( file.destroySpectresRui, "isVisible", true )
+		}
+
+
+
+}
+
+void function PvEAirdrops_HideDestroySpectresMessage( float delay )
+{
+
+		file.playerInBubble = false
+
+		thread PvEAirdrops_HideMessageAfterDelay( delay )
+
+
+
+}
+
+void function PvEAirdrops_HideMessageAfterDelay( float delay )
+{
+
+		wait delay
+
+		if ( !file.playerInBubble && file.destroySpectresRui != null )
+		{
+			RuiDestroyIfAlive( file.destroySpectresRui )
+			file.destroySpectresRui = null
+		}
+
+}
+
+entity function PvEAirdrops_GetRestrictedLootPanelForAirdropLoot( entity loot )
+{
+	entity droppod = loot.GetParent()
+
+	if ( IsValid( droppod ) && droppod.GetTargetName() == TARGETNAME_PVE_AIRDROP )
+	{
+		return droppod
+	}
+
+	return null
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ServerToClient_PvEAirdrops_OnPlayerEntersEncounter( entity player )
+{
+
+		PvEAirdrops_ShowDestroySpectresMessage()
+
+
+
+}
+
+void function ServerToClient_PvEAirdrops_OnPlayerLeavesEncounter( entity player )
+{
+
+		PvEAirdrops_HideDestroySpectresMessage( PVE_AIRDROPS_ENCOUNTER_AGGRO_COOLDOWN )
+
+
+
+}
+
+void function ServerToClient_PvEAirdrops_OnEncounterComplete()
+{
+
+		PvEAirdrops_HideDestroySpectresMessage( 0 )
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function PvEAirDrops_ClientSoundThread( entity fxEnt )
+{
+	float sphereRadius = (fxEnt.GetBoundingMaxs().x - fxEnt.GetBoundingMins().x) / 2
+	float maxUpdateRadius = sphereRadius + 5000
+	entity soundEmitter = CreateClientSideAmbientGeneric( fxEnt.GetOrigin(), SFX_PVE_AIRDROPS_SHIELD_SUSTAIN, 0 );
+	SetTeam( soundEmitter, fxEnt.GetTeam() )
+	CopyRealmsFromTo( fxEnt, soundEmitter )
+	soundEmitter.SetEnabled( true )
+
+	EndSignal( fxEnt, "OnDestroy", "OnDeath" )
+
+	OnThreadEnd( void function() : (soundEmitter) { if ( IsValid( soundEmitter ) ) soundEmitter.Destroy() } )
+
+
+	while ( true )
+	{
+		entity viewPlayer = GetLocalViewPlayer()
+		if ( viewPlayer )
+		{
+			vector origin = fxEnt.GetOrigin()
+			vector sphere2player = viewPlayer.EyePosition() - origin
+			float distSq = LengthSqr( sphere2player )
+			if ( distSq < maxUpdateRadius * maxUpdateRadius )
+				soundEmitter.SetOrigin( origin + sphere2player * (sphereRadius / sqrt( distSq )) )
+		}
+
+		WaitFrame()
+	}
+}
+
+void function PvEAirDrops_ClientDropPodShieldCreated( entity fxEnt )
+{
+	thread PvEAirDrops_ClientSoundThread( fxEnt )
+}
+
+ 

@@ -1,0 +1,1282 @@
+global function Endorsements_Crafting_Init
+
+
+
+
+
+
+global function ClientToServer_Endorsements_PlayerCraftsEndorsement
+global function ClientToServer_Endorsements_ShutdownReplicatorMenu
+
+global function ServerToClient_Endorsements_Crafting_OpenCraftingMenu
+global function ServerToClient_Endorsements_Crafting_CloseCraftingMenu
+global function ServerToClient_Endorsements_Skydive_Announcement
+
+global function Endorsements_Crafting_SetCallback_OnSelectEndorsementForCrafting
+global function Endorsements_Crafting_SetCallback_GetChoiceDataOverride
+
+
+	global function Endorsements_Crafting_UpdateTicketCount
+	global function Endorsements_Crafting_HandleEscapeInput
+	global function Endorsements_Crafting_Client_IsCraftingMenuOpen
+	global function Endorsements_Crafting_GetChoiceData
+
+
+#if DEV
+	global function DEV_SetEndorsementCrafterUISkin
+#endif
+
+
+const string SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_OPEN												= "EndorsementsCrafting_EndorsementMenu_Open"
+const string SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_CLOSE												= "EndorsementsCrafting_EndorsementMenu_Close"
+const string SIG_ENDORSEMENTS_CRAFTING_UPDATE_TICKET_COUNT 													= "Endorsements_Crafting_UpdateTicketCount"
+const string SIG_ENDORSEMENTS_CRAFTING_RANDOM_ENDORSEMENT_CRAFTING_START									= "Endorsements_Crafting_RandomEndorsementCrafting_Start"
+
+
+
+
+
+
+
+
+
+global struct EndorsementSelectionProcessingResults
+{
+	bool broadcastSelectionToServer = true
+	bool updateEndorsementCount = true
+}
+
+
+
+const float ENDORSEMENT_SCREEN_SHUTDOWN_ANIM_DURATION = 0.2
+
+
+const float ENDORSEMENT_SCREEN_BOOTUP_SELECTION_LOCKOUT_TIME = 0.745
+
+
+const float ENDORSEMENT_SCREEN_SELECTION_MADE_DURATION = 0.75
+
+
+const float ENDORSEMENT_SCREEN_ITEMS_INTRO_DURATION = 0.12
+
+
+const float ENDORSEMENT_SCREEN_MULTISELECT_SELECTION_LOCKOUT_TIME = ENDORSEMENT_SCREEN_SELECTION_MADE_DURATION + ENDORSEMENT_SCREEN_ITEMS_INTRO_DURATION
+
+
+global const string ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS = "unhinged_wildcard_banner_ui_1p"
+
+struct {
+
+
+
+
+
+
+	var craftingMenuRUI
+	bool functionref( int ) menuKeyInputCallback
+	int endorsementCountCraftedThisSession = 0
+	table< EHI , int > playerEHIToEndorsementCount
+
+	asset backgroundLeft = $""
+	asset backgroundRight = $""
+	int sideSelected = 0
+	bool leadingChoiceAnimDone = false
+
+
+
+	EndorsementSelectionProcessingResults functionref( entity, EndorsementDefinition ) callback_OnSelectEndorsementForCrafting = null
+	EndorsementChoiceData functionref( entity, EndorsementChoiceData ) callback_GetChoiceDataOverride = null
+} file
+
+void function Endorsements_Crafting_Init()
+{
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_Crafting_OpenCraftingMenu ), "entity" )
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_Crafting_CloseCraftingMenu ) )
+	Remote_RegisterClientFunction( string( ServerToClient_Endorsements_Skydive_Announcement ) )
+
+	Remote_RegisterServerFunction( string( ClientToServer_Endorsements_PlayerCraftsEndorsement ), "int", ENDORSEMENT_INVALID, Endorsements_GetMaxEndorsementID(), "int", eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID, eEndorsementSponsor._COUNT )
+	Remote_RegisterServerFunction( string( ClientToServer_Endorsements_ShutdownReplicatorMenu ) )
+
+
+
+
+
+
+
+	Endorsements_AddCallback_OnEndorsementsChanged( Endorsements_Crafting_OnEndorsementsChanged )
+	AddCallback_OnViewPlayerChanged( Endorsements_Crafting_OnViewPlayerChanged )
+	AddCreateCallback( "player", Endorsements_Crafting_OnPlayerCreated )
+
+
+	
+	RegisterSignal( SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_OPEN )
+	RegisterSignal( SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_CLOSE )
+	RegisterSignal( SIG_ENDORSEMENTS_CRAFTING_UPDATE_TICKET_COUNT )
+	RegisterSignal( SIG_ENDORSEMENTS_CRAFTING_RANDOM_ENDORSEMENT_CRAFTING_START )
+
+	FlagInit( "Endorsements_NetVar_Changed" )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function ClientToServer_Endorsements_PlayerCraftsEndorsement( entity player, int itemId, int sponsorType )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	Assert( false, "Called on wrong VM" )
+
+}
+
+void function ClientToServer_Endorsements_ShutdownReplicatorMenu( entity player )
+{
+	Signal( player, SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_CLOSE )
+}
+
+void function ServerToClient_Endorsements_Crafting_OpenCraftingMenu( entity crafter )
+{
+
+	if ( Endorsements_Crafting_Client_IsCraftingMenuOpen() )
+		return
+
+	thread Endorsements_Crafting_CL_CraftingMenuLifetime_Thread()
+
+
+
+}
+
+void function ServerToClient_Endorsements_Crafting_CloseCraftingMenu()
+{
+
+	if ( !Endorsements_Crafting_Client_IsCraftingMenuOpen() )
+		return
+
+	Endorsements_Crafting_Client_CloseCraftingMenu()
+
+
+
+}
+
+
+void function Endorsements_Crafting_OnEndorsementsChanged( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	EHI playerEHI = ToEHI( player )
+
+	int lastOwnedCount = 0
+	if ( playerEHI in file.playerEHIToEndorsementCount )
+	{
+		lastOwnedCount = file.playerEHIToEndorsementCount[playerEHI]
+	}
+
+	
+	int ownedEndorsementCount = Endorsements_GetPlayerEndorsementCount( player )
+	Endorsements_Crafting_SetPlayerEndorsementCacheCount( player, ownedEndorsementCount )
+
+	if ( !IsLocalViewPlayer( player ) )
+		return
+
+	if ( Endorsements_Crafting_Client_IsCraftingMenuOpen() )
+		return
+
+	if ( ownedEndorsementCount > lastOwnedCount )
+	{
+		Endorsements_Crafted_Announcement( player )
+	}
+	else if ( ownedEndorsementCount < lastOwnedCount )
+	{
+		
+	}
+}
+
+void function Endorsements_Crafting_OnViewPlayerChanged( entity viewPlayer )
+{
+	if ( !IsValid( viewPlayer ) )
+		return
+
+	
+	if ( Endorsements_Crafting_PlayerHasCachedEndorsementCount( viewPlayer ) )
+		return
+
+	int netvarCount = Endorsements_GetPlayerEndorsementCount( viewPlayer )
+	Endorsements_Crafting_SetPlayerEndorsementCacheCount( viewPlayer, netvarCount )
+}
+
+void function Endorsements_Crafting_OnPlayerCreated( entity player )
+{
+	if ( !IsValid( player ) )
+		return
+
+	
+	if ( Endorsements_Crafting_PlayerHasCachedEndorsementCount( player ) )
+		return
+
+	int netvarCount = Endorsements_GetPlayerEndorsementCount( player )
+	Endorsements_Crafting_SetPlayerEndorsementCacheCount( player, netvarCount )
+}
+
+int function Endorsements_Crafting_GetPlayerEndorsementCacheCount( entity player )
+{
+	EHI playerEHI = ToEHI( player )
+
+	
+	if ( playerEHI == EHI_null || !( playerEHI in file.playerEHIToEndorsementCount ) )
+		return -1
+
+	return file.playerEHIToEndorsementCount[playerEHI]
+}
+
+bool function Endorsements_Crafting_PlayerHasCachedEndorsementCount( entity player )
+{
+	EHI playerEHI = ToEHI( player )
+
+	
+	if ( playerEHI == EHI_null )
+		return false
+
+	return ( playerEHI in file.playerEHIToEndorsementCount )
+}
+
+void function Endorsements_Crafting_SetPlayerEndorsementCacheCount( entity player, int count )
+{
+	EHI playerEHI = ToEHI( player )
+
+	if ( playerEHI == EHI_null )
+		return
+
+	file.playerEHIToEndorsementCount[playerEHI] <- count
+}
+
+bool function Endorsements_Crafting_IsWaitingForEndorsementNetvarUpdate( entity player )
+{
+	if ( !IsValid( player ) )
+		return false
+
+	int netvarCount = Endorsements_GetPlayerEndorsementCount( player )
+	int cacheCount = Endorsements_Crafting_GetPlayerEndorsementCacheCount( player )
+
+	if ( cacheCount < 0 )
+		return false
+
+	return netvarCount != cacheCount
+}
+
+void function Endorsements_Crafting_UpdateTicketCount( int newVal )
+{
+	Signal( clGlobal.signalDummy, SIG_ENDORSEMENTS_CRAFTING_UPDATE_TICKET_COUNT )
+}
+
+void function Endorsements_Crafting_HandleEscapeInput()
+{
+	if ( file.craftingMenuRUI != null )
+	{
+		file.menuKeyInputCallback( KEY_ESCAPE )
+	}
+}
+
+bool function Endorsements_Crafting_Client_IsCraftingMenuOpen()
+{
+	return file.craftingMenuRUI != null
+}
+
+Assert( MAX_ENDORSEMENTS_PER_ROUND_BASE == 2, "Need to update endorsement crafter UI to support >2 endorsement choices" )
+void function Endorsements_Crafting_CL_CraftingMenuLifetime_Thread()
+{
+	const int DIR_LEFT = -1
+	const int DIR_MIDDLE = 0
+	const int DIR_RIGHT = 1
+
+	AssertIsNewThread()
+
+	Signal( clGlobal.signalDummy, SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_OPEN )
+	EndSignal( clGlobal.signalDummy, SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_OPEN )
+	EndSignal( clGlobal.signalDummy, SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_CLOSE )
+	EndSignal( clGlobal.signalDummy, "ViewPlayerChanged" )
+
+	Assert( !Endorsements_Crafting_Client_IsCraftingMenuOpen() )
+	EmitUISound( "Unhinged_WildcardStation_UI_Open_1P" )
+	EmitUISound( "Unhinged_WildcardStation_UI_Screen_Loop_1P" )
+
+	bool isFirstSelectionOfSession = true
+
+	file.craftingMenuRUI = CreateFullscreenPostFXRui( $"ui/endorsement_replicator_screen.rpak", 1 )
+
+	Endorsements_ApplyCraftingStationUISkin()
+
+	SetFakeMenuOpenState( eFakeMenuState.IN_FAKE_MENU, "endorsement_replicator_screen" )
+
+	
+	CommsMenu_Shutdown( false )
+
+	PassByReferenceFloat viewInputPos
+	PassByReferenceFloat moveInputPos
+	PassByReferenceFloat dpadInputPos
+
+	PassByReferenceBool shouldCancel
+	PassByReferenceBool shouldUse
+
+	file.endorsementCountCraftedThisSession = 0
+
+	entity viewPlayer = GetLocalViewPlayer()
+	if ( !IsValid( viewPlayer ) )
+		return
+
+	OnThreadEnd( function() : () {
+		Endorsements_Crafting_ShutdownReplicatorMenu()
+	} )
+
+	
+
+
+
+	HudInputContext inputContext
+	inputContext.keyInputCallback = bool function( int key ) : ( shouldCancel, shouldUse, dpadInputPos )
+	{
+		dpadInputPos.value = 0
+
+		switch ( key )
+		{
+			case BUTTON_A:
+			case BUTTON_X:
+			case BUTTON_TRIGGER_RIGHT:
+			case MOUSE_LEFT:
+			{
+				shouldUse.value = true
+				break
+			}
+
+			case BUTTON_TRIGGER_LEFT:
+			case BUTTON_B:
+			case KEY_ESCAPE:
+			case MOUSE_RIGHT:
+			{
+				shouldCancel.value = true
+				break
+			}
+
+			case BUTTON_DPAD_LEFT:
+			{
+				dpadInputPos.value = -1
+				break
+			}
+
+			case BUTTON_DPAD_RIGHT:
+			{
+				dpadInputPos.value = 1
+				break
+			}
+
+			default:
+			{
+				break
+			}
+		}
+
+		return false
+	}
+	file.menuKeyInputCallback = inputContext.keyInputCallback
+	inputContext.viewInputCallback = bool function( float x, float y ) : ( viewInputPos )
+	{
+		viewInputPos.value = x
+		return true
+	}
+	inputContext.moveInputCallback = bool function( float x, float y ) : ( moveInputPos )
+	{
+		if ( !IsControllerModeActive() )
+			return false
+
+		moveInputPos.value = x
+		return true
+	}
+	inputContext.hudInputFlags = (HIF_BLOCK_WAYPOINT_FOCUS)
+
+	bool isLocalPlayer = IsLocalClientPlayer( viewPlayer )
+	RuiSetBoolIfExists( file.craftingMenuRUI, "isLocalPlayer", isLocalPlayer )
+
+	if ( isLocalPlayer )
+	{
+		HudInput_PushContext( inputContext )
+		OnThreadEnd( function() { HudInput_PopContext() } )
+	}
+
+	PassByReferenceFloat validUseTime
+	validUseTime.value = ClientTime() + ENDORSEMENT_SCREEN_BOOTUP_SELECTION_LOCKOUT_TIME
+
+	
+	file.playerEHIToEndorsementCount[ ToEHI( viewPlayer ) ] =  Endorsements_GetPlayerEndorsementCount( viewPlayer )
+	int tickets = Endorsements_Delivery_GetPlayerTicketCount( viewPlayer )
+
+	while ( tickets > 0 )
+	{
+		viewInputPos.value = 0
+		moveInputPos.value = 0
+		dpadInputPos.value = 0
+		shouldUse.value    = false
+		shouldCancel.value = false
+
+		viewPlayer = GetLocalViewPlayer()
+		if ( !IsValid( viewPlayer ) )
+			return
+
+		
+		if ( Endorsements_Crafting_IsWaitingForEndorsementNetvarUpdate( viewPlayer ) )
+		{
+			viewPlayer.WaitSignal( SIG_ENDORSEMENTS_NETVAR_UPDATE )
+		}
+
+		if ( Endorsements_IsPlayerLockedOutFromCrafter( viewPlayer ) )
+			return
+
+		
+		EndorsementChoiceData endorsementChoiceData = Endorsements_Crafting_GetChoiceData( viewPlayer )
+		if ( endorsementChoiceData.endorsementOptions.len() == 0 )
+			return
+
+		Endorsements_Crafting_PopulateChoiceButtonRuiElements( endorsementChoiceData )
+
+		
+		Endorsements_Crafting_PopulateTrackSelectionRuiElements( endorsementChoiceData )
+
+		
+		Endorsements_Crafting_PopulateOwnedEndorsementRuiElements( viewPlayer )
+
+		
+		if ( isFirstSelectionOfSession )
+		{
+			RuiSetGameTime( file.craftingMenuRUI, "screenOpenTime", ClientTime() )
+			isFirstSelectionOfSession = false
+		}
+		else
+		{
+			RuiSetGameTime( file.craftingMenuRUI, "itemsIntroTime", ClientTime() )
+		}
+
+		
+		int selectedDirection = DIR_MIDDLE
+		while ( !shouldUse.value && !shouldCancel.value )
+		{
+			const float MOUSE_DEADZONE = 4.0
+			const float CONTROLLER_DEADZONE = 0.4
+			float deadzone = IsControllerModeActive() ? CONTROLLER_DEADZONE : MOUSE_DEADZONE
+
+			
+			bool isValidViewInput = fabs( viewInputPos.value ) > deadzone
+			bool isValidMoveInput = fabs( moveInputPos.value ) > deadzone
+			bool isValidDpadInput = fabs( dpadInputPos.value ) > deadzone
+			bool isValidInput = isValidViewInput || isValidMoveInput || isValidDpadInput
+
+			
+			float inputVal = 0.0
+			if ( isValidDpadInput )
+			{
+				inputVal = dpadInputPos.value
+			}
+			else if ( isValidViewInput )
+			{
+				inputVal = viewInputPos.value
+			}
+			else if ( isValidMoveInput )
+			{
+				inputVal = moveInputPos.value
+			}
+
+			bool hasDirectionChanged = false
+			if ( isValidInput && inputVal > 0 && selectedDirection != DIR_RIGHT )
+			{
+				selectedDirection = DIR_RIGHT
+				hasDirectionChanged = true
+			}
+			else if ( isValidInput && inputVal < 0 && selectedDirection != DIR_LEFT )
+			{
+				selectedDirection = DIR_LEFT
+				hasDirectionChanged = true
+			}
+
+			if ( isValidInput && hasDirectionChanged )
+			{
+				string hoverSoundAlias = Endorsements_GetHoverSoundForSponsor( endorsementChoiceData.endorsementOptions[ selectedDirection == DIR_RIGHT ? 1 : 0 ].endorsementSponsorEnum )
+				if ( hoverSoundAlias != "" )
+				{
+					EmitUISound( hoverSoundAlias )
+				}
+
+				RuiSetFloat( file.craftingMenuRUI, "mouseLeftRightPos", inputVal )
+			}
+
+
+			RuiSetBoolIfExists( file.craftingMenuRUI, "leadingChoiceAnimDone", file.leadingChoiceAnimDone )
+			RuiSetIntIfExists( file.craftingMenuRUI, "sideSelected", file.sideSelected )
+
+
+			WaitFrame()
+		}
+
+		if ( shouldUse.value )
+		{
+			
+			if ( ( selectedDirection == DIR_MIDDLE ) || ( ClientTime() < validUseTime.value ) )
+			{
+				WaitFrame()
+				continue
+			}
+
+			EndorsementOptionData selectedEndorsementOption = endorsementChoiceData.endorsementOptions[ selectedDirection == DIR_RIGHT ? 1 : 0 ]
+			EndorsementDefinition selectedEndorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( selectedEndorsementOption.endorsementRef )
+
+			EndorsementSelectionProcessingResults endorsementSelectionProcessingResults
+			if ( file.callback_OnSelectEndorsementForCrafting != null )
+			{
+				endorsementSelectionProcessingResults = file.callback_OnSelectEndorsementForCrafting( viewPlayer, selectedEndorsementDefinition )
+			}
+
+			if ( endorsementSelectionProcessingResults.broadcastSelectionToServer )
+			{
+				
+				Remote_ServerCallFunction( string( ClientToServer_Endorsements_PlayerCraftsEndorsement ), selectedEndorsementDefinition.endorsementID, selectedEndorsementOption.endorsementSponsorEnum )
+			}
+
+			if ( endorsementSelectionProcessingResults.updateEndorsementCount )
+			{
+				file.endorsementCountCraftedThisSession++
+				tickets--
+
+				
+				int ownedEndorsementsCount = Endorsements_Crafting_GetPlayerEndorsementCacheCount( viewPlayer )
+				Endorsements_Crafting_SetPlayerEndorsementCacheCount( viewPlayer, ownedEndorsementsCount + 1 )
+
+
+				if ( GamemodeVariant_UH_ClockUp_IsClockUpEnabled() && selectedEndorsementOption.endorsementSponsorEnum == eEndorsementSponsor.ENDORSEMENT_SPONSOR_CLOCKUP )
+				{
+					tickets = 0
+				}
+
+			}
+
+			bool playSelectionAnimation = tickets > 0 || Endorsements_AreChoicesDifferentSponsors( endorsementChoiceData )
+			bool playShutdownAnimation = tickets == 0
+
+
+			if (Endorsements_GetCurrentLeadingChoiceForReplicatorFromSponsorChoices( endorsementChoiceData ) && playSelectionAnimation && file.sideSelected == 0)
+				file.sideSelected = selectedDirection
+
+
+			string selectionSoundAlias = Endorsements_GetSelectionSoundForSponsor( selectedEndorsementOption.endorsementSponsorEnum, tickets == 0 )
+			waitthread Endorsements_Crafting_PlayScreenAnimations( viewPlayer, validUseTime, playSelectionAnimation, playShutdownAnimation, selectionSoundAlias )
+		}
+		else 
+		{
+			EmitUISound( "Unhinged_WildcardStation_UI_Cancel_1P" )
+			break
+		}
+	}
+}
+
+EndorsementChoiceData function Endorsements_Crafting_GetChoiceData( entity viewPlayer )
+{
+	EndorsementChoiceData resultingChoiceData
+
+	EHI viewPlayerEHI = ToEHI( viewPlayer )
+	table< EHI, PerPlayerEndorsementCraftingData > playerEHIToEndorsementCraftingData = Endorsements_GetPerPlayerEndorsementData()
+	if ( !(viewPlayerEHI in playerEHIToEndorsementCraftingData) )
+		return resultingChoiceData
+
+	PerPlayerEndorsementCraftingData playerCraftingData = playerEHIToEndorsementCraftingData[viewPlayerEHI]
+
+	string playerEndorsementChoiceString = Endorsements_GetPlayerEndorsementChoiceString( viewPlayer )
+	Assert( playerEndorsementChoiceString in playerCraftingData.choiceStringToChoiceData, format( "%s - ERROR - Choice String [%s] is not Valid for Player", FUNC_NAME(), playerEndorsementChoiceString ) )
+
+	resultingChoiceData = playerCraftingData.choiceStringToChoiceData[playerEndorsementChoiceString]
+
+	if ( file.callback_GetChoiceDataOverride != null )
+	{
+		resultingChoiceData = file.callback_GetChoiceDataOverride( viewPlayer, resultingChoiceData )
+	}
+
+	return resultingChoiceData
+}
+
+void function Endorsements_Crafting_PopulateChoiceButtonRuiElements( EndorsementChoiceData endorsementChoiceData )
+{
+	Assert( endorsementChoiceData.endorsementOptions.len() <= Endorsements_GetMaxEndorsementsPerRound() )
+
+	foreach ( int endorsementIndex, EndorsementOptionData endorsementOptionData in endorsementChoiceData.endorsementOptions )
+	{
+		EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromRef( endorsementOptionData.endorsementRef )
+
+		bool isRight = (endorsementIndex % MAX_ENDORSEMENTS_PER_ROUND_BASE) == 1
+		string suffix = isRight ? "Right" : "Left"
+		RuiSetString( file.craftingMenuRUI, "itemName" + suffix, endorsementDefinition.displayName )
+		RuiSetString( file.craftingMenuRUI, "itemDesc" + suffix, endorsementDefinition.displayDescription )
+		RuiSetAsset( file.craftingMenuRUI, "itemIcon" + suffix, endorsementDefinition.endorsementIcon )
+		RuiSetAssetIfExists( file.craftingMenuRUI, "boxIcon" + suffix, endorsementDefinition.boxIcon )
+
+		if ( isRight )
+		{
+			break
+		}
+	}
+}
+
+void function Endorsements_Crafting_PopulateTrackSelectionRuiElements( EndorsementChoiceData endorsementChoiceData )
+{
+	foreach ( int idx, EndorsementOptionData optionData in endorsementChoiceData.endorsementOptions )
+	{
+		if ( optionData.endorsementSponsorEnum != eEndorsementSponsor.ENDORSEMENT_SPONSOR_INVALID )
+		{
+			EndorsementSponsorDefinition sponsorData = Endorsements_GetEndorsementSponsorDefinitionFromSponsor( optionData.endorsementSponsorEnum )
+
+			RuiSetStringIfExists( file.craftingMenuRUI, "track" + idx + "Name", sponsorData.displayName )
+			RuiSetColorAlphaIfExists( file.craftingMenuRUI, "track" + idx + "Color", SrgbToLinear( sponsorData.color / 255 ), 1.0 )
+			RuiSetAssetIfExists( file.craftingMenuRUI, "track" + idx + "Icon", sponsorData.icon )
+
+
+			if ( sponsorData.background != $"")
+			{
+				if (file.backgroundLeft == $"")
+					file.backgroundLeft = sponsorData.background
+				else if (file.backgroundRight == $"")
+					file.backgroundRight = sponsorData.background
+			}
+
+		}
+	}
+
+	RuiSetRGBA( file.craftingMenuRUI, "primaryColor", Endorsements_GetPrimaryReplicatorUIColorFromSponsorChoices( endorsementChoiceData ) )
+	RuiSetAssetIfExists( file.craftingMenuRUI, "currentTrackIcon", Endorsements_GetCurrentTrackIconForReplicatorFromSponsorChoices( endorsementChoiceData ) )
+	RuiSetBoolIfExists( file.craftingMenuRUI, "isTrackSelectionMode", Endorsements_AreChoicesDifferentSponsors( endorsementChoiceData ) )
+
+
+	RuiSetAssetIfExists( file.craftingMenuRUI, "backgroundTextureLeft", file.backgroundLeft )
+	RuiSetAssetIfExists( file.craftingMenuRUI, "backgroundTextureRight", file.backgroundRight )
+	RuiSetBoolIfExists( file.craftingMenuRUI, "isLeadingChoice", Endorsements_GetCurrentLeadingChoiceForReplicatorFromSponsorChoices( endorsementChoiceData ) )
+
+}
+
+void function Endorsements_Crafting_PopulateOwnedEndorsementRuiElements( entity viewPlayer )
+{
+	int endorsementIndex = 0
+	foreach ( int endorsementID in Endorsements_GetPlayerEndorsementArray( viewPlayer ) )
+	{
+		EndorsementDefinition endorsementDefinition = Endorsements_GetEndorsementDefinitionFromID( endorsementID )
+		RuiSetAssetIfExists( file.craftingMenuRUI, "ownedEndorsementIcon" + endorsementIndex, endorsementDefinition.endorsementIcon )
+		RuiSetBoolIfExists( file.craftingMenuRUI, "ownedEndorsementEmpty" + endorsementIndex, false )
+		RuiSetBoolIfExists( file.craftingMenuRUI, "ownedEndorsementLocked" + endorsementIndex, false )
+		endorsementIndex++
+	}
+
+	int unclaimedTicketCount = Endorsements_Delivery_GetPlayerTicketCount( viewPlayer )
+	for ( int unclaimedTicketIndex = 0; unclaimedTicketIndex < unclaimedTicketCount; ++unclaimedTicketIndex )
+	{
+		RuiSetAssetIfExists( file.craftingMenuRUI, "ownedEndorsementIcon" + (unclaimedTicketIndex + endorsementIndex), $"" )
+		RuiSetBoolIfExists( file.craftingMenuRUI, "ownedEndorsementEmpty" + (unclaimedTicketIndex + endorsementIndex), true )
+		RuiSetBoolIfExists( file.craftingMenuRUI, "ownedEndorsementLocked" + (unclaimedTicketIndex + endorsementIndex), false )
+	}
+
+	for ( int lockedEndorsementIndex = (unclaimedTicketCount + endorsementIndex); lockedEndorsementIndex < Endorsements_GetMaxEndorsementCount(); ++lockedEndorsementIndex )
+	{
+		RuiSetAssetIfExists( file.craftingMenuRUI, "ownedEndorsementIcon" + lockedEndorsementIndex, $"" )
+		RuiSetBoolIfExists( file.craftingMenuRUI, "ownedEndorsementEmpty" + lockedEndorsementIndex, true )
+		RuiSetBoolIfExists( file.craftingMenuRUI, "ownedEndorsementLocked" + lockedEndorsementIndex, true )
+	}
+}
+
+void function Endorsements_Crafting_ShutdownReplicatorMenu()
+{
+	
+	Remote_ServerCallFunction( string( ClientToServer_Endorsements_ShutdownReplicatorMenu ) )
+
+	StopUISoundByName( "Unhinged_WildcardStation_UI_Screen_Loop_1P" )
+	Endorsements_HidePingNagWithoutPinging()
+
+	
+	RuiDestroy( file.craftingMenuRUI )
+	file.craftingMenuRUI = null
+
+	
+	SetFakeMenuOpenState( eFakeMenuState.NOT_IN_FAKE_MENU, "" )
+
+	
+	Endorsements_Crafted_TryCraftedAnnouncement( GetLocalClientPlayer() )
+
+	
+	file.playerEHIToEndorsementCount[ ToEHI( GetLocalViewPlayer() ) ] =  Endorsements_GetPlayerEndorsementCount( GetLocalViewPlayer() )
+}
+
+void function Endorsements_Crafting_PlayScreenAnimations( entity player, PassByReferenceFloat validUseTime, bool playSelectionAnimation, bool playShutdownAnimation, string soundToPlay )
+{
+	AssertIsNewThread()
+
+
+	OnThreadEnd( function() : ( ) {
+		file.leadingChoiceAnimDone = true
+	} )
+
+
+	float animationDuration = 0
+	if ( playSelectionAnimation )
+	{
+		animationDuration += ENDORSEMENT_SCREEN_SELECTION_MADE_DURATION
+	}
+
+	if ( playShutdownAnimation )
+	{
+		animationDuration += ENDORSEMENT_SCREEN_SHUTDOWN_ANIM_DURATION
+	}
+
+	if ( playSelectionAnimation && !playShutdownAnimation )
+	{
+		animationDuration += ENDORSEMENT_SCREEN_ITEMS_INTRO_DURATION
+	}
+
+	if ( soundToPlay != "" )
+	{
+		EmitUISound( soundToPlay )
+	}
+
+	validUseTime.value = ClientTime() + animationDuration
+
+	if ( playSelectionAnimation )
+	{
+		if ( file.craftingMenuRUI != null && RuiIsAlive( file.craftingMenuRUI ) )
+		{
+			RuiSetGameTime( file.craftingMenuRUI, "selectionMadeTime", ClientTime() )
+			RuiSetFloat( file.craftingMenuRUI, "mouseLeftRightPos", 0.0 )
+
+			if ( playShutdownAnimation )
+			{
+				RuiSetBool( file.craftingMenuRUI, "extendedShutdown", true )
+			}
+		}
+
+		
+		wait ENDORSEMENT_SCREEN_SELECTION_MADE_DURATION
+	}
+
+	if ( playShutdownAnimation )
+	{
+		if ( file.craftingMenuRUI != null && RuiIsAlive( file.craftingMenuRUI ) )
+		{
+			RuiSetGameTime( file.craftingMenuRUI, "screenCloseTime", ClientTime() )
+		}
+
+		
+		wait ENDORSEMENT_SCREEN_SHUTDOWN_ANIM_DURATION
+	}
+}
+
+void function Endorsements_Crafting_Client_CloseCraftingMenu()
+{
+	Signal( clGlobal.signalDummy, SIG_ENDORSEMENTS_CRAFTING_ENDORSEMENT_MENU_CLOSE )
+}
+
+
+void function Endorsements_Crafted_TryCraftedAnnouncement( entity player )
+{
+	if ( file.endorsementCountCraftedThisSession == 0 || player != GetLocalViewPlayer() )
+		return
+
+	
+	if ( !Endorsements_Crafting_IsWaitingForEndorsementNetvarUpdate( player ) )
+	{
+		Endorsements_Crafted_Announcement( player )
+	}
+}
+
+void function Endorsements_Crafted_Announcement( entity player )
+{
+	if ( !GetCurrentPlaylistVarBool( "show_endorsement_crafted_announcement", true ) )
+		return
+
+
+	if ( ClockUp_Endorsements_IsEnabled() && ClockUp_PlayerHasClockUpEndorsement( player ) )
+	{
+		array<int> ownedEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+		if ( ownedEndorsements.len() >= 1 )
+		{
+			EndorsementDefinition endorsementDef = Endorsements_GetEndorsementDefinitionFromID( ownedEndorsements[0] )
+			ClockUp_Endorsements_Crafted_Announcement( player, endorsementDef )
+		}
+		return
+	}
+
+
+	const vector GREY_COLOR_UI = COLOR_GRAY / 255
+	const vector DARKGREY_COLOR_UI = COLOR_BLACK / 255
+
+	
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+	mainBanner.imageContainerFrameColor = UNHINGED_COLOR_UI
+	mainBanner.frameColor = UNHINGED_COLOR_UI
+	mainBanner.leftIntensityTextureCount = 2
+	mainBanner.rightIntensityTextureCount = 2
+
+	
+	mainBanner.imageContainerImageBacker = $"rui/hud/endorsements/endorsement_box_large"
+	mainBanner.imageContainerVerticalPadding = 9.0
+
+	array<int> ownedEndorsements = Endorsements_GetPlayerEndorsementArray( player )
+	int unclaimedTicketCount = Endorsements_Delivery_GetPlayerTicketCount( player )
+	int unlockedSlotCount = ownedEndorsements.len() + unclaimedTicketCount
+
+	
+	if ( ownedEndorsements.len() >= 1 ) 
+	{
+		mainBanner.mainIcon2 = Endorsements_GetEndorsementDefinitionFromID( ownedEndorsements[0] ).endorsementIcon
+		mainBanner.imageContainerImageBackerColor2 = UNHINGED_COLOR_UI
+	}
+	else
+	{
+		bool isSlotUnlocked = unlockedSlotCount >= 1
+		mainBanner.mainIcon2 = isSlotUnlocked ? $"white" : $"rui/menu/buttons/lock"
+		mainBanner.mainIcon2Alpha = isSlotUnlocked ? 0.0 : 1.0
+		mainBanner.mainIcon2Color = isSlotUnlocked ? GREY_COLOR_UI : DARKGREY_COLOR_UI
+		mainBanner.imageContainerImageBackerColor2 = isSlotUnlocked ? GREY_COLOR_UI : DARKGREY_COLOR_UI
+	}
+
+	if ( ownedEndorsements.len() >= 2 ) 
+	{
+		mainBanner.mainIcon1 = Endorsements_GetEndorsementDefinitionFromID( ownedEndorsements[1] ).endorsementIcon
+		mainBanner.imageContainerImageBackerColor1 = UNHINGED_COLOR_UI
+	}
+	else
+	{
+		bool isSlotUnlocked = unlockedSlotCount >= 2
+		mainBanner.mainIcon1 = isSlotUnlocked ? $"white" : $"rui/menu/buttons/lock"
+		mainBanner.mainIcon1Alpha = isSlotUnlocked ? 0.0 : 1.0
+		mainBanner.mainIcon1Color = isSlotUnlocked ? GREY_COLOR_UI : DARKGREY_COLOR_UI
+		mainBanner.imageContainerImageBackerColor1 = isSlotUnlocked ? GREY_COLOR_UI : DARKGREY_COLOR_UI
+	}
+
+	if ( ownedEndorsements.len() >= 3 ) 
+	{
+		mainBanner.mainIcon3 = Endorsements_GetEndorsementDefinitionFromID( ownedEndorsements[2] ).endorsementIcon
+		mainBanner.imageContainerImageBackerColor3 = UNHINGED_COLOR_UI
+	}
+	else
+	{
+		bool isSlotUnlocked = unlockedSlotCount >= 3
+		mainBanner.mainIcon3 = isSlotUnlocked ? $"white" : $"rui/menu/buttons/lock"
+		mainBanner.mainIcon3Alpha = isSlotUnlocked ? 0.0 : 1.0
+		mainBanner.mainIcon3Color = isSlotUnlocked ? GREY_COLOR_UI : DARKGREY_COLOR_UI
+		mainBanner.imageContainerImageBackerColor3 = isSlotUnlocked ? GREY_COLOR_UI : DARKGREY_COLOR_UI
+	}
+
+	
+	if ( ownedEndorsements.len() >= Endorsements_GetMaxEndorsementCount() )
+	{
+		mainBanner.mainText = Localize( "#ENDORSEMENTS_ALL_CRAFTED_ANNOUNCE" )
+	}
+	else if ( file.endorsementCountCraftedThisSession > 1 )
+	{
+		mainBanner.mainText =  Localize( "#ENDORSEMENTS_SOME_CRAFTED_ANNOUNCE" )
+	}
+	else
+	{
+		mainBanner.mainText = Localize( "#ENDORSEMENTS_CRAFTED_ANNOUNCE" )
+	}
+
+	
+	CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+	subBanner.mainText = Localize( "#ENDORSEMENTS_CRAFTED_ANNOUNCE_SUBTEXT" )
+	subBanner.mainTextIsUpper = false
+	subBanner.scalar = 0.5
+	subBanner.paddingTop = 10
+	subBanner.leftEndPadding = 200
+	subBanner.rightEndPadding = 200
+
+	
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+	builder.soundAliases = [ ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS ]
+	builder.priority = eHudNotificationQueuePriority.MAX
+	builder.onIntro = Endorsements_Crafting_PlayVFX_On_Craft
+	CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+}
+
+void function Endorsements_Crafting_PlayVFX_On_Craft( HudNotificationQueueItem dummyHNQI )
+{
+	Endorsements_PlayVFXForEndorsementGranted()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void function Endorsements_Crafting_SetCallback_OnSelectEndorsementForCrafting( EndorsementSelectionProcessingResults functionref( entity, EndorsementDefinition ) callbackFunction )
+{
+	Assert( file.callback_OnSelectEndorsementForCrafting == null, format( "%s - ERROR - OnSelectEndorsementForCrafting Callback is already Set", FUNC_NAME() ) )
+	file.callback_OnSelectEndorsementForCrafting = callbackFunction
+}
+
+
+
+void function Endorsements_Crafting_SetCallback_GetChoiceDataOverride( EndorsementChoiceData functionref( entity, EndorsementChoiceData ) callbackFunction )
+{
+	Assert( file.callback_GetChoiceDataOverride == null, format( "%s - ERROR - GetChoiceDataOverride Callback is already Set", FUNC_NAME() ) )
+	file.callback_GetChoiceDataOverride = callbackFunction
+}
+
+
+
+
+#if INTELLIJ_OUTLINE_SECTION_MARKER
+void function _____________ENDORSEMENT_STATION_UI_SKIN___________________________(){}
+#endif
+
+
+void function Endorsements_ApplyCraftingStationUISkin()
+{
+	if ( file.craftingMenuRUI == null || !RuiIsAlive( file.craftingMenuRUI ) )
+		return
+
+	EndorsementCrafterUISkin crafterSkin = Endorsements_GetCraftingStationUISkin()
+
+	
+	RGBA primaryThemeColor 				= RGBAToLinear( crafterSkin.primaryThemeColor )
+	RGBA backgroundColor 				= RGBAToLinear( crafterSkin.backgroundColor )
+	RGBA backgroundTextureColor 		= RGBAToLinear( crafterSkin.backgroundTextureColor )
+	RGBA decal1Color 					= RGBAToLinear( crafterSkin.decal1Color )
+	RGBA decal2Color 					= RGBAToLinear( crafterSkin.decal2Color )
+	RGBA decal3Color 					= RGBAToLinear( crafterSkin.decal3Color )
+	RGBA itemBackgroundTextureColor 	= RGBAToLinear( crafterSkin.itemBackgroundTextureColor )
+	RGBA itemFrameColor 				= RGBAToLinear( crafterSkin.itemFrameColor )
+
+
+	RuiSetRGBA( file.craftingMenuRUI, "primaryColor",primaryThemeColor )
+	RuiSetRGBA( file.craftingMenuRUI, "backgroundColor", backgroundColor )
+
+	RuiSetAsset( file.craftingMenuRUI, "backgroundTexture", crafterSkin.backgroundTexture )
+	RuiSetFloat( file.craftingMenuRUI, "backgroundTextureTileCount", crafterSkin.backgroundTextureTileCount )
+	RuiSetRGBA( file.craftingMenuRUI, "backgroundTextureColor", backgroundTextureColor )
+
+	RuiSetBool( file.craftingMenuRUI, "scanlinesEnabled", crafterSkin.scanlinesEnabled )
+
+	if ( crafterSkin.decal1 != $"" )
+	{
+		RuiSetAsset( file.craftingMenuRUI, "decal1", crafterSkin.decal1 )
+		RuiSetFloat2( file.craftingMenuRUI, "decal1Size", crafterSkin.decal1Size )
+		RuiSetFloat2( file.craftingMenuRUI, "decal1SelfPinCorner", Hud_GetPinCoordinatesForCorner( crafterSkin.decal1Pin.selfPinCorner ) )
+		RuiSetFloat2( file.craftingMenuRUI, "decal1SiblingPinCorner", Hud_GetPinCoordinatesForCorner( crafterSkin.decal1Pin.siblingPinCorner ) )
+		RuiSetFloat2( file.craftingMenuRUI, "decal1PinOffset", crafterSkin.decal1Pin.pinOffset )
+		RuiSetRGBA( file.craftingMenuRUI, "decal1Color", decal1Color )
+	}
+
+	if ( crafterSkin.decal2 != $"" )
+	{
+		RuiSetAsset( file.craftingMenuRUI, "decal2", crafterSkin.decal2 )
+		RuiSetFloat2( file.craftingMenuRUI, "decal2Size", crafterSkin.decal2Size )
+		RuiSetFloat2( file.craftingMenuRUI, "decal2SelfPinCorner", Hud_GetPinCoordinatesForCorner( crafterSkin.decal2Pin.selfPinCorner ) )
+		RuiSetFloat2( file.craftingMenuRUI, "decal2SiblingPinCorner", Hud_GetPinCoordinatesForCorner( crafterSkin.decal2Pin.siblingPinCorner ) )
+		RuiSetFloat2( file.craftingMenuRUI, "decal2PinOffset", crafterSkin.decal2Pin.pinOffset )
+		RuiSetRGBA( file.craftingMenuRUI, "decal2Color", decal2Color )
+	}
+
+	if ( crafterSkin.decal3 != $"" )
+	{
+		RuiSetAsset( file.craftingMenuRUI, "decal3", crafterSkin.decal3 )
+		RuiSetFloat2( file.craftingMenuRUI, "decal3Size", crafterSkin.decal3Size )
+		RuiSetFloat2( file.craftingMenuRUI, "decal3SelfPinCorner", Hud_GetPinCoordinatesForCorner( crafterSkin.decal3Pin.selfPinCorner ) )
+		RuiSetFloat2( file.craftingMenuRUI, "decal3SiblingPinCorner", Hud_GetPinCoordinatesForCorner( crafterSkin.decal3Pin.siblingPinCorner ) )
+		RuiSetFloat2( file.craftingMenuRUI, "decal3PinOffset", crafterSkin.decal3Pin.pinOffset )
+		RuiSetRGBA( file.craftingMenuRUI, "decal3Color", decal3Color )
+	}
+
+	RuiSetAsset( file.craftingMenuRUI, "itemBackgroundTexture", crafterSkin.itemBackgroundTexture )
+	RuiSetRGBA( file.craftingMenuRUI, "itemBackgroundTextureColor", itemBackgroundTextureColor )
+	RuiSetAsset( file.craftingMenuRUI, "itemBackgroundMask", crafterSkin.itemBackgroundMask )
+
+	RuiSetAsset( file.craftingMenuRUI, "itemFrameImage", crafterSkin.itemFrameImage )
+	RuiSetRGBA( file.craftingMenuRUI, "itemFrameColor", itemFrameColor )
+
+
+		if ( GamemodeVariant_UH_ClockUp_IsClockUpEnabled() )
+		{
+			RuiSetString( file.craftingMenuRUI, "stationTitle", "#ENDORSEMENT_CLOCKUP_STATION_TITLE" )
+			RuiSetString( file.craftingMenuRUI, "stationSubtitle", "#ENDORSEMENT_CLOCKUP_STATION_SUBTITLE" )
+		}
+
+}
+
+
+#if DEV
+void function DEV_SetEndorsementCrafterUISkin( int skinIndex )
+{
+	if ( skinIndex <= 0 )
+	{
+		Endorsements_SetDefaultCraftingStationUISkin()
+	}
+
+	else if ( skinIndex == 1 )
+	{
+		Beamstick_SetupEndorsementCrafterUISkin()
+	}
+
+}
+#endif
+
+
+void function ServerToClient_Endorsements_Skydive_Announcement()
+{
+
+	string preSkydivePrompt = "#ENDORSEMENTS_PRE_SKYDIVE_PROMPT"
+
+	if ( !Endorsements_AreEndorsementStationsEnabled() && Endorsements_Delivery_RoundBased_EnabledForMode() )
+	{
+		preSkydivePrompt = "#ENDORSEMENTS_SELECT_PRE_SKYDIVE_PROMPT"
+	}
+
+
+
+
+
+
+
+
+	
+	CenterAnnouncementItem mainBanner = CenterAnnouncements_CreateNotchedStyle()
+	mainBanner.mainText = Localize( preSkydivePrompt )
+	mainBanner.mainIcon1 = $"rui/hud/gametype_icons/survival/endorsement_map_icon"
+	CenterAnnouncements_ImageContainer_SetNotchedStyle( mainBanner )
+	mainBanner.imageContainerFrameColor = ( UNHINGED_COLOR / 255 )
+	mainBanner.frameColor = ( UNHINGED_COLOR / 255 )
+	mainBanner.textureColor = ( UNHINGED_COLOR / 255 )
+	mainBanner.leftIntensityTextureCount = 2
+	mainBanner.rightIntensityTextureCount = 2
+	mainBanner.backgroundAlpha = 0.6
+
+	
+	CenterAnnouncementItem subBanner = CenterAnnouncements_CreateGradientStyle()
+	subBanner.mainText = Localize( "#ENDORSEMENTS_VIEW_INVENTORY_PROMPT" )
+	subBanner.mainTextIsUpper = false
+	subBanner.scalar = 0.5
+	subBanner.paddingTop = 10
+	subBanner.leftEndPadding = 200
+	subBanner.rightEndPadding = 200
+	subBanner.backgroundAlpha = 0.6
+
+	
+	AnnouncementBuilder builder = CenterAnnouncements_CreateBuilderFromAnnouncementItems( [ mainBanner, subBanner ] )
+	builder.soundAliases.clear()
+	builder.soundAliases.append( ENDORSEMENT_ANNOUNCEMENT_SOUND_ALIAS )
+	CenterAnnouncements_QueueBuilder( builder, ePersistenceContext.PLAYER )
+
+}
+ 
